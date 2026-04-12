@@ -1,0 +1,347 @@
+import SwiftUI
+import Charts
+import SwiftData
+import PhotosUI
+import MapKit
+import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
+
+// MARK: - Dive Tab Categories
+
+enum DiveTab: String, CaseIterable, Identifiable {
+    case menu        = "Overview"
+    case siteDetails = "Site Details"
+    case conditions  = "Conditions"
+    case gaz         = "Gas"
+    case samples     = "Samples"
+    case xmlExport   = "XML Export"
+    case uddfExport  = "UDDF Export"
+
+    var id: String { rawValue }
+
+    var localizedName: LocalizedStringKey { LocalizedStringKey(rawValue) }
+
+    /// Tabs visible in the tab bar (export tabs hidden — uncomment to re-enable for troubleshooting)
+    static var visibleCases: [DiveTab] {
+        allCases.filter { $0 != .xmlExport && $0 != .uddfExport }
+        // allCases // To enable tabs + comment the previous line
+    }
+
+    var icon: String {
+        switch self {
+        case .menu:        return "chart.xyaxis.line"
+        case .siteDetails: return "mappin.and.ellipse.circle.fill"
+        case .conditions:  return "cloud.sun.fill"
+        case .gaz:         return "bubbles.and.sparkles.fill"
+        case .samples:     return "waveform.path.ecg"
+        case .xmlExport:   return "doc.text.magnifyingglass"
+        case .uddfExport:  return "doc.badge.gearshape.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .menu:        return .cyan
+        case .siteDetails: return .blue
+        case .conditions:  return .yellow
+        case .gaz:         return .green
+        case .samples:     return .teal
+        case .xmlExport:   return .indigo
+        case .uddfExport:  return .teal
+        }
+    }
+}
+
+// MARK: - DiveDetailView
+
+struct DiveDetailView: View {
+    @Bindable var dive: Dive
+    @Environment(\.modelContext) var modelContext
+    @Query(sort: \Dive.timestamp, order: .reverse) var allDives: [Dive]
+    @Query(sort: \GearGroup.name) var gearGroups: [GearGroup]
+
+    @State var showEditSheet = false
+    @State var showAddFish = false
+    @State var showAddGear = false
+    @State var selectedPhotos: [PhotosPickerItem] = []
+    @State var prefs = UserPreferences.shared
+    @State var selectedTab: DiveTab = .menu
+    @State var isEditingEquipment = false
+    @State var gearToDelete: Gear?
+    @State var showDeleteGearAlert = false
+    @State var isEditingPhotos = false
+    @State var photoIndexToDelete: Int?
+    @State var showDeletePhotoAlert = false
+    @State var isEditingMarineLife = false
+    @State var fishToDelete: MarineSight?
+    @State var showDeleteFishAlert = false
+    @State var selectedPhotoForPreview: IdentifiablePhotoData?
+
+    // Export state
+    #if os(iOS)
+    @State var showFileExporter = false
+    @State var exportDocument: ExportableFileDocument?
+    @State var exportFileName: String = ""
+    @State var exportContentType: UTType = .xml
+    #endif
+
+    // MARK: - Computed Properties
+
+    var diveNumber: Int {
+        allDives.count - (allDives.firstIndex(of: dive) ?? 0)
+    }
+
+    var locationText: Text {
+        if let country = dive.siteCountry, !country.isEmpty {
+            // If both location and country exist, combine them
+            if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+                return Text(verbatim: "\(dive.location), \(country)")
+            }
+            // If only country exists
+            return Text(verbatim: country)
+        }
+        // If only location exists
+        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+            return Text(verbatim: dive.location)
+        }
+        // Fallback
+        return Text("Unknown location")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Tab bar custom
+            diveTabBar
+
+            // Content according to active tab
+            ScrollView {
+                VStack(spacing: 20) {
+                    switch selectedTab {
+                    case .menu:
+                        menuTabContent
+                    case .siteDetails:
+                        siteDetailsTabContent
+                    case .conditions:
+                        conditionsTabContent
+                    case .gaz:
+                        gazTabContent
+                    case .samples:
+                        samplesTabContent
+                    case .xmlExport:
+                        xmlExportTabContent
+                    case .uddfExport:
+                        uddfExportTabContent
+                    }
+                }
+                .padding(.bottom, 30)
+                .animation(.easeInOut(duration: 0.25), value: selectedTab)
+            }
+        }
+        .navigationTitle(dive.siteName)
+        .background(Color.platformBackground.ignoresSafeArea())
+
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HStack(spacing: 12) {
+                    // Export menu
+                    Menu {
+                        Button {
+                            exportToXML()
+                        } label: {
+                            Label("Export Dive to XML", systemImage: "doc.text")
+                        }
+                        Button {
+                            exportToUDDF()
+                        } label: {
+                            Label("Export Dive to UDDF", systemImage: "doc.badge.gearshape")
+                        }
+                        Button {
+                            exportToPDF()
+                        } label: {
+                            Label("Export Dive to PDF", systemImage: "doc.richtext")
+                        }
+                    } label: {
+                        #if os(macOS)
+                        Label("Export", systemImage: "square.and.arrow.up.circle.fill")
+                            .foregroundStyle(.cyan)
+                        #else
+                        Image(systemName: "square.and.arrow.up.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.cyan)
+                        #endif
+                    }
+
+                    // Edit button
+                    Button {
+                        showEditSheet = true
+                    } label: {
+                        #if os(macOS)
+                        Label("Edit", systemImage: "pencil.circle.fill")
+                            .foregroundStyle(.cyan)
+                        #else
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.cyan)
+                        #endif
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            editSheetForCurrentTab
+                #if os(iOS)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                #endif
+        }
+        .sheet(isPresented: $showAddFish) {
+            AddFishView(dive: dive)
+        }
+        .sheet(isPresented: $showAddGear) {
+            AddGearToDiveView(dive: dive)
+        }
+        #if os(iOS)
+        .fileExporter(
+            isPresented: $showFileExporter,
+            document: exportDocument,
+            contentType: exportContentType,
+            defaultFilename: exportFileName
+        ) { _ in
+            exportDocument = nil
+        }
+        #endif
+    }
+
+    // MARK: - Tab Bar
+
+    private var diveTabBar: some View {
+        #if os(macOS)
+        // macOS : segmented control natif
+        Picker("", selection: $selectedTab) {
+            ForEach(DiveTab.visibleCases) { tab in
+                Label(tab.localizedName, systemImage: tab.icon).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color.primary.opacity(0.05))
+        .animation(.easeInOut(duration: 0.2), value: selectedTab)
+        #else
+        // iOS : tab bar scrollable avec indicateur coloré
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(DiveTab.visibleCases) { tab in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedTab = tab
+                        }
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 18))
+                                .foregroundStyle(selectedTab == tab ? tab.color : .secondary)
+                            Text(tab.localizedName)
+                                .font(.caption2)
+                                .fontWeight(selectedTab == tab ? .semibold : .regular)
+                                .foregroundStyle(selectedTab == tab ? tab.color : .secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 20)
+                        .background(
+                            selectedTab == tab
+                                ? tab.color.opacity(0.12)
+                                : Color.clear
+                        )
+                        .animation(.easeInOut(duration: 0.2), value: selectedTab)
+                        .overlay(
+                            Rectangle()
+                                .fill(selectedTab == tab ? tab.color : Color.clear)
+                                .frame(height: 2),
+                            alignment: .bottom
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .background(Color.primary.opacity(0.05))
+        #endif
+    }
+
+    // MARK: - Edit Sheet Router
+
+    @ViewBuilder
+    private var editSheetForCurrentTab: some View {
+        switch selectedTab {
+        case .menu:
+            EditMenuStatsView(dive: dive)
+        case .siteDetails:
+            EditSiteDetailsView(dive: dive)
+        case .conditions:
+            EditConditionsView(dive: dive)
+        case .gaz:
+            EditGazView(dive: dive)
+        case .samples:
+            // Samples come from a dive computer — no manual editing
+            noEditAvailableView(message: "Samples come from your dive computer and cannot be manually edited.")
+        case .xmlExport:
+            noEditAvailableView(message: "The XML export is automatically generated from internal data and cannot be edited.")
+        case .uddfExport:
+            noEditAvailableView(message: "The UDDF export is automatically generated from internal data and cannot be edited.")
+        }
+    }
+
+    @ViewBuilder
+    private func noEditAvailableView(message: LocalizedStringKey) -> some View {
+        #if os(macOS)
+        VStack(spacing: 20) {
+            HStack {
+                Spacer()
+                Button("Close") { showEditSheet = false }
+                    .keyboardShortcut(.escape, modifiers: [])
+            }
+            .padding()
+            Spacer()
+            Image(systemName: "lock.circle.fill")
+                .font(.system(size: 50))
+                .foregroundStyle(.secondary)
+            Text("Editing Not Available")
+                .font(.headline).foregroundStyle(.primary)
+            Text(message)
+                .font(.subheadline).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center).padding(.horizontal, 30)
+            Spacer()
+        }
+        .frame(width: 400, height: 280)
+        .background(Color(NSColor.windowBackgroundColor))
+        #else
+        NavigationStack {
+            VStack(spacing: 20) {
+                Image(systemName: "lock.circle.fill")
+                    .font(.system(size: 50))
+                    .foregroundStyle(.secondary)
+                Text("Editing Not Available")
+                    .font(.headline).foregroundStyle(.primary)
+                Text(message)
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).padding(.horizontal, 30)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.platformBackground.ignoresSafeArea())
+            .navigationTitle("Samples")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Close") { showEditSheet = false }.foregroundStyle(.cyan)
+                }
+            }
+        }
+        #endif
+    }
+}

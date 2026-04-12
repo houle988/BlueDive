@@ -1,0 +1,72 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "comment" : "Bundle display name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "BlueDive"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "BlueDive"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "NSBluetoothAlwaysUsageDescription" : {
+      "comment" : "Permission message shown when the app requests Bluetooth access to connect to a dive computer.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive uses Bluetooth to connect to your dive computer."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive utilise le Bluetooth pour se connecter à votre ordinateur de plongée."
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Permission message shown when the app requests location access to display the user's position on the dive map.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive uses your location to show your position on the dive map."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive utilise votre position pour l'afficher sur la carte de plongée."
+          }
+        }
+      }
+    },
+    "UDDF Document" : {
+      "shouldTranslate" : false
+    },
+    "Zip Archive" : {
+      "shouldTranslate" : false
+    }
+  },
+  "version" : "1.0"
+}

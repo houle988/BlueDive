@@ -1,0 +1,33 @@
+BlueDive Source Available License (BDSAL) v1.0
+Copyright (c) 2024–2026 Steve Houle, Patrick Houle, and Jérôme Devost. All rights reserved.
+This project is led and maintained by Steve Houle as principal copyright holder and decision maker. Patrick Houle and Jérôme Devost are recognized co-authors and contributors.
+
+Permission granted
+
+* View, read, and study this source code
+* Fork this repository privately for the purpose of submitting pull requests to the original project
+* Use this code as reference for personal, non-distributed projects
+
+Permission NOT granted without prior written consent of Steve Houle
+
+* Redistribute, publish, or sublicense this source code or any derivative work
+* Submit any application derived from this code to any app store or software marketplace (including but not limited to the Apple App Store, Google Play, or any third-party distributor)
+* Use the name "BlueDive", its logo, or associated branding in any product or service
+* Deploy any service or product based on this code, whether commercial or free
+
+Third-party dependencies
+
+This project incorporates third-party libraries that are licensed independently of this license and are not subject to the restrictions above. Specifically:
+
+* libdivecomputer (https://github.com/libdivecomputer/libdivecomputer) — licensed under the GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later)
+* libdc-swift (https://github.com/deepsealabs/libdc-swift, BlueDive fork: https://github.com/jdevost/libdc-swift) — licensed under the GNU Lesser General Public License v2.1 (LGPL-2.1)
+
+Any modifications made to these libraries by the authors of this project are published separately under their respective LGPL licenses. The permissions and restrictions of this license (BDSAL) apply solely to the original code authored under this project and do not extend to, limit, or supersede the rights granted by the LGPL for those libraries.
+
+Continuity clause
+
+In the event that this project is explicitly declared abandoned by Steve Houle via a written notice committed to this repository, the above restrictions are relaxed to permit a single community fork, subject to: (a) full attribution to all original authors, (b) a distinct name and branding, and (c) removal of any reference to the original authors as active maintainers.
+
+No warranty
+
+This software is provided "as is", without warranty of any kind.

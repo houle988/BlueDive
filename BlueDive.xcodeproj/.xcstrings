@@ -1,0 +1,446 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+
+    "language.system" : {
+      "comment" : "Language picker: follow OS setting",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "System Default" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Langue du système" } }
+      }
+    },
+
+    "settings.language.label" : {
+      "comment" : "Picker label in Settings",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Language" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Langue" } }
+      }
+    },
+
+    "settings.language.header" : {
+      "comment" : "Section header in Settings",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Language" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Langue" } }
+      }
+    },
+
+    "settings.language.footer" : {
+      "comment" : "Section footer explaining language change behaviour",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected language takes effect immediately. A full restart may be needed for some system text." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "La langue sélectionnée prend effet immédiatement. Un redémarrage complet peut être nécessaire pour certains textes système." } }
+      }
+    },
+
+    "settings.title" : {
+      "comment" : "Navigation title of the Settings screen",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Réglages" } }
+      }
+    },
+
+    "settings.close" : {
+      "comment" : "Close button label",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Fermer" } }
+      }
+    },
+
+    "settings.diver.header" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Diver Information" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Informations du Plongeur" } }
+      }
+    },
+
+    "settings.diver.defaultName" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Default Name" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Nom par défaut" } }
+      }
+    },
+
+    "settings.diver.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This name will be used by default when creating new dives." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Ce nom sera utilisé par défaut lors de la création de nouvelles plongées." } }
+      }
+    },
+
+    "settings.diver.planner" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Dive Planner" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Planificateur de plongée" } }
+      }
+    },
+
+    "settings.units.header" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Measurement Units" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Unités de Mesure" } }
+      }
+    },
+
+    "settings.units.depth" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Depth" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Profondeur" } }
+      }
+    },
+
+    "settings.units.pressure" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tank pressure" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Pression bouteille" } }
+      }
+    },
+
+    "settings.units.temperature" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Temperature" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Température" } }
+      }
+    },
+
+    "settings.units.footer" : {
+      "comment" : "Shows current unit choices; %1$@ = depth symbol, %2$@ = pressure symbol, %3$@ = temperature symbol",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : { "state" : "translated", "value" : "Depth in %1$@ · Pressure in %2$@ · Temperature in %3$@" }
+        },
+        "fr-CA" : {
+          "stringUnit" : { "state" : "translated", "value" : "Profondeur en %1$@ · Pression en %2$@ · Température en %3$@" }
+        }
+      }
+    },
+
+    "settings.critters.header" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Marine Life" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Créatures Marines" } }
+      }
+    },
+
+    "settings.critters.suggestions" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Creature Suggestions" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Suggestions de créatures" } }
+      }
+    },
+
+    "settings.critters.suggestions.subtitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show suggestions when adding creatures" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Affiche des suggestions lors de l'ajout de créatures" } }
+      }
+    },
+
+    "settings.critters.autoConvert" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatic Conversion" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Conversion automatique" } }
+      }
+    },
+
+    "settings.critters.autoConvert.subtitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically converts old fish observations" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Convertit automatiquement les anciennes observations de poissons" } }
+      }
+    },
+
+    "settings.notifications.header" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notifications" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Notifications" } }
+      }
+    },
+
+    "settings.notifications.label" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notifications" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Notifications" } }
+      }
+    },
+
+    "settings.notifications.gear" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Equipment Maintenance" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Entretien équipement" } }
+      }
+    },
+
+    "settings.notifications.cert" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Certification Expiry" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Expiration certifications" } }
+      }
+    },
+
+    "settings.notifications.dive" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Dive Reminders" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Rappels plongée" } }
+      }
+    },
+
+    "settings.notifications.milestone" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Milestone Reached" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Jalons atteints" } }
+      }
+    },
+
+    "settings.notifications.reminderDays" : {
+      "comment" : "%lld = number of days",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remind after %lld days" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Rappel après %lld jours" } }
+      }
+    },
+
+    "settings.notifications.openSystemPrefs" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open System Preferences" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Ouvrir les Préférences Système" } }
+      }
+    },
+
+    "settings.notifications.footer.denied.ios" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notifications are disabled in iOS. Enable them in Settings → BlueDive → Notifications." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Les notifications sont désactivées dans iOS. Activez-les dans Réglages → BlueDive → Notifications." } }
+      }
+    },
+
+    "settings.notifications.footer.denied.macos" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notifications are disabled. Enable them in System Preferences → Notifications → BlueDive." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Les notifications sont désactivées. Activez-les dans Préférences Système → Notifications → BlueDive." } }
+      }
+    },
+
+    "settings.notifications.footer.enabled" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reminders are updated automatically when your data changes." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Les rappels sont mis à jour automatiquement quand vos données changent." } }
+      }
+    },
+
+    "settings.sync.header" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sync" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Synchronisation" } }
+      }
+    },
+
+    "settings.sync.syncNow" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sync Now" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Synchroniser maintenant" } }
+      }
+    },
+
+    "settings.sync.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Data is synced automatically via CloudKit. Use this button if you notice a delay between your devices." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Les données sont synchronisées automatiquement via CloudKit. Utilisez ce bouton si vous constatez un délai entre vos appareils." } }
+      }
+    },
+
+    "settings.sync.result.available" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sync requested — iCloud will update your devices." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Synchronisation demandée — iCloud va mettre à jour vos appareils." } }
+      }
+    },
+
+    "settings.sync.result.unavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "iCloud unavailable. Check that you are signed in to your Apple Account." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "iCloud non disponible. Vérifiez que vous êtes connecté à votre compte Apple." } }
+      }
+    },
+
+    "settings.data.header" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Data" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Données" } }
+      }
+    },
+
+    "settings.data.export" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Export All Data" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Exporter toutes les données" } }
+      }
+    },
+
+    "settings.about.header" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "About" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "À propos" } }
+      }
+    },
+
+    "settings.about.version" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Version" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Version" } }
+      }
+    },
+
+    "settings.about.privacy" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Privacy Policy" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Politique de confidentialité" } }
+      }
+    },
+
+    "settings.about.support" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Support" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Support" } }
+      }
+    },
+
+    "settings.danger.header" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Danger Zone" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Zone de Danger" } }
+      }
+    },
+
+    "settings.danger.resetPrefs" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reset Preferences" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Réinitialiser les préférences" } }
+      }
+    },
+
+    "settings.danger.deleteAll" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete All Data" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Effacer toutes les données" } }
+      }
+    },
+
+    "settings.danger.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "These actions are irreversible." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Ces actions sont irréversibles." } }
+      }
+    },
+
+    "alert.deleteAll.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete all data?" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Effacer toutes les données ?" } }
+      }
+    },
+
+    "alert.deleteAll.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This action is irreversible. All your dives, certifications and equipment will be deleted." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Cette action est irréversible. Toutes vos plongées, certifications et équipements seront supprimés." } }
+      }
+    },
+
+    "alert.resetPrefs.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reset preferences?" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Réinitialiser les préférences ?" } }
+      }
+    },
+
+    "alert.resetPrefs.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All preferences will be restored to their default values." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Toutes les préférences reviendront à leurs valeurs par défaut." } }
+      }
+    },
+
+    "button.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } }
+      }
+    },
+
+    "button.delete" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Effacer" } }
+      }
+    },
+
+    "button.reset" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reset" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Réinitialiser" } }
+      }
+    },
+
+    "contentview.search.prompt" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Site, location, buddy, notes…" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Site, lieu, binôme, notes…" } }
+      }
+    },
+
+    "contentview.import.error.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Import Error" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Erreur d'importation" } }
+      }
+    },
+
+    "contentview.delete.dive.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete dive?" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer la plongée ?" } }
+      }
+    },
+
+    "contentview.delete.dive.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This action is irreversible. All associated data (marine life, equipment) will also be deleted." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Cette action est irréversible. Toutes les données associées (poissons vus, équipement) seront également supprimées." } }
+      }
+    },
+
+    "sort.dateDesc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Date ↓" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Date ↓" } }
+      }
+    },
+
+    "sort.dateAsc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Date ↑" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Date ↑" } }
+      }
+    },
+
+    "sort.depthDesc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Depth ↓" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Profondeur ↓" } }
+      }
+    },
+
+    "sort.durationDesc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Duration ↓" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Durée ↓" } }
+      }
+    }
+
+  },
+  "version" : "1.0"
+}
