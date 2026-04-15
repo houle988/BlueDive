@@ -50,14 +50,16 @@ struct DetailCard: View {
     let title: LocalizedStringKey
     let value: String
     let localizedValue: LocalizedStringKey?
+    let subtitle: String?
     let icon: String
     let color: Color
 
     // Initializer pour String
-    init(title: LocalizedStringKey, value: String, icon: String, color: Color) {
+    init(title: LocalizedStringKey, value: String, subtitle: String? = nil, icon: String, color: Color) {
         self.title = title
         self.value = value
         self.localizedValue = nil
+        self.subtitle = subtitle
         self.icon = icon
         self.color = color
     }
@@ -67,6 +69,7 @@ struct DetailCard: View {
         self.title = title
         self.value = ""
         self.localizedValue = localizedValue
+        self.subtitle = nil
         self.icon = icon
         self.color = color
     }
@@ -76,6 +79,7 @@ struct DetailCard: View {
         self.title = title
         self.value = String(format: specifier, value) + unit
         self.localizedValue = nil
+        self.subtitle = nil
         self.icon = icon
         self.color = color
     }
@@ -98,6 +102,11 @@ struct DetailCard: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
+            }
+            if let subtitle {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

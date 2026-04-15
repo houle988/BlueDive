@@ -194,6 +194,8 @@ enum BlueDiveXMLExporter {
                 lines.append(xmlTag("workingPressure", tank.workingPressure.map(formatDouble) ?? "", indent: 8))
                 lines.append(xmlTag("tankMaterial",    tankMaterialVal,                        indent: 8))
                 lines.append(xmlTag("tankType",        tankTypeValue,                          indent: 8))
+                lines.append(xmlTag("usageStartTime",  tank.usageStartTime.map(formatDouble) ?? "", indent: 8))
+                lines.append(xmlTag("usageEndTime",    tank.usageEndTime.map(formatDouble) ?? "",   indent: 8))
                 lines.append("      </tank>")
             }
             lines.append("    </tanks>")
@@ -250,6 +252,12 @@ enum BlueDiveXMLExporter {
                 ]
                 if let temp     = sample.temperature  { attrs.append(("temperature", formatDouble(temp))) }
                 if let pressure = sample.tankPressure  { attrs.append(("tankPressure", formatDouble(pressure))) }
+                if let tp = sample.tankPressures, !tp.isEmpty {
+                    let serialized = tp.sorted(by: { $0.key < $1.key })
+                        .map { "\($0.key):\(formatDouble($0.value))" }
+                        .joined(separator: ",")
+                    attrs.append(("tankPressures", serialized))
+                }
                 if let ppo2     = sample.ppo2           { attrs.append(("ppo2", formatDouble(ppo2))) }
                 if let ndl      = sample.ndl            { attrs.append(("ndl", formatDouble(ndl))) }
                 let eventsStr = sample.events.map { serializeEvent($0) }.joined(separator: ",")

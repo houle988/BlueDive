@@ -333,20 +333,70 @@ private struct StaticChartLayer: View, Equatable {
         }
     }
 
+    /// Sorted tank indices that appear in per-tank pressure data across all samples.
+    private var chartTankIndices: [Int] {
+        var indices = Set<Int>()
+        for sample in dive.profileSamples {
+            if let tp = sample.tankPressures {
+                indices.formUnion(tp.keys)
+            }
+        }
+        return indices.sorted()
+    }
+
+    /// Dash pattern per tank index for visual distinction (all lines stay red).
+    private func pressureDash(forTankAt position: Int) -> [CGFloat] {
+        switch position {
+        case 0:  return []             // solid for primary tank
+        case 1:  return [6, 3]         // short dash
+        case 2:  return [10, 4]        // medium dash
+        case 3:  return [2, 3]         // dotted
+        default: return [8, 3, 2, 3]   // dash-dot
+        }
+    }
+
     @ChartContentBuilder
     private var pressureMarks: some ChartContent {
         if visibility.showPressure {
-            let samplesWithPressure = dive.profileSamples.filter { $0.tankPressure != nil }
-            ForEach(samplesWithPressure) { sample in
-                if let pressure = sample.tankPressure {
-                    let displayPressure = dive.displayProfilePressure(pressure)
-                    let maxDisplayPressure = dive.displayPressure(300)
-                    // Full pressure → y = 0 (top), empty → y = -displayMaxDepth (bottom)
-                    let value = -dive.displayMaxDepth * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
-                    LineMark(x: .value("Time", sample.time), y: .value("Press.", value), series: .value("Sequence", "Pressure"))
-                        .interpolationMethod(.catmullRom)
-                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                        .foregroundStyle(Color.red)
+            let tankIndices = chartTankIndices
+            let maxDisplayPressure = dive.displayPressure(300)
+
+            if tankIndices.count > 1 {
+                // Multi-tank: one line per tank index
+                ForEach(tankIndices, id: \.self) { tankIdx in
+                    let samplesForTank = dive.profileSamples.filter { $0.tankPressures?[tankIdx] != nil }
+                    ForEach(samplesForTank) { sample in
+                        if let pressure = sample.tankPressures?[tankIdx] {
+                            let displayPressure = dive.displayProfilePressure(pressure)
+                            let value = -dive.displayMaxDepth * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
+                            LineMark(
+                                x: .value("Time", sample.time),
+                                y: .value("Press.", value),
+                                series: .value("Sequence", "Pressure-T\(tankIdx)")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .lineStyle(StrokeStyle(
+                                lineWidth: 2,
+                                lineCap: .round,
+                                lineJoin: .round,
+                                dash: pressureDash(forTankAt: tankIndices.firstIndex(of: tankIdx) ?? 0)
+                            ))
+                            .foregroundStyle(Color.red)
+                        }
+                    }
+                }
+            } else {
+                // Single tank or old dive: use tankPressure
+                let samplesWithPressure = dive.profileSamples.filter { $0.tankPressure != nil }
+                ForEach(samplesWithPressure) { sample in
+                    if let pressure = sample.tankPressure {
+                        let displayPressure = dive.displayProfilePressure(pressure)
+                        let value = -dive.displayMaxDepth * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
+                        LineMark(x: .value("Time", sample.time), y: .value("Press.", value), series: .value("Sequence", "Pressure"))
+                            .interpolationMethod(.catmullRom)
+                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                            .foregroundStyle(Color.red)
+                    }
                 }
             }
         }
@@ -638,7 +688,14 @@ struct UnifiedDiveChartOptimized: View {
                 }
                 
                 if visibility.showPressure && hasPressureData {
-                    metricLegendRow(color: .red, label: "Pressure", range: pressureRange)
+                    let tankIndices = chartTankIndicesForLegend
+                    if tankIndices.count > 1 {
+                        ForEach(tankIndices, id: \.self) { idx in
+                            metricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
+                        }
+                    } else {
+                        metricLegendRow(color: .red, label: "Pressure", range: pressureRange)
+                    }
                 }
                 
                 if visibility.showNDL && hasNDLData {
@@ -712,10 +769,30 @@ struct UnifiedDiveChartOptimized: View {
         return "\(displayMin)-\(displayMax)"
     }
     
+    /// Tank indices for legend (computed at the outer view level).
+    private var chartTankIndicesForLegend: [Int] {
+        var indices = Set<Int>()
+        for sample in dive.profileSamples {
+            if let tp = sample.tankPressures {
+                indices.formUnion(tp.keys)
+            }
+        }
+        return indices.sorted()
+    }
+
     private var pressureRange: String {
         let pressures = dive.profileSamples.compactMap { $0.tankPressure }
         guard !pressures.isEmpty, let minP = pressures.min(), let maxP = pressures.max() else { return "—" }
         // Use the dive's unit-aware conversion — never apply heuristics directly.
+        let minDisplay = dive.displayProfilePressure(minP)
+        let maxDisplay = dive.displayProfilePressure(maxP)
+        let symbol = prefs.pressureUnit.symbol
+        return "\(Int(minDisplay))-\(Int(maxDisplay)) \(symbol)"
+    }
+
+    private func pressureRangeForTank(_ tankIdx: Int) -> String {
+        let pressures = dive.profileSamples.compactMap { $0.tankPressures?[tankIdx] }
+        guard !pressures.isEmpty, let minP = pressures.min(), let maxP = pressures.max() else { return "—" }
         let minDisplay = dive.displayProfilePressure(minP)
         let maxDisplay = dive.displayProfilePressure(maxP)
         let symbol = prefs.pressureUnit.symbol
@@ -776,6 +853,12 @@ struct ChartTooltipView: View {
         // Use the dive's unit-aware conversion — never apply heuristics directly.
         return dive.formattedPressure(p)
     }
+
+    /// Per-tank pressure labels for multi-tank tooltip.
+    private var perTankPressureLabels: [(index: Int, label: String)]? {
+        guard let tp = sample.tankPressures, tp.count > 1 else { return nil }
+        return tp.sorted(by: { $0.key < $1.key }).map { (index: $0.key, label: dive.formattedPressure($0.value)) }
+    }
     
     private var ndlLabel: String? {
         guard let ndl = sample.ndl else { return nil }
@@ -829,8 +912,14 @@ struct ChartTooltipView: View {
             }
 
             // Pressure — shown if enabled and data available
-            if visibility.showPressure, let pLabel = pressureLabel {
-                tooltipRow(icon: "gauge.with.needle.fill", color: .red, label: pLabel)
+            if visibility.showPressure {
+                if let perTank = perTankPressureLabels {
+                    ForEach(perTank, id: \.index) { entry in
+                        tooltipRow(icon: "gauge.with.needle.fill", color: .red, label: "T\(entry.index + 1): \(entry.label)")
+                    }
+                } else if let pLabel = pressureLabel {
+                    tooltipRow(icon: "gauge.with.needle.fill", color: .red, label: pLabel)
+                }
             }
             
             // NDL — shown if enabled and data available

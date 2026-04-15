@@ -818,6 +818,44 @@ extension DiveDetailView {
         }
     }
 
+    // MARK: - All-Tanks Summary Helpers
+
+    /// Gas mix summary for all tanks, e.g. "Air / Nitrox 32%"
+    var allTanksGasMixSummary: String {
+        let tanks = dive.tanks
+        guard !tanks.isEmpty else { return dive.formattedGasType }
+        let labels = tanks.map { tank -> String in
+            let o2 = tank.o2Percentage
+            let he = tank.hePercentage
+            if he > 0 { return "Trimix \(o2)/\(he)" }
+            if o2 > 21 { return "Nitrox \(o2)%" }
+            return tank.gasName
+        }
+        return labels.joined(separator: " / ")
+    }
+
+    /// Start pressure summary for all tanks, e.g. "200 bar / 180 bar"
+    func allTanksStartPressureSummary(symbol: String) -> String {
+        let tanks = dive.tanks
+        guard !tanks.isEmpty else { return "—" }
+        let values = tanks.map { tank -> String in
+            guard let sp = tank.startPressure else { return "—" }
+            return String(format: "%.0f \(symbol)", dive.displayPressure(sp))
+        }
+        return values.joined(separator: " / ")
+    }
+
+    /// End pressure summary for all tanks, e.g. "50 bar / 80 bar"
+    func allTanksEndPressureSummary(symbol: String) -> String {
+        let tanks = dive.tanks
+        guard !tanks.isEmpty else { return "—" }
+        let values = tanks.map { tank -> String in
+            guard let ep = tank.endPressure else { return "—" }
+            return String(format: "%.0f \(symbol)", dive.displayPressure(ep))
+        }
+        return values.joined(separator: " / ")
+    }
+
     var statsGrid: some View {
         let depthMax     = dive.displayMaxDepth
         let depthAvg     = dive.displayAverageDepth
@@ -872,14 +910,30 @@ extension DiveDetailView {
 
             DetailCard(
                 title: "RMV",
-                value: dive.formattedRMV,
+                value: dive.formattedCombinedRMV,
+                subtitle: {
+                    if dive.profileSamples.count < 2 && dive.tanks.count > 1 {
+                        return NSLocalizedString("Multi-tank RMV/SAC requires dive computer data", bundle: Bundle.forAppLanguage(), comment: "")
+                    } else if dive.combinedRMVNeedsUsageTime {
+                        return NSLocalizedString("Usage time required for multi-tank RMV", bundle: Bundle.forAppLanguage(), comment: "Shown when multiple non-sidemount tanks are present but usage time is missing, making combined RMV impossible to compute")
+                    }
+                    return nil
+                }(),
                 icon: "lungs.fill",
                 color: .pink
             )
 
             DetailCard(
                 title: "SAC",
-                value: dive.formattedSAC,
+                value: dive.formattedCombinedSAC,
+                subtitle: {
+                    if dive.profileSamples.count < 2 && dive.tanks.count > 1 {
+                        return NSLocalizedString("Multi-tank RMV/SAC requires dive computer data", bundle: Bundle.forAppLanguage(), comment: "")
+                    } else if dive.combinedSACNeedsUsageTime {
+                        return NSLocalizedString("Usage time required for multi-tank SAC", bundle: Bundle.forAppLanguage(), comment: "Shown when multiple tanks are present but usage time is missing, making combined SAC impossible to compute")
+                    }
+                    return nil
+                }(),
                 icon: "gauge.with.dots.needle.bottom.50percent",
                 color: .mint
             )
@@ -893,21 +947,21 @@ extension DiveDetailView {
 
             DetailCard(
                 title: "GAS MIX",
-                value: dive.formattedGasType,
+                value: allTanksGasMixSummary,
                 icon: "bubbles.and.sparkles.fill",
                 color: .purple
             )
 
             DetailCard(
                 title: "START PRESS.",
-                value: dive.displayStartPressure.map { String(format: "%.0f \(pressSymbol)", $0) } ?? "—",
+                value: allTanksStartPressureSummary(symbol: pressSymbol),
                 icon: "gauge.with.needle.fill",
                 color: .red
             )
 
             DetailCard(
                 title: "END PRESS.",
-                value: dive.displayEndPressure.map { String(format: "%.0f \(pressSymbol)", $0) } ?? "—",
+                value: allTanksEndPressureSummary(symbol: pressSymbol),
                 icon: "gauge.with.dots.needle.bottom.50percent",
                 color: .red
             )

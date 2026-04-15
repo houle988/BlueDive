@@ -137,6 +137,9 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var tempWaypointTime: Double?
     private var tempWaypointDepth: Double?
     private var tempWaypointPressure: Double?
+    private var tempWaypointTankPressures: [Int: Double] = [:]
+    private var tempTankPressureRef: String?
+    private var tankIdToIndex: [String: Int] = [:]
     private var tempWaypointTemperature: Double?
     private var tempWaypointPPO2: Double?
     private var tempWaypointNDT: Int?
@@ -339,6 +342,11 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
 
         case "sitedata":
             if isInSite { isInSiteData = true }
+
+        case "tankpressure":
+            if isInWaypoint {
+                tempTankPressureRef = attributeDict["ref"]
+            }
 
         case "link":
             // Process link references immediately from attributes
@@ -653,6 +661,9 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                     tankMaterial: nil,
                     tankType: nil
                 ))
+                if let id = tempTankId {
+                    tankIdToIndex[id] = currentTanks.count - 1
+                }
                 isInTankData = false
             }
 
@@ -662,8 +673,20 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         case "depth":
             if isInWaypoint { tempWaypointDepth = Double(text) }
         case "tankpressure":
-            if isInWaypoint {
-                if let pa = Double(text) { tempWaypointPressure = pascalToBar(pa) }
+            if isInWaypoint, let pa = Double(text) {
+                let bar = pascalToBar(pa)
+                tempWaypointPressure = bar
+                // Resolve tank index from ref using the id→index map built when tankdata was parsed.
+                // Fallback: extract digits from ref for files where tankdata follows samples
+                // (e.g. old BlueDive exports: "tank1" → 1 → index 0, "tank2" → 2 → index 1).
+                if let ref = tempTankPressureRef {
+                    if let idx = tankIdToIndex[ref] {
+                        tempWaypointTankPressures[idx] = bar
+                    } else if let num = Int(ref.filter(\.isNumber)), num > 0 {
+                        tempWaypointTankPressures[num - 1] = bar
+                    }
+                }
+                tempTankPressureRef = nil
             }
         case "temperature":
             if isInWaypoint {
@@ -682,10 +705,16 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         case "waypoint":
             if isInWaypoint {
                 if let time = tempWaypointTime, let depth = tempWaypointDepth {
+                    let perTank: [Int: Double]? = tempWaypointTankPressures.isEmpty ? nil : tempWaypointTankPressures
+                    // When per-tank pressures exist, derive primary from tank 0 / lowest index
+                    let effectivePressure: Double? = perTank.flatMap { dict in
+                        dict[0] ?? dict.min(by: { $0.key < $1.key })?.value
+                    } ?? tempWaypointPressure
                     currentSamples.append(BlueDiveSamplesData(
                         time: time,
                         depth: depth,
-                        pressure: tempWaypointPressure,
+                        pressure: effectivePressure,
+                        tankPressures: perTank,
                         temperature: tempWaypointTemperature,
                         ppo2: tempWaypointPPO2,
                         ndt: tempWaypointNDT
@@ -918,6 +947,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         currentBuddyRefs = []
         currentSamples = []
         currentTanks = []
+        tankIdToIndex = [:]
         isInInformationBeforeDive = false
         isInInformationAfterDive = false
         isInSamples = false
@@ -939,6 +969,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         tempWaypointTime = nil
         tempWaypointDepth = nil
         tempWaypointPressure = nil
+        tempWaypointTankPressures = [:]
+        tempTankPressureRef = nil
         tempWaypointTemperature = nil
         tempWaypointPPO2 = nil
         tempWaypointNDT = nil

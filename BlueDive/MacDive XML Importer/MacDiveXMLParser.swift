@@ -114,6 +114,26 @@ struct BlueDiveTankData: Sendable {
     let workingPressure: Double?   // Working pressure in bar/PSI/Pa
     let tankMaterial: String?      // Material (Steel, Aluminum, etc.)
     let tankType: String?          // Type/Format (Single, Double, Sidemount, etc.)
+    let usageStartTime: Double?    // Seconds into dive when tank usage started
+    let usageEndTime: Double?      // Seconds into dive when tank usage ended
+
+    init(id: String? = nil, oxygen: Int? = nil, helium: Int? = nil, double: Bool = false,
+         volume: Double? = nil, startPressure: Double? = nil, endPressure: Double? = nil,
+         workingPressure: Double? = nil, tankMaterial: String? = nil, tankType: String? = nil,
+         usageStartTime: Double? = nil, usageEndTime: Double? = nil) {
+        self.id = id
+        self.oxygen = oxygen
+        self.helium = helium
+        self.double = double
+        self.volume = volume
+        self.startPressure = startPressure
+        self.endPressure = endPressure
+        self.workingPressure = workingPressure
+        self.tankMaterial = tankMaterial
+        self.tankType = tankType
+        self.usageStartTime = usageStartTime
+        self.usageEndTime = usageEndTime
+    }
 }
 
 /// Gear / equipment item
@@ -140,15 +160,17 @@ struct BlueDiveSamplesData: Sendable {
     let time: Double               // seconds (mandatory)
     let depth: Double              // meters or feet (mandatory)
     let pressure: Double?          // bar or PSI or Pa
+    let tankPressures: [Int: Double]? // Per-tank pressure readings {tankIndex: bar}
     let temperature: Double?       // °C or °F or °K
     let ppo2: Double?
     let ndt: Int?
     let events: [DiveProfileEvent]
 
-    init(time: Double, depth: Double, pressure: Double? = nil, temperature: Double? = nil, ppo2: Double? = nil, ndt: Int? = nil, events: [DiveProfileEvent] = []) {
+    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, ndt: Int? = nil, events: [DiveProfileEvent] = []) {
         self.time = time
         self.depth = depth
         self.pressure = pressure
+        self.tankPressures = tankPressures
         self.temperature = temperature
         self.ppo2 = ppo2
         self.ndt = ndt

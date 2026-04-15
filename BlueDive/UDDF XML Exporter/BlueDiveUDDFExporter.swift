@@ -393,41 +393,9 @@ enum BlueDiveUDDFExporter {
             }
             lines.append("        </informationbeforedive>")
 
-            // ── samples ─────────────────────────────────────────────────────
-            let samples = dive.profileSamples
-            // CNS: dive-level percentage (0–100) exported as fraction (0–1) on last waypoint
-            let diveCNS = dive.cnsPercentage
-            if !samples.isEmpty {
-                lines.append("        <samples>")
-                let lastIndex = samples.count - 1
-                for (index, sample) in samples.enumerated() {
-                    lines.append("          <waypoint>")
-                    // Time: profile stores minutes, UDDF needs seconds
-                    lines.append("            <divetime>\(formatDouble(sample.time * 60))</divetime>")
-                    lines.append("            <depth>\(formatDouble(sample.depth))</depth>")
-                    if let temp = sample.temperature {
-                        lines.append("            <temperature>\(formatDouble(celsiusToKelvin(temp)))</temperature>")
-                    }
-                    if let pressure = sample.tankPressure {
-                        lines.append("            <tankpressure>\(formatDouble(barToPascal(pressure)))</tankpressure>")
-                    }
-                    if let ppo2 = sample.ppo2 {
-                        lines.append("            <calculatedpo2>\(formatDouble(ppo2))</calculatedpo2>")
-                    }
-                    if let ndl = sample.ndl {
-                        // NDL: profile stores minutes, UDDF needs seconds
-                        lines.append("            <nodecotime>\(formatDouble(ndl * 60))</nodecotime>")
-                    }
-                    // Export dive-level CNS on the last waypoint (accumulated value)
-                    if index == lastIndex, let cns = diveCNS, cns > 0 {
-                        lines.append("            <cns>\(formatDouble(cns))</cns>")
-                    }
-                    lines.append("          </waypoint>")
-                }
-                lines.append("        </samples>")
-            }
-
             // ── tankdata ────────────────────────────────────────────────────
+            // Exported before <samples> so parsers can build a ref→index map
+            // before encountering <tankpressure ref="..."> in waypoints.
             if !dive.tanks.isEmpty {
                 for (index, tank) in dive.tanks.enumerated() {
                     lines.append("        <tankdata id=\"tank\(index + 1)\">")
@@ -449,6 +417,45 @@ enum BlueDiveUDDFExporter {
                 }
             }
 
+            // ── samples ─────────────────────────────────────────────────────
+            let samples = dive.profileSamples
+            // CNS: dive-level percentage (0–100) exported as fraction (0–1) on last waypoint
+            let diveCNS = dive.cnsPercentage
+            if !samples.isEmpty {
+                lines.append("        <samples>")
+                let lastIndex = samples.count - 1
+                for (index, sample) in samples.enumerated() {
+                    lines.append("          <waypoint>")
+                    // Time: profile stores minutes, UDDF needs seconds
+                    lines.append("            <divetime>\(formatDouble(sample.time * 60))</divetime>")
+                    lines.append("            <depth>\(formatDouble(sample.depth))</depth>")
+                    if let temp = sample.temperature {
+                        lines.append("            <temperature>\(formatDouble(celsiusToKelvin(temp)))</temperature>")
+                    }
+                    if let tp = sample.tankPressures, !tp.isEmpty {
+                        // Multi-tank: one <tankpressure> per tank, linked by ref
+                        for (tankIdx, pressure) in tp.sorted(by: { $0.key < $1.key }) {
+                            lines.append("            <tankpressure ref=\"tank\(tankIdx + 1)\">\(formatDouble(barToPascal(pressure)))</tankpressure>")
+                        }
+                    } else if let pressure = sample.tankPressure {
+                        lines.append("            <tankpressure>\(formatDouble(barToPascal(pressure)))</tankpressure>")
+                    }
+                    if let ppo2 = sample.ppo2 {
+                        lines.append("            <calculatedpo2>\(formatDouble(ppo2))</calculatedpo2>")
+                    }
+                    if let ndl = sample.ndl {
+                        // NDL: profile stores minutes, UDDF needs seconds
+                        lines.append("            <nodecotime>\(formatDouble(ndl * 60))</nodecotime>")
+                    }
+                    // Export dive-level CNS on the last waypoint (accumulated value)
+                    if index == lastIndex, let cns = diveCNS, cns > 0 {
+                        lines.append("            <cns>\(formatDouble(cns))</cns>")
+                    }
+                    lines.append("          </waypoint>")
+                }
+                lines.append("        </samples>")
+            }
+
             // ── informationafterdive ─────────────────────────────────────────
             lines.append("        <informationafterdive>")
             lines.append("          <greatestdepth>\(formatDouble(dive.maxDepth))</greatestdepth>")
@@ -461,21 +468,15 @@ enum BlueDiveUDDFExporter {
             if let lowTemp = dive.minTemperature as Double?, lowTemp != 0 {
                 lines.append("          <lowesttemperature>\(formatDouble(celsiusToKelvin(lowTemp)))</lowesttemperature>")
             }
-            if let vis = dive.visibility, let visNum = Double(vis) {
-                lines.append("          <visibility>\(formatDouble(visNum))</visibility>")
-            }
-            if let cur = dive.current, !cur.isEmpty {
-                lines.append("          <current>\(xmlEscape(cur))</current>")
+
+            if let vis = dive.visibility, let visVal = Double(vis) {
+                lines.append("          <visibility>\(formatDouble(visVal))</visibility>")
             }
 
-            // Rating
             if dive.rating > 0 {
-                lines.append("          <rating>")
-                lines.append("            <ratingvalue>\(dive.rating)</ratingvalue>")
-                lines.append("          </rating>")
+                lines.append("          <rating><ratingvalue>\(dive.rating)</ratingvalue></rating>")
             }
 
-            // Equipment used — lead
             if let w = dive.weights, w > 0 {
                 lines.append("          <equipmentused>")
                 lines.append("            <leadquantity>\(formatDouble(w))</leadquantity>")

@@ -4,16 +4,120 @@ import SwiftUI
 
 extension DiveDetailView {
 
+    /// The currently selected tank, safely clamped to the valid range.
+    private var selectedTank: TankData? {
+        let tanks = dive.tanks
+        guard !tanks.isEmpty else { return nil }
+        let index = min(selectedTankIndex, tanks.count - 1)
+        return tanks[index]
+    }
+
     var gazTabContent: some View {
         VStack(spacing: 20) {
+            tankSelectorCard
             gazInfoCard
             pressureCard
             decompressionCard
         }
+        .onChange(of: dive.tanks.count) {
+            // Reset selection if tanks changed and index is out of bounds
+            if selectedTankIndex >= dive.tanks.count {
+                selectedTankIndex = max(0, dive.tanks.count - 1)
+            }
+        }
+    }
+
+    var tankSelectorCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "cylinder.fill")
+                    .font(.title3)
+                    .foregroundStyle(.blue)
+                Text("Tanks")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+                Spacer()
+
+                if dive.tanks.count > 1 {
+                    Text(verbatim: "\(min(selectedTankIndex, dive.tanks.count - 1) + 1) / \(dive.tanks.count)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                // Add tank button
+                Button {
+                    addNewTank()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                }
+                .buttonStyle(.plain)
+
+                // Remove selected tank button (only if more than one tank)
+                if dive.tanks.count > 1 {
+                    Button {
+                        removeSelectedTank()
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if dive.tanks.count > 1 {
+                Picker(selection: $selectedTankIndex) {
+                    ForEach(Array(dive.tanks.enumerated()), id: \.element.id) { index, tank in
+                        Text(verbatim: tankPickerLabel(index: index, tank: tank))
+                            .tag(index)
+                    }
+                } label: {
+                    Text("Tank")
+                }
+                .pickerStyle(.menu)
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .padding(.horizontal)
     }
 
     var gazInfoCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let tank = selectedTank
+
+        let o2Pct = tank?.o2Percentage ?? 21
+        let hePct = tank?.hePercentage ?? 0
+        let n2Pct = max(0, 100 - o2Pct - hePct)
+        let gasName = tank?.gasName ?? "Air"
+
+        let gasTypeDisplay: String = {
+            if hePct > 0 { return "Trimix \(o2Pct)/\(hePct)" }
+            if o2Pct > 21 { return "Nitrox \(o2Pct)%" }
+            return gasName
+        }()
+
+        let volumeDisplay: String = {
+            guard let vol = tank?.volume else { return "—" }
+            return dive.formattedVolume(vol, workingPressureRaw: tank?.workingPressure)
+        }()
+
+        let isDouble: Bool = {
+            guard let tt = tank?.tankType?.lowercased() else { return false }
+            return tt.contains("double") || tt.contains("twin")
+        }()
+
+        let wpDisplay: String = {
+            if let wpRaw = tank?.workingPressure {
+                let converted = dive.displayPressure(wpRaw)
+                return String(format: "%.0f \(UserPreferences.shared.pressureUnit.symbol)", converted)
+            }
+            return "—"
+        }()
+
+        return VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
                 Image(systemName: "bubbles.and.sparkles.fill")
                     .font(.title3)
@@ -25,37 +129,23 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            conditionRow(icon: "bubbles.and.sparkles.fill", color: .purple, label: "Gas Type", value: dive.formattedGasType)
+            conditionRow(icon: "bubbles.and.sparkles.fill", color: .purple, label: "Gas Type", value: gasTypeDisplay)
 
-            // Oxygen / Helium / Nitrogen percentages
-            let heliumPct   = dive.heliumPercentage ?? 0
-            let nitrogenPct = max(0, 100 - dive.oxygenPercentage - heliumPct)
+            conditionRow(icon: "o.circle.fill", color: .green,  label: "Oxygen (O₂)", value: "\(o2Pct) %")
+            conditionRow(icon: "h.circle.fill", color: .cyan,   label: "Helium (He)",   value: "\(hePct) %")
+            conditionRow(icon: "n.circle.fill", color: .blue,   label: "Nitrogen (N₂)",    value: "\(n2Pct) %")
 
-            conditionRow(icon: "o.circle.fill", color: .green,  label: "Oxygen (O₂)", value: "\(dive.oxygenPercentage) %")
-            conditionRow(icon: "h.circle.fill", color: .cyan,   label: "Helium (He)",   value: "\(heliumPct) %")
-            conditionRow(icon: "n.circle.fill", color: .blue,   label: "Nitrogen (N₂)",    value: "\(nitrogenPct) %")
+            conditionRow(icon: "cylinder.fill", color: .blue, label: "Tank Volume", value: volumeDisplay)
 
-            conditionRow(icon: "cylinder.fill", color: .blue, label: "Tank Volume", value: dive.formattedCylinderSize ?? "—")
+            conditionRow(icon: "cylinder.split.1x2.fill", color: .blue, label: "Double Tank", value: isDouble ? "Yes" : "No")
 
-            conditionRow(icon: "cylinder.split.1x2.fill", color: .blue, label: "Double Tank", value: dive.isDoubleTank ? "Yes" : "No")
-
-            // Working pressure — shown in the user's preferred pressure unit
-            let wpDisplay: String = {
-                if let wpRaw = dive.tanks.first?.workingPressure {
-                    let converted = dive.displayPressure(wpRaw)
-                    return String(format: "%.0f \(UserPreferences.shared.pressureUnit.symbol)", converted)
-                }
-                return "—"
-            }()
             conditionRow(icon: "gauge.badge.plus", color: .teal, label: "Working Pressure", value: wpDisplay)
 
-            // Always display Material field
             conditionRow(icon: "cube.fill", color: .gray, label: "Material",
-                        value: (dive.tanks.first?.tankMaterial?.isEmpty == false ? dive.tanks.first!.tankMaterial! : "—"))
+                        value: (tank?.tankMaterial?.isEmpty == false ? tank!.tankMaterial! : "—"))
 
-            // Always display Format field
             conditionRow(icon: "cylinder.split.1x2.fill", color: .indigo, label: "Format",
-                        value: (dive.tanks.first?.tankType?.isEmpty == false ? dive.tanks.first!.tankType! : "—"))
+                        value: (tank?.tankType?.isEmpty == false ? tank!.tankType! : "—"))
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
@@ -63,16 +153,16 @@ extension DiveDetailView {
     }
 
     var pressureCard: some View {
-        let pressUnit   = prefs.pressureUnit
-        let pressSymbol = pressUnit.symbol
+        let tank = selectedTank
+        let pressSymbol = prefs.pressureUnit.symbol
 
         let startDisplay: String = {
-            guard let sp = dive.displayStartPressure else { return "—" }
-            return String(format: "%.0f \(pressSymbol)", sp)
+            guard let sp = tank?.startPressure else { return "—" }
+            return String(format: "%.0f \(pressSymbol)", dive.displayPressure(sp))
         }()
         let endDisplay: String = {
-            guard let ep = dive.displayEndPressure else { return "—" }
-            return String(format: "%.0f \(pressSymbol)", ep)
+            guard let ep = tank?.endPressure else { return "—" }
+            return String(format: "%.0f \(pressSymbol)", dive.displayPressure(ep))
         }()
 
         return VStack(alignment: .leading, spacing: 16) {
@@ -90,16 +180,46 @@ extension DiveDetailView {
             conditionRow(icon: "gauge.with.needle.fill", color: .red, label: "Start Pressure", value: startDisplay)
             conditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .orange, label: "End Pressure", value: endDisplay)
 
-            let rmvLabel: LocalizedStringKey = dive.isDoubleTank ? "RMV (double tank)" : "RMV"
-            let sacLabel: LocalizedStringKey = dive.isDoubleTank ? "SAC (double tank)" : "SAC"
+            if tank?.usageStartTime != nil || tank?.usageEndTime != nil {
+                let startSec = tank?.usageStartTime ?? 0
+                let endSec = tank?.usageEndTime
+                let startLabel = formatUsageTime(startSec)
+                let endLabel = endSec.map { formatUsageTime($0) } ?? "—"
+                conditionRow(icon: "play.fill", color: .cyan, label: "Usage Start", value: startLabel)
+                conditionRow(icon: "stop.fill", color: .cyan, label: "Usage End", value: endLabel)
+            }
 
-            // Always display RMV field
-            conditionRow(icon: "lungs.fill", color: .pink, label: rmvLabel,
-                        value: dive.formattedRMV)
+            let tankIdx = dive.tanks.isEmpty ? -1 : min(selectedTankIndex, dive.tanks.count - 1)
+            let selectedTankTypeLC = tank?.tankType?.lowercased() ?? ""
+            let selectedTankIsDouble = selectedTankTypeLC.contains("twin") || selectedTankTypeLC.contains("double")
+            let rmvLabel: LocalizedStringKey = selectedTankIsDouble ? "RMV (double tank)" : "RMV"
+            let sacLabel: LocalizedStringKey = selectedTankIsDouble ? "SAC (double tank)" : "SAC"
 
-            // Always display SAC field (unit follows user's pressure preference)
-            conditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel,
-                        value: dive.formattedSAC)
+            let isSidemount = selectedTankTypeLC.contains("sidemount")
+            let validTankCount = dive.tanks.filter { ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }.count
+            let multiTankMissingUsageTime = validTankCount > 1 && (tank?.usageStartTime == nil || tank?.usageEndTime == nil) && !isSidemount
+            let multiTankNoSamples = dive.profileSamples.count < 2 && validTankCount > 1
+
+            if multiTankNoSamples || multiTankMissingUsageTime {
+                conditionRow(icon: "lungs.fill", color: .pink, label: rmvLabel, value: "—")
+                conditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel, value: "—")
+                if multiTankNoSamples {
+                    Text("Multi-tank RMV/SAC requires dive computer data")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
+                } else {
+                    Text("Usage time required for per-tank RMV/SAC")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
+                }
+            } else {
+                conditionRow(icon: "lungs.fill", color: .pink, label: rmvLabel,
+                            value: dive.formattedRMV(forTankAt: tankIdx))
+                conditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel,
+                            value: dive.formattedSAC(forTankAt: tankIdx))
+            }
 
             // Footnote when RMV was computed from non-metric units
             if let note = dive.rmvFootnote {
@@ -322,6 +442,50 @@ extension DiveDetailView {
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
         .padding(.horizontal)
+    }
+
+    // MARK: - Usage Time Formatting
+
+    /// Formats seconds into a readable string (e.g. "5m 30s" or "0m 00s").
+    private func formatUsageTime(_ seconds: Double) -> String {
+        let totalSec = Int(seconds.rounded())
+        let m = totalSec / 60
+        let s = totalSec % 60
+        let bundle = Bundle.forAppLanguage()
+        let mAbbr = NSLocalizedString("usage_time_minutes_abbrev", bundle: bundle, comment: "Abbreviation for minutes in usage time display (e.g. '5m')")
+        let sAbbr = NSLocalizedString("usage_time_seconds_abbrev", bundle: bundle, comment: "Abbreviation for seconds in usage time display (e.g. '30s')")
+        return "\(m)\(mAbbr) \(String(format: "%02d", s))\(sAbbr)"
+    }
+
+    // MARK: - Tank Management
+
+    func addNewTank() {
+        var tanks = dive.tanks
+        tanks.append(TankData())
+        dive.tanks = tanks
+        selectedTankIndex = tanks.count - 1
+        // Open edit sheet for the new tank
+        showEditSheet = true
+    }
+
+    func removeSelectedTank() {
+        var tanks = dive.tanks
+        guard tanks.count > 1 else { return }
+        let indexToRemove = min(selectedTankIndex, tanks.count - 1)
+        tanks.remove(at: indexToRemove)
+        dive.tanks = tanks
+        selectedTankIndex = max(0, indexToRemove - 1)
+    }
+
+    // MARK: - Tank Picker Helper
+
+    func tankPickerLabel(index: Int, tank: TankData) -> String {
+        let bundle = Bundle.forAppLanguage()
+        let tankLabel = NSLocalizedString("Tank", bundle: bundle, comment: "")
+        let number = "\(tankLabel) \(index + 1)"
+        let gas = tank.gasName
+        let o2 = "\(tank.o2Percentage)%"
+        return "\(number) — \(gas) \(o2)"
     }
 
     // MARK: - Helper Functions for Decompression

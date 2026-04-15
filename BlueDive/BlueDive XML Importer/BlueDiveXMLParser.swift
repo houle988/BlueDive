@@ -123,6 +123,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
     private var tempTankWorkingPressure: Double?
     private var tempTankMaterial: String?
     private var tempTankType: String?
+    private var tempTankUsageStartTime: Double?
+    private var tempTankUsageEndTime: Double?
 
     // MARK: - Temporary Gear State
 
@@ -357,8 +359,10 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         case "startPressure":   tempTankStartPressure = Double(text)
         case "endPressure":     tempTankEndPressure = Double(text)
         case "workingPressure": tempTankWorkingPressure = Double(text)
-        case "tankMaterial":    tempTankMaterial = text.nilIfEmpty
-        case "tankType":        tempTankType = text.nilIfEmpty
+        case "tankMaterial":       tempTankMaterial = text.nilIfEmpty
+        case "tankType":           tempTankType = text.nilIfEmpty
+        case "usageStartTime":     tempTankUsageStartTime = Double(text)
+        case "usageEndTime":       tempTankUsageEndTime = Double(text)
         case "tank":
             let tankIsDouble = tempTankType?.lowercased().contains("twin") == true
             currentTanks.append(BlueDiveTankData(
@@ -371,7 +375,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
                 endPressure: tempTankEndPressure,
                 workingPressure: tempTankWorkingPressure,
                 tankMaterial: tempTankMaterial,
-                tankType: tempTankType
+                tankType: tempTankType,
+                usageStartTime: tempTankUsageStartTime,
+                usageEndTime: tempTankUsageEndTime
             ))
             isInTank = false
         default: break
@@ -434,6 +440,18 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         let temperature = attributes["temperature"].flatMap(Double.init)
         // The export key is "tankPressure"; BlueDiveSamplesData maps it to `pressure`
         let pressure    = attributes["tankPressure"].flatMap(Double.init)
+        // Per-tank pressures: "0:200.0,1:180.0" → [0: 200.0, 1: 180.0]
+        let tankPressures: [Int: Double]? = attributes["tankPressures"].flatMap { raw in
+            var dict: [Int: Double] = [:]
+            for pair in raw.split(separator: ",") {
+                let parts = pair.split(separator: ":")
+                guard parts.count == 2,
+                      let idx = Int(parts[0]),
+                      let val = Double(parts[1]) else { continue }
+                dict[idx] = val
+            }
+            return dict.isEmpty ? nil : dict
+        }
         let ppo2        = attributes["ppo2"].flatMap(Double.init)
         let ndt         = attributes["ndl"].flatMap(Double.init).map(Int.init)
         let events: [DiveProfileEvent]
@@ -443,10 +461,16 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
             events = []
         }
 
+        // When per-tank pressures exist, derive primary pressure from tank 0 / lowest index
+        let effectivePressure: Double? = tankPressures.flatMap { dict in
+            dict[0] ?? dict.min(by: { $0.key < $1.key })?.value
+        } ?? pressure
+
         currentSamples.append(BlueDiveSamplesData(
             time: timeSeconds,
             depth: depth,
-            pressure: pressure,
+            pressure: effectivePressure,
+            tankPressures: tankPressures,
             temperature: temperature,
             ppo2: ppo2,
             ndt: ndt,
@@ -683,6 +707,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         tempTankWorkingPressure = nil
         tempTankMaterial = nil
         tempTankType = nil
+        tempTankUsageStartTime = nil
+        tempTankUsageEndTime = nil
     }
 
     private func resetTempGear() {

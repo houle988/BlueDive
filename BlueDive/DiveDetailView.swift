@@ -25,8 +25,8 @@ enum DiveTab: String, CaseIterable, Identifiable {
 
     /// Tabs visible in the tab bar (export tabs hidden — uncomment to re-enable for troubleshooting)
     static var visibleCases: [DiveTab] {
-        allCases.filter { $0 != .xmlExport && $0 != .uddfExport }
-        // allCases // To enable tabs + comment the previous line
+        // allCases.filter { $0 != .xmlExport && $0 != .uddfExport }
+        allCases // Export tabs enabled for testing
     }
 
     var icon: String {
@@ -78,6 +78,7 @@ struct DiveDetailView: View {
     @State var fishToDelete: MarineSight?
     @State var showDeleteFishAlert = false
     @State var selectedPhotoForPreview: IdentifiablePhotoData?
+    @State var selectedTankIndex: Int = 0
 
     // Export state
     #if os(iOS)
@@ -284,7 +285,7 @@ struct DiveDetailView: View {
         case .conditions:
             EditConditionsView(dive: dive)
         case .gaz:
-            EditGazView(dive: dive)
+            EditGazView(dive: dive, tankIndex: selectedTankIndex)
         case .samples:
             // Samples come from a dive computer — no manual editing
             noEditAvailableView(message: "Samples come from your dive computer and cannot be manually edited.")

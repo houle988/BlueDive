@@ -254,6 +254,7 @@ extension ContentView {
                 depth: sample.depth,
                 temperature: sample.temperature,
                 tankPressure: sample.pressure,
+                tankPressures: sample.tankPressures,
                 ndl: sample.ndt != nil ? Double(sample.ndt!) : nil,
                 ppo2: sample.ppo2,
                 events: sample.events
@@ -369,7 +370,9 @@ extension ContentView {
                     endPressure: tank.endPressure,
                     workingPressure: tank.workingPressure,
                     tankMaterial: tank.tankMaterial,
-                    tankType: resolvedTankType
+                    tankType: resolvedTankType,
+                    usageStartTime: tank.usageStartTime,
+                    usageEndTime: tank.usageEndTime
                 )
                 tanks.append(tankData)
             }
@@ -542,6 +545,7 @@ extension ContentView {
                 depth: sample.depth,
                 temperature: sample.temperature,
                 tankPressure: sample.tankPressure,
+                tankPressures: sample.tankPressures,
                 ndl: sample.ndl,
                 ppo2: sample.ppo2
             ))

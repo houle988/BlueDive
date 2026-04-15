@@ -93,8 +93,22 @@ extension DiveDetailView {
         .padding(.horizontal)
     }
 
+    /// Sorted tank indices that have per-tank pressure data across the whole dive.
+    private var sampleTankIndices: [Int] {
+        var indices = Set<Int>()
+        for sample in dive.profileSamples {
+            if let tp = sample.tankPressures {
+                indices.formUnion(tp.keys)
+            }
+        }
+        return indices.sorted()
+    }
+
     var samplesTableSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let tankIndices = sampleTankIndices
+        let hasMultiTank = tankIndices.count > 1
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "tablecells.fill")
                     .foregroundStyle(.teal)
@@ -103,73 +117,94 @@ extension DiveDetailView {
                     .foregroundStyle(.primary)
             }
 
-            // Table header
-            HStack {
-                Text("Time").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .leading)
-                Text("Depth").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
-                Text("Temp.").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
-                Text("Press.").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
-                Text("PPO₂").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
-                Text("NDL").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
-                Text("Events").font(.caption2).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
-                Spacer()
-            }
-            .padding(.horizontal, 4)
-
-            Divider().background(.primary.opacity(0.15))
-
-            LazyVStack(spacing: 0) {
-                ForEach(Array(dive.profileSamples.enumerated()), id: \.offset) { i, sample in
-                    HStack {
-                        Text(String(format: "%.2f", sample.time * 60))
-                            .font(.caption).foregroundStyle(.primary)
-                            .frame(width: 50, alignment: .leading)
-                        Text(String(format: "%.2f", sample.depth))
-                            .font(.caption).foregroundStyle(.cyan)
-                            .frame(width: 45, alignment: .trailing)
-                        if let temp = sample.temperature {
-                            Text(UserPreferences.shared.temperatureUnit.formatted(temp, from: dive.storedTemperatureUnit))
-                                .font(.caption).foregroundStyle(.orange)
-                                .frame(width: 50, alignment: .trailing)
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // Table header
+                    HStack(spacing: 0) {
+                        Text("Time").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .leading)
+                        Text("Depth").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                        Text("Temp.").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                        if hasMultiTank {
+                            ForEach(tankIndices, id: \.self) { idx in
+                                Text("T\(idx + 1)").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                            }
                         } else {
-                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                            Text("Press.").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
                         }
-                        if let press = sample.tankPressure {
-                            Text(String(format: "%.2f", dive.displayProfilePressure(press)))
-                                .font(.caption).foregroundStyle(.red)
-                                .frame(width: 50, alignment: .trailing)
-                        } else {
-                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
-                        }
-                        if let ppo2 = sample.ppo2 {
-                            Text(String(format: "%.2f", ppo2))
-                                .font(.caption).foregroundStyle(ppo2Color(for: ppo2))
-                                .frame(width: 50, alignment: .trailing)
-                        } else {
-                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
-                        }
-                        if let ndl = sample.ndl {
-                            Text(String(format: "%.0f", ndl))
-                                .font(.caption).foregroundStyle(.yellow)
-                                .frame(width: 45, alignment: .trailing)
-                        } else {
-                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
-                        }
-                        if sample.events.isEmpty {
-                            Text("—").font(.caption).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
-                        } else {
-                            Text(sample.events.map(\.label).joined(separator: ", "))
-                                .font(.caption).foregroundStyle(.mint)
-                                .frame(minWidth: 50, alignment: .leading)
-                        }
+                        Text("PPO₂").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                        Text("NDL").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                        Text("Events").font(.caption2).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
                         Spacer()
                     }
-                    .padding(.vertical, 4)
                     .padding(.horizontal, 4)
-                    .background(i % 2 == 0 ? Color.primary.opacity(0.03) : Color.clear)
+
+                    Divider().background(.primary.opacity(0.15))
+
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(dive.profileSamples.enumerated()), id: \.offset) { i, sample in
+                            HStack(spacing: 0) {
+                                Text(String(format: "%.2f", sample.time * 60))
+                                    .font(.caption).foregroundStyle(.primary)
+                                    .frame(width: 50, alignment: .leading)
+                                Text(String(format: "%.2f", sample.depth))
+                                    .font(.caption).foregroundStyle(.cyan)
+                                    .frame(width: 45, alignment: .trailing)
+                                if let temp = sample.temperature {
+                                    Text(UserPreferences.shared.temperatureUnit.formatted(temp, from: dive.storedTemperatureUnit))
+                                        .font(.caption).foregroundStyle(.orange)
+                                        .frame(width: 50, alignment: .trailing)
+                                } else {
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                }
+                                if hasMultiTank {
+                                    ForEach(tankIndices, id: \.self) { idx in
+                                        if let press = sample.tankPressures?[idx] {
+                                            Text(String(format: "%.0f", dive.displayProfilePressure(press)))
+                                                .font(.caption).foregroundStyle(.red)
+                                                .frame(width: 50, alignment: .trailing)
+                                        } else {
+                                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                        }
+                                    }
+                                } else {
+                                    if let press = sample.tankPressure {
+                                        Text(String(format: "%.2f", dive.displayProfilePressure(press)))
+                                            .font(.caption).foregroundStyle(.red)
+                                            .frame(width: 50, alignment: .trailing)
+                                    } else {
+                                        Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                    }
+                                }
+                                if let ppo2 = sample.ppo2 {
+                                    Text(String(format: "%.2f", ppo2))
+                                        .font(.caption).foregroundStyle(ppo2Color(for: ppo2))
+                                        .frame(width: 50, alignment: .trailing)
+                                } else {
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                }
+                                if let ndl = sample.ndl {
+                                    Text(String(format: "%.0f", ndl))
+                                        .font(.caption).foregroundStyle(.yellow)
+                                        .frame(width: 45, alignment: .trailing)
+                                } else {
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                                }
+                                if sample.events.isEmpty {
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
+                                } else {
+                                    Text(sample.events.map(\.label).joined(separator: ", "))
+                                        .font(.caption).foregroundStyle(.mint)
+                                        .frame(minWidth: 50, alignment: .leading)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 4)
+                            .background(i % 2 == 0 ? Color.primary.opacity(0.03) : Color.clear)
+                        }
+                    }
                 }
             }
-
 
         }
         .padding()

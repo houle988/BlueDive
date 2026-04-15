@@ -2366,6 +2366,7 @@ struct EditConditionsView: View {
 /// Popup de modification pour l'onglet Gaz
 struct EditGazView: View {
     @Bindable var dive: Dive
+    let tankIndex: Int
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \TankTemplate.name) private var templates: [TankTemplate]
     @State private var selectedTemplateName: String = ""
@@ -2384,6 +2385,38 @@ struct EditGazView: View {
     /// `nil` = not provided (calculation falls back to 3000 PSI default).
     @State private var workingWorkingPressure: Double?
     @State private var workingPressureText: String
+    @State private var workingUsageStartTime: Double?  // always in seconds
+    @State private var usageStartTimeText: String
+    @State private var workingUsageEndTime: Double?    // always in seconds
+    @State private var usageEndTimeText: String
+
+    enum UsageTimeUnit: String, CaseIterable {
+        case minutes = "Minutes"
+        case seconds = "Seconds"
+
+        var symbol: String {
+            switch self {
+            case .minutes: return "min"
+            case .seconds: return "sec"
+            }
+        }
+
+        func toSeconds(_ value: Double) -> Double {
+            switch self {
+            case .minutes: return value * 60.0
+            case .seconds: return value
+            }
+        }
+
+        func fromSeconds(_ value: Double) -> Double {
+            switch self {
+            case .minutes: return value / 60.0
+            case .seconds: return value
+            }
+        }
+    }
+
+    @State private var usageTimeUnit: UsageTimeUnit = .minutes
 
     /// Validation: si le volume saisi semble hors limites selon l'unité stockée.
     private var cylinderSizeIsValid: Bool {
@@ -2429,12 +2462,14 @@ struct EditGazView: View {
     private let materialOptions = ["Steel", "Galvanized Steel", "Aluminium", "Carbon"]
     private let typeOptions     = ["Single tank", "Twinset", "Sidemount", "Pony", "Rebreather", "Other"]
 
-    init(dive: Dive) {
+    init(dive: Dive, tankIndex: Int = 0) {
         self.dive = dive
-        let tank = dive.tanks.first
-        _workingGasType          = State(initialValue: dive.gasType)
-        _workingO2               = State(initialValue: dive.oxygenPercentage)
-        _workingHe               = State(initialValue: dive.heliumPercentage ?? 0)
+        self.tankIndex = tankIndex
+        let tanks = dive.tanks
+        let tank = tankIndex < tanks.count ? tanks[tankIndex] : nil
+        _workingGasType          = State(initialValue: tank?.gasName ?? "Air")
+        _workingO2               = State(initialValue: tank?.o2Percentage ?? 21)
+        _workingHe               = State(initialValue: tank?.hePercentage ?? 0)
         _workingCylinderSize     = State(initialValue: tank?.volume)
         _cylinderSizeText        = State(initialValue: Self.formatDouble(tank?.volume))
         _workingCylinderMaterial = State(initialValue: tank?.tankMaterial ?? "")
@@ -2443,6 +2478,10 @@ struct EditGazView: View {
         _workingEndPressure      = State(initialValue: tank?.endPressure.map { Int($0.rounded()) })
         _workingWorkingPressure  = State(initialValue: tank?.workingPressure)
         _workingPressureText     = State(initialValue: Self.formatDouble(tank?.workingPressure))
+        _workingUsageStartTime   = State(initialValue: tank?.usageStartTime)
+        _usageStartTimeText      = State(initialValue: Self.formatDouble(tank?.usageStartTime.map { $0 / 60.0 }))
+        _workingUsageEndTime     = State(initialValue: tank?.usageEndTime)
+        _usageEndTimeText        = State(initialValue: Self.formatDouble(tank?.usageEndTime.map { $0 / 60.0 }))
     }
 
     /// Copy physical tank properties from a template into the working state variables.
@@ -2745,6 +2784,91 @@ struct EditGazView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+
+                    gazMacOSGroup("Usage Time", icon: "clock.fill", color: .cyan) {
+                        Picker("Unit", selection: $usageTimeUnit) {
+                            ForEach(UsageTimeUnit.allCases, id: \.self) { unit in
+                                Text(LocalizedStringKey(unit.rawValue)).tag(unit)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: usageTimeUnit) {
+                            // Re-display existing values in new unit
+                            usageStartTimeText = workingUsageStartTime.map {
+                                Self.formatDouble(usageTimeUnit.fromSeconds($0))
+                            } ?? ""
+                            usageEndTimeText = workingUsageEndTime.map {
+                                Self.formatDouble(usageTimeUnit.fromSeconds($0))
+                            } ?? ""
+                        }
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.fill")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            Text(verbatim: NSLocalizedString("Usage Start", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 180, alignment: .leading)
+                            TextField("Usage Start", text: $usageStartTimeText)
+                                .textFieldStyle(.roundedBorder)
+                                .onChange(of: usageStartTimeText) {
+                                    if let parsed = Self.parseFlexibleDouble(usageStartTimeText) {
+                                        workingUsageStartTime = usageTimeUnit.toSeconds(parsed)
+                                    } else {
+                                        workingUsageStartTime = nil
+                                    }
+                                }
+                                .overlay(alignment: .trailing) {
+                                    if workingUsageStartTime != nil {
+                                        Button {
+                                            workingUsageStartTime = nil
+                                            usageStartTimeText = ""
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(.trailing, 6)
+                                    }
+                                }
+                        }
+                        .padding(.vertical, 4)
+                        Divider()
+                        HStack(spacing: 12) {
+                            Image(systemName: "stop.fill")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            Text(verbatim: NSLocalizedString("Usage End", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 180, alignment: .leading)
+                            TextField("Usage End", text: $usageEndTimeText)
+                                .textFieldStyle(.roundedBorder)
+                                .onChange(of: usageEndTimeText) {
+                                    if let parsed = Self.parseFlexibleDouble(usageEndTimeText) {
+                                        workingUsageEndTime = usageTimeUnit.toSeconds(parsed)
+                                    } else {
+                                        workingUsageEndTime = nil
+                                    }
+                                }
+                                .overlay(alignment: .trailing) {
+                                    if workingUsageEndTime != nil {
+                                        Button {
+                                            workingUsageEndTime = nil
+                                            usageEndTimeText = ""
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(.trailing, 6)
+                                    }
+                                }
+                        }
+                        .padding(.vertical, 4)
+                        Text("Optional. Specify when this tank was used during the dive for more accurate RMV/SAC calculation.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding(24)
             }
@@ -2955,6 +3079,82 @@ struct EditGazView: View {
                         Text("Pressure unit (\(dive.storedPressureUnit.symbol)) matches the original import format and cannot be changed.")
                             .font(.caption2)
                     }
+                    Section {
+                        Picker("Unit", selection: $usageTimeUnit) {
+                            ForEach(UsageTimeUnit.allCases, id: \.self) { unit in
+                                Text(LocalizedStringKey(unit.rawValue)).tag(unit)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: usageTimeUnit) {
+                            usageStartTimeText = workingUsageStartTime.map {
+                                Self.formatDouble(usageTimeUnit.fromSeconds($0))
+                            } ?? ""
+                            usageEndTimeText = workingUsageEndTime.map {
+                                Self.formatDouble(usageTimeUnit.fromSeconds($0))
+                            } ?? ""
+                        }
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.fill")
+                                .foregroundStyle(.cyan)
+                                .frame(width: 24)
+                            Text(verbatim: NSLocalizedString("Usage Start", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
+                                .foregroundStyle(.primary)
+                                .fixedSize()
+                            TextField("Usage Start", text: $usageStartTimeText)
+                                .platformKeyboardType(.decimalPad)
+                                .onChange(of: usageStartTimeText) {
+                                    if let parsed = Self.parseFlexibleDouble(usageStartTimeText) {
+                                        workingUsageStartTime = usageTimeUnit.toSeconds(parsed)
+                                    } else {
+                                        workingUsageStartTime = nil
+                                    }
+                                }
+                            if workingUsageStartTime != nil {
+                                Button {
+                                    workingUsageStartTime = nil
+                                    usageStartTimeText = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        HStack(spacing: 12) {
+                            Image(systemName: "stop.fill")
+                                .foregroundStyle(.cyan)
+                                .frame(width: 24)
+                            Text(verbatim: NSLocalizedString("Usage End", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
+                                .foregroundStyle(.primary)
+                                .fixedSize()
+                            TextField("Usage End", text: $usageEndTimeText)
+                                .platformKeyboardType(.decimalPad)
+                                .onChange(of: usageEndTimeText) {
+                                    if let parsed = Self.parseFlexibleDouble(usageEndTimeText) {
+                                        workingUsageEndTime = usageTimeUnit.toSeconds(parsed)
+                                    } else {
+                                        workingUsageEndTime = nil
+                                    }
+                                }
+                            if workingUsageEndTime != nil {
+                                Button {
+                                    workingUsageEndTime = nil
+                                    usageEndTimeText = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    } header: {
+                        Text("Usage Time")
+                    } footer: {
+                        Text("Optional. Specify when this tank was used during the dive for more accurate RMV/SAC calculation.")
+                            .font(.caption2)
+                    }
                 }
                 .scrollContentBackground(.hidden)
             }
@@ -3027,8 +3227,11 @@ struct EditGazView: View {
         let trimmedType = workingCylinderType.trimmingCharacters(in: .whitespaces)
         let type = trimmedType.isEmpty ? nil : trimmedType
 
-        if let existingTank = dive.tanks.first {
-            let updatedTank = TankData(
+        var tanks = dive.tanks
+
+        if tankIndex < tanks.count {
+            let existingTank = tanks[tankIndex]
+            tanks[tankIndex] = TankData(
                 id: existingTank.id,
                 o2: o2Fraction,
                 he: heFraction,
@@ -3037,11 +3240,12 @@ struct EditGazView: View {
                 endPressure: endP,
                 workingPressure: workingWorkingPressure,
                 tankMaterial: material,
-                tankType: type
+                tankType: type,
+                usageStartTime: workingUsageStartTime,
+                usageEndTime: workingUsageEndTime
             )
-            dive.tanks = [updatedTank] + dive.tanks.dropFirst()
         } else {
-            dive.tanks = [TankData(
+            tanks.append(TankData(
                 o2: o2Fraction,
                 he: heFraction,
                 volume: workingCylinderSize,
@@ -3049,9 +3253,12 @@ struct EditGazView: View {
                 endPressure: endP,
                 workingPressure: workingWorkingPressure,
                 tankMaterial: material,
-                tankType: type
-            )]
+                tankType: type,
+                usageStartTime: workingUsageStartTime,
+                usageEndTime: workingUsageEndTime
+            ))
         }
+        dive.tanks = tanks
 
         dismiss()
     }

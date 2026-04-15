@@ -1270,11 +1270,19 @@ struct BluetoothScannerView: View {
                 }
             }
             
+            let perTank: [Int: Double]? = base.pressures.isEmpty ? nil : base.pressures
+            // Derive tankPressure from per-tank dict when available:
+            // prefer tank 0 (primary), then lowest-index tank, then legacy single value
+            let primaryPressure: Double? = perTank.flatMap { dict in
+                dict[0] ?? dict.min(by: { $0.key < $1.key })?.value
+            } ?? base.pressure
+
             result.append(DiveProfilePoint(
                 time: base.time / 60.0, // LibDCSwift uses seconds, BlueDive uses minutes
                 depth: base.depth,
                 temperature: base.temperature,
-                tankPressure: base.pressure,
+                tankPressure: primaryPressure,
+                tankPressures: perTank,
                 ndl: base.ndl.map { Double($0) / 60.0 }, // Seconds to minutes
                 ppo2: base.po2,
                 events: allEvents

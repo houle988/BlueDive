@@ -41,17 +41,19 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
     let time: Double  // Time in minutes
     let depth: Double // Depth in meters
     let temperature: Double? // Temperature in Celsius
-    let tankPressure: Double? // Tank pressure in bar
+    let tankPressure: Double? // Tank pressure in bar (single / primary tank)
+    let tankPressures: [Int: Double]? // Per-tank pressure readings {tankIndex: bar}
     let ndl: Double? // No Decompression Limit in minutes
     let ppo2: Double? // Oxygen partial pressure in bar
     let events: [DiveProfileEvent] // Events at this profile point
     
-    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, ndl: Double? = nil, ppo2: Double? = nil, events: [DiveProfileEvent] = []) {
+    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ppo2: Double? = nil, events: [DiveProfileEvent] = []) {
         self.id = id
         self.time = time
         self.depth = depth
         self.temperature = temperature
         self.tankPressure = tankPressure
+        self.tankPressures = tankPressures
         self.ndl = ndl
         self.ppo2 = ppo2
         self.events = events
@@ -65,7 +67,11 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         time = try container.decode(Double.self, forKey: .time)
         depth = try container.decode(Double.self, forKey: .depth)
         temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
-        tankPressure = try container.decodeIfPresent(Double.self, forKey: .tankPressure)
+        let storedPressure = try container.decodeIfPresent(Double.self, forKey: .tankPressure)
+        let perTank = try container.decodeIfPresent([Int: Double].self, forKey: .tankPressures)
+        tankPressures = perTank
+        // Derive tankPressure from per-tank dict (tank 0 / lowest index) when available
+        tankPressure = perTank.flatMap { $0[0] ?? $0.min(by: { $0.key < $1.key })?.value } ?? storedPressure
         ndl = try container.decodeIfPresent(Double.self, forKey: .ndl)
         ppo2 = try container.decodeIfPresent(Double.self, forKey: .ppo2)
         events = (try? container.decode([DiveProfileEvent].self, forKey: .events)) ?? []
@@ -85,6 +91,8 @@ struct TankData: Identifiable, Sendable {
     let workingPressure: Double? // Working pressure in bar (optional)
     let tankMaterial: String?    // Tank material (Steel, Aluminum, etc.)
     let tankType: String?        // Configuration type (Single, Double, Sidemount)
+    let usageStartTime: Double?  // Seconds into the dive when this tank started being used
+    let usageEndTime: Double?    // Seconds into the dive when this tank stopped being used
 
     // Computed gas properties
     var n2: Double { max(0, 1.0 - o2 - he) }
@@ -99,7 +107,8 @@ struct TankData: Identifiable, Sendable {
 
     init(id: UUID = UUID(), o2: Double = 0.21, he: Double = 0.0,
          volume: Double? = nil, startPressure: Double? = nil, endPressure: Double? = nil,
-         workingPressure: Double? = nil, tankMaterial: String? = nil, tankType: String? = nil) {
+         workingPressure: Double? = nil, tankMaterial: String? = nil, tankType: String? = nil,
+         usageStartTime: Double? = nil, usageEndTime: Double? = nil) {
         self.id = id
         self.o2 = o2
         self.he = he
@@ -109,6 +118,8 @@ struct TankData: Identifiable, Sendable {
         self.workingPressure = workingPressure
         self.tankMaterial = tankMaterial
         self.tankType = tankType
+        self.usageStartTime = usageStartTime
+        self.usageEndTime = usageEndTime
     }
 }
 
@@ -118,6 +129,7 @@ extension TankData: Codable {
     enum CodingKeys: String, CodingKey {
         case id, o2, he, volume, startPressure, endPressure
         case workingPressure, tankMaterial, tankType
+        case usageStartTime, usageEndTime
     }
 
     init(from decoder: Decoder) throws {
@@ -131,6 +143,8 @@ extension TankData: Codable {
         workingPressure = try container.decodeIfPresent(Double.self, forKey: .workingPressure)
         tankMaterial = try container.decodeIfPresent(String.self, forKey: .tankMaterial)
         tankType = try container.decodeIfPresent(String.self, forKey: .tankType)
+        usageStartTime = try container.decodeIfPresent(Double.self, forKey: .usageStartTime)
+        usageEndTime = try container.decodeIfPresent(Double.self, forKey: .usageEndTime)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -144,6 +158,8 @@ extension TankData: Codable {
         try container.encodeIfPresent(workingPressure, forKey: .workingPressure)
         try container.encodeIfPresent(tankMaterial, forKey: .tankMaterial)
         try container.encodeIfPresent(tankType, forKey: .tankType)
+        try container.encodeIfPresent(usageStartTime, forKey: .usageStartTime)
+        try container.encodeIfPresent(usageEndTime, forKey: .usageEndTime)
     }
 }
 
@@ -694,35 +710,94 @@ final class Dive {
         return weightedSum / totalTime
     }
 
-    /// Calcul automatique de la RMV (Respiratory Minute Volume) en L/min à la surface.
-    /// Formule: RMV = (ΔP × Volume effectif) / (Durée × Pression atm. moyenne)
-    ///
-    /// Le volume effectif est doublé si `isDoubleTank` est activé.
-    /// Calculates RMV from TankData values.
-    /// La pression atmosphérique est calculée avec la profondeur moyenne pondérée par le temps
-    /// (règle des trapèzes) pour correspondre au calcul de MacDive sur les fichiers UDDF.
-    var calculatedRMV: Double {
-        guard duration > 0 else { return 0.0 }
-
+    /// Time-weighted average depth for a specific time window (in minutes).
+    /// Falls back to `timeWeightedAverageDepth` when the window covers the full dive.
+    func timeWeightedAverageDepth(from startMin: Double, to endMin: Double) -> Double {
         let samples = profileSamples
-        let durationMinutes: Double
-        if let lastTime = samples.last?.time, lastTime > 0 {
-            durationMinutes = lastTime
-        } else {
-            durationMinutes = Double(duration)
+        guard samples.count >= 2 else { return averageDepth }
+
+        var weightedSum = 0.0
+        var totalTime = 0.0
+
+        for i in 1..<samples.count {
+            let t0 = samples[i - 1].time
+            let t1 = samples[i].time
+            // Clip segment to the requested window
+            let segStart = max(t0, startMin)
+            let segEnd = min(t1, endMin)
+            let dt = segEnd - segStart
+            guard dt > 0 else { continue }
+
+            // Interpolate depths at segment boundaries
+            let segDuration = t1 - t0
+            guard segDuration > 0 else { continue }
+            let d0 = samples[i - 1].depth
+            let d1 = samples[i].depth
+            let depthAtSegStart = d0 + (d1 - d0) * ((segStart - t0) / segDuration)
+            let depthAtSegEnd = d0 + (d1 - d0) * ((segEnd - t0) / segDuration)
+            let midDepth = (depthAtSegStart + depthAtSegEnd) / 2.0
+            weightedSum += midDepth * dt
+            totalTime += dt
         }
 
-        let effectiveAvgDepth = timeWeightedAverageDepth
-        guard effectiveAvgDepth > 0 else { return 0.0 }
+        guard totalTime > 0 else { return averageDepth }
+        return weightedSum / totalTime
+    }
+
+    /// Combined RMV across all tanks (L/min at the surface).
+    /// Delegates to `combinedRMV` which uses per-tank `tankType` multipliers.
+    var calculatedRMV: Double { combinedRMV }
+
+    /// Combined SAC across all tanks (bar/min).
+    /// Delegates to `combinedSAC` which uses per-tank `tankType` multipliers.
+    var calculatedSAC: Double { combinedSAC }
+
+    // MARK: - Per-tank RMV / SAC
+
+    /// RMV for a specific tank (L/min at the surface).
+    /// Uses the tank's usage time window when available for accurate per-tank calculation.
+    func calculatedRMV(forTankAt index: Int) -> Double {
+        guard duration > 0, index >= 0, index < tanks.count else { return 0.0 }
+        let tank = tanks[index]
+
+        let samples = profileSamples
+        let hasSamples = (samples.last?.time ?? 0) > 0
+
+        // Manual dive (no samples): only supported for single tank
+        if !hasSamples && tanks.count > 1 { return 0.0 }
+
+        let hasUsageTimes = tank.usageStartTime != nil || tank.usageEndTime != nil
+
+        let divisor: Double
+        let effectiveAvgDepth: Double
+
+        if hasUsageTimes, hasSamples {
+            let lastTimeMin = samples.last!.time              // minutes
+            let usageStartMin = (tank.usageStartTime ?? 0) / 60.0 // seconds → minutes
+            let usageEndMin = tank.usageEndTime.map { $0 / 60.0 } ?? lastTimeMin
+            let durationMin = usageEndMin - usageStartMin
+            guard durationMin > 0 else { return 0.0 }
+            divisor = durationMin
+            effectiveAvgDepth = timeWeightedAverageDepth(from: usageStartMin, to: usageEndMin)
+        } else if hasSamples {
+            // Match combined calculatedRMV: divide by lastTime (minutes)
+            divisor = samples.last!.time
+            effectiveAvgDepth = timeWeightedAverageDepth
+        } else {
+            // Manual single-tank dive: use stored duration (minutes)
+            divisor = Double(duration)
+            effectiveAvgDepth = timeWeightedAverageDepth
+        }
+        guard divisor > 0, effectiveAvgDepth > 0 else { return 0.0 }
 
         let effectiveAvgDepthMeters = importDistanceUnit == "feet"
             ? effectiveAvgDepth / 3.28084
             : effectiveAvgDepth
         let avgAtmosphere = (effectiveAvgDepthMeters / 10.0) + 1.0
-        let tankMultiplier: Double = isDoubleTank ? 2.0 : 1.0
+        let tankTypeLC = tank.tankType?.lowercased() ?? ""
+        let tankMultiplier: Double = (tankTypeLC.contains("twin") || tankTypeLC.contains("double")) ? 2.0 : 1.0
 
-        guard let tank = tanks.first,
-              let volume = tank.volume,
+        guard let volume = tank.volume,
               let pStart = tank.startPressure,
               let pEnd = tank.endPressure,
               volume > 0, pStart > pEnd else { return 0.0 }
@@ -732,31 +807,239 @@ final class Dive {
         let consumedBar = pStartBar - pEndBar
         let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
         let totalLiters = consumedBar * volumeLiters * tankMultiplier
-        let rmv = totalLiters / durationMinutes / avgAtmosphere
+        let rmv = totalLiters / divisor / avgAtmosphere
         return rmv > 0 && rmv < 100 ? rmv : 0.0
     }
 
-    /// Calcul du SAC (Surface Air Consumption) en bar/min.
-    /// Représente la pression consommée par minute ramenée à la surface,
-    /// normalisée pour **une seule** bouteille de référence.
-    ///
-    /// Formule : SAC = RMV / Volume_1_bouteille
-    ///
-    /// Comme le RMV est déjà multiplié par 2 quand `isDoubleTank` est activé
-    /// (le plongeur consomme deux fois plus de litres), et qu'on divise
-    /// toujours par le volume d'une seule bouteille, le SAC est lui aussi
-    /// naturellement × 2 en configuration double — ce comportement est
-    /// intentionnel et correspond à la demande.
-    var calculatedSAC: Double {
-        let rmv = calculatedRMV
-        guard rmv > 0 else { return 0.0 }
-
-        // Toujours diviser par le volume d'UNE SEULE bouteille,
-        // peu importe isDoubleTank (le RMV intègre déjà le ×2).
-        guard let tank = tanks.first, let volume = tank.volume, volume > 0 else { return 0.0 }
+    /// SAC for a specific tank (bar/min).
+    func calculatedSAC(forTankAt index: Int) -> Double {
+        let rmv = calculatedRMV(forTankAt: index)
+        guard rmv > 0, index >= 0, index < tanks.count else { return 0.0 }
+        let tank = tanks[index]
+        guard let volume = tank.volume, volume > 0 else { return 0.0 }
         let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
         let sac = rmv / volumeLiters
         return sac > 0 && sac < 20 ? sac : 0.0
+    }
+
+    /// Formatted RMV for a specific tank.
+    func formattedRMV(forTankAt index: Int) -> String {
+        let rmvLiters = calculatedRMV(forTankAt: index)
+        guard rmvLiters > 0 else { return "—" }
+        let displayPreference = UserPreferences.shared.pressureUnit
+        let valueString: String
+        if displayPreference == .psi {
+            let rmvCuFt = rmvLiters / 28.3168
+            valueString = String(format: "%.3f cu ft/min", rmvCuFt)
+        } else {
+            valueString = String(format: "%.2f L/min", rmvLiters)
+        }
+        return isRMVInNativeUnits ? valueString : valueString + " *"
+    }
+
+    /// Formatted SAC for a specific tank.
+    func formattedSAC(forTankAt index: Int) -> String {
+        let sac = calculatedSAC(forTankAt: index)
+        guard sac > 0 else { return "—" }
+        let displaySac = UserPreferences.shared.pressureUnit.convertFromBar(sac)
+        let unit = UserPreferences.shared.pressureUnit.symbol
+        return String(format: "%.2f \(unit)/min", displaySac)
+    }
+
+    /// Combined RMV across all tanks.
+    ///
+    /// Formula: Σ(consumedGas_i / avgAtm_i) / actualDiveTime
+    ///
+    /// Dividing by actual dive time (not the sum of tank usage durations) correctly handles
+    /// all configurations:
+    /// - Sidemount (simultaneous): both tanks contribute additively → sum of per-tank RMVs.
+    /// - Sequential: each tank contributes proportionally to its usage fraction → weighted rate.
+    /// - Mixed (sidemount + stage): sidemount tanks add fully, stage contributes proportionally.
+    ///
+    /// Multi-tank non-sidemount dives without usage times are suppressed via combinedRMVNeedsUsageTime.
+    var combinedRMV: Double {
+        guard duration > 0 else { return 0.0 }
+
+        let samples = profileSamples
+        let hasSamples = (samples.last?.time ?? 0) > 0
+
+        // Manual dive (no samples): only supported for single tank
+        if !hasSamples && tanks.count > 1 { return 0.0 }
+
+        let durationMinutes: Double = {
+            if let lastTime = samples.last?.time, lastTime > 0 { return lastTime }
+            return Double(duration)
+        }()
+
+        // Non-sidemount multi-tank without usage times: cannot determine when each tank
+        // was in use, so combined RMV cannot be computed accurately.
+        if combinedRMVNeedsUsageTime { return 0.0 }
+
+        // Check if any tank has explicit usage times
+        let anyUsageTimes = tanks.contains { $0.usageStartTime != nil || $0.usageEndTime != nil }
+
+        if anyUsageTimes {
+            // Accumulate Σ(consumedGas_i / avgAtm_i) — the surface-equivalent litres contributed
+            // by each tank over its usage period. Dividing by actualDiveTime (not totalUsageMinutes)
+            // ensures simultaneous tanks (sidemount) add rather than average.
+            var surfaceGasSum = 0.0
+            var anyContribution = false
+
+            for tank in tanks {
+                guard let volume = tank.volume,
+                      let pStart = tank.startPressure,
+                      let pEnd = tank.endPressure,
+                      volume > 0, pStart > pEnd else { continue }
+
+                let usageStartMin = (tank.usageStartTime ?? 0) / 60.0         // seconds → minutes
+                let usageEndMin = tank.usageEndTime.map { $0 / 60.0 } ?? durationMinutes
+                let durationMin = usageEndMin - usageStartMin
+                guard durationMin > 0 else { continue }
+
+                let effectiveAvgDepth: Double
+                if tank.usageStartTime != nil || tank.usageEndTime != nil {
+                    effectiveAvgDepth = timeWeightedAverageDepth(from: usageStartMin, to: usageEndMin)
+                } else {
+                    effectiveAvgDepth = timeWeightedAverageDepth
+                }
+                guard effectiveAvgDepth > 0 else { continue }
+
+                let effectiveAvgDepthMeters = importDistanceUnit == "feet"
+                    ? effectiveAvgDepth / 3.28084
+                    : effectiveAvgDepth
+                let avgAtmosphere = (effectiveAvgDepthMeters / 10.0) + 1.0
+
+                let pStartBar = PressureUnit.bar.convert(pStart, from: storedPressureUnit)
+                let pEndBar   = PressureUnit.bar.convert(pEnd,   from: storedPressureUnit)
+                let consumedBar = pStartBar - pEndBar
+                let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
+                let tankTypeLC = tank.tankType?.lowercased() ?? ""
+                let tankMultiplier: Double = (tankTypeLC.contains("twin") || tankTypeLC.contains("double")) ? 2.0 : 1.0
+                let tankSurfaceGas = consumedBar * volumeLiters * tankMultiplier / avgAtmosphere
+
+                surfaceGasSum += tankSurfaceGas
+                anyContribution = true
+            }
+
+            guard anyContribution else { return 0.0 }
+            let rmv = surfaceGasSum / durationMinutes
+            return rmv > 0 && rmv < 100 ? rmv : 0.0
+        } else {
+            // Original behaviour: total gas / full dive duration (minutes)
+            let effectiveAvgDepth = timeWeightedAverageDepth
+            guard effectiveAvgDepth > 0 else { return 0.0 }
+
+            let effectiveAvgDepthMeters = importDistanceUnit == "feet"
+                ? effectiveAvgDepth / 3.28084
+                : effectiveAvgDepth
+            let avgAtmosphere = (effectiveAvgDepthMeters / 10.0) + 1.0
+
+            var totalLiters = 0.0
+            for tank in tanks {
+                guard let volume = tank.volume,
+                      let pStart = tank.startPressure,
+                      let pEnd = tank.endPressure,
+                      volume > 0, pStart > pEnd else { continue }
+
+                let pStartBar = PressureUnit.bar.convert(pStart, from: storedPressureUnit)
+                let pEndBar   = PressureUnit.bar.convert(pEnd,   from: storedPressureUnit)
+                let consumedBar = pStartBar - pEndBar
+                let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
+                let tankTypeLC = tank.tankType?.lowercased() ?? ""
+                let tankMultiplier: Double = (tankTypeLC.contains("twin") || tankTypeLC.contains("double")) ? 2.0 : 1.0
+                totalLiters += consumedBar * volumeLiters * tankMultiplier
+            }
+
+            guard totalLiters > 0 else { return 0.0 }
+            let rmv = totalLiters / durationMinutes / avgAtmosphere
+            return rmv > 0 && rmv < 100 ? rmv : 0.0
+        }
+    }
+
+    /// Formatted combined RMV across all tanks.
+    var formattedCombinedRMV: String {
+        let rmvLiters = combinedRMV
+        guard rmvLiters > 0 else { return "—" }
+        let displayPreference = UserPreferences.shared.pressureUnit
+        let valueString: String
+        if displayPreference == .psi {
+            let rmvCuFt = rmvLiters / 28.3168
+            valueString = String(format: "%.3f cu ft/min", rmvCuFt)
+        } else {
+            valueString = String(format: "%.2f L/min", rmvLiters)
+        }
+        return isRMVInNativeUnits ? valueString : valueString + " *"
+    }
+
+    /// True when combined RMV cannot be computed accurately because there are multiple
+    /// non-sidemount tanks and at least one is missing full usage time data.
+    /// Sidemount tanks are exempt — they are breathed simultaneously and do not require usage times.
+    var combinedRMVNeedsUsageTime: Bool {
+        let validTanks = tanks.filter { ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }
+        guard validTanks.count > 1 else { return false }
+        if validTanks.allSatisfy({ $0.tankType?.lowercased().contains("sidemount") == true }) { return false }
+        return validTanks.contains { $0.usageStartTime == nil || $0.usageEndTime == nil }
+    }
+
+    /// True when there are multiple tanks with volume but at least one is missing full usage time data,
+    /// making an accurate combined SAC impossible to compute.
+    /// Sidemount-only tanks are exempt — they are breathed simultaneously for the full dive.
+    var combinedSACNeedsUsageTime: Bool {
+        let validTanks = tanks.filter { ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }
+        guard validTanks.count > 1 else { return false }
+        if validTanks.allSatisfy({ $0.tankType?.lowercased().contains("sidemount") == true }) { return false }
+        return validTanks.contains { $0.usageStartTime == nil || $0.usageEndTime == nil }
+    }
+
+    /// Combined SAC: combinedRMV divided by the usage-time-weighted average tank volume.
+    /// For a single tank, usage time is not required.
+    /// For multiple tanks, all tanks must have usage time recorded — returns 0 otherwise.
+    var combinedSAC: Double {
+        let rmv = combinedRMV
+        guard rmv > 0 else { return 0.0 }
+        let validTanks = tanks.filter { ($0.volume ?? 0) > 0 }
+        guard !validTanks.isEmpty else { return 0.0 }
+
+        let tanksWithTime = validTanks.filter { $0.usageStartTime != nil && $0.usageEndTime != nil }
+        let avgVolumeLiters: Double
+
+        if tanksWithTime.count == validTanks.count {
+            // All tanks have usage times: use time-weighted average volume.
+            let totalWeight = tanksWithTime.reduce(0.0) { $0 + ($1.usageEndTime! - $1.usageStartTime!) }
+            if totalWeight > 0 {
+                avgVolumeLiters = tanksWithTime.reduce(0.0) { sum, tank in
+                    let duration = tank.usageEndTime! - tank.usageStartTime!
+                    let vol = waterVolumeLiters(rawVolume: tank.volume!, workingPressureRaw: tank.workingPressure)
+                    return sum + vol * (duration / totalWeight)
+                }
+            } else {
+                // All usage durations are zero — use simple average as last resort.
+                let total = validTanks.reduce(0.0) { $0 + waterVolumeLiters(rawVolume: $1.volume!, workingPressureRaw: $1.workingPressure) }
+                avgVolumeLiters = total / Double(validTanks.count)
+            }
+        } else if validTanks.count == 1 {
+            // Single tank: usage time not needed.
+            avgVolumeLiters = waterVolumeLiters(rawVolume: validTanks[0].volume!, workingPressureRaw: validTanks[0].workingPressure)
+        } else if validTanks.allSatisfy({ $0.tankType?.lowercased().contains("sidemount") == true }) {
+            // All-sidemount without usage times: assume full dive usage → simple average volume.
+            let total = validTanks.reduce(0.0) { $0 + waterVolumeLiters(rawVolume: $1.volume!, workingPressureRaw: $1.workingPressure) }
+            avgVolumeLiters = total / Double(validTanks.count)
+        } else {
+            // Multiple tanks with incomplete usage times: cannot compute an accurate SAC.
+            return 0.0
+        }
+
+        let sac = rmv / avgVolumeLiters
+        return sac > 0 && sac < 20 ? sac : 0.0
+    }
+
+    /// Formatted combined SAC across all tanks.
+    var formattedCombinedSAC: String {
+        let sac = combinedSAC
+        guard sac > 0 else { return "—" }
+        let displaySac = UserPreferences.shared.pressureUnit.convertFromBar(sac)
+        let unit = UserPreferences.shared.pressureUnit.symbol
+        return String(format: "%.2f \(unit)/min", displaySac)
     }
 
     /// SAC expressed in the user's preferred pressure unit per minute.
