@@ -1321,13 +1321,20 @@ extension Dive {
     
     /// Consommation d'air totale en litres
     var totalAirConsumption: Double {
-        guard let tank = tanks.first,
-              let sp = tank.startPressure,
-              let ep = tank.endPressure,
-              let volume = tank.volume else { return 0.0 }
-        let startBar     = PressureUnit.bar.convert(sp, from: storedPressureUnit)
-        let endBar       = PressureUnit.bar.convert(ep, from: storedPressureUnit)
-        let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
-        return (startBar - endBar) * volumeLiters
+        var totalLiters = 0.0
+        for tank in tanks {
+            guard let sp = tank.startPressure,
+                  let ep = tank.endPressure,
+                  let volume = tank.volume,
+                  volume > 0, sp > ep else { continue }
+            let startBar     = PressureUnit.bar.convert(sp, from: storedPressureUnit)
+            let endBar       = PressureUnit.bar.convert(ep, from: storedPressureUnit)
+            let consumedBar  = startBar - endBar
+            let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
+            let tankTypeLC   = tank.tankType?.lowercased() ?? ""
+            let tankMultiplier: Double = (tankTypeLC.contains("twin") || tankTypeLC.contains("double")) ? 2.0 : 1.0
+            totalLiters += consumedBar * volumeLiters * tankMultiplier
+        }
+        return totalLiters
     }
 }
