@@ -1,5 +1,9 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
+#if canImport(AppKit)
+import AppKit
+#endif
 
 struct CertificationsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -11,6 +15,17 @@ struct CertificationsView: View {
     @State private var certificationToDelete: Certification?
     @State private var showDeleteConfirmation = false
     @State private var showEditCertificationFor: Certification?
+    @State private var showImportPicker = false
+    @State private var pendingImportResult: Result<[URL], Error>?
+    @State private var importError: String?
+    @State private var showImportError = false
+    @State private var importedCount: Int = 0
+    @State private var showImportSuccess = false
+    #if os(iOS)
+    @State private var showFileExporter = false
+    @State private var exportDocument: ExportableFileDocument?
+    @State private var exportFileName: String = ""
+    #endif
     
     private var activeCertifications: [Certification] {
         certifications.filter { !$0.isExpired }
@@ -179,9 +194,29 @@ struct CertificationsView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showAddCertification = true }) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.cyan)
+                    HStack(spacing: 12) {
+                        Menu {
+                            Button {
+                                exportCertificationsToXML()
+                            } label: {
+                                Label("Export", systemImage: "square.and.arrow.up")
+                            }
+                            .disabled(certifications.isEmpty)
+
+                            Button {
+                                showImportPicker = true
+                            } label: {
+                                Label("Import", systemImage: "square.and.arrow.down")
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                .foregroundStyle(.cyan)
+                        }
+
+                        Button(action: { showAddCertification = true }) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.cyan)
+                        }
                     }
                 }
             }
@@ -210,6 +245,33 @@ struct CertificationsView: View {
             .sheet(item: $showEditCertificationFor) { cert in
                 AddCertificationView(certificationToEdit: cert)
             }
+            .fileImporter(
+                isPresented: $showImportPicker,
+                allowedContentTypes: [.xml],
+                allowsMultipleSelection: false
+            ) { result in
+                handleImportResult(result)
+            }
+            #if os(iOS)
+            .fileExporter(
+                isPresented: $showFileExporter,
+                document: exportDocument,
+                contentType: .xml,
+                defaultFilename: exportFileName
+            ) { _ in
+                exportDocument = nil
+            }
+            #endif
+        }
+        .alert("Import Successful", isPresented: $showImportSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("\(importedCount) certification(s) imported successfully.")
+        }
+        .alert("Import Error", isPresented: $showImportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(verbatim: importError ?? NSLocalizedString("An unknown error occurred.", bundle: Bundle.forAppLanguage(), comment: "Default error message shown in the import error alert when no specific error is available."))
         }
     }
     
@@ -305,6 +367,88 @@ struct CertificationsView: View {
             withAnimation(.easeOut(duration: 0.5)) {
                 emptyAppeared = true
             }
+        }
+    }
+
+    // MARK: - Import / Export
+
+    private func exportCertificationsToXML() {
+        let xml = CertificationXMLExporter.generateXML(for: certifications)
+        guard let data = xml.data(using: .utf8) else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let datePart = formatter.string(from: Date())
+        let fileName = "BlueDive_Certifications_\(datePart).xml"
+
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = fileName
+        panel.allowedContentTypes = [.xml]
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? data.write(to: url)
+        }
+        #else
+        exportDocument = ExportableFileDocument(data: data)
+        exportFileName = fileName
+        showFileExporter = true
+        #endif
+    }
+
+    private func handleImportResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+            do {
+                let data = try Data(contentsOf: url)
+                let parser = CertificationXMLParser()
+                guard let parsed = parser.parse(data: data), !parsed.isEmpty else {
+                    importError = NSLocalizedString("No certifications found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports an XML file that contains no certifications.")
+                    showImportError = true
+                    return
+                }
+
+                var count = 0
+                for item in parsed {
+                    // Skip duplicates based on certification number + organization
+                    let isDuplicate = certifications.contains { existing in
+                        existing.certificationNumber == item.certificationNumber
+                        && existing.organization == item.organization
+                        && !item.certificationNumber.isEmpty
+                    }
+                    guard !isDuplicate else { continue }
+
+                    let cert = Certification(
+                        name: item.name,
+                        organization: item.organization,
+                        level: item.level,
+                        certificationNumber: item.certificationNumber,
+                        issueDate: item.issueDate,
+                        expirationDate: item.expirationDate,
+                        instructorName: item.instructorName,
+                        notes: item.notes
+                    )
+                    modelContext.insert(cert)
+                    if cert.expirationDate != nil {
+                        cert.scheduleExpirationReminder()
+                    }
+                    count += 1
+                }
+
+                importedCount = count
+                showImportSuccess = true
+            } catch {
+                importError = error.localizedDescription
+                showImportError = true
+            }
+
+        case .failure(let error):
+            importError = error.localizedDescription
+            showImportError = true
         }
     }
 }
