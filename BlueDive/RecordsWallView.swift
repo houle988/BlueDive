@@ -25,22 +25,22 @@ struct RecordsWallView: View {
     @State private var cachedTotalAirConsumed: Double = 0
     @State private var recordsReady = false
 
-    private func computeRecords() {
+    private func computeRecords() async {
         guard !allDives.isEmpty else {
             recordsReady = true
             return
         }
+
+        // Lightweight records — no JSON decoding needed (stored scalars only)
         cachedDeepestDive = allDives.max(by: { $0.displayMaxDepth < $1.displayMaxDepth })
         cachedLongestDive = allDives.max(by: { $0.duration < $1.duration })
         cachedColdestDive = allDives.min(by: { $0.displayWaterTemperature < $1.displayWaterTemperature })
         cachedWarmestDive = allDives.max(by: { $0.displayWaterTemperature < $1.displayWaterTemperature })
-        cachedBestRMVDive = allDives.filter { $0.calculatedRMV > 0 }.min(by: { $0.calculatedRMV < $1.calculatedRMV })
         cachedBestRatedDive = allDives.first(where: { $0.rating == 5 })
-        cachedTotalTime = allDives.map(\.duration).reduce(0, +)
+        cachedTotalTime = allDives.reduce(0) { $0 + $1.duration }
         cachedTotalDives = allDives.count
         cachedUniqueSites = Set(allDives.map { $0.siteName.lowercased() }).count
         cachedUniqueCountries = Set(allDives.compactMap { $0.siteCountry?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }).count
-        cachedTotalAirConsumed = allDives.map(\.totalAirConsumption).reduce(0, +)
 
         let days = Set(allDives.map { Calendar.current.startOfDay(for: $0.timestamp) }).sorted()
         var best = days.isEmpty ? 0 : 1
@@ -51,6 +51,25 @@ struct RecordsWallView: View {
             best = max(best, current)
         }
         cachedLongestStreak = best
+
+        // Heavy records — these trigger JSON decoding of profileData / tanksData.
+        // Yield periodically so the main run-loop stays responsive.
+        var bestRMVValue = Double.greatestFiniteMagnitude
+        var totalAir = 0.0
+        let yieldInterval = 50    // yield every N dives
+        for (idx, dive) in allDives.enumerated() {
+            let rmv = dive.calculatedRMV
+            if rmv > 0 && rmv < bestRMVValue {
+                bestRMVValue = rmv
+                cachedBestRMVDive = dive
+            }
+            totalAir += dive.totalAirConsumption
+
+            if idx % yieldInterval == yieldInterval - 1 {
+                await Task.yield()
+            }
+        }
+        cachedTotalAirConsumed = totalAir
         recordsReady = true
     }
 
@@ -65,6 +84,9 @@ struct RecordsWallView: View {
                             description: Text("Record your dives to see your personal records here.")
                         )
                         .padding(.top, 60)
+                    } else if !recordsReady {
+                        ProgressView("Computing records…")
+                            .padding(.top, 60)
                     } else if recordsReady {
                         // Global lifetime stats banner
                         lifetimeBanner
@@ -159,7 +181,7 @@ struct RecordsWallView: View {
                 }
                 .padding(.vertical)
                 .task(id: allDives.count) {
-                    computeRecords()
+                    await computeRecords()
                     withAnimation(.easeOut(duration: 0.5)) {
                         recordsAppeared = true
                     }

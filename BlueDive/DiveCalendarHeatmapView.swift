@@ -15,26 +15,29 @@ struct DiveCalendarHeatmapView: View {
     private let monthColumns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 7)
     private var weekdaySymbols: [String] {
         let symbols = calendar.shortStandaloneWeekdaySymbols
-        // Calendar symbols start Sunday (index 0); reorder to Monday-first
         return Array(symbols[1...]) + [symbols[0]]
     }
 
-    // All available years that have dives
-    private var availableYears: [Int] {
-        let years = Set(allDives.map { calendar.component(.year, from: $0.timestamp) })
-        return years.sorted().reversed()
-    }
+    // Cached statistics — computed once in .task / recomputeYearStats, not on every render
+    @State private var cachedAvailableYears: [Int] = []
+    @State private var cachedDivesByDay: [Date: [Dive]] = [:]
+    @State private var cachedCurrentStreak: Int = 0
+    @State private var cachedYearDiveCount: Int = 0
+    @State private var cachedYearDiveMinutes: Int = 0
+    @State private var cachedYearUniqueSites: Int = 0
+    @State private var cachedMonthDiveCounts: [Int: Int] = [:]
+    @State private var statsReady = false
 
-    // Dives grouped by day for fast lookup
-    private var divesByDay: [Date: [Dive]] {
-        Dictionary(grouping: allDives) { dive in
+    private func recomputeAllStats() {
+        // Build divesByDay once
+        cachedDivesByDay = Dictionary(grouping: allDives) { dive in
             calendar.startOfDay(for: dive.timestamp)
         }
-    }
 
-    // Streak computed from all dives (not year-filtered)
-    private var currentStreak: Int {
-        let days = Set(allDives.map { calendar.startOfDay(for: $0.timestamp) }).sorted().reversed()
+        cachedAvailableYears = Set(allDives.map { calendar.component(.year, from: $0.timestamp) }).sorted().reversed()
+
+        // Current streak
+        let days = Set(cachedDivesByDay.keys).sorted().reversed()
         var streak = 0
         var expected = calendar.startOfDay(for: .now)
         for day in days {
@@ -45,18 +48,34 @@ struct DiveCalendarHeatmapView: View {
                 break
             }
         }
-        return streak
+        cachedCurrentStreak = streak
+
+        recomputeYearStats()
+        statsReady = true
     }
 
-    private var yearDiveCount: Int {
-        divesByDay.filter { calendar.component(.year, from: $0.key) == selectedYear }
-                  .values.map(\.count).reduce(0, +)
-    }
+    private func recomputeYearStats() {
+        cachedYearDiveCount = cachedDivesByDay
+            .filter { calendar.component(.year, from: $0.key) == selectedYear }
+            .values.map(\.count).reduce(0, +)
 
-    private var yearDiveMinutes: Int {
-        allDives
+        cachedYearDiveMinutes = allDives
             .filter { calendar.component(.year, from: $0.timestamp) == selectedYear }
             .map(\.duration).reduce(0, +)
+
+        cachedYearUniqueSites = Set(
+            allDives.filter { calendar.component(.year, from: $0.timestamp) == selectedYear }
+                    .map { $0.siteName.lowercased() }
+        ).count
+
+        var monthCounts: [Int: Int] = [:]
+        for month in 1...12 {
+            monthCounts[month] = allDives.filter {
+                calendar.component(.year, from: $0.timestamp) == selectedYear &&
+                calendar.component(.month, from: $0.timestamp) == month
+            }.count
+        }
+        cachedMonthDiveCounts = monthCounts
     }
 
     // Days in a given month of the selected year
@@ -84,40 +103,39 @@ struct DiveCalendarHeatmapView: View {
         return formatter.monthSymbols[month - 1]
     }
 
-    // Dive count for a month
-    private func diveCountForMonth(_ month: Int) -> Int {
-        allDives.filter {
-            calendar.component(.year, from: $0.timestamp) == selectedYear &&
-            calendar.component(.month, from: $0.timestamp) == month
-        }.count
-    }
-
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    yearSelector
-                    yearSummary
-                    legend
+            Group {
+                if !statsReady {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            yearSelector
+                            yearSummary
+                            legend
 
-                    // Month-by-month calendar grids
-                    ForEach(1...12, id: \.self) { month in
-                        let days = daysInMonth(month)
-                        let monthDiveCount = diveCountForMonth(month)
+                            // Month-by-month calendar grids
+                            ForEach(1...12, id: \.self) { month in
+                                let days = daysInMonth(month)
+                                let monthDiveCount = cachedMonthDiveCounts[month] ?? 0
 
-                        if !days.isEmpty {
-                            monthSection(month: month, days: days, diveCount: monthDiveCount)
+                                if !days.isEmpty {
+                                    monthSection(month: month, days: days, diveCount: monthDiveCount)
+                                }
+                            }
+
+                            // Selected day detail
+                            if let day = selectedDay, !selectedDayDives.isEmpty {
+                                selectedDayDetail(day: day, dives: selectedDayDives)
+                            }
+
+                            Spacer(minLength: 40)
                         }
+                        .padding()
                     }
-
-                    // Selected day detail
-                    if let day = selectedDay, !selectedDayDives.isEmpty {
-                        selectedDayDetail(day: day, dives: selectedDayDives)
-                    }
-
-                    Spacer(minLength: 40)
                 }
-                .padding()
             }
             .navigationTitle("Calendar")
             #if os(iOS)
@@ -133,6 +151,12 @@ struct DiveCalendarHeatmapView: View {
                         .foregroundStyle(.cyan)
                 }
             }
+            .task(id: allDives.count) {
+                recomputeAllStats()
+            }
+            .onChange(of: selectedYear) {
+                recomputeYearStats()
+            }
         }
     }
 
@@ -141,13 +165,13 @@ struct DiveCalendarHeatmapView: View {
     private var yearSelector: some View {
         HStack(spacing: 16) {
             Button {
-                if let prev = availableYears.first(where: { $0 < selectedYear }) {
+                if let prev = cachedAvailableYears.first(where: { $0 < selectedYear }) {
                     withAnimation(.spring(response: 0.3)) { selectedYear = prev; selectedDay = nil; selectedDayDives = [] }
                 }
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(availableYears.contains(where: { $0 < selectedYear }) ? .cyan : .secondary)
+                    .foregroundStyle(cachedAvailableYears.contains(where: { $0 < selectedYear }) ? .cyan : .secondary)
             }
 
             Text(String(selectedYear))
@@ -156,22 +180,22 @@ struct DiveCalendarHeatmapView: View {
                 .frame(minWidth: 80)
 
             Button {
-                if let next = availableYears.last(where: { $0 > selectedYear }) {
+                if let next = cachedAvailableYears.last(where: { $0 > selectedYear }) {
                     withAnimation(.spring(response: 0.3)) { selectedYear = next; selectedDay = nil; selectedDayDives = [] }
                 }
             } label: {
                 Image(systemName: "chevron.right")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(availableYears.contains(where: { $0 > selectedYear }) ? .cyan : .secondary)
+                    .foregroundStyle(cachedAvailableYears.contains(where: { $0 > selectedYear }) ? .cyan : .secondary)
             }
 
             Spacer()
 
-            if currentStreak > 0 {
+            if cachedCurrentStreak > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "flame.fill")
                         .foregroundStyle(.orange)
-                    Text("\(currentStreak) days")
+                    Text("\(cachedCurrentStreak) days")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.orange)
                 }
@@ -187,21 +211,21 @@ struct DiveCalendarHeatmapView: View {
     private var yearSummary: some View {
         HStack(spacing: 0) {
             CalHeatStat(
-                value: "\(yearDiveCount)",
+                value: "\(cachedYearDiveCount)",
                 label: "Dives",
                 icon: "bubbles.and.sparkles",
                 color: .cyan
             )
             Divider().frame(height: 36).background(Color.primary.opacity(0.1))
             CalHeatStat(
-                value: yearDiveMinutes >= 60 ? "\(yearDiveMinutes / 60)h \(yearDiveMinutes % 60)m" : "\(yearDiveMinutes)m",
+                value: cachedYearDiveMinutes >= 60 ? "\(cachedYearDiveMinutes / 60)h \(cachedYearDiveMinutes % 60)m" : "\(cachedYearDiveMinutes)m",
                 label: "Time",
                 icon: "clock.fill",
                 color: .green
             )
             Divider().frame(height: 36).background(Color.primary.opacity(0.1))
             CalHeatStat(
-                value: "\(Set(allDives.filter { calendar.component(.year, from: $0.timestamp) == selectedYear }.map { $0.siteName.lowercased() }).count)",
+                value: "\(cachedYearUniqueSites)",
                 label: "Sites",
                 icon: "mappin.circle.fill",
                 color: .orange
@@ -318,7 +342,7 @@ struct DiveCalendarHeatmapView: View {
 
                 // Day cells
                 ForEach(days, id: \.self) { day in
-                    let divesOnDay = divesByDay[day] ?? []
+                    let divesOnDay = cachedDivesByDay[day] ?? []
                     let isSelected = selectedDay.map { calendar.isDate($0, inSameDayAs: day) } ?? false
                     let isToday = calendar.isDateInToday(day)
                     let dayNumber = calendar.component(.day, from: day)

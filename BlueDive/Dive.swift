@@ -692,7 +692,11 @@ final class Dive {
     /// ce qui correspond à la méthode utilisée par MacDive et les logiciels de plongée professionnels.
     /// Revient à `averageDepth` (moyenne arithmétique du parser) si le profil est absent.
     var timeWeightedAverageDepth: Double {
-        let samples = profileSamples
+        timeWeightedAverageDepth(using: profileSamples)
+    }
+
+    /// Time-weighted average depth using pre-decoded samples (avoids redundant JSON decoding).
+    func timeWeightedAverageDepth(using samples: [DiveProfilePoint]) -> Double {
         guard samples.count >= 2 else { return averageDepth }
 
         var weightedSum = 0.0
@@ -713,7 +717,11 @@ final class Dive {
     /// Time-weighted average depth for a specific time window (in minutes).
     /// Falls back to `timeWeightedAverageDepth` when the window covers the full dive.
     func timeWeightedAverageDepth(from startMin: Double, to endMin: Double) -> Double {
-        let samples = profileSamples
+        timeWeightedAverageDepth(from: startMin, to: endMin, using: profileSamples)
+    }
+
+    /// Time-weighted average depth for a window using pre-decoded samples.
+    func timeWeightedAverageDepth(from startMin: Double, to endMin: Double, using samples: [DiveProfilePoint]) -> Double {
         guard samples.count >= 2 else { return averageDepth }
 
         var weightedSum = 0.0
@@ -860,11 +868,13 @@ final class Dive {
     var combinedRMV: Double {
         guard duration > 0 else { return 0.0 }
 
+        // Decode profileSamples and tanks exactly once for the entire calculation.
         let samples = profileSamples
+        let tankList = tanks
         let hasSamples = (samples.last?.time ?? 0) > 0
 
         // Manual dive (no samples): only supported for single tank
-        if !hasSamples && tanks.count > 1 { return 0.0 }
+        if !hasSamples && tankList.count > 1 { return 0.0 }
 
         let durationMinutes: Double = {
             if let lastTime = samples.last?.time, lastTime > 0 { return lastTime }
@@ -873,10 +883,10 @@ final class Dive {
 
         // Non-sidemount multi-tank without usage times: cannot determine when each tank
         // was in use, so combined RMV cannot be computed accurately.
-        if combinedRMVNeedsUsageTime { return 0.0 }
+        if combinedRMVNeedsUsageTime(for: tankList) { return 0.0 }
 
         // Check if any tank has explicit usage times
-        let anyUsageTimes = tanks.contains { $0.usageStartTime != nil || $0.usageEndTime != nil }
+        let anyUsageTimes = tankList.contains { $0.usageStartTime != nil || $0.usageEndTime != nil }
 
         if anyUsageTimes {
             // Accumulate Σ(consumedGas_i / avgAtm_i) — the surface-equivalent litres contributed
@@ -885,7 +895,7 @@ final class Dive {
             var surfaceGasSum = 0.0
             var anyContribution = false
 
-            for tank in tanks {
+            for tank in tankList {
                 guard let volume = tank.volume,
                       let pStart = tank.startPressure,
                       let pEnd = tank.endPressure,
@@ -898,9 +908,9 @@ final class Dive {
 
                 let effectiveAvgDepth: Double
                 if tank.usageStartTime != nil || tank.usageEndTime != nil {
-                    effectiveAvgDepth = timeWeightedAverageDepth(from: usageStartMin, to: usageEndMin)
+                    effectiveAvgDepth = timeWeightedAverageDepth(from: usageStartMin, to: usageEndMin, using: samples)
                 } else {
-                    effectiveAvgDepth = timeWeightedAverageDepth
+                    effectiveAvgDepth = timeWeightedAverageDepth(using: samples)
                 }
                 guard effectiveAvgDepth > 0 else { continue }
 
@@ -926,7 +936,7 @@ final class Dive {
             return rmv > 0 && rmv < 100 ? rmv : 0.0
         } else {
             // Original behaviour: total gas / full dive duration (minutes)
-            let effectiveAvgDepth = timeWeightedAverageDepth
+            let effectiveAvgDepth = timeWeightedAverageDepth(using: samples)
             guard effectiveAvgDepth > 0 else { return 0.0 }
 
             let effectiveAvgDepthMeters = importDistanceUnit == "feet"
@@ -935,7 +945,7 @@ final class Dive {
             let avgAtmosphere = (effectiveAvgDepthMeters / 10.0) + 1.0
 
             var totalLiters = 0.0
-            for tank in tanks {
+            for tank in tankList {
                 guard let volume = tank.volume,
                       let pStart = tank.startPressure,
                       let pEnd = tank.endPressure,
@@ -975,7 +985,12 @@ final class Dive {
     /// non-sidemount tanks and at least one is missing full usage time data.
     /// Sidemount tanks are exempt — they are breathed simultaneously and do not require usage times.
     var combinedRMVNeedsUsageTime: Bool {
-        let validTanks = tanks.filter { ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }
+        combinedRMVNeedsUsageTime(for: tanks)
+    }
+
+    /// Check using pre-decoded tanks (avoids redundant JSON decoding).
+    private func combinedRMVNeedsUsageTime(for tankList: [TankData]) -> Bool {
+        let validTanks = tankList.filter { ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }
         guard validTanks.count > 1 else { return false }
         if validTanks.allSatisfy({ $0.tankType?.lowercased().contains("sidemount") == true }) { return false }
         return validTanks.contains { $0.usageStartTime == nil || $0.usageEndTime == nil }

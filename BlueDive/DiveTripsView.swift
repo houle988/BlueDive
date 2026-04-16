@@ -28,9 +28,13 @@ struct DiveTrip: Identifiable {
         return dives.map(\.maxDepth).reduce(0, +) / Double(dives.count)
     }
     var averageRMV: Double {
-        let valid = dives.filter { $0.calculatedRMV > 0 }
-        guard !valid.isEmpty else { return 0 }
-        return valid.map(\.calculatedRMV).reduce(0, +) / Double(valid.count)
+        var sum = 0.0
+        var count = 0
+        for dive in dives {
+            let rmv = dive.calculatedRMV
+            if rmv > 0 { sum += rmv; count += 1 }
+        }
+        return count > 0 ? sum / Double(count) : 0
     }
     var formattedTotalTime: String {
         let h = totalMinutes / 60
@@ -114,15 +118,22 @@ struct DiveTripsView: View {
     @State private var selectedTrip: DiveTrip? = nil
     @State private var prefs = UserPreferences.shared
     @State private var tripsAppeared = false
-
-    private var trips: [DiveTrip] {
-        TripBuilder.buildTrips(from: Array(allDives))
-    }
+    @State private var cachedTrips: [DiveTrip] = []
+    @State private var tripsReady = false
 
     var body: some View {
         NavigationStack {
             Group {
-                if trips.isEmpty {
+                if allDives.isEmpty {
+                    ContentUnavailableView(
+                        "No Trips",
+                        systemImage: "airplane.departure",
+                        description: Text("Your dives will automatically organize into trips here.")
+                    )
+                } else if !tripsReady {
+                    ProgressView("Organizing trips…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if cachedTrips.isEmpty {
                     ContentUnavailableView(
                         "No Trips",
                         systemImage: "airplane.departure",
@@ -132,12 +143,12 @@ struct DiveTripsView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             // Summary banner
-                            TripsSummaryBanner(trips: trips, dives: allDives)
+                            TripsSummaryBanner(trips: cachedTrips, dives: allDives)
                                 .padding(.horizontal)
                                 .opacity(tripsAppeared ? 1.0 : 0.0)
                                 .offset(y: tripsAppeared ? 0 : 20)
 
-                            ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
+                            ForEach(Array(cachedTrips.enumerated()), id: \.element.id) { index, trip in
                                 TripCard(trip: trip, prefs: prefs)
                                     .padding(.horizontal)
                                     .onTapGesture { selectedTrip = trip }
@@ -172,6 +183,10 @@ struct DiveTripsView: View {
             }
             .sheet(item: $selectedTrip) { trip in
                 TripDetailSheet(trip: trip, prefs: prefs)
+            }
+            .task(id: allDives.count) {
+                cachedTrips = TripBuilder.buildTrips(from: Array(allDives))
+                tripsReady = true
             }
         }
     }
