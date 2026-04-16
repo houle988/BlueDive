@@ -682,8 +682,9 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                 if let ref = tempTankPressureRef {
                     if let idx = tankIdToIndex[ref] {
                         tempWaypointTankPressures[idx] = bar
-                    } else if let num = Int(ref.filter(\.isNumber)), num > 0 {
-                        tempWaypointTankPressures[num - 1] = bar
+                    } else if let num = Int(ref.filter(\.isNumber)) {
+                        // 1-based refs (tank1, T1) → index 0; 0-based refs (tank0) → index 0
+                        tempWaypointTankPressures[num > 0 ? num - 1 : num] = bar
                     }
                 }
                 tempTankPressureRef = nil
