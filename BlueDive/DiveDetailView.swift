@@ -23,10 +23,9 @@ enum DiveTab: String, CaseIterable, Identifiable {
 
     var localizedName: LocalizedStringKey { LocalizedStringKey(rawValue) }
 
-    /// Tabs visible in the tab bar (export tabs hidden — uncomment to re-enable for troubleshooting)
+    /// Tabs visible in the tab bar (export tabs hidden)
     static var visibleCases: [DiveTab] {
-        // allCases.filter { $0 != .xmlExport && $0 != .uddfExport }
-        allCases // Export tabs enabled for testing
+        allCases.filter { $0 != .xmlExport && $0 != .uddfExport }
     }
 
     var icon: String {

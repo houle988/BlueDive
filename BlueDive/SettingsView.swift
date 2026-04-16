@@ -411,6 +411,7 @@ struct SettingsView: View {
     @State private var settingsAppeared = false
     @State private var showingAboutSheet = false
     @State private var showWelcomeWizard = false
+    @State private var showDisclaimer = false
     @State private var iCloudSyncEnabled = UserDefaults.standard.bool(forKey: BlueDiveApp.iCloudSyncEnabledKey)
     @State private var iCloudAccountStatus: CKAccountStatus = .couldNotDetermine
     @State private var iCloudStatusChecked = false
@@ -1405,6 +1406,43 @@ struct SettingsView: View {
             .buttonStyle(.plain)
 
             Button {
+                showDisclaimer = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.red)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Disclaimer")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.primary)
+                        Text("Review the safety disclaimer")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
                 showWelcomeWizard = true
             } label: {
                 HStack(spacing: 12) {
@@ -1453,6 +1491,9 @@ struct SettingsView: View {
         .padding(.horizontal)
         .sheet(isPresented: $showingAboutSheet) {
             AboutView()
+        }
+        .sheet(isPresented: $showDisclaimer) {
+            DisclaimerView()
         }
         #if os(iOS)
         .fullScreenCover(isPresented: $showWelcomeWizard) {

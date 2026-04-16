@@ -11,6 +11,7 @@ struct MainTabView: View {
     @AppStorage("gearReminders") private var gearReminders = true
     @AppStorage("certReminders") private var certReminders = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("hasAcceptedDisclaimer") private var hasAcceptedDisclaimer = false
     
     init() {
         // Force black background for all tabs on macOS
@@ -63,14 +64,26 @@ struct MainTabView: View {
         }
         #if os(iOS)
         .fullScreenCover(isPresented: Binding(
-            get: { !hasCompletedOnboarding },
+            get: { !hasAcceptedDisclaimer },
+            set: { if !$0 { hasAcceptedDisclaimer = true } }
+        )) {
+            DisclaimerView()
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { hasAcceptedDisclaimer && !hasCompletedOnboarding },
             set: { if !$0 { hasCompletedOnboarding = true } }
         )) {
             WelcomeWizardView()
         }
         #else
         .sheet(isPresented: Binding(
-            get: { !hasCompletedOnboarding },
+            get: { !hasAcceptedDisclaimer },
+            set: { if !$0 { hasAcceptedDisclaimer = true } }
+        )) {
+            DisclaimerView()
+        }
+        .sheet(isPresented: Binding(
+            get: { hasAcceptedDisclaimer && !hasCompletedOnboarding },
             set: { if !$0 { hasCompletedOnboarding = true } }
         )) {
             WelcomeWizardView()
