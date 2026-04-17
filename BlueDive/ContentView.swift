@@ -692,11 +692,21 @@ struct ContentView: View {
             }
         }
         #else
-        // iOS: Bluetooth + Filter visible, overflow menu for the rest.
+        // iOS: + menu (Add/Import/Bluetooth) + Filter + overflow menu.
         ToolbarItem(placement: .primaryAction) {
             HStack(spacing: 16) {
-                Button(action: { showScannerSheet = true }) {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
+                Menu {
+                    Button(action: addManualDive) {
+                        Label("Add a dive (Manual)", systemImage: "plus.circle")
+                    }
+                    Button(action: { showScannerSheet = true }) {
+                        Label("Add a dive (Bluetooth)", systemImage: "antenna.radiowaves.left.and.right")
+                    }
+                    Button(action: { showFileImporter = true }) {
+                        Label("Import", systemImage: "doc.badge.plus")
+                    }
+                } label: {
+                    Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.cyan)
                 }
 
@@ -718,12 +728,6 @@ struct ContentView: View {
                 Menu {
                     Button(action: { showProfile = true }) {
                         Label("Profile", systemImage: "person.circle.fill")
-                    }
-                    Button(action: { showFileImporter = true }) {
-                        Label("Import", systemImage: "doc.badge.plus")
-                    }
-                    Button(action: addManualDive) {
-                        Label("Add Dive", systemImage: "plus.circle")
                     }
                     if !dives.isEmpty {
                         Divider()

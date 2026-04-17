@@ -1180,6 +1180,26 @@
         }
       }
     },
+    "Add a dive (Bluetooth)" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une plongée (Bluetooth)"
+          }
+        }
+      }
+    },
+    "Add a dive (Manual)" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une plongée (Manuel)"
+          }
+        }
+      }
+    },
     "Add a dive type" : {
       "localizations" : {
         "en" : {
@@ -1227,6 +1247,7 @@
       }
     },
     "Add Dive" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
