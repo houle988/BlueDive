@@ -1135,7 +1135,7 @@ struct BluetoothScannerView: View {
         dive.isDecompressionDive = hadDecoObligation
         
         // Dive profile (always update with fresh data, merge event-only points)
-        dive.profileSamples = Self.consolidateProfilePoints(diveData.profile, topLevelDecoType: diveData.decoStop?.type)
+        dive.profileSamples = Self.consolidateProfilePoints(diveData.profile)
         
         // Computer name — prefer full brand+model name from supportedModels lookup
         if let peripheral = selectedDevice,
@@ -1209,14 +1209,11 @@ struct BluetoothScannerView: View {
     /// Consolidates LibDCSwift profile points by merging event-only points into their
     /// corresponding time-based points, and synthesising events from DC_SAMPLE_DECO data.
     ///
-    /// - Parameters:
-    ///   - profile: Raw profile points from LibDCSwift (may contain duplicate-timestamp event points)
-    ///   - topLevelDecoType: The `diveData.decoStop?.type` value from the top-level dive data
-    ///     (DC_DECO_NDL=0, SAFETYSTOP=1, DECOSTOP=2, DEEPSTOP=3). Used to synthesise the
-    ///     correct event type when per-sample deco fields indicate an obligation.
+    /// Events are only added when the dive computer explicitly reports them via DC_SAMPLE_EVENT
+    /// or when a mandatory deco obligation is present (decoStop depth set for DC_DECO_DECOSTOP).
+    /// NDL=0 alone does not generate a synthetic event.
     private static func consolidateProfilePoints(
-        _ profile: [LibDCSwift.DiveProfilePoint],
-        topLevelDecoType: Int?
+        _ profile: [LibDCSwift.DiveProfilePoint]
     ) -> [DiveProfilePoint] {
         // Group all points by their timestamp (seconds)
         var pointsByTime: [(time: TimeInterval, points: [LibDCSwift.DiveProfilePoint])] = []
@@ -1239,34 +1236,13 @@ struct BluetoothScannerView: View {
             // Collect explicit events from all points at this timestamp
             var allEvents: [DiveProfileEvent] = group.points.flatMap { $0.events }.map { convertDiveEvent($0) }
             
-            // Synthesize events from DC_SAMPLE_DECO data.
-            // Most dive computers report deco status only via DC_SAMPLE_DECO, not DC_SAMPLE_EVENT.
-            // The library exposes decoStop (depth, only for DECOSTOP type) and ndl (only for NDL type).
-            // When decoStop is non-nil, the diver has a mandatory deco obligation at that sample.
-            // When ndl == 0 and decoStop is nil, the diver may be in a safety/deep stop.
-            // We use the top-level decoStop type to determine which event to synthesise.
+            // Synthesize a decoStop event from DC_SAMPLE_DECO data when the dive computer
+            // reports a mandatory deco obligation (decoStop depth is only set for DC_DECO_DECOSTOP).
+            // NDL=0 alone does not imply a deco obligation and must not generate a synthetic event.
             if base.decoStop != nil {
                 // Mandatory deco stop (decoStop depth is only set for DC_DECO_DECOSTOP)
                 if !allEvents.contains(.decoStop) {
                     allEvents.append(.decoStop)
-                }
-            } else if base.ndl == 0 {
-                // NDL is zero but no decoStop depth — this is a safety stop or deep stop
-                // determined by the top-level deco type from the dive computer
-                switch topLevelDecoType {
-                case 1: // DC_DECO_SAFETYSTOP
-                    if !allEvents.contains(where: { if case .safetyStop = $0 { return true }; return false }) {
-                        allEvents.append(.safetyStop(false))
-                    }
-                case 3: // DC_DECO_DEEPSTOP
-                    if !allEvents.contains(.deepStop) {
-                        allEvents.append(.deepStop)
-                    }
-                default:
-                    // Could be transitioning to deco — synthesise decoStop as safest guess
-                    if !allEvents.contains(.decoStop) {
-                        allEvents.append(.decoStop)
-                    }
                 }
             }
             
@@ -1295,7 +1271,7 @@ struct BluetoothScannerView: View {
     /// Converts a LibDCSwift DiveData to a BlueDive Dive
     private func convertToBlueDiveDive(_ diveData: DiveData, diveNumber: Int, previousDiveEndTime: Date?) -> Dive {
         // Convert the dive profile, merging event-only points into time-based points
-        let profileSamples = Self.consolidateProfilePoints(diveData.profile, topLevelDecoType: diveData.decoStop?.type)
+        let profileSamples = Self.consolidateProfilePoints(diveData.profile)
         
         // Calculate average depth from profile (time-weighted average)
         let averageDepth: Double = diveData.avgDepth

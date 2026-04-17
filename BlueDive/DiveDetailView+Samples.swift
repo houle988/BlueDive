@@ -120,7 +120,7 @@ extension DiveDetailView {
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(spacing: 0) {
                     // Table header
-                    HStack(spacing: 0) {
+                    HStack(spacing: 8) {
                         Text("Time").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .leading)
                         Text("Depth").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
                         Text("Temp.").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
@@ -142,7 +142,7 @@ extension DiveDetailView {
 
                     LazyVStack(spacing: 0) {
                         ForEach(Array(dive.profileSamples.enumerated()), id: \.offset) { i, sample in
-                            HStack(spacing: 0) {
+                            HStack(spacing: 8) {
                                 Text(String(format: "%.2f", sample.time * 60))
                                     .font(.caption).foregroundStyle(.primary)
                                     .frame(width: 50, alignment: .leading)
