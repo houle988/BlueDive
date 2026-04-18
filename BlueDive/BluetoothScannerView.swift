@@ -1167,6 +1167,9 @@ struct BluetoothScannerView: View {
             [DecoStop(depth: stop.depth, time: stop.time, type: stop.type)]
         } ?? []
 
+        // Override source import to reflect the Bluetooth re-download
+        dive.sourceImport = "Bluetooth"
+
         Self.logger.info("Dive from \(dive.timestamp) merged with computer data")
     }
     
