@@ -408,6 +408,8 @@ struct SettingsView: View {
     }
     @State private var erasePhase: ErasePhase?
     @State private var isDebugMode = LibDCSwift.Logger.shared.isDebugMode
+    @State private var showDiagnosticExporter = false
+    @State private var diagnosticLogDocument: ExportableFileDocument?
     @State private var settingsAppeared = false
     @State private var showingAboutSheet = false
     @State private var showWelcomeWizard = false
@@ -437,7 +439,7 @@ struct SettingsView: View {
                         notificationsSection
                         dataManagementSection
                         iCloudSection
-                        // diagnosticsSection  // Hidden – uncomment to re-enable Debug section
+                        diagnosticsSection
                         dangerZoneSection
                         aboutSection
                     }
@@ -523,6 +525,14 @@ struct SettingsView: View {
                 defaultFilename: backupFileName
             ) { result in
                 backupDocument = nil
+            }
+            .fileExporter(
+                isPresented: $showDiagnosticExporter,
+                document: diagnosticLogDocument,
+                contentType: .plainText,
+                defaultFilename: "BlueDive-diagnostic-\(ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")).txt"
+            ) { result in
+                diagnosticLogDocument = nil
             }
             #endif
         }
@@ -1181,73 +1191,145 @@ struct SettingsView: View {
         }
     }
     
-    // MARK: - Diagnostics (Hidden – uncomment to re-enable)
+    // MARK: - Diagnostics
     
-//    private var diagnosticsSection: some View {
-//        VStack(spacing: 16) {
-//            SectionHeaderModern(title: "Diagnostics", icon: "stethoscope", color: .purple)
-//
-//            VStack(spacing: 12) {
-//                HStack(spacing: 12) {
-//                    ZStack {
-//                        Circle()
-//                            .fill(Color.purple.opacity(0.15))
-//                            .frame(width: 40, height: 40)
-//
-//                        Image(systemName: "ant.fill")
-//                            .font(.body)
-//                            .foregroundStyle(.purple)
-//                    }
-//
-//                    VStack(alignment: .leading, spacing: 4) {
-//                        Text("Debug mode")
-//                            .font(.subheadline)
-//                            .fontWeight(.medium)
-//                            .foregroundStyle(.primary)
-//
-//                        Text("Verbose BLE and protocol logging for troubleshooting dive computer connection issues")
-//                            .font(.caption)
-//                            .foregroundStyle(.secondary)
-//                    }
-//
-//                    Spacer()
-//
-//                    Toggle("", isOn: $isDebugMode)
-//                        .labelsHidden()
-//                        .tint(.purple)
-//                        .onChange(of: isDebugMode) { _, newValue in
-//                            if newValue {
-//                                LibDCSwift.Logger.shared.enableDebugMode()
-//                            } else {
-//                                LibDCSwift.Logger.shared.disableDebugMode()
-//                            }
-//                        }
-//                }
-//                .padding()
-//                .background(
-//                    RoundedRectangle(cornerRadius: 12)
-//                        .fill(Color.primary.opacity(0.03))
-//                )
-//
-//                if isDebugMode {
-//                    Text("Debug output is visible in the Xcode console. Enable this before connecting to a dive computer to capture full protocol traces.")
-//                        .font(.caption)
-//                        .foregroundStyle(.purple.opacity(0.8))
-//                        .padding(.horizontal)
-//                }
-//            }
-//            .padding()
-//            .background(
-//                RoundedRectangle(cornerRadius: 20, style: .continuous)
-//                    .fill(Color.primary.opacity(0.03))
-//                    .overlay(
-//                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-//                            .stroke(Color.purple.opacity(0.2), lineWidth: 1)
-//                    )
-//            )
-//            .padding(.horizontal)
-//        }
-//    }
+    private var diagnosticsSection: some View {
+        VStack(spacing: 16) {
+            SectionHeaderModern(title: "Diagnostics", icon: "stethoscope", color: .purple)
+
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.purple.opacity(0.15))
+                            .frame(width: 40, height: 40)
+
+                        Image(systemName: "ant.fill")
+                            .font(.body)
+                            .foregroundStyle(.purple)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Debug mode")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+
+                        Text("Verbose BLE and protocol logging for troubleshooting dive computer connection issues")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: $isDebugMode)
+                        .labelsHidden()
+                        .tint(.purple)
+                        .onChange(of: isDebugMode) { _, newValue in
+                            if newValue {
+                                LibDCSwift.Logger.shared.enableDebugMode()
+                            } else {
+                                LibDCSwift.Logger.shared.disableDebugMode()
+                            }
+                        }
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.03))
+                )
+
+                if isDebugMode {
+                    Text("Enable this before connecting to a dive computer to capture full protocol traces. Use the export button below to share the log.")
+                        .font(.caption)
+                        .foregroundStyle(.purple.opacity(0.8))
+                        .padding(.horizontal)
+                }
+                
+                // Export diagnostic log button
+                Button {
+                    let logText = LibDCSwift.Logger.shared.generateDiagnosticLog()
+                    if let data = logText.data(using: .utf8) {
+                        diagnosticLogDocument = ExportableFileDocument(data: data)
+                        showDiagnosticExporter = true
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.purple.opacity(0.15))
+                                .frame(width: 40, height: 40)
+
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.body)
+                                .foregroundStyle(.purple)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Export Diagnostic Log")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+
+                            Text("Share BLE connection log with developer for troubleshooting")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.03))
+                )
+                
+                // Clear log button
+                Button {
+                    LibDCSwift.Logger.shared.clearLogBuffer()
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.purple.opacity(0.15))
+                                .frame(width: 40, height: 40)
+
+                            Image(systemName: "trash")
+                                .font(.body)
+                                .foregroundStyle(.purple)
+                        }
+
+                        Text("Clear Log Buffer")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+
+                        Spacer()
+                    }
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.03))
+                )
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.primary.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal)
+        }
+    }
     
     private var dangerZoneSection: some View {
         VStack(spacing: 16) {
@@ -1842,7 +1924,7 @@ enum PlatformTextInputAutocapitalizationType {
 /// Works on both iOS and macOS. The content type is specified at the call site.
 struct ExportableFileDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.data] }
-    static var writableContentTypes: [UTType] { [.zip, .data, .xml, .uddf, .pdf] }
+    static var writableContentTypes: [UTType] { [.zip, .data, .xml, .uddf, .pdf, .plainText] }
 
     let data: Data
 
@@ -1858,6 +1940,7 @@ struct ExportableFileDocument: FileDocument {
         FileWrapper(regularFileWithContents: data)
     }
 }
+
 
 #Preview {
     SettingsView()
