@@ -458,6 +458,15 @@ struct CertificationsView: View {
 struct CertificationCard: View {
     let certification: Certification
     let showExpired: Bool
+    @Environment(\.locale) private var locale
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
     
     private var orgColor: Color {
         switch certification.organization {
@@ -499,7 +508,7 @@ struct CertificationCard: View {
                     .foregroundStyle(.secondary)
                 
                 HStack(spacing: 8) {
-                    Label(certification.issueDate.formatted(date: .abbreviated, time: .omitted), systemImage: "calendar")
+                    Label(formattedDate(certification.issueDate), systemImage: "calendar")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
@@ -507,7 +516,7 @@ struct CertificationCard: View {
                         Divider()
                             .frame(height: 12)
                         
-                        Label(expiration.formatted(date: .abbreviated, time: .omitted), systemImage: "clock")
+                        Label(formattedDate(expiration), systemImage: "clock")
                             .font(.caption)
                             .foregroundStyle(showExpired ? .red : (certification.isExpiringSoon ? .orange : .secondary))
                     }
@@ -539,6 +548,15 @@ struct CertificationDetailView: View {
     @Bindable var certification: Certification
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+
+    private func formattedDate(_ date: Date, style: DateFormatter.Style = .medium) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = style
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
     @State private var showDeleteConfirmation = false
     @State private var showEditCertification = false
     
@@ -600,10 +618,10 @@ struct CertificationDetailView: View {
                             DetailRow(icon: "building.2.fill", title: "Organization", value: certification.organization)
                             DetailRow(icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "") : certification.level)
                             DetailRow(icon: "number", title: "Number", value: certification.certificationNumber)
-                            DetailRow(icon: "calendar", title: "Issue Date", value: certification.issueDate.formatted(date: .long, time: .omitted))
+                            DetailRow(icon: "calendar", title: "Issue Date", value: formattedDate(certification.issueDate, style: .long))
                             
                             if let expiration = certification.expirationDate {
-                                DetailRow(icon: "clock", title: "Expiration", value: expiration.formatted(date: .long, time: .omitted))
+                                DetailRow(icon: "clock", title: "Expiration", value: formattedDate(expiration, style: .long))
                             }
                             
                             if let instructor = certification.instructorName, !instructor.isEmpty {

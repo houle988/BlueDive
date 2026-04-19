@@ -11,6 +11,7 @@ struct DiveCalendarHeatmapView: View {
     @State private var selectedYear: Int = Calendar.current.component(.year, from: .now)
     @State private var selectedDay: Date? = nil
     @State private var selectedDayDives: [Dive] = []
+    @State private var showDaySheet = false
 
     private var calendar: Calendar {
         var cal = Calendar.current
@@ -131,11 +132,6 @@ struct DiveCalendarHeatmapView: View {
                                 }
                             }
 
-                            // Selected day detail
-                            if let day = selectedDay, !selectedDayDives.isEmpty {
-                                selectedDayDetail(day: day, dives: selectedDayDives)
-                            }
-
                             Spacer(minLength: 40)
                         }
                         .padding()
@@ -161,6 +157,14 @@ struct DiveCalendarHeatmapView: View {
             }
             .onChange(of: selectedYear) {
                 recomputeYearStats()
+            }
+            .sheet(isPresented: $showDaySheet, onDismiss: {
+                selectedDay = nil
+                selectedDayDives = []
+            }) {
+                if let day = selectedDay {
+                    DayDivesSheetView(day: day, dives: selectedDayDives)
+                }
             }
         }
     }
@@ -360,14 +364,10 @@ struct DiveCalendarHeatmapView: View {
                         isToday: isToday
                     )
                     .onTapGesture {
-                        withAnimation(.spring(response: 0.3)) {
-                            if isSelected {
-                                selectedDay = nil
-                                selectedDayDives = []
-                            } else if !divesOnDay.isEmpty {
-                                selectedDay = day
-                                selectedDayDives = divesOnDay
-                            }
+                        if !divesOnDay.isEmpty {
+                            selectedDay = day
+                            selectedDayDives = divesOnDay
+                            showDaySheet = true
                         }
                     }
                 }
@@ -377,66 +377,6 @@ struct DiveCalendarHeatmapView: View {
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.platformSecondaryBackground)
-        )
-    }
-
-    // MARK: - Selected Day Detail
-
-    private func selectedDayDetail(day: Date, dives: [Dive]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(day, format: .dateTime.weekday(.wide).day().month(.wide).year())
-                    .font(.headline)
-                Spacer()
-                Button {
-                    withAnimation { selectedDay = nil; selectedDayDives = [] }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            ForEach(dives) { dive in
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(dive.siteName)
-                            .font(.subheadline.weight(.semibold))
-                        Text(dive.location)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
-                        HStack(spacing: 4) {
-                            Label(String(format: "%.0fm", dive.maxDepth), systemImage: "arrow.down")
-                            Label(dive.formattedDuration, systemImage: "clock")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.cyan)
-
-                        if dive.rating > 0 {
-                            HStack(spacing: 2) {
-                                ForEach(1...5, id: \.self) { star in
-                                    Image(systemName: star <= dive.rating ? "star.fill" : "star")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(star <= dive.rating ? .yellow : .secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformTertiaryBackground))
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.platformSecondaryBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(Color.cyan.opacity(0.3), lineWidth: 1.5)
-                )
         )
     }
 
@@ -450,6 +390,58 @@ struct DiveCalendarHeatmapView: View {
         case 3: return Color.cyan.opacity(0.75)
         default: return Color.cyan
         }
+    }
+}
+
+// MARK: - Day Dives Sheet
+
+struct DayDivesSheetView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+
+    let day: Date
+    let dives: [Dive]
+
+    private var formattedDay: String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "EEEEddMMMMyyyy", options: 0, locale: locale)
+        return formatter.string(from: day)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(dives) { dive in
+                    NavigationLink(destination: DiveDetailView(dive: dive)) {
+                        DiveRowView(
+                            dive: dive,
+                            diveNumber: allDives.count - (allDives.firstIndex(of: dive) ?? 0)
+                        )
+                    }
+                    .listRowBackground(Color.primary.opacity(0.07))
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color.platformBackground.ignoresSafeArea())
+            #if os(iOS)
+            .listStyle(.plain)
+            #endif
+            .navigationTitle(formattedDay)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Close") { dismiss() }
+                        .foregroundStyle(.cyan)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 500, idealWidth: 650, minHeight: 400, idealHeight: 600)
+        #endif
     }
 }
 

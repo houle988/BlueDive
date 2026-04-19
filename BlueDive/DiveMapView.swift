@@ -9,7 +9,7 @@ struct DiveMapView: View {
     @State private var selectedDive: Dive?
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
     @State private var locationManager = CLLocationManager()
-    
+
     // MARK: - Filter State
     @State private var showFilterSheet = false
     @State private var filterYear: Int? = nil
@@ -326,8 +326,17 @@ struct DiveMapCard: View {
     let dive: Dive
     let onClose: () -> Void
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
     @State private var prefs = UserPreferences.shared
-    
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+
     private var locationText: Text {
         var parts: [String] = []
         if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
@@ -394,7 +403,7 @@ struct DiveMapCard: View {
                     .frame(height: 30)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Label(dive.timestamp.formatted(date: .abbreviated, time: .omitted), systemImage: "calendar")
+                    Label(formattedDate(dive.timestamp), systemImage: "calendar")
                         .font(.caption)
                         .foregroundStyle(.orange)
                     Text("Date")

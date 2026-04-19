@@ -58,6 +58,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
 struct DiveDetailView: View {
     @Bindable var dive: Dive
     @Environment(\.modelContext) var modelContext
+    @Environment(\.locale) var locale
     @Query(sort: \Dive.timestamp, order: .reverse) var allDives: [Dive]
     @Query(sort: \GearGroup.name) var gearGroups: [GearGroup]
 

@@ -5,12 +5,21 @@ struct GearServiceView: View {
     @Bindable var gear: Gear
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    
+    @Environment(\.locale) private var locale
+
     @State private var prefs = UserPreferences.shared
     @State private var showServiceConfirmation = false
     @State private var serviceDate = Date()
     @State private var showEditGear = false
     
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+
     // MARK: - Computed Properties
 
     /// How many days remain until `nextServiceDue`. Nil when no date is set.
@@ -195,7 +204,7 @@ struct GearServiceView: View {
                     
                     ModernInfoPill(
                         icon: "calendar",
-                        text: gear.datePurchased.formatted(date: .abbreviated, time: .omitted),
+                        text: formattedDate(gear.datePurchased),
                         color: .cyan
                     )
                     
@@ -330,7 +339,7 @@ struct GearServiceView: View {
                     gearDetailRow(icon: "number", label: "N° de série", value: serial, color: .gray)
                 }
                 gearDetailRow(icon: "calendar", label: "Date d'achat",
-                              value: gear.datePurchased.formatted(date: .abbreviated, time: .omitted), color: .cyan)
+                              value: formattedDate(gear.datePurchased), color: .cyan)
                 if let price = gear.purchasePrice {
                     let currency = gear.currency ?? "CAD"
                     gearDetailRow(icon: "dollarsign.circle", label: "Prix d'achat",
@@ -533,12 +542,12 @@ struct GearServiceView: View {
         if isServiceDueOrPast, let nextDue = gear.nextServiceDue {
             let overdueDays = abs(daysUntilServiceDue ?? 0)
             if overdueDays == 0 {
-                return Text("Maintenance is due today (\(nextDue.formatted(date: .abbreviated, time: .omitted))).")
+                return Text(verbatim: String(format: NSLocalizedString("Maintenance is due today (%@).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is due today. %@ is the formatted date."), formattedDate(nextDue)))
             }
-            return Text("Maintenance was due on \(nextDue.formatted(date: .abbreviated, time: .omitted)) (\(overdueDays) days ago).")
+            return Text(verbatim: String(format: NSLocalizedString("Maintenance was due on %@ (%lld days ago).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is overdue. First arg is the formatted date, second is the number of days overdue."), formattedDate(nextDue), Int64(overdueDays)))
         }
         if let days = daysUntilServiceDue, let nextDue = gear.nextServiceDue {
-            return Text("Maintenance is due on \(nextDue.formatted(date: .abbreviated, time: .omitted)) (\(days) days remaining).")
+            return Text(verbatim: String(format: NSLocalizedString("Maintenance is due on %@ (%lld days remaining).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is due soon. First arg is the formatted date, second is the number of days remaining."), formattedDate(nextDue), Int64(days)))
         }
         return Text("Maintenance due soon.")
     }
@@ -672,7 +681,7 @@ struct GearServiceView: View {
                 icon: "wrench.adjustable.fill",
                 iconColor: .cyan,
                 title: "Last Maintenance",
-                value: lastService.formatted(date: .abbreviated, time: .omitted)
+                value: formattedDate(lastService)
             )
             
             ModernStatRow(
@@ -717,7 +726,7 @@ struct GearServiceView: View {
                 icon: isPast ? "exclamationmark.triangle.fill" : "calendar.badge.checkmark",
                 iconColor: isPast ? .red : .green,
                 title: "Next Maintenance",
-                value: nextDue.formatted(date: .abbreviated, time: .omitted)
+                value: formattedDate(nextDue)
             )
         }
     }
@@ -834,7 +843,7 @@ struct GearServiceView: View {
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.primary)
                             
-                            Text(dive.timestamp.formatted(date: .abbreviated, time: .omitted))
+                            Text(verbatim: formattedDate(dive.timestamp))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

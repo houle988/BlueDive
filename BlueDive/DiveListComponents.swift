@@ -6,6 +6,7 @@ struct DiveRowView: View {
     let dive: Dive
     let diveNumber: Int
     private let prefs = UserPreferences.shared
+    @Environment(\.locale) private var locale
     
     var body: some View {
         HStack(alignment: .top, spacing: 15) {
@@ -21,6 +22,14 @@ struct DiveRowView: View {
         }
     }
     
+    private var formattedTimestamp: String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: dive.timestamp)
+    }
+
     private var diveIcon: some View {
         let resolved = resolvedFlag
         return VStack(spacing: 4) {
@@ -94,7 +103,7 @@ struct DiveRowView: View {
                     .foregroundStyle(.secondary)
             }
             
-            Text(dive.timestamp.formatted(date: .abbreviated, time: .shortened))
+            Text(formattedTimestamp)
                 .font(.caption)
                 .foregroundStyle(.gray)
         }

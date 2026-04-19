@@ -242,6 +242,7 @@ struct TripSummaryStat: View {
 struct TripCard: View {
     let trip: DiveTrip
     let prefs: UserPreferences
+    @Environment(\.locale) private var locale
 
     private var coverPhoto: PlatformImage? {
         guard let data = trip.photos.first else { return nil }
@@ -349,13 +350,14 @@ struct TripCard: View {
 
     private func tripDateRange(_ trip: DiveTrip) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "d MMM"
+        formatter.locale = locale
+        formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0, locale: locale)
         if Calendar.current.isDate(trip.startDate, equalTo: trip.endDate, toGranularity: .day) {
-            formatter.dateFormat = "d MMM yyyy"
+            formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMMyyyy", options: 0, locale: locale)
             return formatter.string(from: trip.startDate)
         }
         let start = formatter.string(from: trip.startDate)
-        formatter.dateFormat = "d MMM yyyy"
+        formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMMyyyy", options: 0, locale: locale)
         let end = formatter.string(from: trip.endDate)
         return "\(start) – \(end)"
     }

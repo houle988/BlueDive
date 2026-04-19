@@ -7,6 +7,14 @@ import PhotosUI
 
 extension DiveDetailView {
 
+    private var formattedTimestamp: String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: dive.timestamp)
+    }
+
     var menuTabContent: some View {
         VStack(spacing: 20) {
             depthProfileSection
@@ -119,11 +127,11 @@ extension DiveDetailView {
                     locationText
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(dive.timestamp.formatted(date: .abbreviated, time: .shortened))
+                    Text(formattedTimestamp)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     #else
-                    (Text(dive.timestamp.formatted(date: .abbreviated, time: .shortened)) + Text(" — ") + locationText)
+                    (Text(verbatim: formattedTimestamp) + Text(" — ") + locationText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     #endif
