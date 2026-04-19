@@ -5,13 +5,18 @@ import SwiftData
 
 struct DiveCalendarHeatmapView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
 
     @State private var selectedYear: Int = Calendar.current.component(.year, from: .now)
     @State private var selectedDay: Date? = nil
     @State private var selectedDayDives: [Dive] = []
 
-    private let calendar = Calendar.current
+    private var calendar: Calendar {
+        var cal = Calendar.current
+        cal.locale = locale
+        return cal
+    }
     private let monthColumns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 7)
     private var weekdaySymbols: [String] {
         let symbols = calendar.shortStandaloneWeekdaySymbols
@@ -99,7 +104,7 @@ struct DiveCalendarHeatmapView: View {
     // Month name
     private func monthName(_ month: Int) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = locale
         return formatter.monthSymbols[month - 1]
     }
 
