@@ -405,7 +405,12 @@ private struct StaticChartLayer: View, Equatable {
     @ChartContentBuilder
     private var ndlMarks: some ChartContent {
         if visibility.showNDL {
-            let samplesWithNDL = dive.profileSamples.filter { $0.ndl != nil }
+            // Skip leading zero NDL samples — dive computers emit 0 until they compute
+            // the first valid NDL value. Find the index of the first non-zero sample
+            // and only plot from that point onward. Underlying data is unchanged.
+            let allWithNDL = dive.profileSamples.filter { $0.ndl != nil }
+            let firstNonZeroIdx = allWithNDL.firstIndex { ($0.ndl ?? 0) != 0 } ?? allWithNDL.startIndex
+            let samplesWithNDL = Array(allWithNDL[firstNonZeroIdx...])
             ForEach(samplesWithNDL) { sample in
                 if let ndl = sample.ndl {
                     // NDL 100 → y = 0 (top), NDL 0 → y = -displayMaxDepth (bottom)
