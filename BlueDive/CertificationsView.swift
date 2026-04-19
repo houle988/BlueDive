@@ -7,7 +7,7 @@ import AppKit
 
 struct CertificationsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var certifications: [Certification]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     var onClose: (() -> Void)? = nil
     @State private var showAddCertification = false
     @State private var appeared = false
@@ -165,7 +165,7 @@ struct CertificationsView: View {
                     appeared = true
                 }
             }
-            .navigationTitle("Certifications")
+            .navigationTitle("")
             .background(Color.platformBackground.ignoresSafeArea())
             .scrollContentBackground(.hidden)
             .refreshable {

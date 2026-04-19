@@ -6,7 +6,7 @@ import PhotosUI
 
 struct DiverProfileView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
-    @Query private var certifications: [Certification]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     @Query private var insurances: [DivingInsurance]
 
     @AppStorage("userName") private var userName: String = ""
@@ -405,6 +405,16 @@ struct DiverProfileView: View {
 
     // MARK: - Certifications Section
 
+    private static let certificationPreviewLimit = 5
+
+    private var previewCertifications: [Certification] {
+        Array(certifications.prefix(DiverProfileView.certificationPreviewLimit))
+    }
+
+    private var remainingCertificationsCount: Int {
+        max(0, certifications.count - DiverProfileView.certificationPreviewLimit)
+    }
+
     private var certificationsSection: some View {
         ProfileCard(title: "Certifications", icon: "graduationcap.fill") {
             VStack(spacing: 0) {
@@ -421,7 +431,7 @@ struct DiverProfileView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 } else {
-                    ForEach(certifications) { cert in
+                    ForEach(previewCertifications) { cert in
                         Button {
                             showingCertifications = true
                         } label: {
@@ -481,7 +491,7 @@ struct DiverProfileView: View {
                         }
                         .buttonStyle(.plain)
 
-                        if cert.id != certifications.last?.id {
+                        if cert.id != previewCertifications.last?.id {
                             Divider()
                                 .background(Color.primary.opacity(0.07))
                         }
@@ -506,12 +516,20 @@ struct DiverProfileView: View {
                     Spacer()
 
                     if !certifications.isEmpty {
-                        Button {
-                            showingCertifications = true
-                        } label: {
-                            Text("View All")
-                                .font(.subheadline)
-                                .foregroundStyle(.cyan.opacity(0.7))
+                        HStack(spacing: 6) {
+                            if remainingCertificationsCount > 0 {
+                                Text(verbatim: NSLocalizedString("+%lld more", bundle: Bundle.forAppLanguage(), comment: "A small label next to the 'View All' button indicating how many additional certifications are not shown in the preview list.")
+                                    .replacingOccurrences(of: "%lld", with: "\(remainingCertificationsCount)"))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Button {
+                                showingCertifications = true
+                            } label: {
+                                Text("View All")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.cyan.opacity(0.7))
+                            }
                         }
                     }
                 }

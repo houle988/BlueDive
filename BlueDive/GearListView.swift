@@ -85,7 +85,7 @@ struct GearListView: View {
             }
             .animation(.easeInOut(duration: 0.3), value: gearNeedingService.isEmpty)
         }
-        .navigationTitle("My Equipment")
+        .navigationTitle("")
         .searchable(text: $searchText, prompt: "Search equipment...")
         .animation(.easeInOut(duration: 0.3), value: searchText)
         .animation(.easeInOut(duration: 0.3), value: filterCategory)

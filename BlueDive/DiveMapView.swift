@@ -179,7 +179,7 @@ struct DiveMapView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .navigationTitle(NSLocalizedString("Dive Map", bundle: Bundle.forAppLanguage(), comment: "Title of the dive map view"))
+            .navigationTitle("")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

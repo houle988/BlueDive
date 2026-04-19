@@ -595,23 +595,6 @@ struct ContentView: View {
         }
 
         ToolbarItem(placement: .navigation) {
-            Button {
-                Task { await forceiCloudSync() }
-            } label: {
-                if isSyncing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.cyan)
-                } else {
-                    Image(systemName: "icloud.fill")
-                        .foregroundStyle(.cyan)
-                }
-            }
-            .disabled(isSyncing)
-            .help("Force sync with iCloud")
-        }
-
-        ToolbarItem(placement: .navigation) {
             toolsMenu
         }
 
