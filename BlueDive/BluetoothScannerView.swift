@@ -47,6 +47,7 @@ struct BluetoothScannerView: View {
     @State private var downloadProgressCancellable: AnyCancellable?
     @State private var isSearching: Bool = false
     @State private var targetDeviceSerial: String?
+    @State private var targetDeviceName: String?
     @State private var deviceToDelete: DeviceFingerprint?
     @State private var showingDeleteConfirmation = false
     @State private var modelOverrides: [String: DeviceConfiguration.ComputerModel] = [:]
@@ -97,7 +98,19 @@ struct BluetoothScannerView: View {
                 bleManager.close(clearDevicePtr: true)
                 isSearching = false
                 targetDeviceSerial = nil
+                targetDeviceName = nil
+                #if os(iOS)
+                UIApplication.shared.isIdleTimerDisabled = false
+                Self.logger.debug("Screen lock re-enabled (onDisappear)")
+                #endif
             }
+            #if os(iOS)
+            .onChange(of: syncState) { _, newState in
+                let shouldPreventLock = newState.isActive
+                UIApplication.shared.isIdleTimerDisabled = shouldPreventLock
+                Self.logger.debug("Screen lock \(shouldPreventLock ? "disabled" : "re-enabled") (syncState: \(String(describing: newState)))")
+            }
+            #endif
             .alert("Delete Dive Computer", isPresented: $showingDeleteConfirmation) {
                 Button("Cancel", role: .cancel) {
                     deviceToDelete = nil
@@ -211,11 +224,11 @@ struct BluetoothScannerView: View {
                     }
                     
                     if diveCountDuringDownload > 1 {
-                        Text("\(diveCountDuringDownload - 1) dive(s) downloaded")
+                        Text(verbatim: String(format: NSLocalizedString("%lld dive(s) downloaded", bundle: Bundle.forAppLanguage(), comment: "A text label displaying the number of dives that have been successfully downloaded. The argument is the number of dives that have been downloaded."), diveCountDuringDownload - 1))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("Downloading...")
+                        Text(verbatim: NSLocalizedString("Downloading...", bundle: Bundle.forAppLanguage(), comment: "A placeholder text displayed when downloading dives."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -242,8 +255,11 @@ struct BluetoothScannerView: View {
             errorView(message: message)
         case .idle where !isSearching:
             knownDevicesView
-        default:
+        case .scanning, .idle:
             deviceListView
+        default:
+            // .connecting, .downloading, .importing — header shows status
+            Spacer()
         }
     }
     
@@ -449,6 +465,7 @@ struct BluetoothScannerView: View {
                 Button("Retry") {
                     isSearching = false
                     targetDeviceSerial = nil
+                    targetDeviceName = nil
                     syncState = .idle
                 }
                 .buttonStyle(.bordered)
@@ -484,6 +501,7 @@ struct BluetoothScannerView: View {
                         stopScanning()
                         isSearching = false
                         targetDeviceSerial = nil
+                        targetDeviceName = nil
                         syncState = .idle
                     } label: {
                         Text("Cancel")
@@ -515,44 +533,60 @@ struct BluetoothScannerView: View {
     }
     
     private var syncStateTitle: String {
+        let bundle = Bundle.forAppLanguage()
         switch syncState {
-        case .idle: return isSearching ? "Ready" : "Sync"
-        case .scanning: return targetDeviceSerial != nil ? "Searching..." : "Searching..."
-        case .connecting(let name): return "Connecting to \(name)"
-        case .downloading: return "Downloading..."
-        case .importing(let count): return "Importing \(count) dives..."
+        case .idle:
+            return isSearching
+                ? NSLocalizedString("Ready", bundle: bundle, comment: "Title shown in the Bluetooth scanner when ready to connect to a device")
+                : NSLocalizedString("Sync", bundle: bundle, comment: "The title of the screen where users can sync their dives with their dive computer.")
+        case .scanning:
+            return NSLocalizedString("Searching...", bundle: bundle, comment: "A label with an image that indicates a search is in progress.")
+        case .connecting(let name):
+            return String(format: NSLocalizedString("Connecting to %@", bundle: bundle, comment: "Title shown while connecting to a Bluetooth dive computer. %@ is the device name."), name)
+        case .downloading:
+            return NSLocalizedString("Downloading...", bundle: bundle, comment: "A placeholder text displayed when downloading dives.")
+        case .importing(let count):
+            return String(format: NSLocalizedString("Importing %lld dives...", bundle: bundle, comment: "Title shown while importing dives from a dive computer. %lld is the number of dives."), count)
         case .completed(let imported, let merged, _):
-            return (imported + merged) > 0 ? "Sync Complete" : "No New Dives"
-        case .error: return "Error"
+            return (imported + merged) > 0
+                ? NSLocalizedString("Sync Complete", bundle: bundle, comment: "A title and some body text displayed after a successful Bluetooth sync.")
+                : NSLocalizedString("No New Dives", bundle: bundle, comment: "Title shown when there are no new dives to import from the dive computer")
+        case .error:
+            return NSLocalizedString("Error", bundle: bundle, comment: "The title of an alert that appears when there is a validation error.")
         }
     }
     
-    private var syncStateSubtitle: LocalizedStringKey {
+    private var syncStateSubtitle: String {
+        let bundle = Bundle.forAppLanguage()
         switch syncState {
         case .idle:
-            return isSearching ? "Select a device to begin" : "Select a dive computer to sync"
+            return isSearching
+                ? NSLocalizedString("Select a device to begin", bundle: bundle, comment: "Subtitle shown in the Bluetooth scanner when ready to select a device")
+                : NSLocalizedString("Select a dive computer to sync", bundle: bundle, comment: "Subtitle shown in the Bluetooth scanner idle state")
         case .scanning:
-            return targetDeviceSerial != nil ? "Looking for your dive computer..." : "Searching for Bluetooth dive computers..."
+            return targetDeviceSerial != nil
+                ? NSLocalizedString("Looking for your dive computer...", bundle: bundle, comment: "Subtitle shown while scanning for a specific known dive computer")
+                : NSLocalizedString("Searching for Bluetooth dive computers...", bundle: bundle, comment: "Subtitle shown while scanning for Bluetooth dive computers")
         case .connecting:
-            return "Establishing connection..."
+            return NSLocalizedString("Establishing connection...", bundle: bundle, comment: "Subtitle shown while connecting to a Bluetooth dive computer")
         case .downloading:
             if diveCountDuringDownload > 0 {
-                return "Downloading dive \(diveCountDuringDownload)..."
+                return String(format: NSLocalizedString("Downloading dive %lld...", bundle: bundle, comment: "Subtitle showing the current dive being downloaded. %lld is the dive number."), diveCountDuringDownload)
             }
-            return "Reading dive computer..."
+            return NSLocalizedString("Reading dive computer...", bundle: bundle, comment: "Subtitle shown while reading data from a dive computer")
         case .importing:
-            return "Saving to logbook..."
+            return NSLocalizedString("Saving to logbook...", bundle: bundle, comment: "Subtitle shown while saving downloaded dives to the logbook")
         case .completed(let imported, let merged, let skipped):
             if imported == 0 && merged == 0 && skipped == 0 {
-                return "Your logbook is up to date"
+                return NSLocalizedString("Your logbook is up to date", bundle: bundle, comment: "Subtitle shown when the logbook is already up to date after sync")
             } else if merged > 0 && imported == 0 {
-                return "\(merged) dive(s) updated"
+                return String(format: NSLocalizedString("%lld dive(s) updated", bundle: bundle, comment: "A label indicating that a number of dives have been updated (merged) with existing dives in the logbook. The argument is the number of dives that have been updated."), merged)
             } else if skipped > 0 {
-                return "\(skipped) dive(s) already present"
+                return String(format: NSLocalizedString("%lld dive(s) already present", bundle: bundle, comment: "Subtitle showing the number of dives already present in the logbook"), skipped)
             }
-            return "All dives have been imported"
+            return NSLocalizedString("All dives have been imported", bundle: bundle, comment: "Subtitle shown when all dives have been successfully imported")
         case .error(let message):
-            return "\(message)"
+            return message
         }
     }
     
@@ -587,8 +621,9 @@ struct BluetoothScannerView: View {
               let uuid = UUID(uuidString: storedDevice.uuid),
               let peripheral = bleManager.centralManager.retrievePeripherals(withIdentifiers: [uuid]).first else {
             Self.logger.warning("Could not retrieve peripheral for \(device.computerName) — falling back to scan")
-            // Fall back to scanning if direct retrieval fails
+            // Fall back to scanning; checkForTargetDevice will auto-connect
             targetDeviceSerial = device.serial
+            targetDeviceName = device.computerName
             isSearching = true
             bleManager.clearDiscoveredPeripherals()
             startScanning()
@@ -615,8 +650,15 @@ struct BluetoothScannerView: View {
             if let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
                storedDevice.serial == serial {
                 Self.logger.info("Found target device: \(peripheral.name ?? "Unknown") matching serial \(serial)")
+                let savedName = targetDeviceName
                 targetDeviceSerial = nil
+                targetDeviceName = nil
                 connectToDevice(peripheral)
+                // Override name with the correct one from the fingerprint record
+                if let name = savedName {
+                    connectedDeviceName = name
+                    syncState = .connecting(deviceName: name)
+                }
                 return
             }
         }
@@ -673,7 +715,7 @@ struct BluetoothScannerView: View {
             guard connected else {
                 DispatchQueue.main.async {
                     Self.logger.error("Failed to connect to \(deviceName)")
-                    self.syncState = .error(message: "Unable to connect to \(deviceName)")
+                    self.syncState = .error(message: String(format: NSLocalizedString("Unable to connect to %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when a Bluetooth connection to a dive computer fails. %@ is the device name."), deviceName))
                     self.selectedDevice = nil
                 }
                 return
@@ -704,7 +746,7 @@ struct BluetoothScannerView: View {
             DispatchQueue.main.async {
                 guard self.bleManager.openedDeviceDataPtr != nil else {
                     Self.logger.error("Timeout: device pointer not available after \(timeoutSeconds)s")
-                    self.syncState = .error(message: "Connection established but device not ready")
+                    self.syncState = .error(message: NSLocalizedString("Connection established but device not ready", bundle: Bundle.forAppLanguage(), comment: "Error message shown when the Bluetooth connection succeeded but the device pointer was not available in time."))
                     self.selectedDevice = nil
                     self.bleManager.close(clearDevicePtr: true)
                     return
@@ -718,7 +760,7 @@ struct BluetoothScannerView: View {
     private func retrieveDiveLogs(from peripheral: CBPeripheral) {
         guard let devicePtr = bleManager.openedDeviceDataPtr else {
             Self.logger.error("Device pointer not available")
-            syncState = .error(message: "Device not available")
+            syncState = .error(message: NSLocalizedString("Device not available", bundle: Bundle.forAppLanguage(), comment: "Error message shown when the dive computer device pointer is unavailable at the start of a download."))
             bleManager.close(clearDevicePtr: true)
             selectedDevice = nil
             return
@@ -757,7 +799,6 @@ struct BluetoothScannerView: View {
             if let serial = storedDevice?.serial {
                 Self.logger.info("Clearing fingerprint for \(deviceType) (serial: \(serial))")
                 DeviceFingerprintStorage.shared.clearFingerprint(forDeviceType: deviceType, serial: serial)
-                clearAllDeviceFingerprintRecords(serial: serial)
             } else {
                 // No hardware serial number stored — clear all fingerprints for this device type
                 Self.logger.warning("No hardware serial number stored — clearing all fingerprints for \(deviceType)")
@@ -819,9 +860,9 @@ struct BluetoothScannerView: View {
                     DispatchQueue.main.async {
                         Self.logger.error("Failed to retrieve dives")
                         if case .failed(let msg) = viewModel.progress {
-                            self.syncState = .error(message: "Download failed: \(msg)")
+                            self.syncState = .error(message: String(format: NSLocalizedString("Download failed: %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when downloading dives from the dive computer fails. %@ is the underlying error description."), msg))
                         } else {
-                            self.syncState = .error(message: "Failed to download dives")
+                            self.syncState = .error(message: NSLocalizedString("Failed to download dives", bundle: Bundle.forAppLanguage(), comment: "Error message shown when downloading dives from the dive computer fails with no specific reason."))
                         }
                         // Close the connection on failure
                         self.bleManager.close(clearDevicePtr: true)
@@ -918,7 +959,7 @@ struct BluetoothScannerView: View {
                 downloadedDives = []
                 selectedDevice = nil
                 connectedDeviceName = nil
-                syncState = .error(message: "Error saving: \(error.localizedDescription)")
+                syncState = .error(message: String(format: NSLocalizedString("Error saving: %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when saving dives to the logbook fails. %@ is the system error description."), error.localizedDescription))
                 return
             }
             
@@ -976,7 +1017,13 @@ struct BluetoothScannerView: View {
 
         if let existing = try? modelContext.fetch(descriptor).first {
             existing.fingerprintData = fp
-            existing.computerName = deviceType
+            // Preserve an existing (possibly overridden) computerName unless
+            // DeviceStorage resolved a model-based name (not a raw BLE fallback).
+            if existing.computerName.isEmpty || DeviceConfiguration.supportedModels.contains(where: { $0.name == deviceType }) {
+                existing.computerName = deviceType
+            } else {
+                Self.logger.debug("Keeping existing computerName '\(existing.computerName)' (resolved: '\(deviceType)')")
+            }
             existing.updatedAt = Date()
         } else {
             modelContext.insert(DeviceFingerprint(serial: serial, computerName: deviceType, fingerprintData: fp))
