@@ -471,7 +471,7 @@
 			repositoryURL = "https://github.com/jdevost/libdc-swift";
 			requirement = {
 				kind = revision;
-				revision = 8a2e377b2db7aea0e31a49807ad9054e31a919c4;
+				revision = b478236d088273679a43cedcde64c063f75ac346;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
