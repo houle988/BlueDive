@@ -27,8 +27,17 @@ struct MergeDivesSheet: View {
         guard let a = selectedDiveA, let b = selectedDiveB else { return "" }
         let earlier = a.timestamp <= b.timestamp ? a : b
         let later   = a.timestamp <= b.timestamp ? b : a
+        let format = NSLocalizedString(
+            "Keep \"%@\" (%@) and append samples from \"%@\" (%@). The second dive will be deleted.",
+            bundle: .forAppLanguage(),
+            comment: "Merge confirmation message showing which dive is kept and which is deleted"
+        )
         return String(
-            localized: "Keep \"\(earlier.siteName)\" (\(earlier.timestamp.formatted(date: .abbreviated, time: .shortened))) and append samples from \"\(later.siteName)\" (\(later.timestamp.formatted(date: .abbreviated, time: .shortened))). The second dive will be deleted."
+            format: format,
+            earlier.siteName,
+            earlier.timestamp.formatted(date: .abbreviated, time: .shortened),
+            later.siteName,
+            later.timestamp.formatted(date: .abbreviated, time: .shortened)
         )
     }
 
