@@ -177,6 +177,20 @@ struct EditMenuStatsView: View {
         }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
+    private var uniqueDiveTypeNames: [String] {
+        var seen = Set<String>()
+        return allDives.flatMap { d -> [String] in
+            (d.diveTypes ?? "")
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        }.compactMap { name -> String? in
+            let key = name.lowercased()
+            guard seen.insert(key).inserted else { return nil }
+            return name
+        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
     var body: some View {
         #if os(macOS)
         macOSBody
@@ -523,35 +537,60 @@ struct EditMenuStatsView: View {
                                 }
 
                                 // Add new dive type
-                                HStack(spacing: 8) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .foregroundStyle(.purple)
-                                    TextField("Add a dive type", text: $newType)
-                                        .textFieldStyle(.roundedBorder)
-                                        .overlay(alignment: .trailing) {
-                                            if !newType.isEmpty {
-                                                Button {
-                                                    newType = ""
-                                                } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundStyle(.purple)
+                                        TextField("Add a dive type", text: $newType)
+                                            .textFieldStyle(.roundedBorder)
+                                            .overlay(alignment: .trailing) {
+                                                if !newType.isEmpty {
+                                                    Button {
+                                                        newType = ""
+                                                    } label: {
+                                                        Image(systemName: "xmark.circle.fill")
+                                                            .foregroundStyle(.secondary)
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                    .padding(.trailing, 6)
                                                 }
-                                                .buttonStyle(.plain)
-                                                .padding(.trailing, 6)
+                                            }
+                                            .onSubmit {
+                                                addDiveType(newType)
+                                                newType = ""
+                                            }
+                                        Button("Add") {
+                                            withAnimation {
+                                                addDiveType(newType)
+                                                newType = ""
                                             }
                                         }
-                                        .onSubmit {
-                                            addDiveType(newType)
-                                            newType = ""
-                                        }
-                                    Button("Add") {
-                                        withAnimation {
-                                            addDiveType(newType)
-                                            newType = ""
-                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .tint(.purple)
                                     }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.purple)
+                                    let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter {
+                                        $0.localizedCaseInsensitiveContains(newType) && $0.lowercased() != newType.lowercased() && !diveTypesArray.contains($0)
+                                    }
+                                    if !filteredDiveTypeSuggestions.isEmpty {
+                                        VStack(alignment: .leading, spacing: 0) {
+                                            ForEach(filteredDiveTypeSuggestions.prefix(5), id: \.self) { suggestion in
+                                                Button {
+                                                    addDiveType(suggestion)
+                                                    newType = ""
+                                                } label: {
+                                                    Text(suggestion)
+                                                        .foregroundStyle(.primary)
+                                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                                        .padding(.vertical, 4)
+                                                        .padding(.horizontal, 8)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .background(Color.primary.opacity(0.05))
+                                            }
+                                        }
+                                        .cornerRadius(4)
+                                        .padding(.top, 4)
+                                    }
                                 }
                             }
                             .padding(.horizontal, 16)
@@ -1145,30 +1184,56 @@ struct EditMenuStatsView: View {
                         }
 
                         // Add new dive type
-                        HStack(spacing: 8) {
-                            Image(systemName: "plus.circle.fill")
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundStyle(.purple)
+                                TextField("Add a dive type", text: $newType)
+                                    .autocorrectionDisabled()
+                                    .foregroundStyle(.primary)
+                                if !newType.isEmpty {
+                                    Button {
+                                        newType = ""
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                Button("Add") {
+                                    withAnimation {
+                                        addDiveType(newType)
+                                        newType = ""
+                                    }
+                                }
+                                .buttonStyle(.borderless)
                                 .foregroundStyle(.purple)
-                            TextField("Add a dive type", text: $newType)
-                                .autocorrectionDisabled()
-                                .foregroundStyle(.primary)
-                            if !newType.isEmpty {
-                                Button {
-                                    newType = ""
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
+                                .disabled(newType.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
-                            Button("Add") {
-                                withAnimation {
-                                    addDiveType(newType)
-                                    newType = ""
-                                }
+                            let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter {
+                                $0.localizedCaseInsensitiveContains(newType) && $0.lowercased() != newType.lowercased() && !diveTypesArray.contains($0)
                             }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(.purple)
-                            .disabled(newType.trimmingCharacters(in: .whitespaces).isEmpty)
+                            if !filteredDiveTypeSuggestions.isEmpty {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    ForEach(filteredDiveTypeSuggestions.prefix(5), id: \.self) { suggestion in
+                                        Button {
+                                            addDiveType(suggestion)
+                                            newType = ""
+                                        } label: {
+                                            Text(suggestion)
+                                                .foregroundStyle(.primary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.vertical, 6)
+                                                .padding(.horizontal, 8)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .background(Color.primary.opacity(0.05))
+                                        .cornerRadius(4)
+                                    }
+                                }
+                                .padding(.leading, 28)
+                                .padding(.top, 4)
+                            }
                         }
 
                         HStack {
