@@ -228,12 +228,12 @@ final class Dive {
     var siteName: String = ""
     var diveTypes: String? // Multiple types comma-separated (Night, Wreck, etc.)
     
-    /// The primary dive type, falling back to "Reef" when no types are set.
-    var primaryDiveType: String {
+    /// The primary dive type, or nil when no types are set.
+    var primaryDiveType: String? {
         diveTypes?
             .split(separator: ",")
             .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?
-            .trimmingCharacters(in: .whitespaces) ?? "Reef"
+            .trimmingCharacters(in: .whitespaces)
     }
     var tags: String? // Tags separated by commas
     

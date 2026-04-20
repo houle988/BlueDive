@@ -1087,7 +1087,7 @@ extension DiveDetailView {
                     Circle()
                         .fill(Color.purple.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: diveTypeIcon(for: dive.primaryDiveType))
+                    Image(systemName: diveTypeIcon(for: dive.primaryDiveType ?? ""))
                         .foregroundStyle(.purple)
                         .font(.system(size: 18))
                 }
@@ -1097,7 +1097,7 @@ extension DiveDetailView {
                         .font(.caption)
                         .foregroundStyle(.gray)
 
-                    Text(dive.diveTypes?.isEmpty != false ? dive.primaryDiveType : dive.diveTypes!)
+                    Text(dive.diveTypes ?? "—")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundStyle(.primary)
