@@ -221,7 +221,7 @@ struct DiveCalendarHeatmapView: View {
         HStack(spacing: 0) {
             CalHeatStat(
                 value: "\(cachedYearDiveCount)",
-                label: "Dives",
+                label: "Dive(s)",
                 icon: "bubbles.and.sparkles",
                 color: .cyan
             )
@@ -316,7 +316,10 @@ struct DiveCalendarHeatmapView: View {
                     .foregroundStyle(.primary)
 
                 if diveCount > 0 {
-                    Text("\(diveCount) dives")
+                    let label = diveCount == 1
+                        ? NSLocalizedString("1 dive", bundle: .forAppLanguage(), comment: "Single dive count in calendar heatmap month header")
+                        : String(format: NSLocalizedString("%lld dives", bundle: .forAppLanguage(), comment: "Multiple dives count in calendar heatmap month header"), diveCount)
+                    Text(verbatim: label)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.cyan)
                         .padding(.horizontal, 8)
