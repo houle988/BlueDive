@@ -6,7 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jdevost/libdc-swift",
       "state" : {
-        "revision" : "37c799c742b3bc624ac117bdeaf802da31051992"
+        "branch" : "Debug-Mares-Aqualung",
+        "revision" : "dc3be0d40785f01aa3bc18b4165a5ef82260cac9"
       }
     }
   ],
