@@ -10,14 +10,64 @@ private extension Comparable {
     }
 }
 
+// MARK: - Shared mandatory deco stop resolution
+
+/// For each mandatory deco stop (type == 2), returns the deco-flagged profile sample
+/// whose time is closest to the interpolated ascending crossing of `stop.depth`.
+/// Used by both the diamond marker placement (`StaticChartLayer`) and the tooltip
+/// (`ChartTooltipView`) so the tooltip's stop sub-row appears exactly on the sample
+/// beneath each diamond, with no depth-vs-time-matching drift.
+fileprivate func mandatoryDecoStopRepresentatives(for dive: Dive) -> [(stop: DecoStop, sampleID: UUID)] {
+    let stops = dive.decoStops.filter { $0.type == 2 }
+    guard !stops.isEmpty else { return [] }
+
+    let decoSamples = dive.profileSamples
+        .filter { $0.events.contains(.decoStop) }
+        .sorted { $0.time < $1.time }
+    guard !decoSamples.isEmpty else { return [] }
+
+    let decoWindowStart = (decoSamples.first?.time ?? 0) - 2.0
+    let decoWindowEnd   = decoSamples.last?.time ?? 0
+    let windowSamples = dive.profileSamples
+        .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
+        .sorted { $0.time < $1.time }
+
+    var result: [(stop: DecoStop, sampleID: UUID)] = []
+    for stop in stops {
+        var crossTime: Double? = nil
+        if windowSamples.count >= 2 {
+            for i in 0..<(windowSamples.count - 1) {
+                let a = windowSamples[i], b = windowSamples[i + 1]
+                guard a.depth > stop.depth && b.depth <= stop.depth else { continue }
+                let t = (stop.depth - a.depth) / (b.depth - a.depth)
+                crossTime = a.time + t * (b.time - a.time)
+                break
+            }
+        }
+        if crossTime == nil {
+            crossTime = decoSamples
+                .min(by: { abs($0.depth - stop.depth) < abs($1.depth - stop.depth) })?.time
+        }
+        guard let time = crossTime,
+              let rep = decoSamples.min(by: { abs($0.time - time) < abs($1.time - time) })
+        else { continue }
+        result.append((stop: stop, sampleID: rep.id))
+    }
+    return result
+}
+
 /// Configuration de visibilité des lignes du graphique
 struct ChartLineVisibility {
     var showDepth: Bool = true
     var showTemperature: Bool = false
     var showPressure: Bool = false
     var showNDL: Bool = false
+    /// Independent of the exclusive secondary metrics — deco event bands can be shown
+    /// alongside any other overlay because they are background shading, not axis-mapped lines.
+    var showDeco: Bool = false
 
     private static let defaultsKey = "chartSecondaryMetric"
+    private static let decoKey = "chartShowDecoEvents"
 
     /// Loads the last-used secondary metric from UserDefaults.
     static func restored() -> ChartLineVisibility {
@@ -28,6 +78,7 @@ struct ChartLineVisibility {
         case "ndl":         v.showNDL = true
         default:            break
         }
+        v.showDeco = UserDefaults.standard.bool(forKey: decoKey)
         return v
     }
 
@@ -39,6 +90,7 @@ struct ChartLineVisibility {
         else if showNDL         { value = "ndl" }
         else                    { value = "none" }
         UserDefaults.standard.set(value, forKey: Self.defaultsKey)
+        UserDefaults.standard.set(showDeco, forKey: Self.decoKey)
     }
 }
 
@@ -96,6 +148,7 @@ private struct StaticChartLayer: View, Equatable {
         lhs.visibility.showTemperature == rhs.visibility.showTemperature &&
         lhs.visibility.showPressure == rhs.visibility.showPressure &&
         lhs.visibility.showNDL == rhs.visibility.showNDL &&
+        lhs.visibility.showDeco == rhs.visibility.showDeco &&
         lhs.xMax == rhs.xMax
     }
 
@@ -183,6 +236,7 @@ private struct StaticChartLayer: View, Equatable {
 
     var body: some View {
         Chart {
+            decoMarks
             depthMarks
             temperatureMarks
             pressureMarks
@@ -423,6 +477,130 @@ private struct StaticChartLayer: View, Equatable {
             }
         }
     }
+
+    // MARK: - Deco event blocks
+
+    /// Contiguous time ranges during which the dive computer reported a deco obligation.
+    /// Two consecutive deco samples are merged into the same block when their time gap
+    /// is ≤ 3 minutes (well above any normal sample interval).
+    private var decoBlocks: [(start: Double, end: Double)] {
+        let times = dive.profileSamples
+            .filter { $0.events.contains(.decoStop) }
+            .map { $0.time }
+            .sorted()
+        guard !times.isEmpty else { return [] }
+
+        var blocks: [(start: Double, end: Double)] = []
+        var blockStart = times[0]
+        var blockEnd   = times[0]
+
+        for i in 1..<times.count {
+            if times[i] - blockEnd <= 3.0 {
+                blockEnd = times[i]
+            } else {
+                blocks.append((start: blockStart, end: blockEnd))
+                blockStart = times[i]
+                blockEnd   = times[i]
+            }
+        }
+        blocks.append((start: blockStart, end: blockEnd))
+        return blocks
+    }
+
+    // MARK: - Mandatory deco stop points
+
+    /// For each mandatory deco stop (type == 2) in `dive.decoStops`, interpolates the
+    /// exact time at which the depth profile crosses `stop.depth` during the deco phase.
+    /// This places the diamond exactly on the profile line at the planned stop depth.
+    /// Falls back to the deco sample whose depth is closest to `stop.depth` when the
+    /// profile does not cross it between consecutive samples.
+    /// Returns tuples of (chart X time, display depth, duration in seconds).
+    private var mandatoryDecoStopPoints: [(time: Double, displayDepth: Double, duration: TimeInterval)] {
+        let stops = dive.decoStops.filter { $0.type == 2 }
+        guard !stops.isEmpty else { return [] }
+
+        let decoSamples = dive.profileSamples
+            .filter { $0.events.contains(.decoStop) }
+            .sorted { $0.time < $1.time }
+        guard !decoSamples.isEmpty else { return [] }
+
+        // For accurate crossing detection, search ALL profile samples within the deco
+        // window (plus a 2-minute lookback). This handles dive computers that only start
+        // emitting .decoStop events after the profile has already passed stop.depth.
+        let decoWindowStart = (decoSamples.first?.time ?? 0) - 2.0
+        let decoWindowEnd   = decoSamples.last?.time ?? 0
+        let windowSamples = dive.profileSamples
+            .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
+            .sorted { $0.time < $1.time }
+
+        var result: [(time: Double, displayDepth: Double, duration: TimeInterval)] = []
+        for stop in stops {
+            // Look for an ascending crossing only (depth decreasing over time, a > b),
+            // which is when the diver ascends to the stop depth during decompression.
+            var crossTime: Double? = nil
+            if windowSamples.count >= 2 {
+                for i in 0..<(windowSamples.count - 1) {
+                    let a = windowSamples[i], b = windowSamples[i + 1]
+                    guard a.depth > stop.depth && b.depth <= stop.depth else { continue }
+                    let t = (stop.depth - a.depth) / (b.depth - a.depth)
+                    crossTime = a.time + t * (b.time - a.time)
+                    break
+                }
+            }
+            // Fall back: deco-event sample whose depth is closest to stop.depth
+            if crossTime == nil {
+                crossTime = decoSamples
+                    .min(by: { abs($0.depth - stop.depth) < abs($1.depth - stop.depth) })?.time
+            }
+            guard let time = crossTime else { continue }
+            result.append((
+                time:         time,
+                displayDepth: dive.displayProfileDepth(stop.depth),
+                duration:     stop.time
+            ))
+        }
+        return result
+    }
+
+    @ChartContentBuilder
+    private var decoMarks: some ChartContent {
+        if visibility.showDeco {
+            let blocks = decoBlocks
+            let yMin   = yDomainMin
+            // Draw a semi-transparent orange band for each contiguous deco period so the
+            // shading sits behind all other chart lines.
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                RectangleMark(
+                    xStart: .value("Deco Start", block.start),
+                    xEnd:   .value("Deco End",   block.end),
+                    yStart: .value("Bottom",      yMin),
+                    yEnd:   .value("Top",         0.0)
+                )
+                .foregroundStyle(Color.orange.opacity(0.2))
+            }
+
+            // One labelled point per mandatory deco stop — diamond symbol so it stands
+            // out clearly against the depth profile line.
+            let stopPoints = mandatoryDecoStopPoints
+            ForEach(Array(stopPoints.enumerated()), id: \.offset) { _, point in
+                PointMark(
+                    x: .value("Time", point.time),
+                    y: .value("Deco Stop", -point.displayDepth)
+                )
+                .symbol(.diamond)
+                .symbolSize(120)
+                .foregroundStyle(Color.orange)
+                .annotation(position: .top, alignment: .center) {
+                    VStack(spacing: 1) {
+                        Text(String(format: "%.0f%@", point.displayDepth, prefs.depthUnit.symbol))
+                        Text(String(format: "%.0fmin", ceil(point.duration / 60)))
+                    }
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.orange)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - UnifiedDiveChartOptimized
@@ -512,6 +690,19 @@ struct UnifiedDiveChartOptimized: View {
                     label: "NDL",
                     color: .ndlYellow,
                     isAvailable: hasNDLData
+                )
+
+                // Deco is independent — it overlays background shading and can be shown
+                // alongside any of the axis-mapped secondary metrics above.
+                ToggleButton(
+                    isOn: Binding(
+                        get: { visibility.showDeco },
+                        set: { visibility.showDeco = $0; visibility.save() }
+                    ),
+                    icon: "exclamationmark.triangle.fill",
+                    label: "Deco",
+                    color: .orange,
+                    isAvailable: hasDecoData
                 )
             }
             Text("Depth is always displayed on the chart")
@@ -650,7 +841,7 @@ struct UnifiedDiveChartOptimized: View {
     /// Keeps the tooltip card within the plot area horizontally.
     /// `screenX` is already in the overlay's coordinate space (origin-offset included).
     private func tooltipOffsetX(screenX: CGFloat, plotOriginX: CGFloat, plotWidth: CGFloat) -> CGFloat {
-        let tooltipWidth: CGFloat = 150
+        let tooltipWidth: CGFloat = 200
         let padding: CGFloat = 8
         let x = screenX - tooltipWidth / 2
         let minX = plotOriginX + padding
@@ -706,6 +897,13 @@ struct UnifiedDiveChartOptimized: View {
                 if visibility.showNDL && hasNDLData {
                     metricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
                 }
+
+                if visibility.showDeco && hasDecoData {
+                    HStack(spacing: 8) {
+                        legendBand(.orange, "Deco obligation")
+                        legendDiamond(.orange, "Mandatory stop")
+                    }
+                }
             }
         }
         .padding(.horizontal)
@@ -735,6 +933,33 @@ struct UnifiedDiveChartOptimized: View {
                 .foregroundStyle(.secondary)
         }
     }
+
+    /// Rectangular swatch used for background-band legend entries (e.g. deco phase).
+    private func legendBand(_ color: Color, _ text: LocalizedStringKey) -> some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color.opacity(0.25))
+                .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(color.opacity(0.6), lineWidth: 0.5))
+                .frame(width: 14, height: 8)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Diamond swatch used for point-marker legend entries (e.g. mandatory deco stops).
+    private func legendDiamond(_ color: Color, _ text: LocalizedStringKey) -> some View {
+        HStack(spacing: 4) {
+            Rectangle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+                .rotationEffect(.degrees(45))
+                .frame(width: 10, height: 10)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
     
     private func metricLegendRow(color: Color, label: LocalizedStringKey, range: String) -> some View {
         HStack(spacing: 4) {
@@ -758,12 +983,11 @@ struct UnifiedDiveChartOptimized: View {
     private var hasNDLData: Bool {
         dive.profileSamples.contains { $0.ndl != nil }
     }
-    
-    private var hasVisibleSecondaryMetrics: Bool {
-        (visibility.showTemperature && hasTemperatureData) ||
-        (visibility.showPressure && hasPressureData) ||
-        (visibility.showNDL && hasNDLData)
+
+    private var hasDecoData: Bool {
+        dive.profileSamples.contains { $0.events.contains(.decoStop) }
     }
+    
     
     private var temperatureRange: String {
         let temps = dive.profileSamples.compactMap { $0.temperature }
@@ -870,6 +1094,30 @@ struct ChartTooltipView: View {
         return String(format: "%.0f min", ndl)
     }
 
+    /// Mandatory deco stop (type == 2) whose diamond marker sits on this sample.
+    /// Uses the shared `mandatoryDecoStopRepresentatives` resolution so the tooltip's
+    /// depth+duration sub-row lines up exactly with the diamond drawn on the chart.
+    private var matchingDecoStop: DecoStop? {
+        guard sample.events.contains(.decoStop) else { return nil }
+        return mandatoryDecoStopRepresentatives(for: dive)
+            .first { $0.sampleID == sample.id }?
+            .stop
+    }
+
+    /// Header label for the deco row.
+    private var decoDiveLabel: String {
+        NSLocalizedString("Deco Dive", bundle: .forAppLanguage(), comment: "Tooltip label indicating the dive is under decompression")
+    }
+
+    /// Depth + duration detail for the mandatory stop at this sample, shown as a sub-row.
+    /// Returns nil when the sample does not coincide with a mandatory stop point.
+    private var decoStopDetail: String? {
+        guard let stop = matchingDecoStop else { return nil }
+        let depth    = String(format: "%.0f%@", dive.displayProfileDepth(stop.depth), prefs.depthUnit.symbol)
+        let duration = String(format: "%.0fmin", ceil(stop.time / 60))
+        return "\(depth) · \(duration)"
+    }
+
     private var ascentSpeedLabel: String? {
         guard let speed = ascentSpeed else { return nil }
         let displaySpeed = prefs.depthUnit.convert(abs(speed))
@@ -931,10 +1179,19 @@ struct ChartTooltipView: View {
             if visibility.showNDL, let nLabel = ndlLabel {
                 tooltipRow(icon: "timer", color: .ndlYellow, label: nLabel)
             }
+
+            // Deco event — shown if enabled and this sample carries a deco obligation.
+            if visibility.showDeco && sample.events.contains(.decoStop) {
+                tooltipRow(icon: "exclamationmark.triangle.fill", color: .orange, label: decoDiveLabel)
+                // When on a mandatory stop point, show depth + duration on a sub-row.
+                if let detail = decoStopDetail {
+                    tooltipRow(icon: "smallcircle.filled.circle", color: .orange.opacity(0.7), label: detail)
+                }
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(width: 150, alignment: .leading)
+        .frame(width: 200, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.black.opacity(0.75))
@@ -962,7 +1219,7 @@ struct ChartTooltipView: View {
 
 // MARK: - Preview
 
-#Preview {
+#Preview("No Deco") {
     let samplePoints = [
         DiveProfilePoint(time: 0, depth: 0, temperature: 24.0, tankPressure: 200, ndl: 100),
         DiveProfilePoint(time: 5, depth: 10, temperature: 23.5, tankPressure: 180, ndl: 85),
@@ -975,7 +1232,7 @@ struct ChartTooltipView: View {
         DiveProfilePoint(time: 40, depth: 3, temperature: 24.0, tankPressure: 55, ndl: 100),
         DiveProfilePoint(time: 42, depth: 0, temperature: 24.2, tankPressure: 50, ndl: 100)
     ]
-    
+
     let dive = Dive(
         timestamp: Date(),
         location: "Test",
@@ -987,12 +1244,79 @@ struct ChartTooltipView: View {
         minTemperature: 20.0,
         profileSamples: samplePoints
     )
-    
+
     return VStack {
         UnifiedDiveChartOptimized(dive: dive)
             .padding()
     }
     .background(Color.platformBackground)
-
 }
 
+#Preview("Deco Dive") {
+    // Realistic deco dive: 40 m bottom, three mandatory deco stops at 18 m / 9 m / 5 m
+    let samplePoints: [DiveProfilePoint] = [
+        // Descent
+        DiveProfilePoint(time: 0,  depth: 0,  temperature: 24.0, tankPressure: 220, ndl: 99),
+        DiveProfilePoint(time: 2,  depth: 15, temperature: 22.5, tankPressure: 210, ndl: 60),
+        DiveProfilePoint(time: 4,  depth: 30, temperature: 19.0, tankPressure: 200, ndl: 20),
+        DiveProfilePoint(time: 5,  depth: 40, temperature: 17.5, tankPressure: 190, ndl: 5),
+        // Bottom
+        DiveProfilePoint(time: 10, depth: 40, temperature: 17.0, tankPressure: 165, ndl: 0),
+        DiveProfilePoint(time: 15, depth: 39, temperature: 17.0, tankPressure: 140, ndl: 0),
+        DiveProfilePoint(time: 18, depth: 38, temperature: 17.2, tankPressure: 120, ndl: 0),
+        // Ascent begins
+        DiveProfilePoint(time: 20, depth: 30, temperature: 18.5, tankPressure: 110, ndl: 0),
+        DiveProfilePoint(time: 22, depth: 21, temperature: 20.0, tankPressure: 100, ndl: 0),
+        // Deco stop at 18 m (4 min)
+        DiveProfilePoint(time: 23, depth: 18, temperature: 21.0, tankPressure: 95, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 24, depth: 18, temperature: 21.0, tankPressure: 90, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 25, depth: 18, temperature: 21.0, tankPressure: 85, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 26, depth: 18, temperature: 21.0, tankPressure: 81, ndl: 0, events: [.decoStop]),
+        // Continue ascent
+        DiveProfilePoint(time: 28, depth: 12, temperature: 22.0, tankPressure: 76, ndl: 0),
+        // Deco stop at 9 m (5 min)
+        DiveProfilePoint(time: 29, depth: 9,  temperature: 22.8, tankPressure: 72, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 30, depth: 9,  temperature: 22.8, tankPressure: 68, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 31, depth: 9,  temperature: 22.8, tankPressure: 65, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 32, depth: 9,  temperature: 23.0, tankPressure: 62, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 33, depth: 9,  temperature: 23.0, tankPressure: 59, ndl: 0, events: [.decoStop]),
+        // Continue ascent
+        DiveProfilePoint(time: 34, depth: 6,  temperature: 23.5, tankPressure: 56, ndl: 0),
+        // Deco stop at 5 m (7 min)
+        DiveProfilePoint(time: 35, depth: 5,  temperature: 23.8, tankPressure: 53, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 36, depth: 5,  temperature: 23.8, tankPressure: 50, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 37, depth: 5,  temperature: 23.8, tankPressure: 47, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 38, depth: 5,  temperature: 24.0, tankPressure: 44, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 39, depth: 5,  temperature: 24.0, tankPressure: 41, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 40, depth: 5,  temperature: 24.0, tankPressure: 38, ndl: 0, events: [.decoStop]),
+        DiveProfilePoint(time: 41, depth: 5,  temperature: 24.0, tankPressure: 35, ndl: 0, events: [.decoStop]),
+        // Surface
+        DiveProfilePoint(time: 42, depth: 2,  temperature: 24.2, tankPressure: 33, ndl: 5),
+        DiveProfilePoint(time: 43, depth: 0,  temperature: 24.5, tankPressure: 30, ndl: 20),
+    ]
+
+    let decoStops: [DecoStop] = [
+        DecoStop(depth: 18, time: 4 * 60, type: 2), // 4 min at 18 m
+        DecoStop(depth: 9,  time: 5 * 60, type: 2), // 5 min at 9 m
+        DecoStop(depth: 5,  time: 7 * 60, type: 2), // 7 min at 5 m
+    ]
+
+    let dive = Dive(
+        timestamp: Date(),
+        location: "Test",
+        siteName: "Deco Test Site",
+        maxDepth: 40.0,
+        averageDepth: 22.0,
+        duration: 43,
+        waterTemperature: 17.0,
+        minTemperature: 17.0,
+        profileSamples: samplePoints,
+        decoStops: decoStops
+    )
+
+    return VStack {
+        UnifiedDiveChartOptimized(dive: dive)
+            .padding()
+    }
+    .background(Color.platformBackground)
+}

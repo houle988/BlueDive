@@ -401,7 +401,7 @@ extension DiveDetailView {
                                     Text("Depth")
                                         .font(.caption2)
                                         .foregroundStyle(.gray)
-                                    Text(decoStopDepthLabel(stop.depth, unit: dive.importDistanceUnit))
+                                    Text(decoStopDepthLabel(stop.depth))
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.primary)
@@ -425,7 +425,7 @@ extension DiveDetailView {
                                     Text("Type")
                                         .font(.caption2)
                                         .foregroundStyle(.gray)
-                                    Text(LocalizedStringKey(decoStopTypeLabel(stop.type)))
+                                    Text(verbatim: decoStopTypeLabel(stop.type))
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.orange)
@@ -490,8 +490,9 @@ extension DiveDetailView {
 
     // MARK: - Helper Functions for Decompression
 
-    func decoStopDepthLabel(_ depth: Double, unit: String) -> String {
-        unit == "feet" ? String(format: "%.0f ft", depth * 3.28084) : String(format: "%.0f m", depth)
+    func decoStopDepthLabel(_ depth: Double) -> String {
+        let converted = dive.displayDepth(depth)
+        return String(format: "%.0f %@", converted, UserPreferences.shared.depthUnit.symbol)
     }
 
     func decoStopTimeLabel(_ seconds: TimeInterval) -> String {
@@ -502,11 +503,12 @@ extension DiveDetailView {
     }
 
     func decoStopTypeLabel(_ type: Int) -> String {
+        let bundle = Bundle.forAppLanguage()
         switch type {
-        case 1: return "Safety Stop"
-        case 2: return "Deco Stop"
-        case 3: return "Deep Stop"
-        default: return "NDL"
+        case 1: return NSLocalizedString("Safety Stop", bundle: bundle, comment: "Deco stop type: safety stop")
+        case 2: return NSLocalizedString("Deco Stop", bundle: bundle, comment: "Deco stop type: mandatory decompression stop")
+        case 3: return NSLocalizedString("Deep Stop", bundle: bundle, comment: "Deco stop type: deep stop")
+        default: return NSLocalizedString("NDL", bundle: bundle, comment: "Deco stop type: no-decompression limit")
         }
     }
 
