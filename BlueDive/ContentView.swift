@@ -551,7 +551,7 @@ struct ContentView: View {
             } else {
                 List {
                     ForEach(displayedDives) { dive in
-                        NavigationLink(destination: DiveDetailView(dive: dive)) {
+                        NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: filteredAndSortedDives)) {
                             DiveRowView(
                                 dive: dive,
                                 diveNumber: dives.count - (dives.firstIndex(of: dive) ?? 0)

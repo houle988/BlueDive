@@ -7,6 +7,18 @@ import AppKit
 
 // MARK: - Supporting Views
 
+// MARK: - Dive Sliding Preview (used during swipe-between-dives transition)
+
+struct DiveSlidingPreview: View {
+    let dive: Dive
+    let initialTab: DiveTab
+
+    var body: some View {
+        DiveDetailView(dive: dive, sortedDives: [], isSlidePreview: true, initialTab: initialTab)
+            .allowsHitTesting(false)
+    }
+}
+
 struct RatingStarsView: View {
     let rating: Int
 

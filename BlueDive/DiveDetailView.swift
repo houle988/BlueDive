@@ -56,7 +56,9 @@ enum DiveTab: String, CaseIterable, Identifiable {
 // MARK: - DiveDetailView
 
 struct DiveDetailView: View {
-    @Bindable var dive: Dive
+    @State var dive: Dive
+    let sortedDives: [Dive]
+    let isSlidePreview: Bool
     @Environment(\.modelContext) var modelContext
     @Environment(\.locale) var locale
     @Query(sort: \Dive.timestamp, order: .reverse) var allDives: [Dive]
@@ -80,6 +82,16 @@ struct DiveDetailView: View {
     @State var fishToEdit: MarineSight?
     @State var selectedPhotoForPreview: IdentifiablePhotoData?
     @State var selectedTankIndex: Int = 0
+    @State private var dragOffset: CGFloat = 0
+    @State private var pendingDive: Dive? = nil
+    @State private var viewWidth: CGFloat = 400
+
+    init(dive: Dive, sortedDives: [Dive] = [], isSlidePreview: Bool = false, initialTab: DiveTab = .menu) {
+        self._dive = State(initialValue: dive)
+        self.sortedDives = sortedDives
+        self.isSlidePreview = isSlidePreview
+        self._selectedTab = State(initialValue: initialTab)
+    }
 
     // Export state
     #if os(iOS)
@@ -90,6 +102,21 @@ struct DiveDetailView: View {
     #endif
 
     // MARK: - Computed Properties
+
+    private var currentIndexInSorted: Int? {
+        guard !sortedDives.isEmpty else { return nil }
+        return sortedDives.firstIndex(of: dive)
+    }
+
+    private var previousDiveInList: Dive? {
+        guard let idx = currentIndexInSorted, idx > 0 else { return nil }
+        return sortedDives[idx - 1]
+    }
+
+    private var nextDiveInList: Dive? {
+        guard let idx = currentIndexInSorted, idx + 1 < sortedDives.count else { return nil }
+        return sortedDives[idx + 1]
+    }
 
     var diveNumber: Int {
         allDives.count - (allDives.firstIndex(of: dive) ?? 0)
@@ -113,39 +140,111 @@ struct DiveDetailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Tab bar custom
-            diveTabBar
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                // Incoming dive preview — slides in from the side during navigation
+                if let pending = pendingDive {
+                    DiveSlidingPreview(dive: pending, initialTab: selectedTab)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .offset(x: dragOffset < 0
+                            ? dragOffset + geo.size.width
+                            : dragOffset - geo.size.width)
+                }
 
-            // Content according to active tab
-            ScrollView {
-                VStack(spacing: 20) {
-                    switch selectedTab {
-                    case .menu:
-                        menuTabContent
-                    case .siteDetails:
-                        siteDetailsTabContent
-                    case .conditions:
-                        conditionsTabContent
-                    case .gaz:
-                        gazTabContent
-                    case .samples:
-                        samplesTabContent
-                    case .xmlExport:
-                        xmlExportTabContent
-                    case .uddfExport:
-                        uddfExportTabContent
+                // Current dive content
+                VStack(spacing: 0) {
+                    diveTabBar
+
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 20) {
+                                Color.clear.frame(height: 0).id("diveTop")
+                                switch selectedTab {
+                                case .menu:        menuTabContent
+                                case .siteDetails: siteDetailsTabContent
+                                case .conditions:  conditionsTabContent
+                                case .gaz:         gazTabContent
+                                case .samples:     samplesTabContent
+                                case .xmlExport:   xmlExportTabContent
+                                case .uddfExport:  uddfExportTabContent
+                                }
+                            }
+                            .padding(.bottom, 30)
+                            .animation(.easeInOut(duration: 0.25), value: selectedTab)
+                        }
+                        .onChange(of: dive) {
+                            proxy.scrollTo("diveTop", anchor: .top)
+                        }
                     }
                 }
-                .padding(.bottom, 30)
-                .animation(.easeInOut(duration: 0.25), value: selectedTab)
+                .frame(width: geo.size.width)
+                .background(Color.platformBackground)
+                .offset(x: dragOffset)
             }
+            .clipped()
+            .onAppear { viewWidth = geo.size.width }
+            .onChange(of: geo.size.width) { viewWidth = geo.size.width }
         }
-        .navigationTitle(dive.siteName)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20)
+                .onChanged { value in
+                    guard !sortedDives.isEmpty else { return }
+                    // Only activate from screen edges to avoid conflicting with internal horizontal scrolling
+                    let edgeThreshold: CGFloat = 20
+                    guard dragOffset != 0 ||
+                          value.startLocation.x < edgeThreshold ||
+                          value.startLocation.x > viewWidth - edgeThreshold
+                    else { return }
+                    let h = value.translation.width
+                    let v = value.translation.height
+                    guard abs(h) > abs(v) || dragOffset != 0 else { return }
+                    if h < 0 {
+                        let target = nextDiveInList
+                        pendingDive = target
+                        dragOffset = target != nil ? h : h * 0.15
+                    } else {
+                        let target = previousDiveInList
+                        pendingDive = target
+                        dragOffset = target != nil ? h : h * 0.15
+                    }
+                }
+                .onEnded { value in
+                    guard !sortedDives.isEmpty, dragOffset != 0 else {
+                        dragOffset = 0; pendingDive = nil; return
+                    }
+                    let predicted = value.predictedEndTranslation.width
+                    let threshold = viewWidth * 0.3
+                    if (dragOffset < -threshold || predicted < -(viewWidth * 0.5)),
+                       let next = nextDiveInList {
+                        navigateTo(next, forward: true)
+                    } else if (dragOffset > threshold || predicted > viewWidth * 0.5),
+                              let prev = previousDiveInList {
+                        navigateTo(prev, forward: false)
+                    } else {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            dragOffset = 0
+                            pendingDive = nil
+                        }
+                    }
+                }
+        )
+        #if os(macOS)
+        .navigationTitle(isSlidePreview ? "" : dive.siteName)
+        #else
+        .navigationTitle("")
+        #endif
         .background(Color.platformBackground.ignoresSafeArea())
 
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            if !isSlidePreview {
+                #if os(macOS)
+                if !sortedDives.isEmpty {
+                    ToolbarItem(placement: .principal) {
+                        diveNavigationButtons
+                    }
+                }
+                #endif
+                ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
                     // Export menu
                     Menu {
@@ -189,6 +288,7 @@ struct DiveDetailView: View {
                         #endif
                     }
                 }
+                }
             }
         }
         .sheet(isPresented: $showEditSheet) {
@@ -217,6 +317,56 @@ struct DiveDetailView: View {
             exportDocument = nil
         }
         #endif
+        .onChange(of: dive) {
+            // Reset per-dive UI state when navigating to a different dive
+            selectedTankIndex = 0
+            showEditSheet = false
+            showAddFish = false
+            showAddGear = false
+            selectedPhotos = []
+            isEditingEquipment = false
+            isEditingPhotos = false
+            isEditingMarineLife = false
+        }
+    }
+
+    // MARK: - Dive Navigation
+
+    private func navigateTo(_ targetDive: Dive, forward: Bool) {
+        pendingDive = targetDive
+        let targetOffset: CGFloat = forward ? -viewWidth : viewWidth
+        withAnimation(.easeOut(duration: 0.28)) {
+            dragOffset = targetOffset
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            dive = targetDive
+            dragOffset = 0
+            pendingDive = nil
+        }
+    }
+
+    private var diveNavigationButtons: some View {
+        HStack(spacing: 4) {
+            Button {
+                if let prev = previousDiveInList { navigateTo(prev, forward: false) }
+            } label: {
+                Image(systemName: "chevron.left.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(previousDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
+            }
+            .disabled(previousDiveInList == nil)
+            .help("Previous dive")
+
+            Button {
+                if let next = nextDiveInList { navigateTo(next, forward: true) }
+            } label: {
+                Image(systemName: "chevron.right.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(nextDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
+            }
+            .disabled(nextDiveInList == nil)
+            .help("Next dive")
+        }
     }
 
     // MARK: - Tab Bar
