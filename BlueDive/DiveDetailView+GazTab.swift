@@ -68,17 +68,15 @@ extension DiveDetailView {
                 }
             }
 
-            if dive.tanks.count > 1 {
-                Picker(selection: $selectedTankIndex) {
-                    ForEach(Array(dive.tanks.enumerated()), id: \.element.id) { index, tank in
-                        Text(verbatim: tankPickerLabel(index: index, tank: tank))
-                            .tag(index)
-                    }
-                } label: {
-                    Text("Tank")
+            Picker(selection: $selectedTankIndex) {
+                ForEach(Array(dive.tanks.enumerated()), id: \.element.id) { index, tank in
+                    Text(verbatim: tankPickerLabel(index: index, tank: tank))
+                        .tag(index)
                 }
-                .pickerStyle(.menu)
+            } label: {
+                Text("Tank")
             }
+            .pickerStyle(.menu)
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
