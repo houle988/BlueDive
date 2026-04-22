@@ -126,6 +126,18 @@ struct AddFishView: View {
 
     @State private var fishName = ""
     @State private var count = 1
+    @State private var showSuggestions = false
+    @FocusState private var isNameFocused: Bool
+
+    @Query private var allFish: [MarineSight]
+
+    private var nameSuggestions: [String] {
+        let unique = Set(allFish.map { $0.name }).sorted()
+        guard !fishName.isEmpty else { return [] }
+        return unique.filter {
+            $0.localizedCaseInsensitiveContains(fishName) && $0.lowercased() != fishName.lowercased()
+        }
+    }
 
     private var isValidFish: Bool {
         !fishName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -160,19 +172,72 @@ struct AddFishView: View {
                                     .font(.caption)
                                     .fontWeight(.medium)
                                     .foregroundStyle(.secondary)
-                                TextField("Marine Life name", text: $fishName)
-                                    .autocorrectionDisabled()
-                                    .platformTextInputAutocapitalization(.words)
-                                    .textFieldStyle(.plain)
-                                    .padding(10)
+                                ZStack(alignment: .trailing) {
+                                    TextField("Marine Life name", text: $fishName)
+                                        .autocorrectionDisabled()
+                                        .platformTextInputAutocapitalization(.words)
+                                        .textFieldStyle(.plain)
+                                        .padding(10)
+                                        .padding(.trailing, fishName.isEmpty ? 10 : 32)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(Color.primary.opacity(0.06))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(Color.cyan.opacity(fishName.isEmpty ? 0 : 0.4), lineWidth: 1)
+                                        )
+                                        .focused($isNameFocused)
+                                        .onChange(of: fishName) {
+                                            showSuggestions = isNameFocused && !nameSuggestions.isEmpty
+                                        }
+                                        .onChange(of: isNameFocused) {
+                                            if isNameFocused {
+                                                showSuggestions = !nameSuggestions.isEmpty
+                                            } else {
+                                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                                    showSuggestions = false
+                                                }
+                                            }
+                                        }
+                                    if !fishName.isEmpty {
+                                        Button {
+                                            fishName = ""
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(.trailing, 8)
+                                    }
+                                }
+                                if showSuggestions && !nameSuggestions.isEmpty {
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        ForEach(nameSuggestions.prefix(4), id: \.self) { suggestion in
+                                            Button {
+                                                fishName = suggestion
+                                                showSuggestions = false
+                                            } label: {
+                                                HStack(spacing: 8) {
+                                                    Image(systemName: "magnifyingglass")
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.secondary)
+                                                    Text(suggestion)
+                                                        .foregroundStyle(.cyan)
+                                                        .lineLimit(1)
+                                                }
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.vertical, 6)
+                                                .padding(.horizontal, 10)
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
                                     .background(
-                                        RoundedRectangle(cornerRadius: 10)
+                                        RoundedRectangle(cornerRadius: 8)
                                             .fill(Color.primary.opacity(0.06))
                                     )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.cyan.opacity(fishName.isEmpty ? 0 : 0.4), lineWidth: 1)
-                                    )
+                                }
                             }
 
                             // Amount stepper
@@ -302,6 +367,256 @@ struct AddFishView: View {
         // Sauvegarder les changements
         try? modelContext.save()
 
+        dismiss()
+    }
+}
+
+// MARK: - Edit Fish View
+
+struct EditFishView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var fish: MarineSight
+
+    @State private var fishName: String
+    @State private var count: Int
+    @State private var showSuggestions = false
+    @FocusState private var isNameFocused: Bool
+
+    @Query private var allFish: [MarineSight]
+
+    init(fish: MarineSight) {
+        self.fish = fish
+        _fishName = State(initialValue: fish.name)
+        _count = State(initialValue: fish.count)
+    }
+
+    private var nameSuggestions: [String] {
+        let unique = Set(allFish.map { $0.name }).sorted()
+        guard !fishName.isEmpty else { return [] }
+        return unique.filter {
+            $0.localizedCaseInsensitiveContains(fishName) && $0.lowercased() != fishName.lowercased()
+        }
+    }
+
+    private var isValidFish: Bool {
+        !fishName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Icon header
+                        VStack(spacing: 10) {
+                            ZStack {
+                                Circle()
+                                    .fill(.cyan.opacity(0.12))
+                                    .frame(width: 64, height: 64)
+                                Image(systemName: "fish.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(.cyan)
+                            }
+                            Text("Marine Life Information")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 20)
+
+                        // Form fields
+                        VStack(spacing: 16) {
+                            // Marine Life name field
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Marine Life name")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.secondary)
+                                ZStack(alignment: .trailing) {
+                                    TextField("Marine Life name", text: $fishName)
+                                        .autocorrectionDisabled()
+                                        .platformTextInputAutocapitalization(.words)
+                                        .textFieldStyle(.plain)
+                                        .padding(10)
+                                        .padding(.trailing, fishName.isEmpty ? 10 : 32)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(Color.primary.opacity(0.06))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(Color.cyan.opacity(fishName.isEmpty ? 0 : 0.4), lineWidth: 1)
+                                        )
+                                        .focused($isNameFocused)
+                                        .onChange(of: fishName) {
+                                            showSuggestions = isNameFocused && !nameSuggestions.isEmpty
+                                        }
+                                        .onChange(of: isNameFocused) {
+                                            if isNameFocused {
+                                                showSuggestions = !nameSuggestions.isEmpty
+                                            } else {
+                                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                                    showSuggestions = false
+                                                }
+                                            }
+                                        }
+                                    if !fishName.isEmpty {
+                                        Button {
+                                            fishName = ""
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(.trailing, 8)
+                                    }
+                                }
+                                if showSuggestions && !nameSuggestions.isEmpty {
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        ForEach(nameSuggestions.prefix(4), id: \.self) { suggestion in
+                                            Button {
+                                                fishName = suggestion
+                                                showSuggestions = false
+                                            } label: {
+                                                HStack(spacing: 8) {
+                                                    Image(systemName: "magnifyingglass")
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.secondary)
+                                                    Text(suggestion)
+                                                        .foregroundStyle(.cyan)
+                                                        .lineLimit(1)
+                                                }
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.vertical, 6)
+                                                .padding(.horizontal, 10)
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.primary.opacity(0.06))
+                                    )
+                                }
+                            }
+
+                            // Amount stepper
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Amount")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.secondary)
+                                HStack {
+                                    HStack(spacing: 16) {
+                                        Button {
+                                            if count > 1 { count -= 1 }
+                                        } label: {
+                                            Image(systemName: "minus.circle.fill")
+                                                .font(.title2)
+                                                .foregroundStyle(count > 1 ? .cyan : .secondary.opacity(0.4))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(count <= 1)
+
+                                        Text("\(count)")
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                            .foregroundStyle(.primary)
+                                            .frame(minWidth: 36)
+
+                                        Button {
+                                            if count < 100 { count += 1 }
+                                        } label: {
+                                            Image(systemName: "plus.circle.fill")
+                                                .font(.title2)
+                                                .foregroundStyle(count < 100 ? .cyan : .secondary.opacity(0.4))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(count >= 100)
+                                    }
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Color.primary.opacity(0.06))
+                                    )
+                                    Spacer()
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        // Live preview
+                        if !fishName.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Overview")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal)
+
+                                HStack {
+                                    Spacer()
+                                    FishPreviewChip(name: fishName, count: count)
+                                        .scaleEffect(1.1)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.primary.opacity(0.04))
+                                )
+                                .padding(.horizontal)
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        }
+                    }
+                }
+
+                Divider()
+                    .overlay(Color.primary.opacity(0.08))
+
+                // Bottom buttons
+                HStack {
+                    Button("Cancel") { dismiss() }
+                        .keyboardShortcut(.escape, modifiers: [])
+
+                    Spacer()
+
+                    Button {
+                        saveFish()
+                    } label: {
+                        Text("Save")
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(isValidFish ? .cyan : .cyan.opacity(0.3))
+                            )
+                            .foregroundStyle(isValidFish ? .black : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isValidFish)
+                }
+                .padding()
+            }
+            .background(Color.platformBackground.ignoresSafeArea())
+            .navigationTitle("Edit Marine Life")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+        }
+        #if os(macOS)
+        .frame(width: 380, height: 400)
+        #endif
+    }
+
+    @MainActor
+    private func saveFish() {
+        fish.name = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
+        fish.count = count
+        try? modelContext.save()
         dismiss()
     }
 }

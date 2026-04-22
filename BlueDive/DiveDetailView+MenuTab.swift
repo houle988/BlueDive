@@ -796,10 +796,20 @@ extension DiveDetailView {
                         FishChipView(fish: fish)
                             .contentShape(Rectangle())
                             #if os(iOS)
-                            .onTapGesture { }
+                            .onTapGesture {
+                                if !isEditingMarineLife {
+                                    fishToEdit = fish
+                                }
+                            }
                             .onLongPressGesture {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     isEditingMarineLife.toggle()
+                                }
+                            }
+                            #else
+                            .onTapGesture {
+                                if !isEditingMarineLife {
+                                    fishToEdit = fish
                                 }
                             }
                             #endif

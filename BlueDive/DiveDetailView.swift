@@ -77,6 +77,7 @@ struct DiveDetailView: View {
     @State var isEditingMarineLife = false
     @State var fishToDelete: MarineSight?
     @State var showDeleteFishAlert = false
+    @State var fishToEdit: MarineSight?
     @State var selectedPhotoForPreview: IdentifiablePhotoData?
     @State var selectedTankIndex: Int = 0
 
@@ -199,6 +200,9 @@ struct DiveDetailView: View {
         }
         .sheet(isPresented: $showAddFish) {
             AddFishView(dive: dive)
+        }
+        .sheet(item: $fishToEdit) { fish in
+            EditFishView(fish: fish)
         }
         .sheet(isPresented: $showAddGear) {
             AddGearToDiveView(dive: dive)
