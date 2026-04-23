@@ -21,7 +21,6 @@ struct DiveMapView: View {
     @State private var filterTag: String? = nil
     @State private var filterDiverName: String? = nil
     @State private var filterMarineLife: String = ""
-    @State private var sortOrder: ContentView.DiveSortOrder = .dateDesc
     
     private func coordinate(for dive: Dive) -> CLLocationCoordinate2D? {
         if let lat = dive.siteLatitude, let lon = dive.siteLongitude,
@@ -148,23 +147,116 @@ struct DiveMapView: View {
             return nil
         }
     }
-    
+
+    // MARK: - Clustering
+
+    @State private var currentSpan: MKCoordinateSpan = MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
+    @State private var clusterDives: [Dive]? = nil
+
+    private struct DiveCluster: Identifiable {
+        let id: String
+        let coordinate: CLLocationCoordinate2D
+        let dives: [Dive]
+    }
+
+    private var clusters: [DiveCluster] {
+        // Grid cell size scales with current zoom so pins regroup/ungroup as user zooms.
+        // ~20 cells across the visible span gives a reasonable overlap threshold relative
+        // to the ~32pt pin footprint.
+        let cellLat = max(currentSpan.latitudeDelta, 0.00001) / 20.0
+        let cellLon = max(currentSpan.longitudeDelta, 0.00001) / 20.0
+        var buckets: [String: [(dive: Dive, coordinate: CLLocationCoordinate2D)]] = [:]
+        for item in divesWithCoordinates {
+            let x = Int((item.coordinate.latitude / cellLat).rounded(.down))
+            let y = Int((item.coordinate.longitude / cellLon).rounded(.down))
+            let key = "\(x)_\(y)"
+            buckets[key, default: []].append(item)
+        }
+        return buckets.map { (key, group) in
+            let avgLat = group.map { $0.coordinate.latitude }.reduce(0, +) / Double(group.count)
+            let avgLon = group.map { $0.coordinate.longitude }.reduce(0, +) / Double(group.count)
+            return DiveCluster(
+                id: key,
+                coordinate: CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon),
+                dives: group.map { $0.dive }
+            )
+        }
+    }
+
+    private func handleClusterTap(_ cluster: DiveCluster) {
+        // If all dives in the cluster share (almost) the same GPS point, zooming
+        // further would never split them. Show a list instead.
+        let lats = cluster.dives.compactMap { $0.siteLatitude }
+        let lons = cluster.dives.compactMap { $0.siteLongitude }
+        let latRange = (lats.max() ?? 0) - (lats.min() ?? 0)
+        let lonRange = (lons.max() ?? 0) - (lons.min() ?? 0)
+        let sameSpot = latRange < 0.00005 && lonRange < 0.00005 // ~5 m
+        // Also bail out of zooming once we're already very close in.
+        let alreadyClose = currentSpan.latitudeDelta < 0.002
+        if sameSpot || alreadyClose {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                clusterDives = cluster.dives
+            }
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.35)) {
+            cameraPosition = .region(MKCoordinateRegion(
+                center: cluster.coordinate,
+                span: MKCoordinateSpan(
+                    latitudeDelta: max(currentSpan.latitudeDelta / 3.0, 0.0005),
+                    longitudeDelta: max(currentSpan.longitudeDelta / 3.0, 0.0005)
+                )
+            ))
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 Map(position: $cameraPosition, selection: $selectedDive) {
-                    ForEach(divesWithCoordinates, id: \.dive.id) { item in
-                        Annotation(
-                            item.dive.siteName,
-                            coordinate: item.coordinate
-                        ) {
-                            DiveMapPin(dive: item.dive, isSelected: selectedDive?.id == item.dive.id)
+                    ForEach(clusters) { cluster in
+                        if cluster.dives.count == 1, let dive = cluster.dives.first {
+                            Annotation(
+                                dive.siteName,
+                                coordinate: cluster.coordinate
+                            ) {
+                                DiveMapPin(dive: dive, isSelected: selectedDive?.id == dive.id)
+                            }
+                            .tag(dive)
+                        } else {
+                            Annotation(
+                                "",
+                                coordinate: cluster.coordinate
+                            ) {
+                                DiveMapClusterPin(count: cluster.dives.count)
+                                    .onTapGesture {
+                                        handleClusterTap(cluster)
+                                    }
+                            }
                         }
-                        .tag(item.dive)
                     }
                     UserAnnotation()
                 }
                 .mapStyle(mapStyle)
+                .onMapCameraChange(frequency: .onEnd) { context in
+                    currentSpan = context.region.span
+                }
+                .onChange(of: selectedDive) { _, newValue in
+                    if newValue != nil {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            clusterDives = nil
+                        }
+                    }
+                }
+                .simultaneousGesture(
+                    TapGesture().onEnded { _ in
+                        if clusterDives != nil && selectedDive == nil {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                clusterDives = nil
+                            }
+                        }
+                    }
+                )
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()
@@ -174,7 +266,21 @@ struct DiveMapView: View {
                 // Detail card when a dive is selected
                 if let selected = selectedDive {
                     DiveMapCard(dive: selected, onClose: {
-                        selectedDive = nil
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            selectedDive = nil
+                        }
+                    })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else if let list = clusterDives {
+                    DiveClusterListCard(dives: list, onSelect: { dive in
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            clusterDives = nil
+                            selectedDive = dive
+                        }
+                    }, onClose: {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            clusterDives = nil
+                        }
                     })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -206,7 +312,7 @@ struct DiveMapView: View {
                     filterTag: $filterTag,
                     filterDiverName: $filterDiverName,
                     filterMarineLife: $filterMarineLife,
-                    sortOrder: $sortOrder
+                    sortOrder: .constant(.dateDesc)
                 )
                 #if os(iOS)
                 .presentationDetents([.large])
@@ -283,16 +389,12 @@ struct DiveMapView: View {
 struct DiveMapPin: View {
     let dive: Dive
     let isSelected: Bool
-    
-    private var pinColor: Color {
-        return .orange
-    }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 Circle()
-                    .fill(pinColor)
+                    .fill(Color.orange)
                     .frame(width: isSelected ? 44 : 32, height: isSelected ? 44 : 32)
                     .overlay(
                         Circle()
@@ -312,11 +414,147 @@ struct DiveMapPin: View {
                 path.addLine(to: CGPoint(x: -10, y: 15))
                 path.closeSubpath()
             }
-            .fill(pinColor)
+            .fill(Color.orange)
             .frame(width: 20, height: 15)
             .offset(y: -2)
         }
         .animation(.spring(response: 0.3), value: isSelected)
+    }
+}
+
+// MARK: - Dive Map Cluster Pin
+
+struct DiveMapClusterPin: View {
+    let count: Int
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Circle().stroke(.white, lineWidth: 2)
+                    )
+                    .shadow(radius: 5)
+
+                Text(verbatim: "\(count)")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: 10, y: 15))
+                path.addLine(to: CGPoint(x: -10, y: 15))
+                path.closeSubpath()
+            }
+            .fill(Color.orange)
+            .frame(width: 20, height: 15)
+            .offset(y: -2)
+        }
+    }
+}
+
+// MARK: - Dive Cluster List Card
+
+struct DiveClusterListCard: View {
+    let dives: [Dive]
+    let onSelect: (Dive) -> Void
+    let onClose: () -> Void
+    @Environment(\.locale) private var locale
+    @State private var prefs = UserPreferences.shared
+
+    /// Height that fits up to 3 rows exactly; beyond 3 dives the list scrolls.
+    private var listScrollHeight: CGFloat {
+        let rowHeight: CGFloat = 56
+        let rowSpacing: CGFloat = 8
+        let visibleRows = min(dives.count, 3)
+        return CGFloat(visibleRows) * rowHeight + CGFloat(max(visibleRows - 1, 0)) * rowSpacing
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: String(format: NSLocalizedString("%lld dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), dives.count))
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    if dives.dropFirst().allSatisfy({ $0.siteName == dives.first?.siteName }),
+                       let name = dives.first?.siteName, !name.isEmpty {
+                        Text(verbatim: name)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(dives.sorted(by: { $0.timestamp > $1.timestamp })) { dive in
+                        Button {
+                            onSelect(dive)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "flag.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 28, height: 28)
+                                    .background(Circle().fill(Color.orange))
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(formattedDate(dive.timestamp))
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.primary)
+                                    HStack(spacing: 8) {
+                                        Label(prefs.depthUnit.formatted(dive.maxDepth), systemImage: "arrow.down")
+                                            .font(.caption2)
+                                            .foregroundStyle(.cyan)
+                                        Label(dive.formattedDuration, systemImage: "clock")
+                                            .font(.caption2)
+                                            .foregroundStyle(.green)
+                                    }
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.secondary.opacity(0.1))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: listScrollHeight)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.regularMaterial)
+                .shadow(radius: 10)
+        )
+        .padding()
     }
 }
 
@@ -325,7 +563,6 @@ struct DiveMapPin: View {
 struct DiveMapCard: View {
     let dive: Dive
     let onClose: () -> Void
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.locale) private var locale
     @State private var prefs = UserPreferences.shared
 
@@ -339,7 +576,7 @@ struct DiveMapCard: View {
 
     private var locationText: Text {
         var parts: [String] = []
-        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+        if !dive.location.isEmpty && dive.location != NSLocalizedString("Unknown", bundle: .forAppLanguage(), comment: "Default text for a location that is not known.") {
             parts.append(dive.location)
         }
         if let country = dive.siteCountry, !country.isEmpty {
@@ -352,7 +589,7 @@ struct DiveMapCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(dive.siteName)
+                    Text(verbatim: dive.siteName)
                         .font(.headline)
                         .foregroundStyle(.primary)
                     
