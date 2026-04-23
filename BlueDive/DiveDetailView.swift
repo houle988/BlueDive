@@ -228,10 +228,9 @@ struct DiveDetailView: View {
                     }
                 }
         )
-        #if os(macOS)
         .navigationTitle(isSlidePreview ? "" : dive.siteName)
-        #else
-        .navigationTitle("")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
         #endif
         .background(Color.platformBackground.ignoresSafeArea())
 
