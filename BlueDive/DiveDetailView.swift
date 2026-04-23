@@ -85,6 +85,31 @@ struct DiveDetailView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var pendingDive: Dive? = nil
     @State private var viewWidth: CGFloat = 400
+    @State private var scrollLocked: Bool = false
+    @State private var unlockToken: UUID = UUID()
+    @State private var isNavigating: Bool = false
+    @State private var cachedDiveNumber: Int = 0
+    @State private var cachedCurrentIndex: Int? = nil
+    @Environment(\.layoutDirection) private var layoutDirection
+
+    // Swipe navigation tuning
+    private static let swipeCommitDuration: Double = 0.28
+    private static let swipeSpringResponse: Double = 0.35
+    private static let swipeSpringDamping: Double = 0.85
+    private static let swipeEdgeThreshold: CGFloat = 40
+    private static let swipeCommitDistanceRatio: CGFloat = 0.3     // Fraction of view width to trigger commit
+    private static let swipeCommitPredictedRatio: CGFloat = 0.5    // Fraction for predicted-end commit
+    private static let swipeRubberBandFactor: CGFloat = 0.15       // Resistance when no neighbour dive
+    private static let swipeRejectionHapticThreshold: CGFloat = 8  // Minimum drag to play rejection haptic
+    private static let swipeRejectionHapticIntensity: CGFloat = 0.35
+
+    #if os(iOS)
+    @State private var hapticGenerator: UIImpactFeedbackGenerator = {
+        let g = UIImpactFeedbackGenerator(style: .light)
+        g.prepare()
+        return g
+    }()
+    #endif
 
     init(dive: Dive, sortedDives: [Dive] = [], isSlidePreview: Bool = false, initialTab: DiveTab = .menu) {
         self._dive = State(initialValue: dive)
@@ -103,23 +128,47 @@ struct DiveDetailView: View {
 
     // MARK: - Computed Properties
 
-    private var currentIndexInSorted: Int? {
-        guard !sortedDives.isEmpty else { return nil }
-        return sortedDives.firstIndex(of: dive)
-    }
-
     private var previousDiveInList: Dive? {
-        guard let idx = currentIndexInSorted, idx > 0 else { return nil }
+        guard let idx = cachedCurrentIndex, idx > 0 else { return nil }
         return sortedDives[idx - 1]
     }
 
     private var nextDiveInList: Dive? {
-        guard let idx = currentIndexInSorted, idx + 1 < sortedDives.count else { return nil }
+        guard let idx = cachedCurrentIndex, idx + 1 < sortedDives.count else { return nil }
         return sortedDives[idx + 1]
     }
 
-    var diveNumber: Int {
-        allDives.count - (allDives.firstIndex(of: dive) ?? 0)
+    var diveNumber: Int { cachedDiveNumber }
+
+    private func pendingDiveNumber(for d: Dive) -> Int {
+        // Only evaluated for the transient preview during a swipe.
+        allDives.count - (allDives.firstIndex(of: d) ?? 0)
+    }
+
+    private func refreshCaches(for d: Dive) {
+        cachedDiveNumber = allDives.count - (allDives.firstIndex(of: d) ?? 0)
+        cachedCurrentIndex = sortedDives.isEmpty ? nil : sortedDives.firstIndex(of: d)
+    }
+
+    @ViewBuilder
+    private func diveTitleLabel(number: Int, siteName: String) -> some View {
+        HStack(spacing: 6) {
+            Text("#\(number)")
+                .font(.system(.caption, design: .monospaced))
+                .fontWeight(.bold)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.cyan.opacity(0.2))
+                .foregroundStyle(.cyan)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            Text(siteName)
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("Dive \(number), \(siteName)"))
     }
 
     var locationText: Text {
@@ -172,25 +221,29 @@ struct DiveDetailView: View {
                             .padding(.bottom, 30)
                             .animation(.easeInOut(duration: 0.25), value: selectedTab)
                         }
-                        .onChange(of: dive) {
+                        .scrollDisabled(scrollLocked)
+                        .onChange(of: dive) { _, _ in
                             proxy.scrollTo("diveTop", anchor: .top)
                         }
                     }
                 }
-                .frame(width: geo.size.width)
+                .frame(width: geo.size.width, height: geo.size.height)
                 .background(Color.platformBackground)
                 .offset(x: dragOffset)
             }
             .clipped()
-            .onAppear { viewWidth = geo.size.width }
+            .onAppear {
+                viewWidth = geo.size.width
+                refreshCaches(for: dive)
+            }
             .onChange(of: geo.size.width) { viewWidth = geo.size.width }
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 20)
                 .onChanged { value in
-                    guard !sortedDives.isEmpty else { return }
+                    guard !sortedDives.isEmpty, !isNavigating else { return }
                     // Only activate from screen edges to avoid conflicting with internal horizontal scrolling
-                    let edgeThreshold: CGFloat = 20
+                    let edgeThreshold = Self.swipeEdgeThreshold
                     guard dragOffset != 0 ||
                           value.startLocation.x < edgeThreshold ||
                           value.startLocation.x > viewWidth - edgeThreshold
@@ -198,41 +251,66 @@ struct DiveDetailView: View {
                     let h = value.translation.width
                     let v = value.translation.height
                     guard abs(h) > abs(v) || dragOffset != 0 else { return }
-                    if h < 0 {
-                        let target = nextDiveInList
-                        pendingDive = target
-                        dragOffset = target != nil ? h : h * 0.15
-                    } else {
-                        let target = previousDiveInList
-                        pendingDive = target
-                        dragOffset = target != nil ? h : h * 0.15
-                    }
+                    if !scrollLocked { scrollLocked = true }
+                    // Treat a leftward visual drag as "next" regardless of layout direction.
+                    let goingNext = layoutDirection == .rightToLeft ? (h > 0) : (h < 0)
+                    let target = goingNext ? nextDiveInList : previousDiveInList
+                    pendingDive = target
+                    let rawOffset = target != nil ? h : h * Self.swipeRubberBandFactor
+                    dragOffset = max(-viewWidth, min(viewWidth, rawOffset))
                 }
                 .onEnded { value in
                     guard !sortedDives.isEmpty, dragOffset != 0 else {
-                        dragOffset = 0; pendingDive = nil; return
+                        dragOffset = 0; pendingDive = nil; scrollLocked = false; return
                     }
                     let predicted = value.predictedEndTranslation.width
-                    let threshold = viewWidth * 0.3
-                    if (dragOffset < -threshold || predicted < -(viewWidth * 0.5)),
-                       let next = nextDiveInList {
+                    let threshold = viewWidth * Self.swipeCommitDistanceRatio
+                    let predictedThreshold = viewWidth * Self.swipeCommitPredictedRatio
+                    let visualNext = (dragOffset < -threshold || predicted < -predictedThreshold)
+                    let visualPrev = (dragOffset > threshold || predicted > predictedThreshold)
+                    let goNext = layoutDirection == .rightToLeft ? visualPrev : visualNext
+                    let goPrev = layoutDirection == .rightToLeft ? visualNext : visualPrev
+                    if goNext, let next = nextDiveInList {
                         navigateTo(next, forward: true)
-                    } else if (dragOffset > threshold || predicted > viewWidth * 0.5),
-                              let prev = previousDiveInList {
+                    } else if goPrev, let prev = previousDiveInList {
                         navigateTo(prev, forward: false)
                     } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        #if os(iOS)
+                        // Subtle feedback when the swipe doesn't commit.
+                        if abs(dragOffset) > Self.swipeRejectionHapticThreshold {
+                            let g = UIImpactFeedbackGenerator(style: .rigid)
+                            g.impactOccurred(intensity: Self.swipeRejectionHapticIntensity)
+                        }
+                        #endif
+                        withAnimation(.spring(response: Self.swipeSpringResponse, dampingFraction: Self.swipeSpringDamping)) {
                             dragOffset = 0
                             pendingDive = nil
+                        }
+                        // Keep scroll locked until the spring settles so the ScrollView
+                        // doesn't apply any residual vertical movement on release.
+                        let token = UUID()
+                        unlockToken = token
+                        DispatchQueue.main.asyncAfter(deadline: .now() + Self.swipeSpringResponse + 0.05) {
+                            if unlockToken == token, dragOffset == 0, pendingDive == nil {
+                                scrollLocked = false
+                            }
                         }
                     }
                 }
         )
-        .navigationTitle(isSlidePreview ? "" : dive.siteName)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .modifier(NavTitleIfNotPreview(title: dive.siteName, isSlidePreview: isSlidePreview))
         .background(Color.platformBackground.ignoresSafeArea())
+        #if os(iOS)
+        .background(
+            // Disable the system back-swipe while on a dive detail so our
+            // swipe-right gesture can navigate to the previous dive.
+            Group {
+                if !isSlidePreview && !sortedDives.isEmpty {
+                    DisableInteractivePop().frame(width: 0, height: 0)
+                }
+            }
+        )
+        #endif
 
         .toolbar {
             if !isSlidePreview {
@@ -240,6 +318,21 @@ struct DiveDetailView: View {
                 if !sortedDives.isEmpty {
                     ToolbarItem(placement: .principal) {
                         diveNavigationButtons
+                    }
+                }
+                #else
+                ToolbarItem(placement: .principal) {
+                    ZStack {
+                        diveTitleLabel(number: dive.diveNumber ?? diveNumber,
+                                       siteName: dive.siteName)
+                            .offset(x: dragOffset)
+                        if let pending = pendingDive {
+                            diveTitleLabel(number: pending.diveNumber ?? pendingDiveNumber(for: pending),
+                                           siteName: pending.siteName)
+                                .offset(x: dragOffset < 0
+                                        ? dragOffset + viewWidth
+                                        : dragOffset - viewWidth)
+                        }
                     }
                 }
                 #endif
@@ -316,7 +409,9 @@ struct DiveDetailView: View {
             exportDocument = nil
         }
         #endif
-        .onChange(of: dive) {
+        .onChange(of: dive) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            refreshCaches(for: newValue)
             // Reset per-dive UI state when navigating to a different dive
             selectedTankIndex = 0
             showEditSheet = false
@@ -326,21 +421,68 @@ struct DiveDetailView: View {
             isEditingEquipment = false
             isEditingPhotos = false
             isEditingMarineLife = false
+            // Also clear transient targets so they can't point to the previous dive's items.
+            selectedPhotoForPreview = nil
+            gearToDelete = nil
+            photoIndexToDelete = nil
+            fishToDelete = nil
+            fishToEdit = nil
+            showDeleteGearAlert = false
+            showDeletePhotoAlert = false
+            showDeleteFishAlert = false
+            #if os(iOS)
+            showFileExporter = false
+            // Announce the newly-focused dive for VoiceOver users.
+            let number = newValue.diveNumber ?? cachedDiveNumber
+            let announcement = String(localized: "Dive \(number), \(newValue.siteName)")
+            UIAccessibility.post(notification: .screenChanged, argument: announcement)
+            #endif
         }
+        .onChange(of: allDives.count) { _, _ in
+            // Keep the cached dive number correct if dives are added/removed elsewhere.
+            refreshCaches(for: dive)
+        }
+        .onDisappear {
+            // Invalidate any pending async reset so it can't fire after the view leaves.
+            unlockToken = UUID()
+        }
+        #if os(iOS)
+        .accessibilityAction(named: Text("Previous dive")) {
+            if let prev = previousDiveInList { navigateTo(prev, forward: false) }
+        }
+        .accessibilityAction(named: Text("Next dive")) {
+            if let next = nextDiveInList { navigateTo(next, forward: true) }
+        }
+        #endif
     }
 
     // MARK: - Dive Navigation
 
     private func navigateTo(_ targetDive: Dive, forward: Bool) {
+        // Prevent overlapping navigations from rapid chevron taps.
+        guard !isNavigating else { return }
+        isNavigating = true
         pendingDive = targetDive
-        let targetOffset: CGFloat = forward ? -viewWidth : viewWidth
-        withAnimation(.easeOut(duration: 0.28)) {
+        // Visual direction: "forward" means the incoming dive comes from the trailing edge.
+        let rtl = layoutDirection == .rightToLeft
+        let visualForward = rtl ? !forward : forward
+        let targetOffset: CGFloat = visualForward ? -viewWidth : viewWidth
+        #if os(iOS)
+        hapticGenerator.impactOccurred()
+        hapticGenerator.prepare() // ready for the next commit
+        #endif
+        let token = UUID()
+        unlockToken = token
+        withAnimation(.easeOut(duration: Self.swipeCommitDuration)) {
             dragOffset = targetOffset
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.swipeCommitDuration) {
+            guard unlockToken == token else { isNavigating = false; return }
             dive = targetDive
             dragOffset = 0
             pendingDive = nil
+            scrollLocked = false
+            isNavigating = false
         }
     }
 
@@ -497,5 +639,73 @@ struct DiveDetailView: View {
             }
         }
         #endif
+    }
+}
+
+#if os(iOS)
+// Disables the UINavigationController interactive pop gesture while this view is
+// in the hierarchy. Needed so a right-swipe starting at the left screen edge
+// navigates to the previous dive instead of popping back to the list.
+private struct DisableInteractivePop: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController { Controller() }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+
+    final class Controller: UIViewController {
+        private weak var nav: UINavigationController?
+        private var wasEnabled: Bool = true
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            DispatchQueue.main.async { [weak self] in self?.disable() }
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            nav?.interactivePopGestureRecognizer?.isEnabled = wasEnabled
+        }
+
+        private func disable() {
+            guard let nav = navigationController ?? findNav() else { return }
+            self.nav = nav
+            if let gr = nav.interactivePopGestureRecognizer {
+                wasEnabled = gr.isEnabled
+                gr.isEnabled = false
+            }
+        }
+
+        private func findNav() -> UINavigationController? {
+            var current: UIViewController? = parent
+            while let c = current {
+                if let nav = c as? UINavigationController { return nav }
+                if let nav = c.navigationController { return nav }
+                current = c.parent
+            }
+            return nil
+        }
+    }
+}
+#endif
+
+// Applies navigationTitle + navigation-bar display mode only when the view is NOT
+// rendered as a slide preview. This prevents the preview (nested DiveDetailView
+// during swipe) from overriding the host's navigation title — which would make
+// the title briefly disappear and shift the content vertically.
+private struct NavTitleIfNotPreview: ViewModifier {
+    let title: String
+    let isSlidePreview: Bool
+
+    func body(content: Content) -> some View {
+        if isSlidePreview {
+            content
+        } else {
+            #if os(iOS)
+            content
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+            #else
+            content
+                .navigationTitle(title)
+            #endif
+        }
     }
 }
