@@ -51,12 +51,11 @@ struct DiveFilterSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    headerSection
+                    resetSection
                     if showSort {
                         sortSection
                     }
                     filterSections
-                    resetSection
                 }
                 .padding()
             }
@@ -78,38 +77,6 @@ struct DiveFilterSheet: View {
     }
     
     // MARK: - Sections
-    
-    private var headerSection: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.cyan.opacity(0.2))
-                    .frame(width: 70, height: 70)
-                
-                Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.cyan)
-            }
-            
-            if showSort {
-                Text("Filters & Sort")
-                    .font(.title2)
-                    .fontWeight(.bold)
-            } else {
-                Text("Filters")
-                    .font(.title2)
-                    .fontWeight(.bold)
-            }
-            
-            if activeFilterCount > 0 {
-                Text("\(activeFilterCount) active filter(s)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .padding(.vertical)
-    }
     
     private var sortSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -232,6 +199,14 @@ struct DiveFilterSheet: View {
                     ) {
                         withAnimation { filterCountry = nil }
                     }
+
+                    ModernFilterChip(
+                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no country set"),
+                        isSelected: filterCountry == "",
+                        color: .blue
+                    ) {
+                        withAnimation { filterCountry = "" }
+                    }
                     
                     ForEach(availableCountries, id: \.self) { country in
                         ModernFilterChip(
@@ -261,6 +236,14 @@ struct DiveFilterSheet: View {
                         color: .purple
                     ) {
                         withAnimation { filterDiveType = nil }
+                    }
+
+                    ModernFilterChip(
+                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no dive type set"),
+                        isSelected: filterDiveType == "",
+                        color: .purple
+                    ) {
+                        withAnimation { filterDiveType = "" }
                     }
                     
                     ForEach(availableDiveTypes, id: \.self) { diveType in
@@ -321,6 +304,14 @@ struct DiveFilterSheet: View {
                         color: .indigo
                     ) {
                         withAnimation { filterDiverName = nil }
+                    }
+
+                    ModernFilterChip(
+                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no diver set"),
+                        isSelected: filterDiverName == "",
+                        color: .indigo
+                    ) {
+                        withAnimation { filterDiverName = "" }
                     }
 
                     ForEach(availableDiverNames, id: \.self) { name in
@@ -402,6 +393,14 @@ struct DiveFilterSheet: View {
                         color: .green
                     ) {
                         withAnimation { filterGasType = nil }
+                    }
+
+                    ModernFilterChip(
+                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no gas type set"),
+                        isSelected: filterGasType == "",
+                        color: .green
+                    ) {
+                        withAnimation { filterGasType = "" }
                     }
                     
                     ForEach(availableGasTypes, id: \.self) { gas in

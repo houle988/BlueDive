@@ -192,21 +192,36 @@ struct ContentView: View {
                 if diveYear != year { return false }
             }
             // Gas filter
-            if let gas = filterGasType, dive.gasType != gas { return false }
+            if let gas = filterGasType {
+                if gas.isEmpty {
+                    if !dive.gasType.isEmpty { return false }
+                } else {
+                    if dive.gasType != gas { return false }
+                }
+            }
             // Minimum depth filter — compare in display units
             if filterMinDepth > 0, dive.displayMaxDepth < filterMinDepth { return false }
             // Minimum rating filter
             if filterMinRating > 0, dive.rating < filterMinRating { return false }
             // Country filter
             if let country = filterCountry {
-                guard let diveCountry = dive.siteCountry, diveCountry == country else { return false }
+                if country.isEmpty {
+                    guard dive.siteCountry == nil || dive.siteCountry!.isEmpty else { return false }
+                } else {
+                    guard let diveCountry = dive.siteCountry, diveCountry == country else { return false }
+                }
             }
             // Dive type filter
             if let diveType = filterDiveType {
+                if diveType.isEmpty {
+                    let trimmed = dive.diveTypes?.trimmingCharacters(in: .whitespaces) ?? ""
+                    if !trimmed.isEmpty { return false }
+                } else {
                 let allTypes = dive.diveTypes?
                     .split(separator: ",")
                     .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
                 if !allTypes.contains(diveType) { return false }
+                }
             }
             // Tag filter
             if let tag = filterTag {
@@ -216,7 +231,13 @@ struct ContentView: View {
                 if !diveTags.contains(tag) { return false }
             }
             // Diver name filter
-            if let name = filterDiverName, dive.diverName != name { return false }
+            if let name = filterDiverName {
+                if name.isEmpty {
+                    if !dive.diverName.isEmpty { return false }
+                } else {
+                    if dive.diverName != name { return false }
+                }
+            }
             // Marine life filter
             if !filterMarineLife.isEmpty {
                 let match = dive.seenFish?.contains { $0.name.localizedCaseInsensitiveContains(filterMarineLife) } ?? false

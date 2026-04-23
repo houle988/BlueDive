@@ -112,17 +112,32 @@ struct DiveMapView: View {
                 let diveYear = Calendar.current.component(.year, from: dive.timestamp)
                 if diveYear != year { return false }
             }
-            if let gas = filterGasType, dive.gasType != gas { return false }
+            if let gas = filterGasType {
+                if gas.isEmpty {
+                    if !dive.gasType.isEmpty { return false }
+                } else {
+                    if dive.gasType != gas { return false }
+                }
+            }
             if filterMinDepth > 0, dive.displayMaxDepth < filterMinDepth { return false }
             if filterMinRating > 0, dive.rating < filterMinRating { return false }
             if let country = filterCountry {
-                guard let diveCountry = dive.siteCountry, diveCountry == country else { return false }
+                if country.isEmpty {
+                    guard dive.siteCountry == nil || dive.siteCountry!.isEmpty else { return false }
+                } else {
+                    guard let diveCountry = dive.siteCountry, diveCountry == country else { return false }
+                }
             }
             if let diveType = filterDiveType {
-                let allTypes = dive.diveTypes?
-                    .split(separator: ",")
-                    .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                if !allTypes.contains(diveType) { return false }
+                if diveType.isEmpty {
+                    let trimmed = dive.diveTypes?.trimmingCharacters(in: .whitespaces) ?? ""
+                    if !trimmed.isEmpty { return false }
+                } else {
+                    let allTypes = dive.diveTypes?
+                        .split(separator: ",")
+                        .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+                    if !allTypes.contains(diveType) { return false }
+                }
             }
             if let tag = filterTag {
                 let diveTags = dive.tags?
@@ -130,7 +145,13 @@ struct DiveMapView: View {
                     .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
                 if !diveTags.contains(tag) { return false }
             }
-            if let name = filterDiverName, dive.diverName != name { return false }
+            if let name = filterDiverName {
+                if name.isEmpty {
+                    if !dive.diverName.isEmpty { return false }
+                } else {
+                    if dive.diverName != name { return false }
+                }
+            }
             if !filterMarineLife.isEmpty {
                 let match = dive.seenFish?.contains { $0.name.localizedCaseInsensitiveContains(filterMarineLife) } ?? false
                 if !match { return false }
