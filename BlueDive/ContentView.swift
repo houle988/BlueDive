@@ -68,6 +68,7 @@ struct ContentView: View {
     @State private var filterYear: Int? = nil
     @State private var filterGasType: String? = nil
     @State private var filterMinDepth: Double = 0
+    @State private var filterMaxDepth: Double = 0
     @State private var filterMinRating: Int = 0
     @State private var filterCountry: String? = nil
     @State private var filterDiveType: String? = nil
@@ -155,7 +156,7 @@ struct ContentView: View {
         var count = 0
         if filterYear != nil            { count += 1 }
         if filterGasType != nil         { count += 1 }
-        if filterMinDepth > 0           { count += 1 }
+        if filterMinDepth > 0 || filterMaxDepth > 0 { count += 1 }
         if filterMinRating > 0          { count += 1 }
         if filterCountry != nil         { count += 1 }
         if filterDiveType != nil        { count += 1 }
@@ -199,8 +200,19 @@ struct ContentView: View {
                     if dive.gasType != gas { return false }
                 }
             }
-            // Minimum depth filter — compare in display units
-            if filterMinDepth > 0, dive.displayMaxDepth < filterMinDepth { return false }
+            // Depth range filter — compare in display units
+            if filterMinDepth > 0 || filterMaxDepth > 0 {
+                let depth = dive.displayMaxDepth
+                if filterMinDepth > 0, filterMaxDepth > 0 {
+                    let lo = Swift.min(filterMinDepth, filterMaxDepth)
+                    let hi = Swift.max(filterMinDepth, filterMaxDepth)
+                    if depth < lo || depth > hi { return false }
+                } else if filterMinDepth > 0 {
+                    if depth < filterMinDepth { return false }
+                } else if filterMaxDepth > 0 {
+                    if depth > filterMaxDepth { return false }
+                }
+            }
             // Minimum rating filter
             if filterMinRating > 0, dive.rating < filterMinRating { return false }
             // Country filter
@@ -225,10 +237,15 @@ struct ContentView: View {
             }
             // Tag filter
             if let tag = filterTag {
-                let diveTags = dive.tags?
-                    .split(separator: ",")
-                    .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                if !diveTags.contains(tag) { return false }
+                if tag.isEmpty {
+                    let trimmed = dive.tags?.trimmingCharacters(in: .whitespaces) ?? ""
+                    if !trimmed.isEmpty { return false }
+                } else {
+                    let diveTags = dive.tags?
+                        .split(separator: ",")
+                        .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+                    if !diveTags.contains(tag) { return false }
+                }
             }
             // Diver name filter
             if let name = filterDiverName {
@@ -295,6 +312,7 @@ struct ContentView: View {
                     filterYear: $filterYear,
                     filterGasType: $filterGasType,
                     filterMinDepth: $filterMinDepth,
+                    filterMaxDepth: $filterMaxDepth,
                     filterMinRating: $filterMinRating,
                     filterCountry: $filterCountry,
                     filterDiveType: $filterDiveType,
@@ -899,6 +917,7 @@ struct ContentView: View {
         filterYear       = nil
         filterGasType    = nil
         filterMinDepth   = 0
+        filterMaxDepth   = 0
         filterMinRating  = 0
         filterCountry    = nil
         filterDiveType   = nil

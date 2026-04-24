@@ -15,6 +15,7 @@ struct DiveFilterSheet: View {
     @Binding var filterYear: Int?
     @Binding var filterGasType: String?
     @Binding var filterMinDepth: Double
+    @Binding var filterMaxDepth: Double
     @Binding var filterMinRating: Int
     @Binding var filterCountry: String?
     @Binding var filterDiveType: String?
@@ -25,12 +26,18 @@ struct DiveFilterSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     private let prefs = UserPreferences.shared
+
+    @State private var minDepthText: String = ""
+    @State private var maxDepthText: String = ""
+
+    private enum DepthField { case min, max }
+    @FocusState private var depthFocus: DepthField?
     
     private var activeFilterCount: Int {
         var count = 0
         if filterYear != nil { count += 1 }
         if filterGasType != nil { count += 1 }
-        if filterMinDepth > 0 { count += 1 }
+        if filterMinDepth > 0 || filterMaxDepth > 0 { count += 1 }
         if filterMinRating > 0 { count += 1 }
         if filterCountry != nil { count += 1 }
         if filterDiveType != nil { count += 1 }
@@ -182,6 +189,7 @@ struct DiveFilterSheet: View {
                 }
                 .padding(.horizontal, 4)
             }
+            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -220,6 +228,7 @@ struct DiveFilterSheet: View {
                 }
                 .padding(.horizontal, 4)
             }
+            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -258,6 +267,7 @@ struct DiveFilterSheet: View {
                 }
                 .padding(.horizontal, 4)
             }
+            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -275,6 +285,14 @@ struct DiveFilterSheet: View {
                     ) {
                         withAnimation { filterTag = nil }
                     }
+
+                    ModernFilterChip(
+                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no tag set"),
+                        isSelected: filterTag == "",
+                        color: .orange
+                    ) {
+                        withAnimation { filterTag = "" }
+                    }
                     
                     ForEach(availableTags, id: \.self) { tag in
                         ModernFilterChip(
@@ -288,6 +306,7 @@ struct DiveFilterSheet: View {
                 }
                 .padding(.horizontal, 4)
             }
+            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -326,6 +345,7 @@ struct DiveFilterSheet: View {
                 }
                 .padding(.horizontal, 4)
             }
+            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -415,34 +435,75 @@ struct DiveFilterSheet: View {
                 }
                 .padding(.horizontal, 4)
             }
+            .chipRowFade()
         }
         .filterCardStyle()
     }
     
+    private var isDepthRangeInverted: Bool {
+        filterMinDepth > 0 && filterMaxDepth > 0 && filterMinDepth > filterMaxDepth
+    }
+
+    private var depthStatusText: String {
+        let unit = prefs.depthUnit.symbol
+        let hasMin = filterMinDepth > 0
+        let hasMax = filterMaxDepth > 0
+        switch (hasMin, hasMax) {
+        case (true, true):
+            let lo = Swift.min(filterMinDepth, filterMaxDepth)
+            let hi = Swift.max(filterMinDepth, filterMaxDepth)
+            return "\(Int(lo)) – \(Int(hi)) \(unit)"
+        case (true, false):
+            return "≥ \(Int(filterMinDepth)) \(unit)"
+        case (false, true):
+            return "≤ \(Int(filterMaxDepth)) \(unit)"
+        default:
+            return ""
+        }
+    }
+
+    private func commitDepthFields() {
+        let rawMin = minDepthText.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
+        let rawMax = maxDepthText.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
+        let parsedMin = Double(rawMin) ?? 0
+        let parsedMax = Double(rawMax) ?? 0
+        // If both are set and inverted, swap them so the range is always lo–hi
+        if parsedMin > 0, parsedMax > 0, parsedMin > parsedMax {
+            filterMinDepth = parsedMax
+            filterMaxDepth = parsedMin
+            minDepthText   = String(Int(parsedMax))
+            maxDepthText   = String(Int(parsedMin))
+        } else {
+            filterMinDepth = parsedMin
+            filterMaxDepth = parsedMax
+        }
+    }
+
     private var depthFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Minimum depth", icon: "arrow.down.to.line")
-            
+            FilterSectionHeader(title: "Depth range", icon: "arrow.down.to.line")
+
             VStack(spacing: 12) {
+                // Status / clear row
                 HStack {
-                    if filterMinDepth > 0 {
-                        Text("≥ \(Int(filterMinDepth)) \(prefs.depthUnit.symbol)")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundStyle(Color.cyan)
+                    if (filterMinDepth > 0 || filterMaxDepth > 0) && !isDepthRangeInverted {
+                        Text(verbatim: depthStatusText)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.cyan)
                     } else {
                         Text("All depths")
-                            .font(.title3)
-                            .fontWeight(.bold)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-
                     Spacer()
-                    
-                    if filterMinDepth > 0 {
+                    if filterMinDepth > 0 || filterMaxDepth > 0 {
                         Button {
                             withAnimation {
                                 filterMinDepth = 0
+                                filterMaxDepth = 0
+                                minDepthText   = ""
+                                maxDepthText   = ""
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
@@ -451,27 +512,122 @@ struct DiveFilterSheet: View {
                         .buttonStyle(.plain)
                     }
                 }
-                
-                Slider(
-                    value: $filterMinDepth,
-                    in: 0...(prefs.depthUnit == .feet ? 200 : 60),
-                    step: prefs.depthUnit == .feet ? 10 : 5
-                )
-                .tint(.cyan)
-                
-                HStack {
-                    Text("0 \(prefs.depthUnit.symbol)")
+
+                // Inverted range warning
+                if isDepthRangeInverted {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.caption)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Min. must be less than Max.")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                            Text("Values will be swapped automatically on confirm.")
+                                .font(.caption2)
+                                .foregroundStyle(.orange.opacity(0.75))
+                        }
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
+                }
+
+                // Min / Max input row
+                HStack(spacing: 12) {
+                    // Min field
+                    HStack(spacing: 6) {
+                        Text("Min.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                        TextField("–", text: $minDepthText)
+                            .textFieldStyle(.plain)
+                            .focused($depthFocus, equals: .min)
+                            #if os(iOS)
+                            .keyboardType(.decimalPad)
+                            #endif
+                            .onChange(of: minDepthText) {
+                                let parsed = Double(
+                                    minDepthText
+                                        .replacingOccurrences(of: ",", with: ".")
+                                        .trimmingCharacters(in: .whitespaces)
+                                ) ?? 0
+                                filterMinDepth = parsed
+                            }
+                            .onSubmit { commitDepthFields() }
+                        if !minDepthText.isEmpty {
+                            Button {
+                                minDepthText   = ""
+                                filterMinDepth = 0
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Text(verbatim: prefs.depthUnit.symbol)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+
+                    Image(systemName: "arrow.left.and.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(prefs.depthUnit == .feet ? 200 : 60) \(prefs.depthUnit.symbol)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+
+                    // Max field
+                    HStack(spacing: 6) {
+                        Text("Max.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                        TextField("–", text: $maxDepthText)
+                            .textFieldStyle(.plain)
+                            .focused($depthFocus, equals: .max)
+                            #if os(iOS)
+                            .keyboardType(.decimalPad)
+                            #endif
+                            .onChange(of: maxDepthText) {
+                                let parsed = Double(
+                                    maxDepthText
+                                        .replacingOccurrences(of: ",", with: ".")
+                                        .trimmingCharacters(in: .whitespaces)
+                                ) ?? 0
+                                filterMaxDepth = parsed
+                            }
+                            .onSubmit { commitDepthFields() }
+                        if !maxDepthText.isEmpty {
+                            Button {
+                                maxDepthText   = ""
+                                filterMaxDepth = 0
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Text(verbatim: prefs.depthUnit.symbol)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: isDepthRangeInverted)
             .padding()
             .background(Color.platformSecondaryBackground)
             .cornerRadius(12)
+            .onAppear {
+                minDepthText = filterMinDepth > 0 ? String(Int(filterMinDepth)) : ""
+                maxDepthText = filterMaxDepth > 0 ? String(Int(filterMaxDepth)) : ""
+            }
         }
         .filterCardStyle()
     }
@@ -503,49 +659,87 @@ struct DiveFilterSheet: View {
         .filterCardStyle()
     }
     
-    private var resetSection: some View {
-        VStack(spacing: 12) {
-            Button(role: .destructive) {
-                withAnimation {
-                    filterYear       = nil
-                    filterGasType    = nil
-                    filterMinDepth   = 0
-                    filterMinRating  = 0
-                    filterCountry    = nil
-                    filterDiveType   = nil
-                    filterTag        = nil
-                    filterDiverName  = nil
-                    filterMarineLife = ""
-                    if showSort {
-                        sortOrder    = .dateDesc
-                    }
-                }
-            } label: {
-                HStack {
-                    Image(systemName: "arrow.counterclockwise.circle.fill")
-                        .font(.title3)
-                    Text("Reset all filters")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.red.opacity(0.15))
-                .foregroundStyle(.red)
-                .cornerRadius(14)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(activeFilterCount == 0 && (showSort ? sortOrder == .dateDesc : true))
-            .opacity(activeFilterCount == 0 && (showSort ? sortOrder == .dateDesc : true) ? 0.5 : 1.0)
+    private var hasSortChange: Bool {
+        showSort && sortOrder != .dateDesc
+    }
+
+    private var hasAnythingToReset: Bool {
+        activeFilterCount > 0 || hasSortChange
+    }
+
+    private var resetButtonLabel: String {
+        let hasFilters = activeFilterCount > 0
+        if hasFilters && hasSortChange {
+            return String(
+                format: NSLocalizedString("Reset %lld filter(s) & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when both filters and sort order are active"),
+                activeFilterCount
+            )
+        } else if hasFilters {
+            return String(
+                format: NSLocalizedString("Reset %lld filter(s)", bundle: Bundle.forAppLanguage(), comment: "Reset button label showing the number of active filters"),
+                activeFilterCount
+            )
+        } else {
+            return NSLocalizedString("Reset sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when only the sort order is changed")
         }
-        .padding(.top, 8)
+    }
+
+    private var resetSection: some View {
+        Group {
+            if hasAnythingToReset {
+                Button(role: .destructive) {
+                    withAnimation {
+                        filterYear       = nil
+                        filterGasType    = nil
+                        filterMinDepth   = 0
+                        filterMaxDepth   = 0
+                        minDepthText     = ""
+                        maxDepthText     = ""
+                        filterMinRating  = 0
+                        filterCountry    = nil
+                        filterDiveType   = nil
+                        filterTag        = nil
+                        filterDiverName  = nil
+                        filterMarineLife = ""
+                        if showSort {
+                            sortOrder    = .dateDesc
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                            .font(.title3)
+                        Text(verbatim: resetButtonLabel)
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red.opacity(0.15))
+                    .foregroundStyle(.red)
+                    .cornerRadius(14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            }
+        }
     }
     
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        #if os(iOS)
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button(NSLocalizedString("Done", bundle: Bundle.forAppLanguage(), comment: "Done button to dismiss the depth filter keyboard and commit values")) {
+                commitDepthFields()
+                depthFocus = nil
+            }
+            .fontWeight(.semibold)
+        }
+        #endif
         ToolbarItem(placement: .confirmationAction) {
             Button {
                 dismiss()
@@ -624,6 +818,21 @@ extension View {
             .background(Color.platformTertiaryBackground)
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+    }
+
+    /// Masks the trailing edge with a fade gradient to hint that more chips are scrollable.
+    func chipRowFade() -> some View {
+        self.mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.88),
+                    .init(color: .clear, location: 1.0)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
     }
 }
 
