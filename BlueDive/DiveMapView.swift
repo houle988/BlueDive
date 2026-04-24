@@ -197,38 +197,90 @@ struct DiveMapView: View {
         let dives: [Dive]
     }
 
+    // Normalizes longitude into [-180, 180) so dives near the antimeridian
+    // don't land in unrelated clusters.
+    private func normalizedLongitude(_ lon: Double) -> Double {
+        var l = lon.truncatingRemainder(dividingBy: 360.0)
+        if l >= 180.0 { l -= 360.0 }
+        if l < -180.0 { l += 360.0 }
+        return l
+    }
+
     private var clusters: [DiveCluster] {
-        // Grid cell size scales with current zoom so pins regroup/ungroup as user zooms.
-        // ~20 cells across the visible span gives a reasonable overlap threshold relative
-        // to the ~32pt pin footprint.
-        let cellLat = max(currentSpan.latitudeDelta, 0.00001) / 20.0
-        let cellLon = max(currentSpan.longitudeDelta, 0.00001) / 20.0
-        var buckets: [String: [(dive: Dive, coordinate: CLLocationCoordinate2D)]] = [:]
-        for item in divesWithCoordinates {
-            let x = Int((item.coordinate.latitude / cellLat).rounded(.down))
-            let y = Int((item.coordinate.longitude / cellLon).rounded(.down))
-            let key = "\(x)_\(y)"
-            buckets[key, default: []].append(item)
+        // Overlap radius scales with visible span so the clustering threshold
+        // matches the pin's screen-space footprint (~1/20th of the visible span).
+        let radiusLat = max(currentSpan.latitudeDelta, 0.00001) / 20.0
+        let baseLonRadius = max(currentSpan.longitudeDelta, 0.00001) / 20.0
+
+        // Greedy distance-based clustering. Unlike a fixed grid, this has no
+        // cell-edge artifact: two visually overlapping pins always merge.
+        // Centroid is recomputed as members are added to keep assignments stable.
+        struct WorkingCluster {
+            var sumLat: Double
+            var sumLon: Double
+            var dives: [Dive]
+            var coords: [CLLocationCoordinate2D]
+            var centroid: CLLocationCoordinate2D {
+                let n = Double(dives.count)
+                return CLLocationCoordinate2D(latitude: sumLat / n, longitude: sumLon / n)
+            }
         }
-        return buckets.map { (key, group) in
-            let avgLat = group.map { $0.coordinate.latitude }.reduce(0, +) / Double(group.count)
-            let avgLon = group.map { $0.coordinate.longitude }.reduce(0, +) / Double(group.count)
+
+        var working: [WorkingCluster] = []
+        // Process in deterministic order so cluster identity is stable across
+        // recomputes (filteredDives is already sorted by timestamp desc).
+        for item in divesWithCoordinates {
+            let lat = item.coordinate.latitude
+            let lon = normalizedLongitude(item.coordinate.longitude)
+            // Compensate longitude radius by cos(latitude) so the cluster
+            // threshold is roughly isotropic in on-screen distance at any latitude.
+            let latCos = max(cos(lat * .pi / 180.0), 0.01)
+            let radiusLon = baseLonRadius / latCos
+            var merged = false
+            for i in working.indices {
+                let c = working[i].centroid
+                if abs(lat - c.latitude) <= radiusLat && abs(lon - c.longitude) <= radiusLon {
+                    working[i].sumLat += lat
+                    working[i].sumLon += lon
+                    working[i].dives.append(item.dive)
+                    working[i].coords.append(CLLocationCoordinate2D(latitude: lat, longitude: lon))
+                    merged = true
+                    break
+                }
+            }
+            if !merged {
+                working.append(WorkingCluster(
+                    sumLat: lat, sumLon: lon,
+                    dives: [item.dive],
+                    coords: [CLLocationCoordinate2D(latitude: lat, longitude: lon)]
+                ))
+            }
+        }
+        return working.map { entry -> DiveCluster in
+            // Stable id = sorted member ids, so SwiftUI keeps the same annotation
+            // identity across re-renders with the same membership.
+            let ids = entry.dives.map { $0.id.uuidString }.sorted().joined(separator: "_")
             return DiveCluster(
-                id: key,
-                coordinate: CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon),
-                dives: group.map { $0.dive }
+                id: ids,
+                coordinate: entry.centroid,
+                dives: entry.dives
             )
         }
+        // Deterministic order (independent of dictionary iteration).
+        .sorted { $0.id < $1.id }
     }
 
     private func handleClusterTap(_ cluster: DiveCluster) {
-        // If all dives in the cluster share (almost) the same GPS point, zooming
-        // further would never split them. Show a list instead.
         let lats = cluster.dives.compactMap { $0.siteLatitude }
-        let lons = cluster.dives.compactMap { $0.siteLongitude }
-        let latRange = (lats.max() ?? 0) - (lats.min() ?? 0)
-        let lonRange = (lons.max() ?? 0) - (lons.min() ?? 0)
-        let sameSpot = latRange < 0.00005 && lonRange < 0.00005 // ~5 m
+        let lons = cluster.dives.compactMap { $0.siteLongitude }.map { normalizedLongitude($0) }
+        guard let minLat = lats.min(), let maxLat = lats.max(),
+              let minLon = lons.min(), let maxLon = lons.max() else { return }
+
+        // "Same spot" test in meters (robust at all latitudes).
+        let corner1 = CLLocation(latitude: minLat, longitude: minLon)
+        let corner2 = CLLocation(latitude: maxLat, longitude: maxLon)
+        let spreadMeters = corner1.distance(from: corner2)
+        let sameSpot = spreadMeters < 10 // meters
         // Also bail out of zooming once we're already very close in.
         let alreadyClose = currentSpan.latitudeDelta < 0.002
         if sameSpot || alreadyClose {
@@ -237,13 +289,17 @@ struct DiveMapView: View {
             }
             return
         }
+
+        // Zoom to the cluster's bounding box (with padding) so a single tap is
+        // always effective, regardless of how far out we started.
+        let centerLat = (minLat + maxLat) / 2.0
+        let centerLon = (minLon + maxLon) / 2.0
+        let latDelta = max((maxLat - minLat) * 2.5, 0.002)
+        let lonDelta = max((maxLon - minLon) * 2.5, 0.002)
         withAnimation(.easeInOut(duration: 0.35)) {
             cameraPosition = .region(MKCoordinateRegion(
-                center: cluster.coordinate,
-                span: MKCoordinateSpan(
-                    latitudeDelta: max(currentSpan.latitudeDelta / 3.0, 0.0005),
-                    longitudeDelta: max(currentSpan.longitudeDelta / 3.0, 0.0005)
-                )
+                center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon),
+                span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
             ))
         }
     }
@@ -263,13 +319,15 @@ struct DiveMapView: View {
                             .tag(dive)
                         } else {
                             Annotation(
-                                "",
+                                "\(cluster.dives.count) dives",
                                 coordinate: cluster.coordinate
                             ) {
                                 DiveMapClusterPin(count: cluster.dives.count)
                                     .onTapGesture {
                                         handleClusterTap(cluster)
                                     }
+                                    .accessibilityLabel(Text("\(cluster.dives.count) dives at this location"))
+                                    .accessibilityAddTraits(.isButton)
                             }
                         }
                     }
@@ -277,7 +335,16 @@ struct DiveMapView: View {
                 }
                 .mapStyle(mapStyle)
                 .onMapCameraChange(frequency: .onEnd) { context in
-                    currentSpan = context.region.span
+                    // Only re-cluster when the user has actually zoomed. Panning
+                    // (especially north/south) produces small Mercator-projection
+                    // span drift that we want to ignore so clusters stay stable.
+                    // Sub-threshold zooms naturally accumulate because the
+                    // baseline only advances when we cross the threshold.
+                    let newSpan = context.region.span
+                    let ratio = newSpan.latitudeDelta / max(currentSpan.latitudeDelta, 0.00001)
+                    if ratio < 0.7 || ratio > 1.4 {
+                        currentSpan = newSpan
+                    }
                 }
                 .onChange(of: selectedDive) { _, newValue in
                     if newValue != nil {
@@ -286,15 +353,6 @@ struct DiveMapView: View {
                         }
                     }
                 }
-                .simultaneousGesture(
-                    TapGesture().onEnded { _ in
-                        if clusterDives != nil && selectedDive == nil {
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                clusterDives = nil
-                            }
-                        }
-                    }
-                )
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()

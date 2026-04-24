@@ -61,6 +61,7 @@ struct DiveDetailView: View {
     let isSlidePreview: Bool
     @Environment(\.modelContext) var modelContext
     @Environment(\.locale) var locale
+    @Environment(\.dismiss) private var dismiss
     @Query(sort: \Dive.timestamp, order: .reverse) var allDives: [Dive]
     @Query(sort: \GearGroup.name) var gearGroups: [GearGroup]
 
@@ -143,6 +144,11 @@ struct DiveDetailView: View {
     private func pendingDiveNumber(for d: Dive) -> Int {
         // Only evaluated for the transient preview during a swipe.
         allDives.count - (allDives.firstIndex(of: d) ?? 0)
+    }
+
+    /// True when the detail view is configured to support swipe-based dive navigation.
+    private var swipeNavigationEnabled: Bool {
+        !isSlidePreview && !sortedDives.isEmpty
     }
 
     private func refreshCaches(for d: Dive) {
@@ -301,19 +307,29 @@ struct DiveDetailView: View {
         .modifier(NavTitleIfNotPreview(title: dive.siteName, isSlidePreview: isSlidePreview))
         .background(Color.platformBackground.ignoresSafeArea())
         #if os(iOS)
-        .background(
-            // Disable the system back-swipe while on a dive detail so our
-            // swipe-right gesture can navigate to the previous dive.
-            Group {
-                if !isSlidePreview && !sortedDives.isEmpty {
-                    DisableInteractivePop().frame(width: 0, height: 0)
-                }
-            }
-        )
+        // Disable the system interactive back-swipe so our own edge swipe can
+        // navigate to the previous dive instead of popping to the list.
+        // Providing a custom leading back button keeps the standard back
+        // affordance while SwiftUI suppresses the swipe gesture.
+        .navigationBarBackButtonHidden(swipeNavigationEnabled)
         #endif
 
         .toolbar {
             if !isSlidePreview {
+                #if os(iOS)
+                if swipeNavigationEnabled {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "chevron.backward")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.cyan)
+                        }
+                        .accessibilityLabel(Text("Back"))
+                    }
+                }
+                #endif
                 #if os(macOS)
                 if !sortedDives.isEmpty {
                     ToolbarItem(placement: .principal) {
@@ -583,16 +599,19 @@ struct DiveDetailView: View {
             EditGazView(dive: dive, tankIndex: selectedTankIndex)
         case .samples:
             // Samples come from a dive computer — no manual editing
-            noEditAvailableView(message: "Samples come from your dive computer and cannot be manually edited.")
+            noEditAvailableView(title: DiveTab.samples.localizedName,
+                                message: "Samples come from your dive computer and cannot be manually edited.")
         case .xmlExport:
-            noEditAvailableView(message: "The XML export is automatically generated from internal data and cannot be edited.")
+            noEditAvailableView(title: DiveTab.xmlExport.localizedName,
+                                message: "The XML export is automatically generated from internal data and cannot be edited.")
         case .uddfExport:
-            noEditAvailableView(message: "The UDDF export is automatically generated from internal data and cannot be edited.")
+            noEditAvailableView(title: DiveTab.uddfExport.localizedName,
+                                message: "The UDDF export is automatically generated from internal data and cannot be edited.")
         }
     }
 
     @ViewBuilder
-    private func noEditAvailableView(message: LocalizedStringKey) -> some View {
+    private func noEditAvailableView(title: LocalizedStringKey, message: LocalizedStringKey) -> some View {
         #if os(macOS)
         VStack(spacing: 20) {
             HStack {
@@ -628,7 +647,7 @@ struct DiveDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.platformBackground.ignoresSafeArea())
-            .navigationTitle("Samples")
+            .navigationTitle(Text(title))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -641,50 +660,6 @@ struct DiveDetailView: View {
         #endif
     }
 }
-
-#if os(iOS)
-// Disables the UINavigationController interactive pop gesture while this view is
-// in the hierarchy. Needed so a right-swipe starting at the left screen edge
-// navigates to the previous dive instead of popping back to the list.
-private struct DisableInteractivePop: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> UIViewController { Controller() }
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
-
-    final class Controller: UIViewController {
-        private weak var nav: UINavigationController?
-        private var wasEnabled: Bool = true
-
-        override func viewWillAppear(_ animated: Bool) {
-            super.viewWillAppear(animated)
-            DispatchQueue.main.async { [weak self] in self?.disable() }
-        }
-
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            nav?.interactivePopGestureRecognizer?.isEnabled = wasEnabled
-        }
-
-        private func disable() {
-            guard let nav = navigationController ?? findNav() else { return }
-            self.nav = nav
-            if let gr = nav.interactivePopGestureRecognizer {
-                wasEnabled = gr.isEnabled
-                gr.isEnabled = false
-            }
-        }
-
-        private func findNav() -> UINavigationController? {
-            var current: UIViewController? = parent
-            while let c = current {
-                if let nav = c as? UINavigationController { return nav }
-                if let nav = c.navigationController { return nav }
-                current = c.parent
-            }
-            return nil
-        }
-    }
-}
-#endif
 
 // Applies navigationTitle + navigation-bar display mode only when the view is NOT
 // rendered as a slide preview. This prevents the preview (nested DiveDetailView

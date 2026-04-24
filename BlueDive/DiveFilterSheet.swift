@@ -30,9 +30,6 @@ struct DiveFilterSheet: View {
     @State private var minDepthText: String = ""
     @State private var maxDepthText: String = ""
 
-    private enum DepthField { case min, max }
-    @FocusState private var depthFocus: DepthField?
-    
     private var activeFilterCount: Int {
         var count = 0
         if filterYear != nil { count += 1 }
@@ -541,7 +538,6 @@ struct DiveFilterSheet: View {
                             .fixedSize()
                         TextField("–", text: $minDepthText)
                             .textFieldStyle(.plain)
-                            .focused($depthFocus, equals: .min)
                             #if os(iOS)
                             .keyboardType(.decimalPad)
                             #endif
@@ -586,7 +582,6 @@ struct DiveFilterSheet: View {
                             .fixedSize()
                         TextField("–", text: $maxDepthText)
                             .textFieldStyle(.plain)
-                            .focused($depthFocus, equals: .max)
                             #if os(iOS)
                             .keyboardType(.decimalPad)
                             #endif
@@ -730,16 +725,6 @@ struct DiveFilterSheet: View {
     
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        #if os(iOS)
-        ToolbarItemGroup(placement: .keyboard) {
-            Spacer()
-            Button(NSLocalizedString("Done", bundle: Bundle.forAppLanguage(), comment: "Done button to dismiss the depth filter keyboard and commit values")) {
-                commitDepthFields()
-                depthFocus = nil
-            }
-            .fontWeight(.semibold)
-        }
-        #endif
         ToolbarItem(placement: .confirmationAction) {
             Button {
                 dismiss()
