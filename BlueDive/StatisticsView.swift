@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import Charts
 
-struct DashboardView: View {
+struct StatisticsView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
     @State private var prefs = UserPreferences.shared
     @Environment(\.dismiss) private var dismiss
@@ -112,7 +112,7 @@ struct DashboardView: View {
             .frame(minWidth: 600, idealWidth: 750, maxWidth: 1000, minHeight: 500, idealHeight: 700, maxHeight: 900)
             #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Close") { dismiss() }
                         .foregroundStyle(.cyan)
                 }
@@ -131,19 +131,19 @@ struct DashboardView: View {
 
     private var heroStatsRow: some View {
         HStack(spacing: 12) {
-            DashboardHeroCard(
+            StatisticsHeroCard(
                 value: "\(cachedTotalDives)",
                 label: "Dives",
                 icon: "figure.open.water.swim",
                 color: .cyan
             )
-            DashboardHeroCard(
+            StatisticsHeroCard(
                 value: cachedFormattedTotalTime,
                 label: "Bottom Time",
                 icon: "clock.fill",
                 color: .green
             )
-            DashboardHeroCard(
+            StatisticsHeroCard(
                 value: "\(cachedCountries)",
                 label: "Countries",
                 icon: "globe",
@@ -442,7 +442,7 @@ struct DashboardView: View {
             .padding(.horizontal, 4)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                DashboardStatCard(
+                StatisticsCard(
                     title: "Species Seen",
                     value: "\(cachedTotalSpeciesSeen)",
                     icon: "fish.fill",
@@ -461,7 +461,7 @@ struct DashboardView: View {
 
 // MARK: - Hero Card
 
-struct DashboardHeroCard: View {
+struct StatisticsHeroCard: View {
     let value: String
     let label: LocalizedStringKey
     let icon: String
@@ -520,7 +520,7 @@ struct DashboardHeroCard: View {
 
 // MARK: - Stat Card
 
-struct DashboardStatCard: View {
+struct StatisticsCard: View {
     let title: LocalizedStringKey
     let value: String
     let icon: String
@@ -562,6 +562,6 @@ struct DashboardStatCard: View {
 }
 
 #Preview {
-    DashboardView()
+    StatisticsView()
         .modelContainer(for: Dive.self, inMemory: true)
 }

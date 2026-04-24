@@ -333,7 +333,7 @@ struct ContentView: View {
             .sheet(isPresented: $showDiveTrips) { DiveTripsView() }
             .sheet(isPresented: $showRecordsWall) { RecordsWallView() }
             .sheet(isPresented: $showCalendarHeatmap) { DiveCalendarHeatmapView() }
-            .sheet(isPresented: $showDashboard) { DashboardView() }
+            .sheet(isPresented: $showDashboard) { StatisticsView() }
             .sheet(isPresented: $showTankTemplates) {
                 TankTemplateListView()
                     #if os(iOS)
