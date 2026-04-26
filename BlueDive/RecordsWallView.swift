@@ -24,25 +24,29 @@ struct RecordsWallView: View {
     @State private var cachedLongestStreak: Int = 0
     @State private var cachedTotalAirConsumed: Double = 0
     @State private var recordsReady = false
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private func computeRecords() async {
-        guard !allDives.isEmpty else {
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
+    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
+
+    private func computeRecords(_ dives: [Dive]) async {
+        guard !dives.isEmpty else {
             recordsReady = true
             return
         }
 
         // Lightweight records — no JSON decoding needed (stored scalars only)
-        cachedDeepestDive = allDives.max(by: { $0.displayMaxDepth < $1.displayMaxDepth })
-        cachedLongestDive = allDives.max(by: { $0.duration < $1.duration })
-        cachedColdestDive = allDives.min(by: { $0.displayWaterTemperature < $1.displayWaterTemperature })
-        cachedWarmestDive = allDives.max(by: { $0.displayWaterTemperature < $1.displayWaterTemperature })
-        cachedBestRatedDive = allDives.first(where: { $0.rating == 5 })
-        cachedTotalTime = allDives.reduce(0) { $0 + $1.duration }
-        cachedTotalDives = allDives.count
-        cachedUniqueSites = Set(allDives.map { $0.siteName.lowercased() }).count
-        cachedUniqueCountries = Set(allDives.compactMap { $0.siteCountry?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }).count
+        cachedDeepestDive = dives.max(by: { $0.displayMaxDepth < $1.displayMaxDepth })
+        cachedLongestDive = dives.max(by: { $0.duration < $1.duration })
+        cachedColdestDive = dives.min(by: { $0.displayWaterTemperature < $1.displayWaterTemperature })
+        cachedWarmestDive = dives.max(by: { $0.displayWaterTemperature < $1.displayWaterTemperature })
+        cachedBestRatedDive = dives.first(where: { $0.rating == 5 })
+        cachedTotalTime = dives.reduce(0) { $0 + $1.duration }
+        cachedTotalDives = dives.count
+        cachedUniqueSites = Set(dives.map { $0.siteName.lowercased() }).count
+        cachedUniqueCountries = Set(dives.compactMap { $0.siteCountry?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }).count
 
-        let days = Set(allDives.map { Calendar.current.startOfDay(for: $0.timestamp) }).sorted()
+        let days = Set(dives.map { Calendar.current.startOfDay(for: $0.timestamp) }).sorted()
         var best = days.isEmpty ? 0 : 1
         var current = 1
         for i in 1..<days.count {
@@ -52,23 +56,31 @@ struct RecordsWallView: View {
         }
         cachedLongestStreak = best
 
+        if Task.isCancelled { return }
+        await Task.yield()
+        if Task.isCancelled { return }
+
         // Heavy records — these trigger JSON decoding of profileData / tanksData.
         // Yield periodically so the main run-loop stays responsive.
         var bestRMVValue = Double.greatestFiniteMagnitude
+        var bestRMVDive: Dive? = nil
         var totalAir = 0.0
         let yieldInterval = 50    // yield every N dives
-        for (idx, dive) in allDives.enumerated() {
+        for (idx, dive) in dives.enumerated() {
             let rmv = dive.calculatedRMV
             if rmv > 0 && rmv < bestRMVValue {
                 bestRMVValue = rmv
-                cachedBestRMVDive = dive
+                bestRMVDive = dive
             }
             totalAir += dive.totalAirConsumption
 
             if idx % yieldInterval == yieldInterval - 1 {
                 await Task.yield()
+                if Task.isCancelled { return }
             }
         }
+        if Task.isCancelled { return }
+        cachedBestRMVDive = bestRMVDive
         cachedTotalAirConsumed = totalAir
         recordsReady = true
     }
@@ -82,6 +94,12 @@ struct RecordsWallView: View {
                             "No Records",
                             systemImage: "trophy",
                             description: Text("Record your dives to see your personal records here.")
+                        )
+                        .padding(.top, 60)
+                    } else if filteredDives.isEmpty {
+                        NoEntriesForDiverView(
+                            title: "No Dives for Diver",
+                            description: "No dives were found for the selected diver."
                         )
                         .padding(.top, 60)
                     } else if !recordsReady {
@@ -180,8 +198,10 @@ struct RecordsWallView: View {
                     }
                 }
                 .padding(.vertical)
-                .task(id: allDives.count) {
-                    await computeRecords()
+                .task(id: "\(allDives.count):\(selectedDiver)") {
+                    recordsReady = false
+                    recordsAppeared = false
+                    await computeRecords(filteredDives)
                     withAnimation(.easeOut(duration: 0.5)) {
                         recordsAppeared = true
                     }
@@ -200,7 +220,9 @@ struct RecordsWallView: View {
                     Button("Close") { dismiss() }
                         .foregroundStyle(.cyan)
                 }
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
+            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
         }
     }
 

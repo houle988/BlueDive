@@ -65,22 +65,21 @@ struct TripBuilder {
         var currentGroup: [Dive] = []
 
         for dive in sorted {
-            if currentGroup.isEmpty {
+            guard let lastDive = currentGroup.last else {
                 currentGroup.append(dive)
-            } else {
-                let lastDive = currentGroup.last!
-                let daysBetween = Calendar.current.dateComponents(
+                continue
+            }
+            let daysBetween = Calendar.current.dateComponents(
                     [.day],
                     from: lastDive.timestamp,
                     to: dive.timestamp
-                ).day ?? 999
+            ).day ?? 999
 
-                if daysBetween <= 7 {
-                    currentGroup.append(dive)
-                } else {
-                    trips.append(makeTrip(from: currentGroup))
-                    currentGroup = [dive]
-                }
+            if daysBetween <= 7 {
+                currentGroup.append(dive)
+            } else {
+                trips.append(makeTrip(from: currentGroup))
+                currentGroup = [dive]
             }
         }
         if !currentGroup.isEmpty {
@@ -100,7 +99,8 @@ struct TripBuilder {
         let topSite = siteCounts.max(by: { $0.value < $1.value })?.key ?? topLocation
 
         let name: String
-        if let year = Calendar.current.dateComponents([.year], from: dives.first!.timestamp).year {
+        if let firstTimestamp = dives.first?.timestamp,
+           let year = Calendar.current.dateComponents([.year], from: firstTimestamp).year {
             name = "\(topLocation) \(year)"
         } else {
             name = topLocation
@@ -120,6 +120,10 @@ struct DiveTripsView: View {
     @State private var tripsAppeared = false
     @State private var cachedTrips: [DiveTrip] = []
     @State private var tripsReady = false
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
+
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
+    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
 
     var body: some View {
         NavigationStack {
@@ -129,6 +133,11 @@ struct DiveTripsView: View {
                         "No Trips",
                         systemImage: "airplane.departure",
                         description: Text("Your dives will automatically organize into trips here.")
+                    )
+                } else if filteredDives.isEmpty {
+                    NoEntriesForDiverView(
+                        title: "No Trips for Diver",
+                        description: "No trips were found for the selected diver."
                     )
                 } else if !tripsReady {
                     ProgressView("Organizing trips…")
@@ -143,7 +152,7 @@ struct DiveTripsView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             // Summary banner
-                            TripsSummaryBanner(trips: cachedTrips, dives: allDives)
+                            TripsSummaryBanner(trips: cachedTrips, dives: filteredDives)
                                 .padding(.horizontal)
                                 .opacity(tripsAppeared ? 1.0 : 0.0)
                                 .offset(y: tripsAppeared ? 0 : 20)
@@ -159,11 +168,6 @@ struct DiveTripsView: View {
                             Spacer(minLength: 30)
                         }
                         .padding(.vertical)
-                        .onAppear {
-                            withAnimation(.easeOut(duration: 0.5)) {
-                                tripsAppeared = true
-                            }
-                        }
                     }
                 }
             }
@@ -180,14 +184,20 @@ struct DiveTripsView: View {
                     Button("Close") { dismiss() }
                         .foregroundStyle(.cyan)
                 }
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
             .sheet(item: $selectedTrip) { trip in
                 TripDetailSheet(trip: trip, prefs: prefs)
             }
-            .task(id: allDives.count) {
-                cachedTrips = TripBuilder.buildTrips(from: Array(allDives))
+            .task(id: "\(allDives.count):\(selectedDiver)") {
+                tripsAppeared = false
+                cachedTrips = TripBuilder.buildTrips(from: Array(filteredDives))
                 tripsReady = true
+                withAnimation(.easeOut(duration: 0.5)) {
+                    tripsAppeared = true
+                }
             }
+            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
         }
     }
 }
@@ -344,7 +354,9 @@ struct TripCard: View {
             [.purple, .indigo],
             [.cyan, .teal],
         ]
-        let index = abs(location.hashValue) % gradients.count
+        // Stable hash across launches (String.hashValue is randomized per process).
+        let stable = location.unicodeScalars.reduce(5381) { ($0 &* 33) &+ Int($1.value) }
+        let index = abs(stable) % gradients.count
         return gradients[index]
     }
 

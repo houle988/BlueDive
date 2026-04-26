@@ -3,7 +3,7 @@ import SwiftData
 import Charts
 
 struct StatisticsView: View {
-    @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
+    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
     @State private var prefs = UserPreferences.shared
     @Environment(\.dismiss) private var dismiss
     @State private var appeared = false
@@ -20,19 +20,24 @@ struct StatisticsView: View {
     @State private var cachedMaxTemp: String = "—"
     @State private var cachedMinTemp: String = "—"
     @State private var statsReady = false
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private func computeStats() {
-        cachedTotalDives = dives.count
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
+    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
+
+    private func computeStats(_ dives: [Dive]) async {
+        // --- Lightweight scalars (always cheap) ---
+        let totalDives = dives.count
         let totalMin = dives.reduce(0) { $0 + $1.duration }
-        cachedFormattedTotalTime = "\(totalMin / 60)h \(totalMin % 60)m"
-        cachedMaxDepthEver = dives.map(\.maxDepth).max() ?? 0
-        cachedAvgDepth = dives.isEmpty ? 0 : dives.map(\.averageDepth).reduce(0, +) / Double(dives.count)
-        cachedCountries = Set(dives.compactMap { $0.siteCountry }.filter { !$0.isEmpty }).count
+        let formattedTotalTime = "\(totalMin / 60)h \(totalMin % 60)m"
+        let maxDepthEver = dives.map(\.maxDepth).max() ?? 0
+        let avgDepth = dives.isEmpty ? 0 : dives.map(\.averageDepth).reduce(0, +) / Double(dives.count)
+        let countries = Set(dives.compactMap { $0.siteCountry }.filter { !$0.isEmpty }).count
 
         let grouped = Dictionary(grouping: dives) { $0.siteName }
-        cachedTopSites = grouped.map { (name, dives) -> (name: String, location: String, country: String, count: Int) in
-            let firstDive = dives.first(where: { $0.siteName == name })
-            return (name, firstDive?.location ?? "", firstDive?.siteCountry ?? "", dives.count)
+        let topSites: [(name: String, location: String, country: String, count: Int)] = grouped.map { (name, group) in
+            let firstDive = group.first
+            return (name, firstDive?.location ?? "", firstDive?.siteCountry ?? "", group.count)
         }
         .sorted { $0.count > $1.count }
         .prefix(5)
@@ -40,30 +45,67 @@ struct StatisticsView: View {
 
         let calendar = Calendar.current
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMM yyyy"
+        formatter.locale = .current
+        formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMMyyyy", options: 0, locale: .current) ?? "MMM yyyy"
         let monthGrouped = Dictionary(grouping: dives) { dive -> DateComponents in
             calendar.dateComponents([.year, .month], from: dive.timestamp)
         }
-        cachedDivesPerMonth = monthGrouped.map { (components, dives) -> (date: Date, month: String, count: Int) in
+        let divesPerMonth: [(month: String, count: Int)] = monthGrouped.map { (components, group) -> (date: Date, month: String, count: Int) in
             let date = calendar.date(from: components) ?? Date()
-            return (date, formatter.string(from: date), dives.count)
+            return (date, formatter.string(from: date), group.count)
         }
         .sorted { $0.date < $1.date }
         .suffix(6)
         .map { (month: $0.month, count: $0.count) }
 
-        cachedTotalSpeciesSeen = Set(dives.flatMap { ($0.seenFish ?? []).map { $0.name } }).count
+        if Task.isCancelled { return }
+        await Task.yield()
+        if Task.isCancelled { return }
 
-        let tempSymbol = UserPreferences.shared.temperatureUnit.symbol
+        // --- Potentially heavy: species set across all dives ---
+        var speciesNames = Set<String>()
+        let yieldInterval = 100
+        for (idx, dive) in dives.enumerated() {
+            if let fish = dive.seenFish {
+                for entry in fish { speciesNames.insert(entry.name) }
+            }
+            if idx % yieldInterval == yieldInterval - 1 {
+                await Task.yield()
+                if Task.isCancelled { return }
+            }
+        }
+        let totalSpeciesSeen = speciesNames.count
+
+        // --- Temperature extremes ---
+        let tempSymbol = prefs.temperatureUnit.symbol
         let warmDives = dives.filter { $0.waterTemperature != 0 }
+        let maxTempStr: String
         if let maxTemp = warmDives.map({ $0.displayWaterTemperature }).max() {
-            cachedMaxTemp = "\(Int(maxTemp.rounded()))\(tempSymbol)"
+            maxTempStr = "\(Int(maxTemp.rounded()))\(tempSymbol)"
+        } else {
+            maxTempStr = "—"
         }
         let coldDives = dives.filter { $0.minTemperature != 0 }
+        let minTempStr: String
         if let minTemp = coldDives.map({ $0.displayMinTemperature }).min() {
-            cachedMinTemp = "\(Int(minTemp.rounded()))\(tempSymbol)"
+            minTempStr = "\(Int(minTemp.rounded()))\(tempSymbol)"
+        } else {
+            minTempStr = "—"
         }
 
+        if Task.isCancelled { return }
+
+        // --- Commit all results atomically ---
+        cachedTotalDives = totalDives
+        cachedFormattedTotalTime = formattedTotalTime
+        cachedMaxDepthEver = maxDepthEver
+        cachedAvgDepth = avgDepth
+        cachedCountries = countries
+        cachedTopSites = topSites
+        cachedDivesPerMonth = divesPerMonth
+        cachedTotalSpeciesSeen = totalSpeciesSeen
+        cachedMaxTemp = maxTempStr
+        cachedMinTemp = minTempStr
         statsReady = true
     }
 
@@ -72,7 +114,12 @@ struct StatisticsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if !statsReady {
+                if !allDives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
+                    NoEntriesForDiverView(
+                        title: "No Dives for Diver",
+                        description: "No dives were found for the selected diver."
+                    )
+                } else if !statsReady {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -116,14 +163,19 @@ struct StatisticsView: View {
                     Button("Close") { dismiss() }
                         .foregroundStyle(.cyan)
                 }
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
             .background(Color.platformBackground.ignoresSafeArea())
-            .task(id: dives.count) {
-                computeStats()
+            .task(id: "\(allDives.count):\(selectedDiver)") {
+                statsReady = false
+                appeared = false
+                await computeStats(filteredDives)
+                if Task.isCancelled { return }
                 withAnimation(.easeOut(duration: 0.6)) {
                     appeared = true
                 }
             }
+            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
         }
     }
 

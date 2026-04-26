@@ -33,14 +33,18 @@ struct DiveCalendarHeatmapView: View {
     @State private var cachedYearUniqueSites: Int = 0
     @State private var cachedMonthDiveCounts: [Int: Int] = [:]
     @State private var statsReady = false
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private func recomputeAllStats() {
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
+    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
+
+    private func recomputeAllStats(_ dives: [Dive]) {
         // Build divesByDay once
-        cachedDivesByDay = Dictionary(grouping: allDives) { dive in
+        cachedDivesByDay = Dictionary(grouping: dives) { dive in
             calendar.startOfDay(for: dive.timestamp)
         }
 
-        cachedAvailableYears = Set(allDives.map { calendar.component(.year, from: $0.timestamp) }).sorted().reversed()
+        cachedAvailableYears = Set(dives.map { calendar.component(.year, from: $0.timestamp) }).sorted(by: >)
 
         // Current streak
         let days = Set(cachedDivesByDay.keys).sorted().reversed()
@@ -56,27 +60,27 @@ struct DiveCalendarHeatmapView: View {
         }
         cachedCurrentStreak = streak
 
-        recomputeYearStats()
+        recomputeYearStats(dives)
         statsReady = true
     }
 
-    private func recomputeYearStats() {
+    private func recomputeYearStats(_ dives: [Dive]) {
         cachedYearDiveCount = cachedDivesByDay
             .filter { calendar.component(.year, from: $0.key) == selectedYear }
             .values.map(\.count).reduce(0, +)
 
-        cachedYearDiveMinutes = allDives
+        cachedYearDiveMinutes = dives
             .filter { calendar.component(.year, from: $0.timestamp) == selectedYear }
             .map(\.duration).reduce(0, +)
 
         cachedYearUniqueSites = Set(
-            allDives.filter { calendar.component(.year, from: $0.timestamp) == selectedYear }
-                    .map { $0.siteName.lowercased() }
+            dives.filter { calendar.component(.year, from: $0.timestamp) == selectedYear }
+                 .map { $0.siteName.lowercased() }
         ).count
 
         var monthCounts: [Int: Int] = [:]
         for month in 1...12 {
-            monthCounts[month] = allDives.filter {
+            monthCounts[month] = dives.filter {
                 calendar.component(.year, from: $0.timestamp) == selectedYear &&
                 calendar.component(.month, from: $0.timestamp) == month
             }.count
@@ -112,7 +116,12 @@ struct DiveCalendarHeatmapView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if !statsReady {
+                if !allDives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
+                    NoEntriesForDiverView(
+                        title: "No Dives for Diver",
+                        description: "No dives were found for the selected diver."
+                    )
+                } else if !statsReady {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -151,19 +160,21 @@ struct DiveCalendarHeatmapView: View {
                     Button("Close") { dismiss() }
                         .foregroundStyle(.cyan)
                 }
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
-            .task(id: allDives.count) {
-                recomputeAllStats()
+            .task(id: "\(allDives.count):\(selectedDiver)") {
+                recomputeAllStats(filteredDives)
             }
+            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             .onChange(of: selectedYear) {
-                recomputeYearStats()
+                recomputeYearStats(filteredDives)
             }
             .sheet(isPresented: $showDaySheet, onDismiss: {
                 selectedDay = nil
                 selectedDayDives = []
             }) {
                 if let day = selectedDay {
-                    DayDivesSheetView(day: day, dives: selectedDayDives)
+                    DayDivesSheetView(day: day, dives: selectedDayDives, diverFilter: selectedDiver)
                 }
             }
         }
@@ -405,6 +416,17 @@ struct DayDivesSheetView: View {
 
     let day: Date
     let dives: [Dive]
+    let diverFilter: String
+
+    private var numberMap: [PersistentIdentifier: Int] {
+        let numbering = diverFilter.isEmpty
+            ? allDives
+            : allDives.filter { $0.diverName == diverFilter }
+        let total = numbering.count
+        return Dictionary(uniqueKeysWithValues: numbering.enumerated().map {
+            ($0.element.persistentModelID, total - $0.offset)
+        })
+    }
 
     private var formattedDay: String {
         let formatter = DateFormatter()
@@ -420,7 +442,7 @@ struct DayDivesSheetView: View {
                     NavigationLink(destination: DiveDetailView(dive: dive)) {
                         DiveRowView(
                             dive: dive,
-                            diveNumber: allDives.count - (allDives.firstIndex(of: dive) ?? 0)
+                            diveNumber: numberMap[dive.persistentModelID] ?? 0
                         )
                     }
                     .listRowBackground(Color.primary.opacity(0.07))
