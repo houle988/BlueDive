@@ -278,11 +278,10 @@ struct RecordCard: View {
     let color: Color
     let dive: Dive
 
-    @State private var showDetail = false
     @State private var cardAppeared = false
 
     var body: some View {
-        Button { showDetail = true } label: {
+        NavigationLink(destination: DiveDetailView(dive: dive)) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(emoji)
@@ -342,134 +341,6 @@ struct RecordCard: View {
                 cardAppeared = true
             }
         }
-        .sheet(isPresented: $showDetail) {
-            RecordDetailSheet(emoji: emoji, title: title, value: value, dive: dive, color: color)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-    }
-}
-
-// MARK: - Record Detail Sheet
-
-struct RecordDetailSheet: View {
-    let emoji: String
-    let title: LocalizedStringKey
-    let value: String
-    let dive: Dive
-    let color: Color
-
-    private let prefs = UserPreferences.shared
-    @State private var appeared = false
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                HStack {
-                    Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.escape, modifiers: [])
-                    .padding(.top, 16)
-                    .padding(.trailing, 20)
-                }
-                ZStack {
-                    Circle()
-                        .fill(RadialGradient(
-                            colors: [color.opacity(0.3), color.opacity(0.0)],
-                            center: .center, startRadius: 5, endRadius: 80
-                        ))
-                        .frame(width: 140, height: 140)
-                        .scaleEffect(appeared ? 1.0 : 0.5)
-                        .opacity(appeared ? 1.0 : 0.0)
-
-                    Circle()
-                        .strokeBorder(
-                            LinearGradient(colors: [color, color.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                            lineWidth: 2.5
-                        )
-                        .frame(width: 140, height: 140)
-                        .scaleEffect(appeared ? 1.0 : 0.5)
-                        .opacity(appeared ? 1.0 : 0.0)
-
-                    Text(emoji)
-                        .font(.system(size: 60))
-                        .scaleEffect(appeared ? 1.0 : 0.3)
-                        .opacity(appeared ? 1.0 : 0.0)
-                }
-                .padding(.top, 10)
-
-                VStack(spacing: 8) {
-                    Text(value)
-                        .font(.system(size: 48, weight: .black, design: .rounded))
-                        .foregroundStyle(color)
-
-                    Text(title)
-                        .font(.title3.weight(.semibold))
-
-                    Text(dive.siteName)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Text(dive.timestamp, format: .dateTime.day().month().year())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Color(.systemFill)))
-                }
-
-                // Quick stats — unit-aware
-                HStack(spacing: 0) {
-                    RecordStatCell(
-                        value: String(format: "%.1f %@", dive.displayMaxDepth, prefs.depthUnit.symbol),
-                        label: "Depth",
-                        color: .indigo
-                    )
-                    Divider().frame(height: 36)
-                    RecordStatCell(
-                        value: dive.formattedDuration,
-                        label: "Duration",
-                        color: .green
-                    )
-                    Divider().frame(height: 36)
-                    RecordStatCell(
-                        value: prefs.temperatureUnit.formatted(dive.waterTemperature, from: dive.storedTemperatureUnit),
-                        label: "Temperature",
-                        color: .cyan
-                    )
-                }
-                .padding()
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.platformSecondaryBackground))
-                .padding(.horizontal)
-
-                Spacer(minLength: 30)
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
-                appeared = true
-            }
-        }
-    }
-}
-
-struct RecordStatCell: View {
-    let value: String
-    let label: LocalizedStringKey
-    let color: Color
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value).font(.subheadline.weight(.bold)).foregroundStyle(color).monospacedDigit()
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 

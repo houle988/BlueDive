@@ -477,40 +477,47 @@ struct TripDetailSheet: View {
     }
 
     private var divesListSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let sortedDives = trip.dives.sorted { $0.timestamp < $1.timestamp }
+        return VStack(alignment: .leading, spacing: 12) {
             Text("🤿 All Dives (\(trip.totalDives))")
                 .font(.headline)
 
-            ForEach(trip.dives.sorted { $0.timestamp < $1.timestamp }) { dive in
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(dive.siteName)
-                            .font(.subheadline.weight(.semibold))
-                        Text(dive.timestamp, format: .dateTime.day().month().hour().minute())
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text(prefs.depthUnit.formatted(dive.maxDepth))
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.cyan)
-                        Text(dive.formattedDuration)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if dive.rating > 0 {
-                        HStack(spacing: 2) {
-                            ForEach(1...5, id: \.self) { star in
-                                Image(systemName: star <= dive.rating ? "star.fill" : "star")
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(star <= dive.rating ? .yellow : .secondary)
+            ForEach(sortedDives) { dive in
+                NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives)) {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(dive.siteName)
+                                .font(.subheadline.weight(.semibold))
+                            Text(dive.timestamp, format: .dateTime.day().month().hour().minute())
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text(prefs.depthUnit.formatted(dive.maxDepth))
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.cyan)
+                            Text(dive.formattedDuration)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if dive.rating > 0 {
+                            HStack(spacing: 2) {
+                                ForEach(1...5, id: \.self) { star in
+                                    Image(systemName: star <= dive.rating ? "star.fill" : "star")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(star <= dive.rating ? .yellow : .secondary)
+                                }
                             }
                         }
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformSecondaryBackground.opacity(0.6)))
                 }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformSecondaryBackground.opacity(0.6)))
+                .buttonStyle(.plain)
             }
         }
         .padding()
