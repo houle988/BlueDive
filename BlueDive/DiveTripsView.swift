@@ -396,6 +396,7 @@ struct TripDetailSheet: View {
     let trip: DiveTrip
     let prefs: UserPreferences
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     var body: some View {
         NavigationStack {
@@ -488,19 +489,11 @@ struct TripDetailSheet: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(dive.siteName)
                                 .font(.subheadline.weight(.semibold))
-                            Text(dive.timestamp, format: .dateTime.day().month().hour().minute())
+                            Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text(prefs.depthUnit.formatted(dive.maxDepth))
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.cyan)
-                            Text(dive.formattedDuration)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
                         if dive.rating > 0 {
                             HStack(spacing: 2) {
                                 ForEach(1...5, id: \.self) { star in
@@ -509,6 +502,14 @@ struct TripDetailSheet: View {
                                         .foregroundStyle(star <= dive.rating ? .yellow : .secondary)
                                 }
                             }
+                        }
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text(verbatim: String(format: "%.1f %@", dive.displayMaxDepth, prefs.depthUnit.symbol))
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.cyan)
+                            Text(dive.formattedDuration)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         Image(systemName: "chevron.right")
                             .font(.caption2)

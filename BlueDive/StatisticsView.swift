@@ -21,6 +21,7 @@ struct StatisticsView: View {
     @State private var cachedMinTemp: String = "—"
     @State private var statsReady = false
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
+    @State private var selectedSiteName: String? = nil
 
     private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
@@ -176,6 +177,17 @@ struct StatisticsView: View {
                 }
             }
             .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .sheet(isPresented: Binding(
+                get: { selectedSiteName != nil },
+                set: { if !$0 { selectedSiteName = nil } }
+            )) {
+                if let siteName = selectedSiteName {
+                    SiteDivesSheet(
+                        siteName: siteName,
+                        dives: filteredDives.filter { $0.siteName == siteName }
+                    )
+                }
+            }
         }
     }
 
@@ -412,58 +424,65 @@ struct StatisticsView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(cachedTopSites.enumerated()), id: \.offset) { index, site in
-                        HStack(spacing: 14) {
-                            // Rank badge
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        index == 0
-                                            ? LinearGradient(colors: [.cyan, .blue], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                            : LinearGradient(colors: [.white.opacity(0.15), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                    )
-                                    .frame(width: 32, height: 32)
-                                Text("\(index + 1)")
-                                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                                    .foregroundStyle(index == 0 ? .primary : .secondary)
-                            }
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(site.name)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-
-                                HStack(spacing: 4) {
-                                    if !site.location.isEmpty && site.location != "Inconnu" && site.location != String(localized: "Unknown site") {
-                                        Text(site.location)
-                                    }
-                                    if !site.country.isEmpty {
-                                        if !site.location.isEmpty && site.location != "Inconnu" && site.location != String(localized: "Unknown site") {
-                                            Text("·")
-                                        }
-                                        Text(site.country)
-                                    }
+                        Button { selectedSiteName = site.name } label: {
+                            HStack(spacing: 14) {
+                                // Rank badge
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            index == 0
+                                                ? LinearGradient(colors: [.cyan, .blue], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                                : LinearGradient(colors: [.white.opacity(0.15), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        )
+                                        .frame(width: 32, height: 32)
+                                    Text("\(index + 1)")
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundStyle(index == 0 ? .primary : .secondary)
                                 }
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(site.name)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+
+                                    HStack(spacing: 4) {
+                                        if !site.location.isEmpty && site.location != "Inconnu" && site.location != String(localized: "Unknown site") {
+                                            Text(site.location)
+                                        }
+                                        if !site.country.isEmpty {
+                                            if !site.location.isEmpty && site.location != "Inconnu" && site.location != String(localized: "Unknown site") {
+                                                Text("·")
+                                            }
+                                            Text(site.country)
+                                        }
+                                    }
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                }
+
+                                Spacer()
+
+                                // Dive count pill
+                                Text("\(site.count)")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.cyan)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule().fill(.cyan.opacity(0.15))
+                                    )
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
                             }
-
-                            Spacer()
-
-                            // Dive count pill
-                            Text("\(site.count)")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundStyle(.cyan)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule().fill(.cyan.opacity(0.15))
-                                )
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 4)
                         }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 4)
+                        .buttonStyle(.plain)
 
                         if index < cachedTopSites.count - 1 {
                             Divider()
@@ -610,6 +629,76 @@ struct StatisticsCard: View {
             RoundedRectangle(cornerRadius: 14)
                 .fill(Color.primary.opacity(0.04))
         )
+    }
+}
+
+// MARK: - Site Dives Sheet
+
+struct SiteDivesSheet: View {
+    let siteName: String
+    let dives: [Dive]
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+    @State private var prefs = UserPreferences.shared
+
+    private var sortedDives: [Dive] { dives.sorted { $0.timestamp > $1.timestamp } }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(sortedDives) { dive in
+                        NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives)) {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                Spacer()
+                                if dive.rating > 0 {
+                                    HStack(spacing: 2) {
+                                        ForEach(1...5, id: \.self) { star in
+                                            Image(systemName: star <= dive.rating ? "star.fill" : "star")
+                                                .font(.system(size: 8))
+                                                .foregroundStyle(star <= dive.rating ? .yellow : .secondary)
+                                        }
+                                    }
+                                }
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text(verbatim: String(format: "%.1f %@", dive.displayMaxDepth, prefs.depthUnit.symbol))
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(.cyan)
+                                    Text(dive.formattedDuration)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(12)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformSecondaryBackground.opacity(0.6)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle(siteName)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            #if os(macOS)
+            .frame(minWidth: 450, idealWidth: 550, maxWidth: 750, minHeight: 400, idealHeight: 500, maxHeight: 700)
+            #endif
+            .background(Color.platformBackground.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Close") { dismiss() }
+                        .foregroundStyle(.cyan)
+                }
+            }
+        }
     }
 }
 
