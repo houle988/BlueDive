@@ -1,5 +1,27 @@
 import SwiftUI
 
+// MARK: - Marine Life Filter Mode
+
+enum FilterMarineLifeMode: String, CaseIterable {
+    case any = "any"
+    case all = "all"
+}
+
+// MARK: - Marine Life Filter Helper
+
+/// Returns true if `dive` satisfies the given marine life filter.
+/// Extracted here so ContentView and DiveMapView share a single implementation.
+func diveMatchesMarineLifeFilter(_ dive: Dive, species: [String], mode: FilterMarineLifeMode) -> Bool {
+    guard !species.isEmpty else { return true }
+    let fishNames = (dive.seenFish ?? []).map { $0.name }
+    switch mode {
+    case .any:
+        return species.contains { s in fishNames.contains { $0.lowercased() == s.lowercased() } }
+    case .all:
+        return species.allSatisfy { s in fishNames.contains { $0.lowercased() == s.lowercased() } }
+    }
+}
+
 // MARK: - Dive Filter Sheet
 
 struct DiveFilterSheet: View {
@@ -21,12 +43,14 @@ struct DiveFilterSheet: View {
     @Binding var filterDiveType: String?
     @Binding var filterTag: String?
     @Binding var filterDiverName: String?
-    @Binding var filterMarineLife: String
+    @Binding var filterMarineLife: [String]
+    @Binding var filterMarineLifeMode: FilterMarineLifeMode
     @Binding var sortOrder: ContentView.DiveSortOrder
 
     @Environment(\.dismiss) private var dismiss
     private let prefs = UserPreferences.shared
 
+    @State private var marineLifeInput: String = ""
     @State private var minDepthText: String = ""
     @State private var maxDepthText: String = ""
 
@@ -45,9 +69,11 @@ struct DiveFilterSheet: View {
     }
 
     private var marineLifeSuggestions: [String] {
-        guard !filterMarineLife.isEmpty else { return [] }
+        guard !marineLifeInput.isEmpty else { return [] }
+        let selected = Set(filterMarineLife.map { $0.lowercased() })
         return availableMarineLife.filter {
-            $0.localizedCaseInsensitiveContains(filterMarineLife) && $0.lowercased() != filterMarineLife.lowercased()
+            $0.localizedCaseInsensitiveContains(marineLifeInput) &&
+            !selected.contains($0.lowercased())
         }
     }
 
@@ -74,6 +100,11 @@ struct DiveFilterSheet: View {
             .navigationBarTitleDisplayMode(.large)
             #endif
             .toolbar { toolbarContent }
+            .onChange(of: filterMarineLife) { _, newValue in
+                if newValue.count <= 1 {
+                    filterMarineLifeMode = .any
+                }
+            }
         }
         #if os(macOS)
         .frame(minWidth: 550, idealWidth: 600, maxWidth: 750, minHeight: 500, idealHeight: 650, maxHeight: 900)
@@ -349,18 +380,65 @@ struct DiveFilterSheet: View {
 
     private var marineLifeFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Marine life", icon: "fish.fill")
+            HStack(spacing: 10) {
+                Image(systemName: "fish.fill")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                Text(NSLocalizedString("Marine life", bundle: Bundle.forAppLanguage(), comment: "Filter section header for marine life search in the filter sheet"))
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if filterMarineLife.count > 1 {
+                    Picker("", selection: $filterMarineLifeMode) {
+                        Text(NSLocalizedString("OR", bundle: Bundle.forAppLanguage(), comment: "Marine life filter mode: match any selected species")).tag(FilterMarineLifeMode.any)
+                        Text(NSLocalizedString("AND", bundle: Bundle.forAppLanguage(), comment: "Marine life filter mode: match all selected species")).tag(FilterMarineLifeMode.all)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 110)
+                }
+            }
+            .padding(.horizontal, 4)
 
             VStack(alignment: .leading, spacing: 8) {
+                if !filterMarineLife.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(filterMarineLife, id: \.self) { species in
+                                HStack(spacing: 4) {
+                                    Text(species)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    Button {
+                                        withAnimation {
+                                            filterMarineLife.removeAll { $0 == species }
+                                        }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.caption)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(Color.teal.opacity(0.2)))
+                                .overlay(Capsule().stroke(Color.teal, lineWidth: 1.5))
+                                .foregroundStyle(.teal)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                }
+
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
                         .frame(width: 20)
-                    TextField("Marine life", text: $filterMarineLife)
+                    TextField(NSLocalizedString("Add marine life…", bundle: Bundle.forAppLanguage(), comment: "Placeholder for marine life filter input"), text: $marineLifeInput)
                         .textFieldStyle(.plain)
-                    if !filterMarineLife.isEmpty {
+                        .onSubmit { addMarineLifeFromInput() }
+                    if !marineLifeInput.isEmpty {
                         Button {
-                            withAnimation { filterMarineLife = "" }
+                            withAnimation { marineLifeInput = "" }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
@@ -377,7 +455,12 @@ struct DiveFilterSheet: View {
                         HStack(spacing: 8) {
                             ForEach(marineLifeSuggestions.prefix(8), id: \.self) { suggestion in
                                 Button {
-                                    withAnimation { filterMarineLife = suggestion }
+                                    withAnimation {
+                                        if !filterMarineLife.contains(where: { $0.lowercased() == suggestion.lowercased() }) {
+                                            filterMarineLife.append(suggestion)
+                                        }
+                                        marineLifeInput = ""
+                                    }
                                 } label: {
                                     Text(suggestion)
                                         .font(.subheadline)
@@ -392,10 +475,29 @@ struct DiveFilterSheet: View {
                         }
                         .padding(.horizontal, 4)
                     }
+                    if marineLifeSuggestions.count > 8 {
+                        Text(String(format: NSLocalizedString("and %lld more…", bundle: Bundle.forAppLanguage(), comment: "Hint shown below marine life suggestions when more than 8 results match"), marineLifeSuggestions.count - 8))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                    }
                 }
             }
         }
         .filterCardStyle()
+    }
+
+    private func addMarineLifeFromInput() {
+        let trimmed = marineLifeInput.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        // Only add if it exactly matches (case-insensitive) a known species,
+        // using the canonical casing from the list so filter matching stays exact.
+        if let canonical = availableMarineLife.first(where: { $0.lowercased() == trimmed.lowercased() }) {
+            if !filterMarineLife.contains(where: { $0.lowercased() == canonical.lowercased() }) {
+                filterMarineLife.append(canonical)
+            }
+        }
+        marineLifeInput = ""
     }
 
     private var gasTypeFilterSection: some View {
@@ -695,7 +797,9 @@ struct DiveFilterSheet: View {
                         filterDiveType   = nil
                         filterTag        = nil
                         filterDiverName  = nil
-                        filterMarineLife = ""
+                        filterMarineLife = []
+                        filterMarineLifeMode = .any
+                        marineLifeInput  = ""
                         if showSort {
                             sortOrder    = .dateDesc
                         }

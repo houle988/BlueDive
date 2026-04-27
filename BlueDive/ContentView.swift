@@ -74,7 +74,8 @@ struct ContentView: View {
     @State private var filterDiveType: String? = nil
     @State private var filterTag: String? = nil
     @State private var filterDiverName: String? = nil
-    @State private var filterMarineLife: String = ""
+    @State private var filterMarineLife: [String] = []
+    @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @State private var sortOrder: DiveSortOrder = .dateDesc
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
@@ -256,10 +257,7 @@ struct ContentView: View {
                 }
             }
             // Marine life filter
-            if !filterMarineLife.isEmpty {
-                let match = dive.seenFish?.contains { $0.name.localizedCaseInsensitiveContains(filterMarineLife) } ?? false
-                if !match { return false }
-            }
+            if !diveMatchesMarineLifeFilter(dive, species: filterMarineLife, mode: filterMarineLifeMode) { return false }
             return true
         }
 
@@ -319,6 +317,7 @@ struct ContentView: View {
                     filterTag: $filterTag,
                     filterDiverName: $filterDiverName,
                     filterMarineLife: $filterMarineLife,
+                    filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: $sortOrder
                 )
                 #if os(iOS)
@@ -923,7 +922,8 @@ struct ContentView: View {
         filterDiveType   = nil
         filterTag        = nil
         filterDiverName  = nil
-        filterMarineLife = ""
+        filterMarineLife = []
+        filterMarineLifeMode = .any
         sortOrder        = .dateDesc
     }
 

@@ -21,8 +21,9 @@ struct DiveMapView: View {
     @State private var filterDiveType: String? = nil
     @State private var filterTag: String? = nil
     @State private var filterDiverName: String? = nil
-    @State private var filterMarineLife: String = ""
-    
+    @State private var filterMarineLife: [String] = []
+    @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
+
     private func coordinate(for dive: Dive) -> CLLocationCoordinate2D? {
         if let lat = dive.siteLatitude, let lon = dive.siteLongitude,
            !(lat == 0 && lon == 0),
@@ -169,10 +170,7 @@ struct DiveMapView: View {
                     if dive.diverName != name { return false }
                 }
             }
-            if !filterMarineLife.isEmpty {
-                let match = dive.seenFish?.contains { $0.name.localizedCaseInsensitiveContains(filterMarineLife) } ?? false
-                if !match { return false }
-            }
+            if !diveMatchesMarineLifeFilter(dive, species: filterMarineLife, mode: filterMarineLifeMode) { return false }
             return true
         }
     }
@@ -409,6 +407,7 @@ struct DiveMapView: View {
                     filterTag: $filterTag,
                     filterDiverName: $filterDiverName,
                     filterMarineLife: $filterMarineLife,
+                    filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: .constant(.dateDesc)
                 )
                 #if os(iOS)
@@ -424,10 +423,10 @@ struct DiveMapView: View {
                             
                             if activeFilterCount > 0 {
                                 Text("\(activeFilterCount)")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 16, height: 16)
-                                    .background(Circle().fill(.red))
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.black)
+                                    .padding(3)
+                                    .background(Color.orange, in: Circle())
                                     .offset(x: 6, y: -6)
                             }
                         }
