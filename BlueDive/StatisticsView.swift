@@ -22,6 +22,11 @@ struct StatisticsView: View {
     @State private var statsReady = false
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     @State private var selectedSiteName: String? = nil
+    @State private var cachedDeepestDive: Dive? = nil
+    @State private var cachedWarmestDive: Dive? = nil
+    @State private var cachedColdestDive: Dive? = nil
+    @State private var cachedSortedDives: [Dive] = []
+    @State private var selectedDive: Dive? = nil
 
     private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
@@ -31,8 +36,9 @@ struct StatisticsView: View {
         let totalDives = dives.count
         let totalMin = dives.reduce(0) { $0 + $1.duration }
         let formattedTotalTime = "\(totalMin / 60)h \(totalMin % 60)m"
-        let maxDepthEver = dives.map(\.maxDepth).max() ?? 0
-        let avgDepth = dives.isEmpty ? 0 : dives.map(\.averageDepth).reduce(0, +) / Double(dives.count)
+        let maxDepthEver = dives.map(\.displayMaxDepth).max() ?? 0
+        let avgDepth = dives.isEmpty ? 0 : dives.map(\.displayAverageDepth).reduce(0, +) / Double(dives.count)
+        let sortedDives = dives.sorted { $0.timestamp > $1.timestamp }
         let countries = Set(dives.compactMap { $0.siteCountry }.filter { !$0.isEmpty }).count
 
         let grouped = Dictionary(grouping: dives) { $0.siteName }
@@ -93,6 +99,9 @@ struct StatisticsView: View {
         } else {
             minTempStr = "—"
         }
+        let deepestDive = dives.max(by: { $0.displayMaxDepth < $1.displayMaxDepth })
+        let warmestDive = warmDives.max(by: { $0.displayWaterTemperature < $1.displayWaterTemperature })
+        let coldestDive = coldDives.min(by: { $0.displayMinTemperature < $1.displayMinTemperature })
 
         if Task.isCancelled { return }
 
@@ -107,6 +116,10 @@ struct StatisticsView: View {
         cachedTotalSpeciesSeen = totalSpeciesSeen
         cachedMaxTemp = maxTempStr
         cachedMinTemp = minTempStr
+        cachedDeepestDive = deepestDive
+        cachedWarmestDive = warmestDive
+        cachedColdestDive = coldestDive
+        cachedSortedDives = sortedDives
         statsReady = true
     }
 
@@ -186,6 +199,11 @@ struct StatisticsView: View {
                         siteName: siteName,
                         dives: filteredDives.filter { $0.siteName == siteName }
                     )
+                }
+            }
+            .sheet(item: $selectedDive) { dive in
+                NavigationStack {
+                    DiveDetailView(dive: dive, sortedDives: cachedSortedDives)
                 }
             }
         }
@@ -308,19 +326,33 @@ struct StatisticsView: View {
                 }
 
                 VStack(spacing: 6) {
-                    Text(prefs.depthUnit.formatted(cachedMaxDepthEver))
-                        .font(.system(.title, design: .rounded))
-                        .fontWeight(.black)
-                        .foregroundStyle(.primary)
-                    Text("Max")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.blue.opacity(0.8))
+                    Button { selectedDive = cachedDeepestDive } label: {
+                        VStack(spacing: 4) {
+                            Text(verbatim: String(format: "%.1f %@", cachedMaxDepthEver, prefs.depthUnit.symbol))
+                                .font(.system(.title, design: .rounded))
+                                .fontWeight(.black)
+                                .foregroundStyle(.primary)
+                            HStack(spacing: 3) {
+                                Text("Max")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.blue.opacity(0.8))
+                                if cachedDeepestDive != nil {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(.blue.opacity(0.6))
+                                }
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(cachedDeepestDive == nil)
 
                     Divider()
                         .background(Color.blue.opacity(0.3))
                         .padding(.horizontal, 8)
 
-                    Text(prefs.depthUnit.formatted(cachedAvgDepth))
+                    Text(verbatim: String(format: "%.1f %@", cachedAvgDepth, prefs.depthUnit.symbol))
                         .font(.system(.title3, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(.secondary)
@@ -361,25 +393,53 @@ struct StatisticsView: View {
                 }
 
                 VStack(spacing: 6) {
-                    Text(cachedMaxTemp)
-                    .font(.system(.title, design: .rounded))
-                    .fontWeight(.black)
-                    .foregroundStyle(.primary)
-                    Text("Warmest")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.orange.opacity(0.8))
+                    Button { selectedDive = cachedWarmestDive } label: {
+                        VStack(spacing: 4) {
+                            Text(cachedMaxTemp)
+                                .font(.system(.title, design: .rounded))
+                                .fontWeight(.black)
+                                .foregroundStyle(.primary)
+                            HStack(spacing: 3) {
+                                Text("Warmest")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.orange.opacity(0.8))
+                                if cachedWarmestDive != nil {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(.orange.opacity(0.6))
+                                }
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(cachedWarmestDive == nil)
 
                     Divider()
                         .background(Color.orange.opacity(0.3))
                         .padding(.horizontal, 8)
 
-                    Text(cachedMinTemp)
-                    .font(.system(.title3, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-                    Text("Coldest")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.cyan.opacity(0.8))
+                    Button { selectedDive = cachedColdestDive } label: {
+                        VStack(spacing: 4) {
+                            Text(cachedMinTemp)
+                                .font(.system(.title3, design: .rounded))
+                                .fontWeight(.bold)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 3) {
+                                Text("Coldest")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.cyan.opacity(0.8))
+                                if cachedColdestDive != nil {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(.cyan.opacity(0.6))
+                                }
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(cachedColdestDive == nil)
                 }
             }
             .padding()
