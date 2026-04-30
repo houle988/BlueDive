@@ -1132,11 +1132,18 @@ struct BluetoothScannerView: View {
                 }
                 // Preserve user-set fields from existing tank at the same index
                 let existing = index < existingTanks.count ? existingTanks[index] : nil
+                // When the dive computer header reports no begin/end pressure (pressure pod scenario),
+                // derive start and end pressure from the first/last non-zero profile sample.
+                let profilePressures = (tank.beginPressure <= 0 || tank.endPressure <= 0)
+                    ? Self.pressureRangeFromProfile(diveData.profile, tankIndex: index)
+                    : (start: nil, end: nil)
+                let startPressure = Self.resolvedPressure(header: tank.beginPressure, fallback: profilePressures.start)
+                let endPressure   = Self.resolvedPressure(header: tank.endPressure,   fallback: profilePressures.end)
                 tanks.append(TankData(
                     o2: o2, he: he,
                     volume: tank.volume > 0 ? tank.volume : existing?.volume,
-                    startPressure: tank.beginPressure > 0 ? tank.beginPressure : nil,
-                    endPressure: tank.endPressure > 0 ? tank.endPressure : nil,
+                    startPressure: startPressure,
+                    endPressure: endPressure,
                     workingPressure: tank.workingPressure > 0 ? tank.workingPressure : existing?.workingPressure,
                     tankMaterial: existing?.tankMaterial,
                     tankType: existing?.tankType
@@ -1146,8 +1153,8 @@ struct BluetoothScannerView: View {
         } else if !diveData.tankPressure.isEmpty {
             // Fallback: create a TankData from tank pressure samples
             let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0
-            let startP = diveData.tankPressure.first.flatMap { $0 > 0 ? $0 : nil }
-            let endP = diveData.tankPressure.last.flatMap { $0 > 0 ? $0 : nil }
+            let startP = diveData.tankPressure.first(where: { $0 > 0 })
+            let endP   = diveData.tankPressure.last(where:  { $0 > 0 })
             let existing = existingTanks.first
             dive.tanks = [TankData(o2: o2Fraction, he: 0.0,
                                    volume: existing?.volume,
@@ -1232,6 +1239,24 @@ struct BluetoothScannerView: View {
         }
     }
     
+    /// Scans profile samples for the first and last non-zero pressure reading for a given tank index.
+    /// Used when the dive computer header reports no begin/end pressure (e.g. pressure pod scenario).
+    private static func pressureRangeFromProfile(
+        _ profile: [LibDCSwift.DiveProfilePoint],
+        tankIndex: Int
+    ) -> (start: Double?, end: Double?) {
+        let readings = profile.compactMap { point -> Double? in
+            let p = point.pressures[tankIndex] ?? (tankIndex == 0 ? point.pressure : nil)
+            return (p ?? 0) > 0 ? p : nil
+        }
+        return (readings.first, readings.last)
+    }
+
+    /// Returns the header pressure when reported (> 0), otherwise falls back to a profile-derived value.
+    private static func resolvedPressure(header: Double, fallback: Double?) -> Double? {
+        header > 0 ? header : fallback
+    }
+
     /// Converts a LibDCSwift DiveEvent to a BlueDive DiveProfileEvent
     private static func convertDiveEvent(_ event: LibDCSwift.DiveEvent) -> DiveProfileEvent {
         switch event {
@@ -1336,7 +1361,7 @@ struct BluetoothScannerView: View {
         var linkedTanks: [TankData] = []
         
         if let dcTanks = diveData.tanks, !dcTanks.isEmpty {
-            for tank in dcTanks {
+            for (index, tank) in dcTanks.enumerated() {
                 let mixIndex = tank.gasMix
                 let o2: Double
                 let he: Double
@@ -1350,18 +1375,25 @@ struct BluetoothScannerView: View {
                     o2 = Double(diveData.gasMix ?? 21) / 100.0
                     he = 0.0
                 }
+                // When the dive computer header reports no begin/end pressure (pressure pod scenario),
+                // derive start and end pressure from the first/last non-zero profile sample.
+                let profilePressures = (tank.beginPressure <= 0 || tank.endPressure <= 0)
+                    ? Self.pressureRangeFromProfile(diveData.profile, tankIndex: index)
+                    : (start: nil, end: nil)
+                let startPressure = Self.resolvedPressure(header: tank.beginPressure, fallback: profilePressures.start)
+                let endPressure   = Self.resolvedPressure(header: tank.endPressure,   fallback: profilePressures.end)
                 linkedTanks.append(TankData(
                     o2: o2, he: he,
                     volume: tank.volume > 0 ? tank.volume : nil,
-                    startPressure: tank.beginPressure > 0 ? tank.beginPressure : nil,
-                    endPressure: tank.endPressure > 0 ? tank.endPressure : nil,
+                    startPressure: startPressure,
+                    endPressure: endPressure,
                     workingPressure: tank.workingPressure > 0 ? tank.workingPressure : nil
                 ))
             }
         } else if !diveData.tankPressure.isEmpty {
             let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0
-            let startP = diveData.tankPressure.first.flatMap { $0 > 0 ? $0 : nil }
-            let endP = diveData.tankPressure.last.flatMap { $0 > 0 ? $0 : nil }
+            let startP = diveData.tankPressure.first(where: { $0 > 0 })
+            let endP   = diveData.tankPressure.last(where:  { $0 > 0 })
             linkedTanks.append(TankData(o2: o2Fraction, he: 0.0, startPressure: startP, endPressure: endP))
         } else if !dcGasMixes.isEmpty {
             linkedTanks = dcGasMixes.map { mix in
