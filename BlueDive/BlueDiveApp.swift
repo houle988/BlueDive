@@ -3,6 +3,7 @@ import SwiftData
 import CloudKit
 import UserNotifications
 import os.log
+import LibDCSwift
 
 // MARK: - App Language Bundle Lookup
 
@@ -80,6 +81,12 @@ struct BlueDiveApp: App {
         createModelContainer()
 
     init() {
+        // TEMPORARY DIAGNOSTIC: enable verbose libdivecomputer + BLE logging
+        // so we can see [BLE IOCTL] GET_NAME, [DC_IO READ/WRITE] hex dumps
+        // and SLIP framing during the i300C handshake.  Remove this line
+        // once the i300C connection issue is resolved.
+        // LibDCSwift.Logger.shared.enableDebugMode()
+
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
         listPendingNotifications()
     }
