@@ -35,14 +35,19 @@ struct DiveFilterSheet: View {
     var showSort: Bool = true
 
     @Binding var filterYear: Int?
+    @Binding var filterYearNegate: Bool
     @Binding var filterGasType: String?
+    @Binding var filterGasTypeNegate: Bool
     @Binding var filterMinDepth: Double
     @Binding var filterMaxDepth: Double
     @Binding var filterMinRating: Int
     @Binding var filterCountry: String?
+    @Binding var filterCountryNegate: Bool
     @Binding var filterDiveType: String?
+    @Binding var filterDiveTypeNegate: Bool
     @Binding var filterTag: String?
     @Binding var filterDiverName: String?
+    @Binding var filterDiverNameNegate: Bool
     @Binding var filterMarineLife: [String]
     @Binding var filterMarineLifeMode: FilterMarineLifeMode
     @Binding var sortOrder: ContentView.DiveSortOrder
@@ -193,8 +198,25 @@ struct DiveFilterSheet: View {
     
     private var yearFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Year", icon: "calendar")
-            
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                Text("Year")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if filterYear != nil {
+                    Picker("", selection: $filterYearNegate) {
+                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
+                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 160)
+                }
+            }
+            .padding(.horizontal, 4)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
@@ -202,14 +224,17 @@ struct DiveFilterSheet: View {
                         isSelected: filterYear == nil,
                         color: .cyan
                     ) {
-                        withAnimation { filterYear = nil }
+                        withAnimation {
+                            filterYear = nil
+                            filterYearNegate = false
+                        }
                     }
-                    
+
                     ForEach(availableYears, id: \.self) { year in
                         ModernFilterChip(
                             label: "\(year)",
                             isSelected: filterYear == year,
-                            color: .cyan
+                            color: filterYearNegate ? .orange : .cyan
                         ) {
                             withAnimation { filterYear = year }
                         }
@@ -224,8 +249,25 @@ struct DiveFilterSheet: View {
     
     private var countryFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Country", icon: "globe")
-            
+            HStack(spacing: 10) {
+                Image(systemName: "globe")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                Text("Country")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if let c = filterCountry, !c.isEmpty {
+                    Picker("", selection: $filterCountryNegate) {
+                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
+                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 160)
+                }
+            }
+            .padding(.horizontal, 4)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
@@ -233,7 +275,10 @@ struct DiveFilterSheet: View {
                         isSelected: filterCountry == nil,
                         color: .blue
                     ) {
-                        withAnimation { filterCountry = nil }
+                        withAnimation {
+                            filterCountry = nil
+                            filterCountryNegate = false
+                        }
                     }
 
                     ModernFilterChip(
@@ -241,14 +286,17 @@ struct DiveFilterSheet: View {
                         isSelected: filterCountry == "",
                         color: .blue
                     ) {
-                        withAnimation { filterCountry = "" }
+                        withAnimation {
+                            filterCountry = ""
+                            filterCountryNegate = false
+                        }
                     }
-                    
+
                     ForEach(availableCountries, id: \.self) { country in
                         ModernFilterChip(
                             label: country,
                             isSelected: filterCountry == country,
-                            color: .blue
+                            color: filterCountryNegate ? .orange : .blue
                         ) {
                             withAnimation { filterCountry = country }
                         }
@@ -263,8 +311,25 @@ struct DiveFilterSheet: View {
     
     private var diveTypeFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Dive type", icon: "figure.open.water.swim")
-            
+            HStack(spacing: 10) {
+                Image(systemName: "figure.open.water.swim")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                Text("Dive type")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if let dt = filterDiveType, !dt.isEmpty {
+                    Picker("", selection: $filterDiveTypeNegate) {
+                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
+                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 160)
+                }
+            }
+            .padding(.horizontal, 4)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
@@ -272,7 +337,10 @@ struct DiveFilterSheet: View {
                         isSelected: filterDiveType == nil,
                         color: .purple
                     ) {
-                        withAnimation { filterDiveType = nil }
+                        withAnimation {
+                            filterDiveType = nil
+                            filterDiveTypeNegate = false
+                        }
                     }
 
                     ModernFilterChip(
@@ -280,14 +348,17 @@ struct DiveFilterSheet: View {
                         isSelected: filterDiveType == "",
                         color: .purple
                     ) {
-                        withAnimation { filterDiveType = "" }
+                        withAnimation {
+                            filterDiveType = ""
+                            filterDiveTypeNegate = false
+                        }
                     }
-                    
+
                     ForEach(availableDiveTypes, id: \.self) { diveType in
                         ModernFilterChip(
                             label: diveType,
                             isSelected: filterDiveType == diveType,
-                            color: .purple
+                            color: filterDiveTypeNegate ? .orange : .purple
                         ) {
                             withAnimation { filterDiveType = diveType }
                         }
@@ -341,7 +412,24 @@ struct DiveFilterSheet: View {
     
     private var diverNameFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Diver", icon: "person.fill")
+            HStack(spacing: 10) {
+                Image(systemName: "person.fill")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                Text("Diver")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if let dn = filterDiverName, !dn.isEmpty {
+                    Picker("", selection: $filterDiverNameNegate) {
+                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
+                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 160)
+                }
+            }
+            .padding(.horizontal, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -350,7 +438,10 @@ struct DiveFilterSheet: View {
                         isSelected: filterDiverName == nil,
                         color: .indigo
                     ) {
-                        withAnimation { filterDiverName = nil }
+                        withAnimation {
+                            filterDiverName = nil
+                            filterDiverNameNegate = false
+                        }
                     }
 
                     ModernFilterChip(
@@ -358,14 +449,17 @@ struct DiveFilterSheet: View {
                         isSelected: filterDiverName == "",
                         color: .indigo
                     ) {
-                        withAnimation { filterDiverName = "" }
+                        withAnimation {
+                            filterDiverName = ""
+                            filterDiverNameNegate = false
+                        }
                     }
 
                     ForEach(availableDiverNames, id: \.self) { name in
                         ModernFilterChip(
                             label: name,
                             isSelected: filterDiverName == name,
-                            color: .indigo
+                            color: filterDiverNameNegate ? .orange : .indigo
                         ) {
                             withAnimation { filterDiverName = name }
                         }
@@ -502,8 +596,25 @@ struct DiveFilterSheet: View {
 
     private var gasTypeFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Gas type", icon: "bubbles.and.sparkles")
-            
+            HStack(spacing: 10) {
+                Image(systemName: "bubbles.and.sparkles")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                Text("Gas type")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if let g = filterGasType, !g.isEmpty {
+                    Picker("", selection: $filterGasTypeNegate) {
+                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
+                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 160)
+                }
+            }
+            .padding(.horizontal, 4)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
@@ -511,7 +622,10 @@ struct DiveFilterSheet: View {
                         isSelected: filterGasType == nil,
                         color: .green
                     ) {
-                        withAnimation { filterGasType = nil }
+                        withAnimation {
+                            filterGasType = nil
+                            filterGasTypeNegate = false
+                        }
                     }
 
                     ModernFilterChip(
@@ -519,14 +633,17 @@ struct DiveFilterSheet: View {
                         isSelected: filterGasType == "",
                         color: .green
                     ) {
-                        withAnimation { filterGasType = "" }
+                        withAnimation {
+                            filterGasType = ""
+                            filterGasTypeNegate = false
+                        }
                     }
-                    
+
                     ForEach(availableGasTypes, id: \.self) { gas in
                         ModernFilterChip(
                             label: gas,
                             isSelected: filterGasType == gas,
-                            color: .green
+                            color: filterGasTypeNegate ? .orange : .green
                         ) {
                             withAnimation { filterGasType = gas }
                         }
@@ -786,22 +903,27 @@ struct DiveFilterSheet: View {
             if hasAnythingToReset {
                 Button(role: .destructive) {
                     withAnimation {
-                        filterYear       = nil
-                        filterGasType    = nil
-                        filterMinDepth   = 0
-                        filterMaxDepth   = 0
-                        minDepthText     = ""
-                        maxDepthText     = ""
-                        filterMinRating  = 0
-                        filterCountry    = nil
-                        filterDiveType   = nil
-                        filterTag        = nil
-                        filterDiverName  = nil
-                        filterMarineLife = []
+                        filterYear           = nil
+                        filterYearNegate     = false
+                        filterGasType        = nil
+                        filterGasTypeNegate  = false
+                        filterMinDepth       = 0
+                        filterMaxDepth       = 0
+                        minDepthText         = ""
+                        maxDepthText         = ""
+                        filterMinRating      = 0
+                        filterCountry        = nil
+                        filterCountryNegate  = false
+                        filterDiveType       = nil
+                        filterDiveTypeNegate = false
+                        filterTag            = nil
+                        filterDiverName      = nil
+                        filterDiverNameNegate = false
+                        filterMarineLife     = []
                         filterMarineLifeMode = .any
-                        marineLifeInput  = ""
+                        marineLifeInput      = ""
                         if showSort {
-                            sortOrder    = .dateDesc
+                            sortOrder        = .dateDesc
                         }
                     }
                 } label: {

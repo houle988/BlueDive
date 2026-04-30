@@ -66,14 +66,19 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var showFilterSheet = false
     @State private var filterYear: Int? = nil
+    @State private var filterYearNegate: Bool = false
     @State private var filterGasType: String? = nil
+    @State private var filterGasTypeNegate: Bool = false
     @State private var filterMinDepth: Double = 0
     @State private var filterMaxDepth: Double = 0
     @State private var filterMinRating: Int = 0
     @State private var filterCountry: String? = nil
+    @State private var filterCountryNegate: Bool = false
     @State private var filterDiveType: String? = nil
+    @State private var filterDiveTypeNegate: Bool = false
     @State private var filterTag: String? = nil
     @State private var filterDiverName: String? = nil
+    @State private var filterDiverNameNegate: Bool = false
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @State private var sortOrder: DiveSortOrder = .dateDesc
@@ -191,12 +196,18 @@ struct ContentView: View {
             // Year filter
             if let year = filterYear {
                 let diveYear = Calendar.current.component(.year, from: dive.timestamp)
-                if diveYear != year { return false }
+                if filterYearNegate {
+                    if diveYear == year { return false }
+                } else {
+                    if diveYear != year { return false }
+                }
             }
             // Gas filter
             if let gas = filterGasType {
                 if gas.isEmpty {
                     if !dive.gasType.isEmpty { return false }
+                } else if filterGasTypeNegate {
+                    if dive.gasType == gas { return false }
                 } else {
                     if dive.gasType != gas { return false }
                 }
@@ -220,6 +231,8 @@ struct ContentView: View {
             if let country = filterCountry {
                 if country.isEmpty {
                     guard dive.siteCountry == nil || dive.siteCountry!.isEmpty else { return false }
+                } else if filterCountryNegate {
+                    if let diveCountry = dive.siteCountry, diveCountry == country { return false }
                 } else {
                     guard let diveCountry = dive.siteCountry, diveCountry == country else { return false }
                 }
@@ -230,10 +243,14 @@ struct ContentView: View {
                     let trimmed = dive.diveTypes?.trimmingCharacters(in: .whitespaces) ?? ""
                     if !trimmed.isEmpty { return false }
                 } else {
-                let allTypes = dive.diveTypes?
-                    .split(separator: ",")
-                    .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                if !allTypes.contains(diveType) { return false }
+                    let allTypes = dive.diveTypes?
+                        .split(separator: ",")
+                        .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+                    if filterDiveTypeNegate {
+                        if allTypes.contains(diveType) { return false }
+                    } else {
+                        if !allTypes.contains(diveType) { return false }
+                    }
                 }
             }
             // Tag filter
@@ -252,6 +269,8 @@ struct ContentView: View {
             if let name = filterDiverName {
                 if name.isEmpty {
                     if !dive.diverName.isEmpty { return false }
+                } else if filterDiverNameNegate {
+                    if dive.diverName == name { return false }
                 } else {
                     if dive.diverName != name { return false }
                 }
@@ -308,14 +327,19 @@ struct ContentView: View {
                     availableDiverNames: availableDiverNames,
                     availableMarineLife: availableMarineLife,
                     filterYear: $filterYear,
+                    filterYearNegate: $filterYearNegate,
                     filterGasType: $filterGasType,
+                    filterGasTypeNegate: $filterGasTypeNegate,
                     filterMinDepth: $filterMinDepth,
                     filterMaxDepth: $filterMaxDepth,
                     filterMinRating: $filterMinRating,
                     filterCountry: $filterCountry,
+                    filterCountryNegate: $filterCountryNegate,
                     filterDiveType: $filterDiveType,
+                    filterDiveTypeNegate: $filterDiveTypeNegate,
                     filterTag: $filterTag,
                     filterDiverName: $filterDiverName,
+                    filterDiverNameNegate: $filterDiverNameNegate,
                     filterMarineLife: $filterMarineLife,
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: $sortOrder
@@ -913,18 +937,23 @@ struct ContentView: View {
     }
     
     private func resetFilters() {
-        filterYear       = nil
-        filterGasType    = nil
-        filterMinDepth   = 0
-        filterMaxDepth   = 0
-        filterMinRating  = 0
-        filterCountry    = nil
-        filterDiveType   = nil
-        filterTag        = nil
-        filterDiverName  = nil
-        filterMarineLife = []
+        filterYear           = nil
+        filterYearNegate     = false
+        filterGasType        = nil
+        filterGasTypeNegate  = false
+        filterMinDepth       = 0
+        filterMaxDepth       = 0
+        filterMinRating      = 0
+        filterCountry        = nil
+        filterCountryNegate  = false
+        filterDiveType       = nil
+        filterDiveTypeNegate = false
+        filterTag            = nil
+        filterDiverName      = nil
+        filterDiverNameNegate = false
+        filterMarineLife     = []
         filterMarineLifeMode = .any
-        sortOrder        = .dateDesc
+        sortOrder            = .dateDesc
     }
 
     private func deleteItems(offsets: IndexSet) {

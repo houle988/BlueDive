@@ -13,14 +13,19 @@ struct DiveMapView: View {
     // MARK: - Filter State
     @State private var showFilterSheet = false
     @State private var filterYear: Int? = nil
+    @State private var filterYearNegate: Bool = false
     @State private var filterGasType: String? = nil
+    @State private var filterGasTypeNegate: Bool = false
     @State private var filterMinDepth: Double = 0
     @State private var filterMaxDepth: Double = 0
     @State private var filterMinRating: Int = 0
     @State private var filterCountry: String? = nil
+    @State private var filterCountryNegate: Bool = false
     @State private var filterDiveType: String? = nil
+    @State private var filterDiveTypeNegate: Bool = false
     @State private var filterTag: String? = nil
     @State private var filterDiverName: String? = nil
+    @State private var filterDiverNameNegate: Bool = false
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
 
@@ -112,11 +117,17 @@ struct DiveMapView: View {
         dives.filter { dive in
             if let year = filterYear {
                 let diveYear = Calendar.current.component(.year, from: dive.timestamp)
-                if diveYear != year { return false }
+                if filterYearNegate {
+                    if diveYear == year { return false }
+                } else {
+                    if diveYear != year { return false }
+                }
             }
             if let gas = filterGasType {
                 if gas.isEmpty {
                     if !dive.gasType.isEmpty { return false }
+                } else if filterGasTypeNegate {
+                    if dive.gasType == gas { return false }
                 } else {
                     if dive.gasType != gas { return false }
                 }
@@ -137,6 +148,8 @@ struct DiveMapView: View {
             if let country = filterCountry {
                 if country.isEmpty {
                     guard dive.siteCountry == nil || dive.siteCountry!.isEmpty else { return false }
+                } else if filterCountryNegate {
+                    if let diveCountry = dive.siteCountry, diveCountry == country { return false }
                 } else {
                     guard let diveCountry = dive.siteCountry, diveCountry == country else { return false }
                 }
@@ -149,7 +162,11 @@ struct DiveMapView: View {
                     let allTypes = dive.diveTypes?
                         .split(separator: ",")
                         .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if !allTypes.contains(diveType) { return false }
+                    if filterDiveTypeNegate {
+                        if allTypes.contains(diveType) { return false }
+                    } else {
+                        if !allTypes.contains(diveType) { return false }
+                    }
                 }
             }
             if let tag = filterTag {
@@ -166,6 +183,8 @@ struct DiveMapView: View {
             if let name = filterDiverName {
                 if name.isEmpty {
                     if !dive.diverName.isEmpty { return false }
+                } else if filterDiverNameNegate {
+                    if dive.diverName == name { return false }
                 } else {
                     if dive.diverName != name { return false }
                 }
@@ -398,14 +417,19 @@ struct DiveMapView: View {
                     availableMarineLife: availableMarineLife,
                     showSort: false,
                     filterYear: $filterYear,
+                    filterYearNegate: $filterYearNegate,
                     filterGasType: $filterGasType,
+                    filterGasTypeNegate: $filterGasTypeNegate,
                     filterMinDepth: $filterMinDepth,
                     filterMaxDepth: $filterMaxDepth,
                     filterMinRating: $filterMinRating,
                     filterCountry: $filterCountry,
+                    filterCountryNegate: $filterCountryNegate,
                     filterDiveType: $filterDiveType,
+                    filterDiveTypeNegate: $filterDiveTypeNegate,
                     filterTag: $filterTag,
                     filterDiverName: $filterDiverName,
+                    filterDiverNameNegate: $filterDiverNameNegate,
                     filterMarineLife: $filterMarineLife,
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: .constant(.dateDesc)
