@@ -43,7 +43,6 @@ struct BluetoothScannerView: View {
     @State private var showingImportConfirmation = false
     @State private var connectedDeviceName: String?
     @State private var downloadAllDives: Bool = false
-    @State private var importAsNew: Bool = false
     @State private var diveCountDuringDownload: Int = 0
     @State private var downloadProgressCancellable: AnyCancellable?
     @State private var isSearching: Bool = false
@@ -374,13 +373,6 @@ struct BluetoothScannerView: View {
                         .disabled(syncState.isActive && syncState != .scanning)
                 } footer: {
                     Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Duplicates will be automatically skipped during import.")
-                }
-                
-                Section {
-                    Toggle("Import as new dives", isOn: $importAsNew)
-                        .disabled(!downloadAllDives || (syncState.isActive && syncState != .scanning))
-                } footer: {
-                    Text("Enable this option to import all downloaded dives as new entries, even if they already exist in your logbook. This creates duplicates. Only available when \"Download all dives\" is enabled.")
                 }
             }
             .formStyle(.grouped)
@@ -932,15 +924,16 @@ struct BluetoothScannerView: View {
             }
             
             for (index, diveData) in sortedDives.enumerated() {
-                // Check if the dive already exists (by date and depth), unless importAsNew is enabled
-                let existingDive = importAsNew ? nil : checkExistingDive(diveData)
-                
-                if let existingDive = existingDive {
+                // Check if the dive already exists (by date and depth)
+                let existingMatch = checkExistingDive(diveData)
+
+                if let (existingDive, matchReason) = existingMatch {
                     if downloadAllDives {
                         // Re-download mode: merge data from the computer
-                        mergeComputerData(from: diveData, into: existingDive)
+                        mergeComputerData(from: diveData, into: existingDive, matchReason: matchReason)
                         mergedCount += 1
                     } else {
+                        Self.logger.info("Dive from \(diveData.datetime) skipped — already in logbook (matched by: \(matchReason))")
                         skippedCount += 1
                     }
                 } else {
@@ -1068,30 +1061,66 @@ struct BluetoothScannerView: View {
         Self.logger.info("Cleared DeviceFingerprint record for serial \(serial)")
     }
 
-    /// Checks if a dive already exists in the logbook
-    private func checkExistingDive(_ diveData: DiveData) -> Dive? {
+    /// Checks if a dive already exists in the logbook.
+    /// Matches by timestamp (±1 minute), max depth (±0.5), and fingerprint data record.
+    /// Returns the matched dive and a human-readable reason for the match, or nil if no match.
+    private func checkExistingDive(_ diveData: DiveData) -> (dive: Dive, reason: String)? {
         let timestamp = diveData.datetime
         let maxDepth = diveData.maxDepth
-        
+
+        // Get the current device's serial number
+        let deviceSerial = selectedDevice.flatMap { peripheral in
+            DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString)?.serial
+        }
+
         // Look for a dive with the same date (within 1 minute) and similar depth
         let calendar = Calendar.current
         let startOfMinute = calendar.date(byAdding: .minute, value: -1, to: timestamp) ?? timestamp
         let endOfMinute = calendar.date(byAdding: .minute, value: 1, to: timestamp) ?? timestamp
         let depthLow = maxDepth - 0.5
         let depthHigh = maxDepth + 0.5
-        
+
         let predicate = #Predicate<Dive> { dive in
             dive.timestamp >= startOfMinute &&
             dive.timestamp <= endOfMinute &&
             dive.maxDepth >= depthLow &&
             dive.maxDepth <= depthHigh
         }
-        
+
         let descriptor = FetchDescriptor<Dive>(predicate: predicate)
-        
+
         do {
             let results = try modelContext.fetch(descriptor)
-            return results.first
+
+            for existingDive in results {
+                let fingerprintMatches = existingDive.fingerprintData != nil &&
+                                         diveData.fingerprint != nil &&
+                                         existingDive.fingerprintData == diveData.fingerprint
+                let serialMatches = deviceSerial != nil &&
+                                    existingDive.computerSerialNumber == deviceSerial
+                // Dives with no device identity (e.g. file imports without serial/fingerprint)
+                // are matched on timestamp+depth alone — it's the only signal available.
+                // This prevents false duplicates when syncing dives previously imported via XML.
+                // The two-diver protection still applies: a Bluetooth-imported dive always has
+                // a serial, so noDeviceIdentity is false for it and the strict check applies.
+                let noDeviceIdentity = existingDive.fingerprintData == nil &&
+                                       (existingDive.computerSerialNumber == nil ||
+                                        existingDive.computerSerialNumber?.isEmpty == true)
+
+                if fingerprintMatches {
+                    return (existingDive, "fingerprint")
+                } else if serialMatches {
+                    return (existingDive, "serial number")
+                } else if noDeviceIdentity {
+                    return (existingDive, "timestamp+depth (no device identity on existing dive)")
+                }
+            }
+
+            if !results.isEmpty {
+                Self.logger.debug("checkExistingDive: \(results.count) timestamp/depth match(es) rejected by identity check — inserting as new dive")
+            }
+
+            return nil
         } catch {
             Self.logger.error("Error searching for existing dive: \(error.localizedDescription)")
             return nil
@@ -1101,7 +1130,7 @@ struct BluetoothScannerView: View {
     /// Merges dive computer data into an existing dive.
     /// Only fields originating from the computer are updated.
     /// User-modified fields (notes, rating, buddies, etc.) are preserved.
-    private func mergeComputerData(from diveData: DiveData, into dive: Dive) {
+    private func mergeComputerData(from diveData: DiveData, into dive: Dive, matchReason: String) {
         // Dive statistics
         dive.maxDepth = diveData.maxDepth
         dive.averageDepth = diveData.avgDepth
@@ -1232,7 +1261,7 @@ struct BluetoothScannerView: View {
         // Override source import to reflect the Bluetooth re-download
         dive.sourceImport = "Bluetooth"
 
-        Self.logger.info("Dive from \(dive.timestamp) merged with computer data")
+        Self.logger.info("Dive from \(dive.timestamp) merged with computer data (matched by: \(matchReason))")
     }
     
     /// Determines gas type name from oxygen and helium percentages, matching
