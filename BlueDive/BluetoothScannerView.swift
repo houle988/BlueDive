@@ -43,6 +43,7 @@ struct BluetoothScannerView: View {
     @State private var showingImportConfirmation = false
     @State private var connectedDeviceName: String?
     @State private var downloadAllDives: Bool = false
+    @State private var importAsNew: Bool = false
     @State private var diveCountDuringDownload: Int = 0
     @State private var downloadProgressCancellable: AnyCancellable?
     @State private var isSearching: Bool = false
@@ -373,6 +374,13 @@ struct BluetoothScannerView: View {
                         .disabled(syncState.isActive && syncState != .scanning)
                 } footer: {
                     Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Duplicates will be automatically skipped during import.")
+                }
+                
+                Section {
+                    Toggle("Import as new dives", isOn: $importAsNew)
+                        .disabled(!downloadAllDives || (syncState.isActive && syncState != .scanning))
+                } footer: {
+                    Text("Enable this option to import all downloaded dives as new entries, even if they already exist in your logbook. This creates duplicates. Only available when \"Download all dives\" is enabled.")
                 }
             }
             .formStyle(.grouped)
@@ -924,8 +932,8 @@ struct BluetoothScannerView: View {
             }
             
             for (index, diveData) in sortedDives.enumerated() {
-                // Check if the dive already exists (by date and depth)
-                let existingDive = checkExistingDive(diveData)
+                // Check if the dive already exists (by date and depth), unless importAsNew is enabled
+                let existingDive = importAsNew ? nil : checkExistingDive(diveData)
                 
                 if let existingDive = existingDive {
                     if downloadAllDives {
