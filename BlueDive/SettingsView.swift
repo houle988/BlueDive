@@ -379,6 +379,7 @@ class UserPreferences {
         appearanceMode            = .system
         languageMode              = .system
         ChartLineVisibility().save()
+        UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
     }
 }
 
@@ -1699,6 +1700,7 @@ struct SettingsView: View {
             // Step 2: Remove all pending and delivered notifications.
             NotificationManager.shared.cancelAllNotifications()
             NotificationManager.shared.clearBadge()
+            UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
             
             // Step 3: Start a 30-second countdown, then close the app.
             // This gives CloudKit enough time to process the local deletions
