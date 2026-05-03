@@ -341,8 +341,10 @@ final class Dive {
     var siteDifficulty: String?      // Difficulty (Beginner, Intermediate, Advanced, Expert)
     var siteWaterType: String?       // Water type (Fresh, Salt, Brackish)
     var siteAltitude: Double?        // Altitude in meters
-    var siteLatitude: Double?        // GPS latitude
-    var siteLongitude: Double?       // GPS longitude
+    var siteLatitude: Double?        // GPS latitude (entry point)
+    var siteLongitude: Double?       // GPS longitude (entry point)
+    var exitLatitude: Double?        // GPS latitude (exit point, e.g. Shearwater GPS)
+    var exitLongitude: Double?       // GPS longitude (exit point, e.g. Shearwater GPS)
     
     /// Photos de la plongée (stockées comme Data)
     @Attribute(.externalStorage)

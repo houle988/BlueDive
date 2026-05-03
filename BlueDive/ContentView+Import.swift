@@ -342,6 +342,10 @@ extension ContentView {
             profileSamples: profilePoints
         )
         
+        // Exit GPS (BlueDive XML round-trip)
+        newDive.exitLatitude  = diveData.site?.exitLatitude
+        newDive.exitLongitude = diveData.site?.exitLongitude
+
         // Deco stops (from BlueDive XML round-trip)
         if !diveData.decoStops.isEmpty {
             newDive.decoStops = diveData.decoStops

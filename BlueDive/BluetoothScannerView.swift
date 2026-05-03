@@ -1266,6 +1266,13 @@ struct BluetoothScannerView: View {
             [DecoStop(depth: stop.depth, time: stop.time, type: stop.type)]
         } ?? []
 
+        // Extract exit GPS from Shearwater raw data (PNF closing record 9)
+        if let rawData = diveData.rawData,
+           let exitGPS = ShearwaterPNFGPS.extractExitGPS(from: rawData) {
+            dive.exitLatitude = exitGPS.latitude
+            dive.exitLongitude = exitGPS.longitude
+        }
+
         // Override source import to reflect the Bluetooth re-download
         dive.sourceImport = "Bluetooth"
 
@@ -1579,6 +1586,13 @@ struct BluetoothScannerView: View {
         dive.decoStops = diveData.decoStop.map { stop in
             [DecoStop(depth: stop.depth, time: stop.time, type: stop.type)]
         } ?? []
+
+        // Extract exit GPS from Shearwater raw data (PNF closing record 9)
+        if let rawData = diveData.rawData,
+           let exitGPS = ShearwaterPNFGPS.extractExitGPS(from: rawData) {
+            dive.exitLatitude = exitGPS.latitude
+            dive.exitLongitude = exitGPS.longitude
+        }
 
         return dive
     }

@@ -1402,6 +1402,18 @@ struct EditSiteDetailsView: View {
     @State private var workingLongitude: String
     @State private var workingAltitude: String
     @State private var workingDifficulty: String
+    @State private var workingExitLatitude: String
+    @State private var workingExitLongitude: String
+
+    private var canResetEntryGPS: Bool {
+        guard let rawData = dive.rawDiveComputerData else { return false }
+        return ShearwaterPNFGPS.extractEntryGPS(from: rawData) != nil
+    }
+
+    private var canResetExitGPS: Bool {
+        guard let rawData = dive.rawDiveComputerData else { return false }
+        return ShearwaterPNFGPS.extractExitGPS(from: rawData) != nil
+    }
 
     static let difficultyScale: [(level: Int, label: String)] = [
         (1, "Very Easy"),
@@ -1497,10 +1509,12 @@ struct EditSiteDetailsView: View {
         _workingSiteName    = State(initialValue: dive.siteName)
         _workingWaterType   = State(initialValue: dive.siteWaterType ?? "")
         _workingBodyOfWater = State(initialValue: dive.siteBodyOfWater ?? "")
-        _workingLatitude    = State(initialValue: dive.siteLatitude.map { String(format: "%.6f", $0) } ?? "")
-        _workingLongitude   = State(initialValue: dive.siteLongitude.map { String(format: "%.6f", $0) } ?? "")
-        _workingAltitude    = State(initialValue: dive.siteAltitude.map { String(format: "%.0f", $0) } ?? "")
-        _workingDifficulty  = State(initialValue: dive.siteDifficulty ?? "")
+        _workingLatitude     = State(initialValue: dive.siteLatitude.map { String(format: "%.6f", $0) } ?? "")
+        _workingLongitude    = State(initialValue: dive.siteLongitude.map { String(format: "%.6f", $0) } ?? "")
+        _workingAltitude     = State(initialValue: dive.siteAltitude.map { String(format: "%.0f", $0) } ?? "")
+        _workingDifficulty   = State(initialValue: dive.siteDifficulty ?? "")
+        _workingExitLatitude  = State(initialValue: dive.exitLatitude.map { String(format: "%.6f", $0) } ?? "")
+        _workingExitLongitude = State(initialValue: dive.exitLongitude.map { String(format: "%.6f", $0) } ?? "")
     }
 
     var body: some View {
@@ -1669,7 +1683,9 @@ struct EditSiteDetailsView: View {
                         siteDetailsMacOSAutocompleteField("Body of Water", text: $workingBodyOfWater, icon: "water.waves", suggestions: uniqueOptionalValues(for: \.siteBodyOfWater))
                     }
 
-                    siteDetailsMacOSGroupBox("GPS Coordinates", icon: "location.circle.fill", color: .green) {
+                    siteDetailsMacOSGroupBox("GPS Coordinates (Entry)", icon: "location.circle.fill", color: .green,
+                        resetAction: dive.rawDiveComputerData != nil ? { resetEntryGPS() } : nil,
+                        resetEnabled: canResetEntryGPS) {
                         siteDetailsMacOSField("Latitude", text: $workingLatitude, icon: "arrow.up.arrow.down")
                         siteDetailsMacOSField("Longitude", text: $workingLongitude, icon: "arrow.left.arrow.right")
                         siteDetailsMacOSField(LocalizedStringKey("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))"), text: $workingAltitude, icon: "mountain.2.fill")
@@ -1677,16 +1693,23 @@ struct EditSiteDetailsView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+
+                    siteDetailsMacOSGroupBox("GPS Coordinates (Exit)", icon: "location.circle", color: .green,
+                        resetAction: dive.rawDiveComputerData != nil ? { resetExitGPS() } : nil,
+                        resetEnabled: canResetExitGPS) {
+                        siteDetailsMacOSField("Latitude", text: $workingExitLatitude, icon: "arrow.up.arrow.down")
+                        siteDetailsMacOSField("Longitude", text: $workingExitLongitude, icon: "arrow.left.arrow.right")
+                    }
                 }
                 .padding(24)
             }
         }
-        .frame(width: 650, height: 550)
+        .frame(width: 650, height: 680)
         .background(Color.platformBackground)
 
     }
 
-    private func siteDetailsMacOSGroupBox(_ title: LocalizedStringKey, icon: String, color: Color, @ViewBuilder content: () -> some View) -> some View {
+    private func siteDetailsMacOSGroupBox(_ title: LocalizedStringKey, icon: String, color: Color, resetAction: (() -> Void)? = nil, resetEnabled: Bool = true, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
@@ -1696,6 +1719,17 @@ struct EditSiteDetailsView: View {
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundStyle(.primary)
+                if let resetAction {
+                    Spacer()
+                    Button(action: resetAction) {
+                        Text("Reset")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(resetEnabled ? .blue : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!resetEnabled)
+                }
             }
             .padding(.bottom, 4)
 
@@ -1970,10 +2004,79 @@ struct EditSiteDetailsView: View {
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "GPS Coordinates", icon: "location.circle.fill", color: .green)
+                        HStack {
+                            MenuSectionHeader(title: "GPS Coordinates (Entry)", icon: "location.circle.fill", color: .green)
+                            if dive.rawDiveComputerData != nil {
+                                Spacer()
+                                Button { resetEntryGPS() } label: {
+                                    Text("Reset")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(canResetEntryGPS ? .blue : .secondary)
+                                }
+                                .disabled(!canResetEntryGPS)
+                            }
+                        }
                     } footer: {
                         Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
                             .font(.caption2)
+                    }
+
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .foregroundStyle(.green)
+                                .frame(width: 24)
+                            Text("Latitude")
+                                .foregroundStyle(.primary)
+                            TextField("Latitude", text: $workingExitLatitude)
+                                .platformKeyboardType(.decimalPad)
+                                .foregroundStyle(.primary)
+                            gpsSignToggleButton(for: $workingExitLatitude)
+                            if !workingExitLatitude.isEmpty {
+                                Button {
+                                    workingExitLatitude = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        HStack(spacing: 12) {
+                            Image(systemName: "arrow.left.arrow.right")
+                                .foregroundStyle(.green)
+                                .frame(width: 24)
+                            Text("Longitude")
+                                .foregroundStyle(.primary)
+                            TextField("Longitude", text: $workingExitLongitude)
+                                .platformKeyboardType(.decimalPad)
+                                .foregroundStyle(.primary)
+                            gpsSignToggleButton(for: $workingExitLongitude)
+                            if !workingExitLongitude.isEmpty {
+                                Button {
+                                    workingExitLongitude = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            MenuSectionHeader(title: "GPS Coordinates (Exit)", icon: "location.circle", color: .green)
+                            if dive.rawDiveComputerData != nil {
+                                Spacer()
+                                Button { resetExitGPS() } label: {
+                                    Text("Reset")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(canResetExitGPS ? .blue : .secondary)
+                                }
+                                .disabled(!canResetExitGPS)
+                            }
+                        }
                     }
                 }
                 .scrollContentBackground(.hidden)
@@ -2018,6 +2121,20 @@ struct EditSiteDetailsView: View {
         #endif
     }
 
+    private func resetEntryGPS() {
+        guard let rawData = dive.rawDiveComputerData,
+              let gps = ShearwaterPNFGPS.extractEntryGPS(from: rawData) else { return }
+        workingLatitude  = String(format: "%.6f", gps.latitude)
+        workingLongitude = String(format: "%.6f", gps.longitude)
+    }
+
+    private func resetExitGPS() {
+        guard let rawData = dive.rawDiveComputerData,
+              let gps = ShearwaterPNFGPS.extractExitGPS(from: rawData) else { return }
+        workingExitLatitude  = String(format: "%.6f", gps.latitude)
+        workingExitLongitude = String(format: "%.6f", gps.longitude)
+    }
+
     private func save() {
         let trimmedCountry     = workingCountry.trimmingCharacters(in: .whitespaces)
         dive.siteCountry    = trimmedCountry.isEmpty ? nil : trimmedCountry
@@ -2032,6 +2149,8 @@ struct EditSiteDetailsView: View {
         dive.siteAltitude   = Double(workingAltitude.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
         let trimmedDifficulty  = workingDifficulty.trimmingCharacters(in: .whitespaces)
         dive.siteDifficulty = trimmedDifficulty.isEmpty ? nil : trimmedDifficulty
+        dive.exitLatitude   = Double(workingExitLatitude.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        dive.exitLongitude  = Double(workingExitLongitude.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
         dismiss()
     }
 }

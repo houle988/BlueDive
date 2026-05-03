@@ -170,8 +170,10 @@ enum BlueDiveXMLExporter {
         lines.append(xmlTag("waterType",   dive.siteWaterType ?? "",                  indent: 6))
         lines.append(xmlTag("difficulty",  dive.siteDifficulty ?? "",                 indent: 6))
         lines.append(xmlTag("altitude",    dive.siteAltitude.map(formatDouble) ?? "", indent: 6))
-        lines.append(xmlTag("lat",         dive.siteLatitude.map(formatCoord) ?? "",  indent: 6))
-        lines.append(xmlTag("lon",         dive.siteLongitude.map(formatCoord) ?? "", indent: 6))
+        lines.append(xmlTag("lat",         dive.siteLatitude.map(formatCoord) ?? "",   indent: 6))
+        lines.append(xmlTag("lon",         dive.siteLongitude.map(formatCoord) ?? "",  indent: 6))
+        lines.append(xmlTag("exitLat",     dive.exitLatitude.map(formatCoord) ?? "",   indent: 6))
+        lines.append(xmlTag("exitLon",     dive.exitLongitude.map(formatCoord) ?? "",  indent: 6))
         lines.append("    </site>")
 
         // ── BlueDiveTankData ─────────────────────────────────────────────────

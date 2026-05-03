@@ -6,7 +6,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jdevost/libdc-swift",
       "state" : {
-        "revision" : "96bb7a0c3182b706f6bd3620407010567ef6dd6c"
+        "revision" : "64cedc119289fca390ce97f9483f63b2a15cf487"
       }
     }
   ],

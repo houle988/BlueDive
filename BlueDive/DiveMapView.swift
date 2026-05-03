@@ -3,12 +3,17 @@ import MapKit
 import SwiftData
 import CoreLocation
 
+private enum MapCoordinateMode: CaseIterable {
+    case entry, exit
+}
+
 struct DiveMapView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var selectedDive: Dive?
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
     @State private var locationManager = CLLocationManager()
+    @State private var coordinateMode: MapCoordinateMode = .entry
 
     // MARK: - Filter State
     @State private var showFilterSheet = false
@@ -29,19 +34,29 @@ struct DiveMapView: View {
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
 
-    private func coordinate(for dive: Dive) -> CLLocationCoordinate2D? {
-        if let lat = dive.siteLatitude, let lon = dive.siteLongitude,
-           !(lat == 0 && lon == 0),
-           CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: lat, longitude: lon)) {
-            return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    private func coordinate(for dive: Dive, mode: MapCoordinateMode) -> CLLocationCoordinate2D? {
+        let lat: Double?
+        let lon: Double?
+        switch mode {
+        case .entry:
+            lat = dive.siteLatitude
+            lon = dive.siteLongitude
+        case .exit:
+            lat = dive.exitLatitude
+            lon = dive.exitLongitude
         }
-        return nil
+        guard let lat, let lon,
+              !(lat == 0 && lon == 0),
+              CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: lat, longitude: lon)) else {
+            return nil
+        }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
     }
     
     // MARK: - Available Filter Options (only from dives with coordinates)
 
     private var geolocatedDives: [Dive] {
-        dives.filter { coordinate(for: $0) != nil }
+        dives.filter { coordinate(for: $0, mode: coordinateMode) != nil }
     }
 
     private var availableYears: [Int] {
@@ -196,7 +211,7 @@ struct DiveMapView: View {
 
     private var divesWithCoordinates: [(dive: Dive, coordinate: CLLocationCoordinate2D)] {
         filteredDives.compactMap { dive in
-            if let coord = coordinate(for: dive) {
+            if let coord = coordinate(for: dive, mode: coordinateMode) {
                 return (dive, coord)
             }
             return nil
@@ -288,8 +303,16 @@ struct DiveMapView: View {
     }
 
     private func handleClusterTap(_ cluster: DiveCluster) {
-        let lats = cluster.dives.compactMap { $0.siteLatitude }
-        let lons = cluster.dives.compactMap { $0.siteLongitude }.map { normalizedLongitude($0) }
+        let lats: [Double]
+        let lons: [Double]
+        switch coordinateMode {
+        case .entry:
+            lats = cluster.dives.compactMap { $0.siteLatitude }
+            lons = cluster.dives.compactMap { $0.siteLongitude }.map { normalizedLongitude($0) }
+        case .exit:
+            lats = cluster.dives.compactMap { $0.exitLatitude }
+            lons = cluster.dives.compactMap { $0.exitLongitude }.map { normalizedLongitude($0) }
+        }
         guard let minLat = lats.min(), let maxLat = lats.max(),
               let minLon = lons.min(), let maxLon = lons.max() else { return }
 
@@ -439,6 +462,14 @@ struct DiveMapView: View {
                 #endif
             }
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("Coordinate Mode", selection: $coordinateMode) {
+                        Text("Entry").tag(MapCoordinateMode.entry)
+                        Text("Exit").tag(MapCoordinateMode.exit)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 160)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showFilterSheet = true }) {
                         ZStack(alignment: .topTrailing) {

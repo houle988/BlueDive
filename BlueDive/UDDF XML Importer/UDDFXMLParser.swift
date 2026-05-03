@@ -433,7 +433,9 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                         difficulty: tempSiteDifficulty,
                         altitude: tempSiteAltitude,
                         latitude: tempSiteLatitude,
-                        longitude: tempSiteLongitude
+                        longitude: tempSiteLongitude,
+                        exitLatitude: nil,
+                        exitLongitude: nil
                     )
                 }
                 isInSite = false

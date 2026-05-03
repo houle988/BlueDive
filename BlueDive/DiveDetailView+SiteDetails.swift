@@ -77,59 +77,109 @@ extension DiveDetailView {
 
             Divider().background(.primary.opacity(0.2))
 
-            // GPS Coordinates
+            // GPS Coordinates (Entry)
             if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
-                conditionRow(icon: "location.circle.fill", color: .green, label: "Coordinates",
+                conditionRow(icon: "location.circle.fill", color: .green, label: "Coordinates (entry)",
                             value: String(format: "%.6f, %.6f", lat, lon))
-
-                Divider().background(.primary.opacity(0.2))
-
-                // Altitude
-                if let alt = dive.displaySiteAltitude {
-                    let depthUnit = prefs.depthUnit == .feet ? "ft" : "m"
-                    conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
-                                value: String(format: "%.0f %@", alt, depthUnit))
-                } else {
-                    conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
-                                value: "—")
-                }
-
-                Divider().background(.primary.opacity(0.2))
-
-                // Map view
-                Map(initialPosition: .region(MKCoordinateRegion(
-                    center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                ))) {
-                    if dive.siteName.isEmpty {
-                        Marker("Dive Site", coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon))
-                    } else {
-                        Marker(dive.siteName, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon))
-                    }
-                }
-                .frame(height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .allowsHitTesting(false)
             } else {
-                conditionRow(icon: "location.circle.fill", color: .green, label: "Coordinates",
+                conditionRow(icon: "location.circle.fill", color: .green, label: "Coordinates (entry)",
                             value: "—")
+            }
 
+            Divider().background(.primary.opacity(0.2))
+
+            // GPS Coordinates (Exit)
+            if let exitLat = dive.exitLatitude, let exitLon = dive.exitLongitude {
+                conditionRow(icon: "location.circle", color: .green, label: "Coordinates (exit)",
+                            value: String(format: "%.6f, %.6f", exitLat, exitLon))
+            } else {
+                conditionRow(icon: "location.circle", color: .green, label: "Coordinates (exit)",
+                            value: "—")
+            }
+
+            Divider().background(.primary.opacity(0.2))
+
+            // Altitude
+            if let alt = dive.displaySiteAltitude {
+                let depthUnit = prefs.depthUnit == .feet ? "ft" : "m"
+                conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
+                            value: String(format: "%.0f %@", alt, depthUnit))
+            } else {
+                conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
+                            value: "—")
+            }
+
+            // Map view
+            if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
                 Divider().background(.primary.opacity(0.2))
 
-                // Altitude
-                if let alt = dive.displaySiteAltitude {
-                    let depthUnit = prefs.depthUnit == .feet ? "ft" : "m"
-                    conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
-                                value: String(format: "%.0f %@", alt, depthUnit))
-                } else {
-                    conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
-                                value: "—")
-                }
+                siteMap(entryLat: lat, entryLon: lon,
+                        exitLat: dive.exitLatitude, exitLon: dive.exitLongitude)
+                    .frame(height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .allowsHitTesting(false)
             }
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
         .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private func siteMap(entryLat: Double, entryLon: Double, exitLat: Double?, exitLon: Double?) -> some View {
+        let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
+
+        if let eLat = exitLat, let eLon = exitLon {
+            let exitCoord = CLLocationCoordinate2D(latitude: eLat, longitude: eLon)
+            let center = CLLocationCoordinate2D(
+                latitude: (entryLat + eLat) / 2,
+                longitude: (entryLon + eLon) / 2
+            )
+            let span = MKCoordinateSpan(
+                latitudeDelta: max(abs(entryLat - eLat) * 1.5, 0.005),
+                longitudeDelta: max(abs(entryLon - eLon) * 1.5, 0.005)
+            )
+            Map(initialPosition: .region(MKCoordinateRegion(center: center, span: span))) {
+                Annotation(coordinate: entryCoord, anchor: .bottom) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .green)
+                } label: {
+                    if dive.siteName.isEmpty {
+                        Text("Entry")
+                    } else {
+                        Text(verbatim: dive.siteName)
+                    }
+                }
+                Annotation(coordinate: exitCoord, anchor: .bottom) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .orange)
+                } label: {
+                    Text("Exit")
+                }
+            }
+        } else {
+            Map(initialPosition: .region(MKCoordinateRegion(
+                center: entryCoord,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            ))) {
+                Annotation(coordinate: entryCoord, anchor: .bottom) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .red)
+                } label: {
+                    if dive.siteName.isEmpty {
+                        Text("Dive Site")
+                    } else {
+                        Text(verbatim: dive.siteName)
+                    }
+                }
+            }
+        }
     }
 
     var difficultyDisplayRow: some View {

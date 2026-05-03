@@ -97,6 +97,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
     private var tempSiteAltitude: Double?
     private var tempSiteLatitude: Double?
     private var tempSiteLongitude: Double?
+    private var tempExitLatitude: Double?
+    private var tempExitLongitude: Double?
 
     // MARK: - Temporary Gas State
 
@@ -299,6 +301,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         case "altitude":    tempSiteAltitude = Double(text)
         case "lat":         tempSiteLatitude = Double(text)
         case "lon":         tempSiteLongitude = Double(text)
+        case "exitLat":     tempExitLatitude = Double(text)
+        case "exitLon":     tempExitLongitude = Double(text)
         case "site":
             currentSite = BlueDiveSiteData(
                 name: tempSiteName ?? "",
@@ -309,7 +313,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
                 difficulty: tempSiteDifficulty,
                 altitude: tempSiteAltitude,
                 latitude: tempSiteLatitude,
-                longitude: tempSiteLongitude
+                longitude: tempSiteLongitude,
+                exitLatitude: tempExitLatitude,
+                exitLongitude: tempExitLongitude
             )
             isInSite = false
         default: break
@@ -681,6 +687,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         tempSiteAltitude = nil
         tempSiteLatitude = nil
         tempSiteLongitude = nil
+        tempExitLatitude = nil
+        tempExitLongitude = nil
     }
 
     private func resetTempGas() {

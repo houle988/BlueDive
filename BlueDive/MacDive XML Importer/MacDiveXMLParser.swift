@@ -82,8 +82,10 @@ struct BlueDiveSiteData: Sendable {
     let waterType: String?
     let difficulty: String?
     let altitude: Double?          // meters or feet
-    let latitude: Double?          // degrees GPS
-    let longitude: Double?         // degrees GPS
+    let latitude: Double?          // degrees GPS (entry point)
+    let longitude: Double?         // degrees GPS (entry point)
+    let exitLatitude: Double?      // degrees GPS (exit point)
+    let exitLongitude: Double?     // degrees GPS (exit point)
 }
 
 /// Gas / tank data (legacy single-tank format for backward compatibility)
@@ -428,7 +430,9 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                     difficulty: tempSiteDifficulty,
                     altitude: tempSiteAltitude,
                     latitude: tempSiteLatitude,
-                    longitude: tempSiteLongitude
+                    longitude: tempSiteLongitude,
+                    exitLatitude: nil,
+                    exitLongitude: nil
                 )
             }
             isInSite = false
