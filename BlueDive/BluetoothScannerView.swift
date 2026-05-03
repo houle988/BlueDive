@@ -838,7 +838,13 @@ struct BluetoothScannerView: View {
                 // DispatchQueue.main.async, so viewModel.dives is not yet populated
                 // at this point. We re-dispatch on the main thread to let the pending
                 // blocks (append + finalizeDiveNumbering) execute before reading the dives.
-                self.bleManager.clearRetrievalState()
+                //
+                // IMPORTANT: clearRetrievalState() must run AFTER close() — not before.
+                // Clearing isRetrievingLogs before the BLE peripheral is disconnected
+                // opens a window where the auto-reconnect logic fires on a transient
+                // BLE disconnect event, re-opening the connection. close() then tears
+                // down the old session while the new connection keeps the dive computer
+                // stuck in "Sending Dive" mode.
                 
                 if success {
                     DispatchQueue.main.async {
@@ -847,12 +853,13 @@ struct BluetoothScannerView: View {
                         if viewModel.dives.isEmpty {
                             // No new dives, close the connection
                             self.bleManager.close(clearDevicePtr: true)
+                            self.bleManager.clearRetrievalState()
                             self.selectedDevice = nil
                             self.syncState = .completed(imported: 0, merged: 0, skipped: 0)
                         } else {
                             self.downloadedDives = viewModel.dives
-                            // Don't close the connection until the import is complete
                             self.bleManager.close(clearDevicePtr: true)
+                            self.bleManager.clearRetrievalState()
                             self.showingImportConfirmation = true
                         }
                     }
@@ -866,6 +873,7 @@ struct BluetoothScannerView: View {
                         }
                         // Close the connection on failure
                         self.bleManager.close(clearDevicePtr: true)
+                        self.bleManager.clearRetrievalState()
                         self.selectedDevice = nil
                     }
                 }
