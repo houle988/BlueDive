@@ -311,6 +311,12 @@ struct BluetoothScannerView: View {
             }
             
             Section {
+                Toggle("Download all dives", isOn: $downloadAllDives)
+            } footer: {
+                Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Duplicates will be automatically skipped during import.")
+            }
+
+            Section {
                 Button {
                     isSearching = true
                     startScanning()
@@ -618,7 +624,12 @@ struct BluetoothScannerView: View {
     
     /// Connects directly to a known device using its stored BLE UUID (no scanning required).
     private func connectToKnownDevice(_ device: DeviceFingerprint) {
-        // Look up the StoredDevice by serial to find the BLE UUID
+        // Look up the StoredDevice by serial to find the BLE UUID.
+        // If DeviceStorage was wiped (reinstall / UserDefaults reset) but
+        // the DeviceFingerprint record has family+model, we cannot recover
+        // the BLE UUID from the DB alone — fall back to scanning where
+        // seedDeviceStorageFromDatabase will re-create the entry once the
+        // peripheral is discovered.
         guard let allDevices = DeviceStorage.shared.getAllStoredDevices(),
               let storedDevice = allDevices.first(where: { $0.serial == device.serial }),
               let uuid = UUID(uuidString: storedDevice.uuid),
@@ -633,6 +644,9 @@ struct BluetoothScannerView: View {
             return
         }
         
+        // Ensure DeviceStorage has the latest family/model from the DB
+        seedDeviceStorageFromDatabase(for: peripheral, fingerprint: device)
+
         Self.logger.info("Directly connecting to known device: \(device.computerName) (serial: \(device.serial))")
         isSearching = true
         connectToDevice(peripheral)
@@ -650,7 +664,8 @@ struct BluetoothScannerView: View {
               case .scanning = syncState else { return }
         
         for peripheral in bleManager.discoveredPeripherals {
-            if let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
+            let uuid = peripheral.identifier.uuidString
+            if let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: uuid),
                storedDevice.serial == serial {
                 Self.logger.info("Found target device: \(peripheral.name ?? "Unknown") matching serial \(serial)")
                 let savedName = targetDeviceName
@@ -663,6 +678,34 @@ struct BluetoothScannerView: View {
                     syncState = .connecting(deviceName: name)
                 }
                 return
+            }
+            
+            // DeviceStorage may be empty (reinstall). Try to match by BLE
+            // advertisement name and seed DeviceStorage from the DB record
+            // so that openBLEDevice gets the correct family/model.
+            if DeviceStorage.shared.getStoredDevice(uuid: uuid) == nil {
+                let predicate = #Predicate<DeviceFingerprint> { $0.serial == serial }
+                if let record = try? modelContext.fetch(FetchDescriptor(predicate: predicate)).first,
+                   record.family != nil, record.modelID != 0 {
+                    // We can't verify serial over BLE before connecting, but the
+                    // advertisement name should match the stored computerName.
+                    let bleName = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "")
+                    let dbName = record.computerName
+                    guard bleName == dbName || (peripheral.name ?? "").localizedCaseInsensitiveContains(dbName) else {
+                        continue
+                    }
+                    seedDeviceStorageFromDatabase(for: peripheral, fingerprint: record)
+                    Self.logger.info("Seeded DeviceStorage for scanned peripheral \(peripheral.name ?? "Unknown") from DB — connecting")
+                    let savedName = targetDeviceName
+                    targetDeviceSerial = nil
+                    targetDeviceName = nil
+                    connectToDevice(peripheral)
+                    if let name = savedName {
+                        connectedDeviceName = name
+                        syncState = .connecting(deviceName: name)
+                    }
+                    return
+                }
             }
         }
     }
@@ -982,6 +1025,37 @@ struct BluetoothScannerView: View {
         }
     }
     
+    /// Creates or updates the DeviceStorage (UserDefaults) entry for a peripheral from the
+    /// persistent DeviceFingerprint record. Called before a sync so that family/model
+    /// survive app reinstalls and UserDefaults resets. Also corrects a stale entry whose
+    /// family/model disagrees with the DB (e.g. after a model override was saved).
+    private func seedDeviceStorageFromDatabase(for peripheral: CBPeripheral, fingerprint device: DeviceFingerprint) {
+        let uuid = peripheral.identifier.uuidString
+        guard let family = device.family, device.modelID != 0 else { return }
+
+        if let existing = DeviceStorage.shared.getStoredDevice(uuid: uuid) {
+            guard existing.family != family || existing.model != device.modelID else { return }
+            DeviceStorage.shared.storeDevice(
+                uuid: uuid,
+                name: device.computerName,
+                family: family,
+                model: device.modelID,
+                serial: device.serial
+            )
+            Self.logger.info("Updated DeviceStorage from DB for \(device.computerName) (serial: \(device.serial)) — family/model corrected")
+            return
+        }
+
+        DeviceStorage.shared.storeDevice(
+            uuid: uuid,
+            name: device.computerName,
+            family: family,
+            model: device.modelID,
+            serial: device.serial
+        )
+        Self.logger.info("Seeded DeviceStorage from DB for \(device.computerName) (serial: \(device.serial))")
+    }
+
     /// Seeds UserDefaults from the DeviceFingerprint record before downloading.
     /// UserDefaults is a session-level cache for LibDCSwift; DeviceFingerprint is the
     /// persistent source of truth (syncs via iCloud, survives reinstalls).
@@ -1009,39 +1083,70 @@ struct BluetoothScannerView: View {
     }
 
     /// Creates or updates the single DeviceFingerprint record for the connected device
-    /// after a successful import, mirroring whatever UserDefaults now holds.
+    /// after a successful import.
+    ///
+    /// Identity update rules for existing records:
+    /// - User override active this session → always write override name/family/model.
+    /// - No override, record already has identity → preserve it (protects prior overrides
+    ///   from being silently overwritten by auto-detection on reconnect).
+    /// - No override, record has no identity yet → seed from auto-detected DeviceStorage.
+    /// The fingerprint bytes are always updated.
     private func persistFingerprintRecord(for peripheral: CBPeripheral?) {
         guard let peripheral,
               let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
               let serial = storedDevice.serial else { return }
 
-        let deviceType: String
+        // The fingerprint is always keyed by the library's auto-detected device type.
+        let libraryDeviceType: String
         if let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == storedDevice.model && $0.family == storedDevice.family }) {
-            deviceType = modelInfo.name
+            libraryDeviceType = modelInfo.name
         } else {
-            deviceType = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
+            libraryDeviceType = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
         }
 
-        guard let fp = DeviceFingerprintStorage.shared.getFingerprint(forDeviceType: deviceType, serial: serial)?.fingerprint else { return }
+        guard let fp = DeviceFingerprintStorage.shared.getFingerprint(forDeviceType: libraryDeviceType, serial: serial)?.fingerprint else { return }
 
         let predicate = #Predicate<DeviceFingerprint> { record in record.serial == serial }
         let descriptor = FetchDescriptor<DeviceFingerprint>(predicate: predicate)
 
         if let existing = try? modelContext.fetch(descriptor).first {
             existing.fingerprintData = fp
-            // Preserve an existing (possibly overridden) computerName unless
-            // DeviceStorage resolved a model-based name (not a raw BLE fallback).
-            if existing.computerName.isEmpty || DeviceConfiguration.supportedModels.contains(where: { $0.name == deviceType }) {
-                existing.computerName = deviceType
-            } else {
-                Self.logger.debug("Keeping existing computerName '\(existing.computerName)' (resolved: '\(deviceType)')")
+            if let override = modelOverrides[peripheral.identifier.uuidString] {
+                // Explicit user override this session — always apply it.
+                existing.computerName = override.name
+                existing.family = override.family
+                existing.modelID = override.modelID
+                Self.logger.info("Applied model override to DeviceFingerprint: \(override.name) (model \(override.modelID))")
+            } else if existing.familyID.isEmpty || existing.modelID == 0 {
+                // No prior identity — seed from auto-detection.
+                existing.computerName = libraryDeviceType
+                existing.family = storedDevice.family
+                existing.modelID = storedDevice.model
             }
+            // Otherwise: record already has an identity (possibly a prior override) — preserve it.
             existing.updatedAt = Date()
         } else {
-            modelContext.insert(DeviceFingerprint(serial: serial, computerName: deviceType, fingerprintData: fp))
+            // Brand-new record — use override if active, otherwise auto-detected values.
+            let dbName: String
+            let dbFamily: DeviceConfiguration.DeviceFamily
+            let dbModel: UInt32
+            if let override = modelOverrides[peripheral.identifier.uuidString] {
+                dbName = override.name
+                dbFamily = override.family
+                dbModel = override.modelID
+                Self.logger.info("Applied model override to new DeviceFingerprint: \(override.name) (model \(override.modelID))")
+            } else {
+                dbName = libraryDeviceType
+                dbFamily = storedDevice.family
+                dbModel = storedDevice.model
+            }
+            modelContext.insert(DeviceFingerprint(
+                serial: serial, computerName: dbName, fingerprintData: fp,
+                family: dbFamily, model: dbModel
+            ))
         }
         try? modelContext.save()
-        Self.logger.info("Persisted DeviceFingerprint for \(deviceType) (\(serial))")
+        Self.logger.info("Persisted DeviceFingerprint for \(serial)")
     }
 
     /// Deletes a known device: removes the DeviceFingerprint from SwiftData,
@@ -1637,9 +1742,15 @@ private struct DeviceRow: View {
                             .foregroundStyle(.orange)
                     }
                     
-                    Text(peripheral.identifier.uuidString.prefix(8) + "...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if let serial = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString)?.serial {
+                        Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.uppercased()))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(peripheral.identifier.uuidString.prefix(8) + "...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -1741,6 +1852,10 @@ private struct KnownDeviceRow: View {
                     Text(computerName)
                         .font(.headline)
                         .foregroundStyle(.primary)
+                    
+                    Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.uppercased()))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     
                     Text("Last synced \(lastSynced, format: .relative(presentation: .named))")
                         .font(.caption)
