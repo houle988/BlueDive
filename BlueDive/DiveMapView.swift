@@ -457,9 +457,9 @@ struct DiveMapView: View {
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: .constant(.dateDesc)
                 )
-                #if os(iOS)
+                .presentationSizing(.page)
                 .presentationDetents([.large])
-                #endif
+                .presentationDragIndicator(.visible)
             }
             .toolbar {
                 ToolbarItem(placement: .principal) {

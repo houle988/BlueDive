@@ -344,34 +344,66 @@ struct ContentView: View {
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: $sortOrder
                 )
-                #if os(iOS)
+                .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                #endif
             }
-            .sheet(isPresented: $showSettings) { SettingsView() }
-            .sheet(isPresented: $showFingerprintDebug) { FingerprintDebugView() }
-            .sheet(isPresented: $showProfile) { DiverProfileView() }
-
-            .sheet(isPresented: $showDiveTrips) { DiveTripsView() }
-            .sheet(isPresented: $showRecordsWall) { RecordsWallView() }
-            .sheet(isPresented: $showCalendarHeatmap) { DiveCalendarHeatmapView() }
-            .sheet(isPresented: $showDashboard) { StatisticsView() }
-            .sheet(isPresented: $showTankTemplates) {
-                TankTemplateListView()
-                    #if os(iOS)
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+                    .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
-                    #endif
+            }
+            .sheet(isPresented: $showFingerprintDebug) { FingerprintDebugView() }
+            .sheet(isPresented: $showProfile) {
+                DiverProfileView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+
+            .sheet(isPresented: $showDiveTrips) {
+                DiveTripsView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showRecordsWall) {
+                RecordsWallView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showCalendarHeatmap) {
+                DiveCalendarHeatmapView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showDashboard) {
+                StatisticsView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showTankTemplates) {
+                TankTemplateListView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showGearGroups) {
                 GearGroupListView()
-                    #if os(iOS)
+                    .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
-                    #endif
             }
-            .sheet(isPresented: $showScannerSheet) { BluetoothScannerView() }
+            .sheet(isPresented: $showScannerSheet) {
+                BluetoothScannerView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
             #if os(macOS)
             .sheet(isPresented: $showDeleteSheet) {
                 MacOSDeleteDiveSheet(
@@ -387,6 +419,9 @@ struct ContentView: View {
                 MergeDivesSheet(dives: filteredAndSortedDives) { diveA, diveB in
                     mergeDives(diveA, with: diveB)
                 }
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
             #if os(iOS)
             .fileExporter(
@@ -421,6 +456,9 @@ struct ContentView: View {
                 } onCancel: {
                     pendingImport = nil
                 }
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
             .alert("Import error", isPresented: $showErrorAlert, presenting: importError) { _ in
                 Button("OK", role: .cancel) { }
@@ -458,6 +496,9 @@ struct ContentView: View {
                         }
                     }
                 }
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
                 #else
                 VStack(spacing: 0) {
                     HStack {

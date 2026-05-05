@@ -72,6 +72,21 @@ extension Color {
     }
 }
 
+// MARK: - Adaptive DatePicker style
+
+extension DatePicker {
+    /// Uses `.graphical` (full-size calendar) when running as an iPad app on Mac,
+    /// and `.compact` (small inline button) on actual iOS devices.
+    @ViewBuilder
+    func adaptiveDatePickerStyle() -> some View {
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            self.datePickerStyle(.graphical)
+        } else {
+            self.datePickerStyle(.compact)
+        }
+    }
+}
+
 #if os(iOS)
 extension View {
     /// Applies a keyboard type on iOS/iPadOS.

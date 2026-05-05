@@ -175,6 +175,9 @@ struct DiveCalendarHeatmapView: View {
             }) {
                 if let day = selectedDay {
                     DayDivesSheetView(day: day, dives: selectedDayDives, diverFilter: selectedDiver)
+                        .presentationSizing(.page)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
                 }
             }
         }
@@ -192,6 +195,8 @@ struct DiveCalendarHeatmapView: View {
                 Image(systemName: "chevron.left")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(cachedAvailableYears.contains(where: { $0 < selectedYear }) ? .cyan : .secondary)
+                    .padding(8)
+                    .contentShape(Rectangle())
             }
 
             Text(String(selectedYear))
@@ -207,6 +212,8 @@ struct DiveCalendarHeatmapView: View {
                 Image(systemName: "chevron.right")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(cachedAvailableYears.contains(where: { $0 > selectedYear }) ? .cyan : .secondary)
+                    .padding(8)
+                    .contentShape(Rectangle())
             }
 
             Spacer()

@@ -46,20 +46,15 @@ struct TankTemplateListView: View {
             }
             .sheet(isPresented: $showAddTemplate) {
                 AddTankTemplateView()
-                    #if os(iOS)
+                    .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
-                    #endif
             }
             .sheet(item: $selectedTemplate) { template in
                 EditTankTemplateView(template: template)
-                    #if os(iOS)
+                    .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
-                    #elseif os(macOS)
-                    .frame(minWidth: 500, idealWidth: 600, maxWidth: 750,
-                           minHeight: 400, idealHeight: 550, maxHeight: 700)
-                    #endif
             }
         }
         #if os(macOS)

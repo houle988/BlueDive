@@ -199,12 +199,18 @@ struct StatisticsView: View {
                         siteName: siteName,
                         dives: filteredDives.filter { $0.siteName == siteName }
                     )
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
                 }
             }
             .sheet(item: $selectedDive) { dive in
                 NavigationStack {
                     DiveDetailView(dive: dive, sortedDives: cachedSortedDives)
                 }
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
         }
     }

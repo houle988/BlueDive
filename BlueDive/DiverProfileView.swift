@@ -177,23 +177,33 @@ struct DiverProfileView: View {
                     diverBio: $diverBio,
                     avatarImage: $avatarImage
                 )
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingCertifications) {
                 CertificationsView(onClose: { showingCertifications = false })
-                    #if os(macOS)
-                    .frame(minWidth: 550, idealWidth: 650, maxWidth: 850, minHeight: 500, idealHeight: 650, maxHeight: 900)
-                    #else
+                    .presentationSizing(.page)
                     .presentationDetents([.large])
-                    #endif
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingAddCertification) {
                 AddCertificationView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingInsurances) {
                 InsurancesView(onClose: { showingInsurances = false })
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingAddInsurance) {
                 AddInsuranceView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }
@@ -1254,9 +1264,15 @@ struct InsurancesView: View {
             }
             .sheet(isPresented: $showAddInsurance) {
                 AddInsuranceView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(item: $selectedInsurance) { insurance in
                 InsuranceDetailView(insurance: insurance)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .alert("Delete insurance?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) {
@@ -1275,6 +1291,9 @@ struct InsurancesView: View {
             }
             .sheet(item: $showEditInsuranceFor) { insurance in
                 AddInsuranceView(insuranceToEdit: insurance)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }
@@ -1584,6 +1603,9 @@ struct InsuranceDetailView: View {
             }
             .sheet(isPresented: $showEditInsurance) {
                 AddInsuranceView(insuranceToEdit: insurance)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }
@@ -1648,11 +1670,13 @@ struct AddInsuranceView: View {
                         insuranceSectionCard(title: "Validity", icon: "calendar", color: .orange) {
                             VStack(spacing: 14) {
                                 DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
+                                    .adaptiveDatePickerStyle()
                                     .foregroundStyle(.primary)
 
                                 Divider().overlay(Color.primary.opacity(0.06))
 
                                 DatePicker("End Date / Renewal", selection: $endDate, displayedComponents: .date)
+                                    .adaptiveDatePickerStyle()
                                     .foregroundStyle(.primary)
                             }
                         }

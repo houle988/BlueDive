@@ -869,6 +869,7 @@ struct DiveFilterSheet: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .filterCardStyle()
     }

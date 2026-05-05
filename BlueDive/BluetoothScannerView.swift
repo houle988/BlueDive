@@ -392,6 +392,9 @@ struct BluetoothScannerView: View {
                             }
                         }
                     )
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
                 }
             }
         }

@@ -553,6 +553,9 @@ extension DiveDetailView {
                     isEditingPhotos = false
                 }
             })
+            .presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .onChange(of: selectedPhotos) {
             Task {

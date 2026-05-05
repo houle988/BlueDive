@@ -1492,9 +1492,15 @@ struct SettingsView: View {
         .padding(.horizontal)
         .sheet(isPresented: $showingAboutSheet) {
             AboutView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showDisclaimer) {
             DisclaimerView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         #if os(iOS)
         .fullScreenCover(isPresented: $showWelcomeWizard) {
@@ -1503,6 +1509,9 @@ struct SettingsView: View {
         #else
         .sheet(isPresented: $showWelcomeWizard) {
             WelcomeWizardView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         #endif
     }

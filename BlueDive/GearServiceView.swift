@@ -96,9 +96,9 @@ struct GearServiceView: View {
             .toolbar { toolbarContent }
             .sheet(isPresented: $showEditGear) {
                 EditGearView(gear: gear)
-                    #if os(macOS)
-                    .frame(minWidth: 560, minHeight: 600)
-                    #endif
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .confirmationDialog(
                 "Mark as Serviced",

@@ -222,9 +222,15 @@ struct CertificationsView: View {
             }
             .sheet(isPresented: $showAddCertification) {
                 AddCertificationView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(item: $selectedCertification) { cert in
                 CertificationDetailView(certification: cert)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .alert("Delete certification?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) {
@@ -244,6 +250,9 @@ struct CertificationsView: View {
             }
             .sheet(item: $showEditCertificationFor) { cert in
                 AddCertificationView(certificationToEdit: cert)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .fileImporter(
                 isPresented: $showImportPicker,
@@ -705,6 +714,9 @@ struct CertificationDetailView: View {
             }
             .sheet(isPresented: $showEditCertification) {
                 AddCertificationView(certificationToEdit: certification)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }
@@ -868,6 +880,7 @@ struct AddCertificationView: View {
                         certificationSectionCard(title: "Dates", icon: "calendar", color: .orange) {
                             VStack(spacing: 14) {
                                 DatePicker("Issue Date", selection: $issueDate, displayedComponents: .date)
+                                    .adaptiveDatePickerStyle()
                                     .foregroundStyle(.primary)
 
                                 Divider().overlay(Color.primary.opacity(0.06))
@@ -878,6 +891,7 @@ struct AddCertificationView: View {
 
                                 if hasExpiration {
                                     DatePicker("Expiration Date", selection: $expirationDate, displayedComponents: .date)
+                                        .adaptiveDatePickerStyle()
                                         .foregroundStyle(.primary)
                                         .transition(.opacity.combined(with: .move(edge: .top)))
                                 }

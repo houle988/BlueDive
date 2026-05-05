@@ -46,20 +46,15 @@ struct GearGroupListView: View {
             }
             .sheet(isPresented: $showAddGearGroup) {
                 AddGearGroupView()
-                    #if os(iOS)
+                    .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
-                    #endif
             }
             .sheet(item: $selectedGearGroup) { group in
                 EditGearGroupView(gearGroup: group)
-                    #if os(iOS)
+                    .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
-                    #elseif os(macOS)
-                    .frame(minWidth: 500, idealWidth: 600, maxWidth: 750,
-                           minHeight: 500, idealHeight: 700, maxHeight: 900)
-                    #endif
             }
         }
         #if os(macOS)

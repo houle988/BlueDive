@@ -93,19 +93,15 @@ struct GearListView: View {
         .toolbar { toolbarContent }
         .sheet(isPresented: $showAddGear) {
             AddGearView()
-                #if os(iOS)
+                .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                #endif
         }
         .sheet(item: $selectedGear) { gear in
             GearServiceView(gear: gear)
-                #if os(iOS)
+                .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                #elseif os(macOS)
-                .frame(minWidth: 650, idealWidth: 800, maxWidth: 1000, minHeight: 600, idealHeight: 800, maxHeight: 900)
-                #endif
         }
 
     }

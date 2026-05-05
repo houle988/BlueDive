@@ -262,7 +262,7 @@ struct AddGearView: View {
                         in: ...Date(),
                         displayedComponents: .date
                     )
-                    .datePickerStyle(.compact)
+                    .adaptiveDatePickerStyle()
                     .labelsHidden()
                     .padding()
                     .background(Color.platformSecondaryBackground)
@@ -427,7 +427,7 @@ struct AddGearView: View {
                             selection: $nextServiceDue,
                             displayedComponents: .date
                         )
-                        .datePickerStyle(.compact)
+                        .adaptiveDatePickerStyle()
                         .labelsHidden()
                         .padding()
                         .background(Color.platformSecondaryBackground)

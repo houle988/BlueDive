@@ -188,6 +188,9 @@ struct DiveTripsView: View {
             }
             .sheet(item: $selectedTrip) { trip in
                 TripDetailSheet(trip: trip, prefs: prefs)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .task(id: "\(allDives.count):\(selectedDiver)") {
                 tripsAppeared = false

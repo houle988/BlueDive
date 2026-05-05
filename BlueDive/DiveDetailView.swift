@@ -97,7 +97,7 @@ struct DiveDetailView: View {
     private static let swipeCommitDuration: Double = 0.28
     private static let swipeSpringResponse: Double = 0.35
     private static let swipeSpringDamping: Double = 0.85
-    private static let swipeEdgeThreshold: CGFloat = 40
+    private static let swipeEdgeThreshold: CGFloat = 20
     private static let swipeCommitDistanceRatio: CGFloat = 0.3     // Fraction of view width to trigger commit
     private static let swipeCommitPredictedRatio: CGFloat = 0.5    // Fraction for predicted-end commit
     private static let swipeRubberBandFactor: CGFloat = 0.15       // Resistance when no neighbour dive
@@ -325,6 +325,8 @@ struct DiveDetailView: View {
                             Image(systemName: "chevron.backward")
                                 .font(.body.weight(.semibold))
                                 .foregroundStyle(.cyan)
+                                .padding(8)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityLabel(Text("Back"))
                     }
@@ -510,6 +512,8 @@ struct DiveDetailView: View {
                 Image(systemName: "chevron.left.circle.fill")
                     .font(.title3)
                     .foregroundStyle(previousDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
+                    .padding(8)
+                    .contentShape(Rectangle())
             }
             .disabled(previousDiveInList == nil)
             .help("Previous dive")
@@ -520,6 +524,8 @@ struct DiveDetailView: View {
                 Image(systemName: "chevron.right.circle.fill")
                     .font(.title3)
                     .foregroundStyle(nextDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
+                    .padding(8)
+                    .contentShape(Rectangle())
             }
             .disabled(nextDiveInList == nil)
             .help("Next dive")
@@ -563,6 +569,7 @@ struct DiveDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .padding(.horizontal, 20)
+                        .contentShape(Rectangle())
                         .background(
                             selectedTab == tab
                                 ? tab.color.opacity(0.12)
