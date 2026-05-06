@@ -2895,10 +2895,10 @@ struct EditGazView: View {
                             Menu {
                                 Button("—") { DispatchQueue.main.async { workingCylinderMaterial = "" } }
                                 ForEach(materialOptions, id: \.self) { opt in
-                                    Button { DispatchQueue.main.async { workingCylinderMaterial = opt } } label: { Text(LocalizedStringKey(opt)) }
+                                    Button { DispatchQueue.main.async { workingCylinderMaterial = opt } } label: { Text(verbatim: localizedTankMaterial(opt)) }
                                 }
                             } label: {
-                                Text(LocalizedStringKey(workingCylinderMaterial.isEmpty ? "—" : workingCylinderMaterial))
+                                Text(verbatim: workingCylinderMaterial.isEmpty ? "—" : localizedTankMaterial(workingCylinderMaterial))
                             }
                         }
                         Divider()
@@ -2906,10 +2906,10 @@ struct EditGazView: View {
                             Menu {
                                 Button("—") { DispatchQueue.main.async { workingCylinderType = "" } }
                                 ForEach(typeOptions, id: \.self) { opt in
-                                    Button { DispatchQueue.main.async { workingCylinderType = opt } } label: { Text(LocalizedStringKey(opt)) }
+                                    Button { DispatchQueue.main.async { workingCylinderType = opt } } label: { Text(verbatim: localizedTankFormat(opt)) }
                                 }
                             } label: {
-                                Text(LocalizedStringKey(workingCylinderType.isEmpty ? "—" : workingCylinderType))
+                                Text(verbatim: workingCylinderType.isEmpty ? "—" : localizedTankFormat(workingCylinderType))
                             }
                         }
                         Text("Volume unit (\(dive.storedVolumeUnit.symbol)) matches the original import format and cannot be changed.")
@@ -3195,11 +3195,11 @@ struct EditGazView: View {
                         }
                         Picker("Material", selection: $workingCylinderMaterial) {
                             Text("—").tag("")
-                            ForEach(materialOptions, id: \.self) { opt in Text(LocalizedStringKey(opt)).tag(opt) }
+                            ForEach(materialOptions, id: \.self) { opt in Text(verbatim: localizedTankMaterial(opt)).tag(opt) }
                         }
                         Picker("Format", selection: $workingCylinderType) {
                             Text("—").tag("")
-                            ForEach(typeOptions, id: \.self) { opt in Text(LocalizedStringKey(opt)).tag(opt) }
+                            ForEach(typeOptions, id: \.self) { opt in Text(verbatim: localizedTankFormat(opt)).tag(opt) }
                         }
                     } header: {
                         Text("Tank")

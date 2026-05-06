@@ -99,7 +99,7 @@ extension DiveDetailView {
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(LocalizedStringKey(value))
+                Text(verbatim: value)
                     .font(.body)
                     .fontWeight(.medium)
                     .foregroundStyle(.primary)

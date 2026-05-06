@@ -140,10 +140,10 @@ extension DiveDetailView {
             conditionRow(icon: "gauge.badge.plus", color: .teal, label: "Working Pressure", value: wpDisplay)
 
             conditionRow(icon: "cube.fill", color: .gray, label: "Material",
-                        value: (tank?.tankMaterial?.isEmpty == false ? tank!.tankMaterial! : "—"))
+                        value: tank?.tankMaterial.flatMap { $0.isEmpty ? nil : localizedTankMaterial($0) } ?? "—")
 
             conditionRow(icon: "cylinder.split.1x2.fill", color: .indigo, label: "Format",
-                        value: (tank?.tankType?.isEmpty == false ? tank!.tankType! : "—"))
+                        value: tank?.tankType.flatMap { $0.isEmpty ? nil : localizedTankFormat($0) } ?? "—")
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))

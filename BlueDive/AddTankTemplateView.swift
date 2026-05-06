@@ -198,11 +198,13 @@ struct AddTankTemplateView: View {
                 Menu {
                     Button("—") { material = "" }
                     ForEach(materialOptions, id: \.self) { opt in
-                        Button { material = opt } label: { Text(LocalizedStringKey(opt)) }
+                        Button { material = opt } label: { Text(verbatim: localizedTankMaterial(opt)) }
                     }
                 } label: {
                     HStack {
-                        Text(LocalizedStringKey(material.isEmpty ? "Select material..." : material))
+                        Text(verbatim: material.isEmpty
+                            ? NSLocalizedString("Select material...", bundle: Bundle.forAppLanguage(), comment: "Placeholder for tank material picker")
+                            : localizedTankMaterial(material))
                             .foregroundStyle(material.isEmpty ? .secondary : .primary)
                         Spacer()
                         Image(systemName: "chevron.up.chevron.down")
@@ -225,11 +227,13 @@ struct AddTankTemplateView: View {
                 Menu {
                     Button("—") { format = "" }
                     ForEach(formatOptions, id: \.self) { opt in
-                        Button { format = opt } label: { Text(LocalizedStringKey(opt)) }
+                        Button { format = opt } label: { Text(verbatim: localizedTankFormat(opt)) }
                     }
                 } label: {
                     HStack {
-                        Text(LocalizedStringKey(format.isEmpty ? "Select format..." : format))
+                        Text(verbatim: format.isEmpty
+                            ? NSLocalizedString("Select format...", bundle: Bundle.forAppLanguage(), comment: "Placeholder for tank format picker")
+                            : localizedTankFormat(format))
                             .foregroundStyle(format.isEmpty ? .secondary : .primary)
                         Spacer()
                         Image(systemName: "chevron.up.chevron.down")

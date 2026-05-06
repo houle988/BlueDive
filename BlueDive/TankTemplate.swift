@@ -86,12 +86,14 @@ extension TankTemplate {
             parts.append(String(format: "%.0f %@", displayWP, prefs.pressureUnit.symbol))
         }
         if let mat = material, !mat.isEmpty {
-            parts.append(mat)
+            parts.append(localizedTankMaterial(mat))
         }
         if let fmt = format, !fmt.isEmpty {
-            parts.append(fmt)
+            parts.append(localizedTankFormat(fmt))
         }
-        return parts.isEmpty ? "No details" : parts.joined(separator: " · ")
+        return parts.isEmpty
+            ? NSLocalizedString("tank_template_no_details", bundle: Bundle.forAppLanguage(), comment: "Fallback shown in the tank template list when no properties are set")
+            : parts.joined(separator: " · ")
     }
 
     /// Manufacturer and model combined (e.g. "Aqualung / Calypso")
@@ -102,5 +104,33 @@ extension TankTemplate {
         if mfr.isEmpty { return mdl }
         if mdl.isEmpty { return mfr }
         return "\(mfr) / \(mdl)"
+    }
+}
+
+// MARK: - Localized Display Helpers
+
+/// Returns the localized display name for a stored tank material value.
+func localizedTankMaterial(_ material: String) -> String {
+    let bundle = Bundle.forAppLanguage()
+    switch material {
+    case "Steel":            return NSLocalizedString("Steel", bundle: bundle, comment: "Tank material: steel")
+    case "Galvanized Steel": return NSLocalizedString("Galvanized Steel", bundle: bundle, comment: "Tank material: galvanized steel")
+    case "Aluminium":        return NSLocalizedString("Aluminium", bundle: bundle, comment: "Tank material: aluminium")
+    case "Carbon":           return NSLocalizedString("Carbon", bundle: bundle, comment: "Tank material: carbon fibre")
+    default:                 return material
+    }
+}
+
+/// Returns the localized display name for a stored tank format value.
+func localizedTankFormat(_ format: String) -> String {
+    let bundle = Bundle.forAppLanguage()
+    switch format {
+    case "Single tank":  return NSLocalizedString("Single tank", bundle: bundle, comment: "Tank format: single cylinder")
+    case "Twinset":      return NSLocalizedString("Twinset", bundle: bundle, comment: "Tank format: twinset")
+    case "Sidemount":    return NSLocalizedString("Sidemount", bundle: bundle, comment: "Tank format: sidemount")
+    case "Pony":         return NSLocalizedString("Pony", bundle: bundle, comment: "Tank format: pony bottle")
+    case "Rebreather":   return NSLocalizedString("Rebreather", bundle: bundle, comment: "Tank format: rebreather")
+    case "Other":        return NSLocalizedString("Other", bundle: bundle, comment: "Tank format: other")
+    default:             return format
     }
 }

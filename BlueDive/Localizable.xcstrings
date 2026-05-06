@@ -12292,6 +12292,24 @@
         }
       }
     },
+    "tank_template_no_details" : {
+      "comment" : "Fallback shown in the tank template list when no properties are set",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No details"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun détail"
+          }
+        }
+      }
+    },
     "Type" : {
       "localizations" : {
         "fr-CA" : {

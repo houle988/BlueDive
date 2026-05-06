@@ -141,7 +141,7 @@ struct TankTemplateRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(LocalizedStringKey(template.summaryDescription))
+                Text(verbatim: template.summaryDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
