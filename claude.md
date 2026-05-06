@@ -38,6 +38,14 @@ Every dive in the database stores its raw values in the unit they were imported 
 
 Never call `DepthUnit.formatted(_ meters:)` or `DepthUnit.convert(_ meters:)` with a raw stored value — these methods assume metres input. Always go through the `Dive` display helpers first.
 
+## Mac (Designed for iPad) Support
+
+BlueDive supports running as an iPad app on Apple Silicon Macs via "Designed for iPad" mode. The following patterns ensure a good experience on Mac:
+
+- **Sheet sizing**: All `.sheet()` presentations must include `.presentationSizing(.page)`, `.presentationDetents([.large])`, and `.presentationDragIndicator(.visible)` so sheets appear at page size instead of the small default form sheet on iPad/Mac.
+- **Date pickers**: Use `.adaptiveDatePickerStyle()` (defined in `CrossPlatformImage.swift`) instead of `.datePickerStyle(.compact)`. This shows a full graphical calendar on Mac and compact style on iPhone/iPad.
+- **Platform detection**: Use `ProcessInfo.processInfo.isiOSAppOnMac` to detect "Designed for iPad" mode at runtime. Note that `#if os(iOS)` is `true` in this mode.
+
 ## Date and Time Formatting
 
 All date and time values displayed in SwiftUI views must respect both the system language and the in-app language override. Always obtain the locale from SwiftUI's environment and apply it to every date format:
