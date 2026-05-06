@@ -380,6 +380,7 @@ class UserPreferences {
         languageMode              = .system
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
+        UserDefaults.standard.set(false, forKey: "filterUnusedTanks")
     }
 }
 
@@ -392,6 +393,7 @@ struct SettingsView: View {
     @AppStorage("gearMaintenanceReminders") private var gearReminders  = true
     @AppStorage("certificationReminders")   private var certReminders  = true
     @AppStorage("milestoneNotifications")   private var milestoneNotifs = true
+    @AppStorage("filterUnusedTanks")         private var filterUnusedTanks = false
 
     // @State on an @Observable singleton: correct pattern for SwiftUI + Observation.
     // Using @State ensures SwiftUI tracks mutations and re-renders the view.
@@ -435,6 +437,7 @@ struct SettingsView: View {
                     VStack(spacing: 20) {
                         appearanceSection
                         unitsSection
+                        bluetoothImportSection
                         notificationsSection
                         dataManagementSection
                         iCloudSection
@@ -766,6 +769,39 @@ struct SettingsView: View {
     }
     
     
+    // MARK: - Bluetooth Import
+
+    private var bluetoothImportSection: some View {
+        VStack(spacing: 16) {
+            SectionHeaderModern(title: "Bluetooth Import", icon: "antenna.radiowaves.left.and.right", color: .blue)
+
+            VStack(spacing: 12) {
+                ModernToggleRow(
+                    isOn: $filterUnusedTanks,
+                    icon: "cylinder.split.1x2",
+                    iconColor: .blue,
+                    title: "Filter unused tanks",
+                    subtitle: "Only import gas mixes actually used during the dive"
+                )
+
+                Text("Some dive computers (Aqualung, Oceanic, Sherwood, HW OSTC, Cressi, DeepSix, Deepblu, Oceans, McLean) report all configured gas slots even when only one was used. When enabled, phantom tanks are filtered out. Disable if you carry configured-but-unused tanks (e.g. pony bottle, bailout).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.primary.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal)
+        }
+    }
+
     private var notificationsSection: some View {
         VStack(spacing: 16) {
             SectionHeaderModern(title: "Notifications", icon: "bell.fill", color: .purple)

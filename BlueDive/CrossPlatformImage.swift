@@ -72,6 +72,20 @@ extension Color {
     }
 }
 
+// MARK: - Conditional view modifier helper
+
+extension View {
+    /// Applies a view-builder transform only when `condition` is true.
+    @ViewBuilder
+    func applyIf<T: View>(_ condition: Bool, transform: (Self) -> T) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Adaptive DatePicker style
 
 extension DatePicker {

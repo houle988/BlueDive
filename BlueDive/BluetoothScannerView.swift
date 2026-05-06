@@ -43,6 +43,7 @@ struct BluetoothScannerView: View {
     @State private var showingImportConfirmation = false
     @State private var connectedDeviceName: String?
     @State private var downloadAllDives: Bool = false
+    @AppStorage("filterUnusedTanks") private var filterUnusedTanks: Bool = false
     @State private var diveCountDuringDownload: Int = 0
     @State private var downloadProgressCancellable: AnyCancellable?
     @State private var isSearching: Bool = false
@@ -1075,10 +1076,10 @@ struct BluetoothScannerView: View {
 
         if let record = try? modelContext.fetch(descriptor).first {
             DeviceFingerprintStorage.shared.saveFingerprint(record.fingerprintData, deviceType: deviceType, serial: serial)
-            Self.logger.info("Synced fingerprint from DeviceFingerprint for \(deviceType) (\(serial))")
+            Self.logger.debug("Overwriting UserDefaults fingerprint for \(deviceType) (\(serial)) — DB has \(record.fingerprintData.count) bytes")
         } else {
             DeviceFingerprintStorage.shared.clearFingerprint(forDeviceType: deviceType, serial: serial)
-            Self.logger.info("No DeviceFingerprint for \(deviceType) (\(serial)) — cleared UserDefaults")
+            Self.logger.debug("No DB fingerprint for \(deviceType) (\(serial)) — clearing UserDefaults")
         }
     }
 
@@ -1316,8 +1317,15 @@ struct BluetoothScannerView: View {
                                    tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)]
         } else if !dcGasMixes.isEmpty {
             // No tank data but we have gas mixes — store them as tanks with gas only
-            dive.tanks = dcGasMixes.enumerated().map { (index, mix) in
-                let existing = index < existingTanks.count ? existingTanks[index] : nil
+            let needsFilter = filterUnusedTanks && (connectedDeviceFamily.map { Self.familiesNeedingSwiftTankFilter.contains($0) } ?? true)
+            let usedMixes = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
+            var existingIdx = 0
+            dive.tanks = dcGasMixes.enumerated().compactMap { (index, mix) in
+                if let used = usedMixes {
+                    guard used.contains(index) else { return nil }
+                }
+                let existing = existingIdx < existingTanks.count ? existingTanks[existingIdx] : nil
+                existingIdx += 1
                 return TankData(o2: mix.oxygen, he: mix.helium,
                                 volume: existing?.volume, workingPressure: existing?.workingPressure,
                                 tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)
@@ -1399,6 +1407,87 @@ struct BluetoothScannerView: View {
         }
     }
     
+    // MARK: - Unused Tank Filtering
+    //
+    // PURPOSE
+    // -------
+    // Some dive computer families report ALL configured gas mix slots as tanks,
+    // even when only one gas was actually breathed during the dive.  For example
+    // the Aqualung i300C always reports 3 gas slots regardless of usage, creating
+    // 2 phantom "tanks" with no pressure data.  This filter removes those phantom
+    // entries so only tanks that were actually used appear in the dive log.
+    //
+    // AFFECTED BRANDS (no C-level filtering in libdivecomputer)
+    // ---------------------------------------------------------
+    // - Oceanic Atom2:  Aqualung i300C, i200C, i770R, i550C, Oceanic Geo/Veo,
+    //                   Sherwood Sage/Wisdom — reports 3–6 configured gas slots
+    // - Pelagic I330R:  Aqualung i330R, Apeks DSX — same Oceanic-derived protocol
+    // - HW OSTC3:       Heinrichs Weikamp OSTC 2/3/4/Sport — reports 3–5 mixes
+    // - Cressi Goa:     Cressi Goa, Cartesio, Leonardo 2.0, Donatello
+    // - DeepSix:        DeepSix Excursion
+    // - Deepblu:        Deepblu Cosmiq+
+    // - Oceans:         Oceans S1
+    // - McLean:         McLean Extreme
+    //
+    // NOT AFFECTED (C-level parser already filters unused tanks)
+    // ----------------------------------------------------------
+    // Shearwater, Suunto, Scubapro/Uwatec, Mares, Divesoft, DiveSystem/Ratio
+    // — these parsers only report tanks that are active/enabled with pressure
+    //   data.  No Swift-side filtering is applied; data passes through as-is.
+    //
+    // LOGIC
+    // -----
+    // 1. Only runs when the "Filter unused tanks" toggle is ON (default: false)
+    //    AND the connected device family is in familiesNeedingSwiftTankFilter.
+    // 2. Determines which gas mix indices were actually used during the dive by:
+    //    a) Scanning profile samples for DC_SAMPLE_GASMIX events (gas switches)
+    //    b) Checking the header-level gasMix field (last-used gas index)
+    //    c) Falling back to {0} (primary gas) if no evidence is found
+    // 3. In the gas-mixes-only tank-building path (Path 3), only gas mixes whose
+    //    index is in the used set are converted to TankData objects.
+    // 4. The toggle is only visible in the UI when the connected (or previously
+    //    paired) device belongs to an affected family.
+    //
+    // USER OVERRIDE
+    // -------------
+    // A diver carrying a configured-but-unused tank (e.g. pony bottle, bailout)
+    // can turn off the toggle to import all configured gas slots as tanks.
+    // The setting persists via @AppStorage("filterUnusedTanks").
+
+    /// Families whose libdivecomputer parser does NOT filter unused tanks/gas mixes
+    /// at the C level.  Only these need the Swift-side usedGasMixIndices filter.
+    private static let familiesNeedingSwiftTankFilter: Set<DeviceConfiguration.DeviceFamily> = [
+        .oceanicAtom2,   // Reports all configured gas slots (3–6)
+        .pelagicI330R,   // Same Oceanic-derived protocol
+        .hwOstc3,        // Reports all 3–5 configured mixes, no DC_FIELD_TANK
+        .cressiGoa,      // No DC_FIELD_TANK
+        .deepsixExcursion,
+        .deepbluCosmiq,
+        .oceansS1,
+        .mcleanExtreme,
+    ]
+
+    /// Returns the DeviceFamily of the currently connected device, if known.
+    private var connectedDeviceFamily: DeviceConfiguration.DeviceFamily? {
+        guard let peripheral = selectedDevice,
+              let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString) else {
+            return nil
+        }
+        return stored.family
+    }
+
+    /// Returns the set of gas mix indices that were actually used during the dive.
+    /// Checks profile gas-switch samples and the header-level gas mix.
+    /// Falls back to {0} when no usage evidence is found (single-gas dive).
+    private static func usedGasMixIndices(from diveData: DiveData) -> Set<Int> {
+        var indices = Set(diveData.profile.compactMap { $0.currentGas })
+        // Include the header-level gas mix (last-used gas) when available
+        if let headerGas = diveData.gasMix { indices.insert(headerGas) }
+        // If no evidence found, assume the primary gas (index 0) was used
+        if indices.isEmpty { indices.insert(0) }
+        return indices
+    }
+
     /// Scans profile samples for the first and last non-zero pressure reading for a given tank index.
     /// Used when the dive computer header reports no begin/end pressure (e.g. pressure pod scenario).
     private static func pressureRangeFromProfile(
@@ -1556,8 +1645,13 @@ struct BluetoothScannerView: View {
             let endP   = diveData.tankPressure.last(where:  { $0 > 0 })
             linkedTanks.append(TankData(o2: o2Fraction, he: 0.0, startPressure: startP, endPressure: endP))
         } else if !dcGasMixes.isEmpty {
-            linkedTanks = dcGasMixes.map { mix in
-                TankData(o2: mix.oxygen, he: mix.helium)
+            let needsFilter = filterUnusedTanks && (connectedDeviceFamily.map { Self.familiesNeedingSwiftTankFilter.contains($0) } ?? true)
+            let usedMixes = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
+            linkedTanks = dcGasMixes.enumerated().compactMap { (index, mix) in
+                if let used = usedMixes {
+                    guard used.contains(index) else { return nil }
+                }
+                return TankData(o2: mix.oxygen, he: mix.helium)
             }
         } else {
             let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0

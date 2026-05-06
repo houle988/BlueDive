@@ -63,17 +63,41 @@ struct MainTabView: View {
                 Task { await scheduleNotificationsAtLaunch() }
         }
         #if os(iOS)
-        .fullScreenCover(isPresented: Binding(
-            get: { !hasAcceptedDisclaimer },
-            set: { if !$0 { hasAcceptedDisclaimer = true } }
-        )) {
-            DisclaimerView()
+        .applyIf(!ProcessInfo.processInfo.isiOSAppOnMac) { view in
+            view
+                .fullScreenCover(isPresented: Binding(
+                    get: { !hasAcceptedDisclaimer },
+                    set: { if !$0 { hasAcceptedDisclaimer = true } }
+                )) {
+                    DisclaimerView()
+                }
+                .fullScreenCover(isPresented: Binding(
+                    get: { hasAcceptedDisclaimer && !hasCompletedOnboarding },
+                    set: { if !$0 { hasCompletedOnboarding = true } }
+                )) {
+                    WelcomeWizardView()
+                }
         }
-        .fullScreenCover(isPresented: Binding(
-            get: { hasAcceptedDisclaimer && !hasCompletedOnboarding },
-            set: { if !$0 { hasCompletedOnboarding = true } }
-        )) {
-            WelcomeWizardView()
+        .applyIf(ProcessInfo.processInfo.isiOSAppOnMac) { view in
+            view
+                .sheet(isPresented: Binding(
+                    get: { !hasAcceptedDisclaimer },
+                    set: { if !$0 { hasAcceptedDisclaimer = true } }
+                )) {
+                    DisclaimerView()
+                        .presentationSizing(.page)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
+                .sheet(isPresented: Binding(
+                    get: { hasAcceptedDisclaimer && !hasCompletedOnboarding },
+                    set: { if !$0 { hasCompletedOnboarding = true } }
+                )) {
+                    WelcomeWizardView()
+                        .presentationSizing(.page)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
         }
         #else
         .sheet(isPresented: Binding(
