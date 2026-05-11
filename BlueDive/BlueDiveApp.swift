@@ -101,6 +101,16 @@ struct BlueDiveApp: App {
             MainTabView()
                 .preferredColorScheme(prefs.appearanceMode.colorScheme)
                 .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
+                .onOpenURL { url in
+                    // Widget deep-links: bluedive://add/manual | bluedive://add/bluetooth
+                    guard let action = AddDiveDeepLink.action(for: url) else { return }
+                    switch action {
+                    case .manual:
+                        NotificationCenter.default.post(name: .addDiveManual, object: nil)
+                    case .bluetooth:
+                        NotificationCenter.default.post(name: .addDiveBluetooth, object: nil)
+                    }
+                }
             #if os(macOS)
                 .sheet(isPresented: $showingAbout) {
                     AboutView()

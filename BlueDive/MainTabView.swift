@@ -12,7 +12,11 @@ struct MainTabView: View {
     @AppStorage("certReminders") private var certReminders = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("hasAcceptedDisclaimer") private var hasAcceptedDisclaimer = false
-    
+
+    /// Tracks the active tab so widget deep-links can switch to the Logbook
+    /// (where `ContentView` presents the manual/Bluetooth sheets).
+    @State private var selectedTab: Int = 0
+
     init() {
         // Force black background for all tabs on macOS
         #if os(macOS)
@@ -24,19 +28,21 @@ struct MainTabView: View {
         ZStack {
             Color.platformBackground.ignoresSafeArea()
             
-            TabView {
+            TabView(selection: $selectedTab) {
                 // --- TAB 1 : LOGBOOK ---
                 ContentView()
                 .tabItem {
                     Label("Dives", systemImage: "water.waves")
                 }
-                
+                .tag(0)
+
                 // --- TAB 2 : MAP ---
                 DiveMapView()
                     .tabItem {
                         Label("Map", systemImage: "map.fill")
                     }
-                
+                    .tag(1)
+
                 // --- TAB 3 : EQUIPMENT ---
                 NavigationStack {
                     GearListView()
@@ -44,14 +50,22 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Equipment", systemImage: "wrench.and.screwdriver.fill")
                 }
-                
+                .tag(2)
+
                 // --- TAB 4 : CERTIFICATIONS ---
                 CertificationsView()
                     .tabItem {
                         Label("Certifications", systemImage: "graduationcap.fill")
                     }
+                    .tag(3)
             }
             .accentColor(.cyan)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .addDiveManual)) { _ in
+            selectedTab = 0
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .addDiveBluetooth)) { _ in
+            selectedTab = 0
         }
         .task {
             await scheduleNotificationsAtLaunch()

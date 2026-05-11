@@ -3,6 +3,7 @@ import SwiftData
 import CloudKit
 import UserNotifications
 import UniformTypeIdentifiers
+import WidgetKit
 import LibDCSwift
 #if os(macOS)
 import AppKit
@@ -354,10 +355,18 @@ class UserPreferences {
         didSet { UserDefaults.standard.set(weightUnit.rawValue, forKey: "weightUnit") }
     }
     var appearanceMode: AppearanceMode {
-        didSet { UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode") }
+        didSet {
+            UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
+            UserDefaults(suiteName: "group.app.bluedive.universal")?.set(appearanceMode.rawValue, forKey: "appearanceMode")
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
     var languageMode: AppLanguage {
-        didSet { UserDefaults.standard.set(languageMode.rawValue, forKey: "languageMode") }
+        didSet {
+            UserDefaults.standard.set(languageMode.rawValue, forKey: "languageMode")
+            UserDefaults(suiteName: "group.app.bluedive.universal")?.set(languageMode.rawValue, forKey: "languageMode")
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     init() {
@@ -368,6 +377,10 @@ class UserPreferences {
         self.weightUnit       = WeightUnit(rawValue: UserDefaults.standard.string(forKey: "weightUnit") ?? "kilograms") ?? .kilograms
         self.appearanceMode   = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "system") ?? .system
         self.languageMode     = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "languageMode") ?? "system") ?? .system
+        // Seed shared container after self is fully initialised (required by @Observable)
+        let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
+        shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
+        shared?.set(self.languageMode.rawValue, forKey: "languageMode")
     }
 
     func resetToDefaults() {
@@ -1746,6 +1759,13 @@ struct SettingsView: View {
             NotificationManager.shared.cancelAllNotifications()
             NotificationManager.shared.clearBadge()
             UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
+
+            // Reset widget dive data in the shared App Group suite.
+            let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
+            shared?.set(0, forKey: "totalDiveCount")
+            shared?.removeObject(forKey: "diverNames")
+            shared?.removeObject(forKey: "diveCountByDiver")
+            WidgetCenter.shared.reloadTimelines(ofKind: "DiveCountWidget")
             
             // Step 3: Start a 30-second countdown, then close the app.
             // This gives CloudKit enough time to process the local deletions

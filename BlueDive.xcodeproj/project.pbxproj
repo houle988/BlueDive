@@ -12,18 +12,55 @@
 		0C63B1782F8AC337005F2A89 /* CONTRIBUTING.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */; };
 		0C89AA682F49ECBC00B7EEBE /* claude.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C89AA672F49ECB100B7EEBE /* claude.md */; };
 		0C89AA6C2F49EF2400B7EEBE /* LibDCSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 0C89AA6B2F49EF2400B7EEBE /* LibDCSwift */; };
+		0CF0DA742FB24469008E0330 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CF0DA732FB24469008E0330 /* WidgetKit.framework */; };
+		0CF0DA762FB24469008E0330 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CF0DA752FB24469008E0330 /* SwiftUI.framework */; };
+		0CF0DA812FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0CF0DA722FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0CF0DA7F2FB24469008E0330 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 57EA9D422F42108A00486B7A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0CF0DA712FB24469008E0330;
+			remoteInfo = BlueDiveWidgetExtensionExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		0CF0DA822FB24469008E0330 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0CF0DA812FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0C60FC712F89C6DC00C1F9A2 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		0C63B1752F8AC307005F2A89 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTRIBUTING.md; sourceTree = "<group>"; };
 		0C89AA672F49ECB100B7EEBE /* claude.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = claude.md; sourceTree = "<group>"; };
+		0CF0DA722FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BlueDiveWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0CF0DA732FB24469008E0330 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		0CF0DA752FB24469008E0330 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		57EA9D4A2F42108A00486B7A /* BlueDive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlueDive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		57EA9DA82F42109E00486B7A /* DeepBlue.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = DeepBlue.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0CF0DA862FB24469008E0330 /* Exceptions for "BlueDiveWidgetExtension" folder in "BlueDiveWidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0CF0DA712FB24469008E0330 /* BlueDiveWidgetExtensionExtension */;
+		};
 		57EA9D6D2F42108B00486B7A /* Exceptions for "BlueDive" folder in "BlueDive" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -34,6 +71,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0CF0DA862FB24469008E0330 /* Exceptions for "BlueDiveWidgetExtension" folder in "BlueDiveWidgetExtensionExtension" target */,
+			);
+			path = BlueDiveWidgetExtension;
+			sourceTree = "<group>";
+		};
 		57EA9D4C2F42108A00486B7A /* BlueDive */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -45,6 +90,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		0CF0DA6F2FB24469008E0330 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0CF0DA762FB24469008E0330 /* SwiftUI.framework in Frameworks */,
+				0CF0DA742FB24469008E0330 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		57EA9D472F42108A00486B7A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -59,6 +113,8 @@
 		0C89AA6A2F49EF2400B7EEBE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				0CF0DA732FB24469008E0330 /* WidgetKit.framework */,
+				0CF0DA752FB24469008E0330 /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -71,6 +127,7 @@
 				0C60FC712F89C6DC00C1F9A2 /* LICENSE */,
 				0C89AA672F49ECB100B7EEBE /* claude.md */,
 				57EA9D4C2F42108A00486B7A /* BlueDive */,
+				0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */,
 				0C89AA6A2F49EF2400B7EEBE /* Frameworks */,
 				57EA9D4B2F42108A00486B7A /* Products */,
 			);
@@ -80,6 +137,7 @@
 			isa = PBXGroup;
 			children = (
 				57EA9D4A2F42108A00486B7A /* BlueDive.app */,
+				0CF0DA722FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -94,6 +152,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0CF0DA712FB24469008E0330 /* BlueDiveWidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0CF0DA852FB24469008E0330 /* Build configuration list for PBXNativeTarget "BlueDiveWidgetExtensionExtension" */;
+			buildPhases = (
+				0CF0DA6E2FB24469008E0330 /* Sources */,
+				0CF0DA6F2FB24469008E0330 /* Frameworks */,
+				0CF0DA702FB24469008E0330 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */,
+			);
+			name = BlueDiveWidgetExtensionExtension;
+			packageProductDependencies = (
+			);
+			productName = BlueDiveWidgetExtensionExtension;
+			productReference = 0CF0DA722FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		57EA9D492F42108A00486B7A /* BlueDive */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 57EA9D6E2F42108B00486B7A /* Build configuration list for PBXNativeTarget "BlueDive" */;
@@ -101,10 +181,12 @@
 				57EA9D462F42108A00486B7A /* Sources */,
 				57EA9D472F42108A00486B7A /* Frameworks */,
 				57EA9D482F42108A00486B7A /* Resources */,
+				0CF0DA822FB24469008E0330 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				0CF0DA802FB24469008E0330 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				57EA9D4C2F42108A00486B7A /* BlueDive */,
@@ -124,9 +206,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2610;
+				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					0CF0DA712FB24469008E0330 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
 					57EA9D492F42108A00486B7A = {
 						CreatedOnToolsVersion = 26.1;
 					};
@@ -157,11 +242,19 @@
 			projectRoot = "";
 			targets = (
 				57EA9D492F42108A00486B7A /* BlueDive */,
+				0CF0DA712FB24469008E0330 /* BlueDiveWidgetExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		0CF0DA702FB24469008E0330 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		57EA9D482F42108A00486B7A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -176,6 +269,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0CF0DA6E2FB24469008E0330 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		57EA9D462F42108A00486B7A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -185,7 +285,86 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		0CF0DA802FB24469008E0330 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0CF0DA712FB24469008E0330 /* BlueDiveWidgetExtensionExtension */;
+			targetProxy = 0CF0DA7F2FB24469008E0330 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		0CF0DA832FB24469008E0330 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = BlueDiveWidgetExtension/BlueDiveWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 41;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BlueDiveWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BlueDiveWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.5;
+				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0CF0DA842FB24469008E0330 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = BlueDiveWidgetExtension/BlueDiveWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 41;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BlueDiveWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BlueDiveWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.5;
+				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		57EA9D6F2F42108B00486B7A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -194,7 +373,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = BlueDive/BlueDive.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 39;
+				CURRENT_PROJECT_VERSION = 41;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -232,7 +411,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -261,7 +440,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = BlueDive/BlueDive.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 39;
+				CURRENT_PROJECT_VERSION = 41;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -299,7 +478,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -447,6 +626,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0CF0DA852FB24469008E0330 /* Build configuration list for PBXNativeTarget "BlueDiveWidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0CF0DA832FB24469008E0330 /* Debug */,
+				0CF0DA842FB24469008E0330 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		57EA9D452F42108A00486B7A /* Build configuration list for PBXProject "BlueDive" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

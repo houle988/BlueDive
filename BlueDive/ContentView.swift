@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import CoreBluetooth
 import UniformTypeIdentifiers
+import WidgetKit
 import LibDCSwift
 #if canImport(UIKit)
 import UIKit
@@ -404,6 +405,13 @@ struct ContentView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
+            // Widget deep-link hooks (bluedive://add/manual | bluedive://add/bluetooth)
+            .onReceive(NotificationCenter.default.publisher(for: .addDiveManual)) { _ in
+                addManualDive()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .addDiveBluetooth)) { _ in
+                showScannerSheet = true
+            }
             #if os(macOS)
             .sheet(isPresented: $showDeleteSheet) {
                 MacOSDeleteDiveSheet(
@@ -572,6 +580,28 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isImporting)
+        .onAppear { updateWidgetDiveData() }
+        .onChange(of: dives.map { $0.diverName }) { _, _ in updateWidgetDiveData() }
+    }
+
+    private func updateWidgetDiveData() {
+        let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
+        shared?.set(dives.count, forKey: "totalDiveCount")
+
+        var countByDiver: [String: Int] = [:]
+        for dive in dives {
+            let name = dive.diverName.trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { continue }
+            countByDiver[name, default: 0] += 1
+        }
+        let diverNames = countByDiver.keys.sorted()
+        if let namesData = try? JSONEncoder().encode(diverNames) {
+            shared?.set(namesData, forKey: "diverNames")
+        }
+        if let countData = try? JSONEncoder().encode(countByDiver) {
+            shared?.set(countData, forKey: "diveCountByDiver")
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: "DiveCountWidget")
     }
     
     // MARK: - View Components

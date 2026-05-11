@@ -29,6 +29,17 @@
 			</array>
 		</dict>
 	</array>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>app.bluedive.universal</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>bluedive</string>
+            </array>
+        </dict>
+    </array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>BlueDive uses Bluetooth to connect to your dive computer.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
