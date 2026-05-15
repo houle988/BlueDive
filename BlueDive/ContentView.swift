@@ -59,6 +59,8 @@ struct ContentView: View {
     @State private var showDashboard = false
     @State private var showTankTemplates = false
     @State private var showGearGroups = false
+    @State private var showMinimumGasPlanning = false
+    @State private var showCalculatorsPopover = false
     @State private var isSyncing = false
     @State private var showManualDiveDatePicker = false
     @State private var manualDiveDate = Date.now
@@ -351,6 +353,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showMinimumGasPlanning) {
+                MinimumGasPlanningView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -728,6 +736,10 @@ struct ContentView: View {
         }
 
         ToolbarItem(placement: .navigation) {
+            calculatorsMenu
+        }
+
+        ToolbarItem(placement: .navigation) {
             toolsMenu
         }
 
@@ -866,6 +878,10 @@ struct ContentView: View {
                     Button(action: { showGearGroups = true }) {
                         Label("Gear Groups", systemImage: "tray.2.fill")
                     }
+                    Divider()
+                    Button(action: { showMinimumGasPlanning = true }) {
+                        Label("Minimum Gas Planning", systemImage: "wrench.and.screwdriver.fill")
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle.fill")
                         .foregroundStyle(.cyan)
@@ -926,6 +942,35 @@ struct ContentView: View {
             }
         } label: {
             Image(systemName: "square.grid.2x2.fill")
+                .foregroundStyle(.cyan)
+        }
+        #endif
+    }
+
+    private var calculatorsMenu: some View {
+        #if os(macOS)
+        Button(action: { showCalculatorsPopover = true }) {
+            Image(systemName: "wrench.and.screwdriver.fill")
+                .foregroundStyle(.cyan)
+        }
+        .help("Calculators")
+        .popover(isPresented: $showCalculatorsPopover, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 0) {
+                toolsPopoverButton("Minimum Gas Planning", icon: "wrench.and.screwdriver.fill") {
+                    showCalculatorsPopover = false
+                    showMinimumGasPlanning = true
+                }
+            }
+            .frame(width: 220)
+            .padding(.vertical, 4)
+        }
+        #else
+        Menu {
+            Button(action: { showMinimumGasPlanning = true }) {
+                Label("Minimum Gas Planning", systemImage: "wrench.and.screwdriver.fill")
+            }
+        } label: {
+            Image(systemName: "wrench.and.screwdriver.fill")
                 .foregroundStyle(.cyan)
         }
         #endif
