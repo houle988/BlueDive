@@ -132,8 +132,15 @@ struct MinimumGasPlanningView: View {
                 detailsSection
                 resultsSection
             }
-            .navigationTitle(Text("Minimum Gas"))
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Minimum Gas")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
@@ -238,8 +245,15 @@ struct MinimumGasPlanningView: View {
                 }
                 .padding(24)
             }
-            .navigationTitle(Text("How MG Works"))
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("How MG Works")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { showInfo = false }
                 }

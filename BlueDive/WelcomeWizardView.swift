@@ -58,7 +58,18 @@ struct WelcomeWizardView: View {
                 Feature(icon: "medal.fill", color: .yellow, title: "Records Wall", description: "See your personal bests — deepest dive, longest bottom time, and more."),
             ]
         ),
-        // Page 5: Sync, export, profile, settings
+        // Page 5: Planning tools
+        WelcomePage(
+            icon: "checklist",
+            iconColor: .red,
+            title: "Plan Your Dives",
+            subtitle: "Safety tools for every dive",
+            features: [
+                Feature(icon: "lungs.fill", color: .red, title: "Minimum Gas Planning", description: "Calculate the minimum breathing gas needed to safely bring you and your buddy to the surface if either of you runs out of air at depth."),
+                Feature(icon: "atom", color: .teal, title: "Gas Density Calculator", description: "Calculate the density of your breathing gas at depth. Colour-coded thresholds warn you when gas density may impair breathing and increase CO₂ retention risk."),
+            ]
+        ),
+        // Page 6: Sync, export, profile, settings
         WelcomePage(
             icon: "gearshape.fill",
             iconColor: .cyan,
@@ -67,6 +78,7 @@ struct WelcomeWizardView: View {
             features: [
                 Feature(icon: "icloud.fill", color: .cyan, title: "iCloud Sync", description: "Your dives sync automatically across all your Apple devices."),
                 Feature(icon: "square.and.arrow.up", color: .indigo, title: "Export Anytime", description: "Export your logbook to XML, UDDF or PDF format whenever you need."),
+                Feature(icon: "rectangle.3.group.fill", color: .blue, title: "Home Screen Widgets", description: "Add BlueDive widgets to your home screen for quick access to your recent dives and dive stats."),
                 Feature(icon: "person.circle.fill", color: .pink, title: "Diver Profile", description: "Keep your diver info, emergency contacts, and insurance details handy."),
                 Feature(icon: "gearshape.fill", color: .gray, title: "Settings", description: "Choose your units (metric/imperial), appearance, language, and notification preferences."),
             ]

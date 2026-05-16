@@ -60,6 +60,7 @@ struct ContentView: View {
     @State private var showTankTemplates = false
     @State private var showGearGroups = false
     @State private var showMinimumGasPlanning = false
+    @State private var showGasDensityCalculator = false
     @State private var showCalculatorsPopover = false
     @State private var isSyncing = false
     @State private var showManualDiveDatePicker = false
@@ -359,6 +360,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showMinimumGasPlanning) {
                 MinimumGasPlanningView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showGasDensityCalculator) {
+                GasDensityCalculatorView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -956,6 +963,11 @@ struct ContentView: View {
                     showCalculatorsPopover = false
                     showMinimumGasPlanning = true
                 }
+                Divider()
+                toolsPopoverButton("Gas Density Calculator", icon: "atom") {
+                    showCalculatorsPopover = false
+                    showGasDensityCalculator = true
+                }
             }
             .frame(width: 220)
             .padding(.vertical, 4)
@@ -964,6 +976,9 @@ struct ContentView: View {
         Menu {
             Button(action: { showMinimumGasPlanning = true }) {
                 Label("Minimum Gas Planning", systemImage: "wrench.and.screwdriver.fill")
+            }
+            Button(action: { showGasDensityCalculator = true }) {
+                Label("Gas Density Calculator", systemImage: "atom")
             }
         } label: {
             Image(systemName: "wrench.and.screwdriver.fill")
