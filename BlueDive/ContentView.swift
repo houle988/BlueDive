@@ -878,10 +878,6 @@ struct ContentView: View {
                     Button(action: { showGearGroups = true }) {
                         Label("Gear Groups", systemImage: "tray.2.fill")
                     }
-                    Divider()
-                    Button(action: { showMinimumGasPlanning = true }) {
-                        Label("Minimum Gas Planning", systemImage: "wrench.and.screwdriver.fill")
-                    }
                 } label: {
                     Image(systemName: "ellipsis.circle.fill")
                         .foregroundStyle(.cyan)
