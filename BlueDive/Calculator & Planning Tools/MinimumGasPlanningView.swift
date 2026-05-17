@@ -12,6 +12,7 @@ struct MinimumGasInput {
     var fillPressure: Double = 230
     var margin: Double = 40
     var roundUpAscent: Bool = true
+    var safetyStop: Bool = false
 }
 
 struct MinimumGasResult {
@@ -19,6 +20,7 @@ struct MinimumGasResult {
     let t1: Double
     let t2: Double
     let tTotal: Double
+    let safetyStopTime: Double
     let mg_L: Double
     let mg_bar: Double
     let ug_L: Double
@@ -37,7 +39,12 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
     let t2     = input.roundUpAscent ? ceil(half / input.v2) : half / input.v2
     let tTotal = input.tHandling + t1 + t2
 
-    let mg_L   = input.sac * divers * tTotal * pMoy
+    // Safety stop: 3 min at 5 m (1.5 bar) for both divers, calculated at stop depth
+    // rather than folding into tTotal to avoid applying pMoy (max-depth pressure) to stop gas.
+    let safetyStopTime  = input.safetyStop ? 3.0 : 0.0
+    let safetyStopGas_L = input.safetyStop ? input.sac * divers * 3.0 * 1.5 : 0.0
+
+    let mg_L   = input.sac * divers * tTotal * pMoy + safetyStopGas_L
     let mg_bar = mg_L / input.cylVol
 
     let ug_L   = input.cylVol * input.fillPressure
@@ -48,6 +55,7 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
 
     return MinimumGasResult(
         pMoy: pMoy, t1: t1, t2: t2, tTotal: tTotal,
+        safetyStopTime: safetyStopTime,
         mg_L: mg_L, mg_bar: mg_bar,
         ug_L: ug_L, ug_bar: ug_bar,
         gp_L: gp_L, gp_bar: gp_bar
@@ -75,6 +83,7 @@ struct MinimumGasPlanningView: View {
     @State private var cylVolStr = "12"
     @State private var isTwinset = false
     @State private var roundUpAscent = true
+    @State private var safetyStop = false
     @State private var showInfo = false
 
     private func toDouble(_ s: String) -> Double {
@@ -108,7 +117,8 @@ struct MinimumGasPlanningView: View {
             cylVol:        cylVolLitres,
             fillPressure:  imp ? toDouble(fillPressureStr) / 14.5038    : toDouble(fillPressureStr),
             margin:        imp ? toDouble(marginStr) / 14.5038          : toDouble(marginStr),
-            roundUpAscent: roundUpAscent
+            roundUpAscent: roundUpAscent,
+            safetyStop:    safetyStop
         ))
     }
 
@@ -224,6 +234,13 @@ struct MinimumGasPlanningView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
+                        Label("Safety Stop", systemImage: "pause.circle.fill")
+                            .font(.headline)
+                            .foregroundStyle(.teal)
+                        Text("When enabled, a 3-minute safety stop at 5 m (15 ft / 1.5 bar) is added to the Minimum Gas for both divers. The stop gas is calculated at stop depth rather than at average dive pressure.")
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
                         Label("Gas Plan (GP)", systemImage: "gauge.with.needle.fill")
                             .font(.headline)
                             .foregroundStyle(.green)
@@ -279,6 +296,7 @@ struct MinimumGasPlanningView: View {
             numberRow(unitMode == .metric ? "Ascent Speed 1st Half (m/min)"   : "Ascent Speed 1st Half (ft/min)",  text: $v1Str)
             numberRow(unitMode == .metric ? "Ascent Speed 2nd Half (m/min)"   : "Ascent Speed 2nd Half (ft/min)",  text: $v2Str)
             Toggle("Round Up Ascent Time", isOn: $roundUpAscent)
+            Toggle(unitMode == .metric ? "Safety Stop (5m)" : "Safety Stop (15ft)", isOn: $safetyStop)
         }
     }
 
@@ -296,7 +314,8 @@ struct MinimumGasPlanningView: View {
             detailRow("Mean Pressure", value: String(format: "%.2f bar", result.pMoy))
             detailRow("Ascent Phase 1", value: String(format: "%.1f min", result.t1))
             detailRow("Ascent Phase 2", value: String(format: "%.1f min", result.t2))
-            detailRow("Total Time",     value: String(format: "%.1f min", result.tTotal))
+            detailRow("Safety Stop",    value: result.safetyStopTime > 0 ? String(format: "%.0f min", result.safetyStopTime) : "—")
+            detailRow("Total Time",     value: String(format: "%.1f min", result.tTotal + result.safetyStopTime))
         }
     }
 

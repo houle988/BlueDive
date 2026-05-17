@@ -10922,6 +10922,26 @@
         }
       }
     },
+    "Safety Stop (5m)" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palier de sécurité (5m)"
+          }
+        }
+      }
+    },
+    "Safety Stop (15ft)" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palier de sécurité (15ft)"
+          }
+        }
+      }
+    },
     "Safety tools for every dive" : {
       "localizations" : {
         "fr-CA" : {
@@ -13993,6 +14013,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Qu'est-ce que la densité de gaz ?"
+          }
+        }
+      }
+    },
+    "When enabled, a 3-minute safety stop at 5 m (15 ft / 1.5 bar) is added to the Minimum Gas for both divers. The stop gas is calculated at stop depth rather than at average dive pressure." : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsqu'activé, un palier de sécurité de 3 minutes à 5 m (15 pi / 1,5 bar) est ajouté au gaz minimum pour les deux plongeurs. Le gaz du palier est calculé à la pression du palier, et non à la pression moyenne de la plongée."
           }
         }
       }
