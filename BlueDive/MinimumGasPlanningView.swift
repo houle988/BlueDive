@@ -8,9 +8,9 @@ struct MinimumGasInput {
     var tHandling: Double = 1
     var v1: Double = 9
     var v2: Double = 3
-    var cylVol: Double = 24
+    var cylVol: Double = 12
     var fillPressure: Double = 230
-    var margin: Double = 30
+    var margin: Double = 40
     var roundUpAscent: Bool = true
 }
 
@@ -71,7 +71,7 @@ struct MinimumGasPlanningView: View {
     @State private var v1Str = "9"
     @State private var v2Str = "3"
     @State private var fillPressureStr = "230"
-    @State private var marginStr = "30"
+    @State private var marginStr = "40"
     @State private var cylVolStr = "12"
     @State private var isTwinset = false
     @State private var roundUpAscent = true
@@ -150,6 +150,14 @@ struct MinimumGasPlanningView: View {
                             .foregroundStyle(.cyan)
                     }
                 }
+                #if os(iOS)
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
+                #endif
             }
             .sheet(isPresented: $showInfo) {
                 infoSheet
@@ -157,17 +165,6 @@ struct MinimumGasPlanningView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            #if os(iOS)
-            .scrollDismissesKeyboard(.interactively)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    }
-                }
-            }
-            #endif
             .onChange(of: unitMode) { _, newMode in
                 switch newMode {
                 case .metric:
@@ -177,7 +174,7 @@ struct MinimumGasPlanningView: View {
                     v2Str           = "3"
                     cylVolStr       = "12"
                     fillPressureStr = "230"
-                    marginStr       = "30"
+                    marginStr       = "40"
                 case .imperial:
                     depthStr        = "100"
                     sacStr          = "0.75"
@@ -185,7 +182,7 @@ struct MinimumGasPlanningView: View {
                     v2Str           = "10"
                     cylVolStr       = "100"
                     fillPressureStr = "3442"
-                    marginStr       = "500"
+                    marginStr       = "600"
                 }
             }
         }

@@ -80,6 +80,14 @@ struct GasDensityCalculatorView: View {
                             .foregroundStyle(.cyan)
                     }
                 }
+                #if os(iOS)
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
+                #endif
             }
             .sheet(isPresented: $showInfo) {
                 infoSheet
@@ -87,17 +95,6 @@ struct GasDensityCalculatorView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            #if os(iOS)
-            .scrollDismissesKeyboard(.interactively)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    }
-                }
-            }
-            #endif
             .onChange(of: unitMode) { _, _ in
                 depthStr = "0"
             }
