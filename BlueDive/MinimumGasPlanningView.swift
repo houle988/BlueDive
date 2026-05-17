@@ -142,7 +142,7 @@ struct MinimumGasPlanningView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Close") { dismiss() }
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button { showInfo = true } label: {
@@ -153,7 +153,7 @@ struct MinimumGasPlanningView: View {
                 #if os(iOS)
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Done") {
+                    Button("Close") {
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     }
                 }
@@ -252,7 +252,7 @@ struct MinimumGasPlanningView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { showInfo = false }
+                    Button("Close") { showInfo = false }
                 }
             }
         }
