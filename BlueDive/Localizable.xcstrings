@@ -8445,12 +8445,12 @@
         }
       }
     },
-    "Minimum Gas Planning" : {
+    "Minimum Gas Calculator" : {
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Planification du gaz minimum"
+            "value" : "Calculateur de gaz minimum"
           }
         }
       }
@@ -9836,12 +9836,12 @@
         }
       }
     },
-    "Plan Your Dives" : {
+    "Dive Tools" : {
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Planifiez vos plongées"
+            "value" : "Outils de plongée"
           }
         }
       }

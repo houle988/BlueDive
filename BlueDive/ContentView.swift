@@ -359,7 +359,7 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showMinimumGasPlanning) {
-                MinimumGasPlanningView()
+                MinimumGasCalculatorView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -959,7 +959,7 @@ struct ContentView: View {
         .help("Calculators")
         .popover(isPresented: $showCalculatorsPopover, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 0) {
-                toolsPopoverButton("Minimum Gas Planning", icon: "wrench.and.screwdriver.fill") {
+                toolsPopoverButton("Minimum Gas Calculator", icon: "wrench.and.screwdriver.fill") {
                     showCalculatorsPopover = false
                     showMinimumGasPlanning = true
                 }
@@ -975,7 +975,7 @@ struct ContentView: View {
         #else
         Menu {
             Button(action: { showMinimumGasPlanning = true }) {
-                Label("Minimum Gas Planning", systemImage: "wrench.and.screwdriver.fill")
+                Label("Minimum Gas Calculator", systemImage: "wrench.and.screwdriver.fill")
             }
             Button(action: { showGasDensityCalculator = true }) {
                 Label("Gas Density Calculator", systemImage: "atom")

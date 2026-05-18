@@ -64,7 +64,7 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
 
 // MARK: - View
 
-struct MinimumGasPlanningView: View {
+struct MinimumGasCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
 
     private enum UnitMode: CaseIterable, Identifiable {

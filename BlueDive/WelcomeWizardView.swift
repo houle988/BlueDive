@@ -58,14 +58,14 @@ struct WelcomeWizardView: View {
                 Feature(icon: "medal.fill", color: .yellow, title: "Records Wall", description: "See your personal bests — deepest dive, longest bottom time, and more."),
             ]
         ),
-        // Page 5: Planning tools
+        // Page 5: Dive tools
         WelcomePage(
             icon: "checklist",
             iconColor: .red,
-            title: "Plan Your Dives",
+            title: "Dive Tools",
             subtitle: "Safety tools for every dive",
             features: [
-                Feature(icon: "lungs.fill", color: .red, title: "Minimum Gas Planning", description: "Calculate the minimum breathing gas needed to safely bring you and your buddy to the surface if either of you runs out of air at depth."),
+                Feature(icon: "lungs.fill", color: .red, title: "Minimum Gas Calculator", description: "Calculate the minimum breathing gas needed to safely bring you and your buddy to the surface if either of you runs out of air at depth."),
                 Feature(icon: "atom", color: .teal, title: "Gas Density Calculator", description: "Calculate the density of your breathing gas at depth. Colour-coded thresholds warn you when gas density may impair breathing and increase CO₂ retention risk."),
             ]
         ),
