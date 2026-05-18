@@ -11,7 +11,9 @@ struct MainTabView: View {
     @AppStorage("gearReminders") private var gearReminders = true
     @AppStorage("certReminders") private var certReminders = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @AppStorage("hasAcceptedDisclaimer") private var hasAcceptedDisclaimer = false
+    @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
+
+    private let currentVersion = appVersionBuild()
 
     /// Tracks the active tab so widget deep-links can switch to the Logbook
     /// (where `ContentView` presents the manual/Bluetooth sheets).
@@ -80,13 +82,13 @@ struct MainTabView: View {
         .applyIf(!ProcessInfo.processInfo.isiOSAppOnMac) { view in
             view
                 .fullScreenCover(isPresented: Binding(
-                    get: { !hasAcceptedDisclaimer },
-                    set: { if !$0 { hasAcceptedDisclaimer = true } }
+                    get: { lastAcceptedDisclaimerVersion != currentVersion },
+                    set: { if !$0 { lastAcceptedDisclaimerVersion = currentVersion } }
                 )) {
                     DisclaimerView()
                 }
                 .fullScreenCover(isPresented: Binding(
-                    get: { hasAcceptedDisclaimer && !hasCompletedOnboarding },
+                    get: { lastAcceptedDisclaimerVersion == currentVersion && !hasCompletedOnboarding },
                     set: { if !$0 { hasCompletedOnboarding = true } }
                 )) {
                     WelcomeWizardView()
@@ -95,8 +97,8 @@ struct MainTabView: View {
         .applyIf(ProcessInfo.processInfo.isiOSAppOnMac) { view in
             view
                 .sheet(isPresented: Binding(
-                    get: { !hasAcceptedDisclaimer },
-                    set: { if !$0 { hasAcceptedDisclaimer = true } }
+                    get: { lastAcceptedDisclaimerVersion != currentVersion },
+                    set: { if !$0 { lastAcceptedDisclaimerVersion = currentVersion } }
                 )) {
                     DisclaimerView()
                         .presentationSizing(.page)
@@ -104,7 +106,7 @@ struct MainTabView: View {
                         .presentationDragIndicator(.visible)
                 }
                 .sheet(isPresented: Binding(
-                    get: { hasAcceptedDisclaimer && !hasCompletedOnboarding },
+                    get: { lastAcceptedDisclaimerVersion == currentVersion && !hasCompletedOnboarding },
                     set: { if !$0 { hasCompletedOnboarding = true } }
                 )) {
                     WelcomeWizardView()
@@ -115,13 +117,13 @@ struct MainTabView: View {
         }
         #else
         .sheet(isPresented: Binding(
-            get: { !hasAcceptedDisclaimer },
-            set: { if !$0 { hasAcceptedDisclaimer = true } }
+            get: { lastAcceptedDisclaimerVersion != currentVersion },
+            set: { if !$0 { lastAcceptedDisclaimerVersion = currentVersion } }
         )) {
             DisclaimerView()
         }
         .sheet(isPresented: Binding(
-            get: { hasAcceptedDisclaimer && !hasCompletedOnboarding },
+            get: { lastAcceptedDisclaimerVersion == currentVersion && !hasCompletedOnboarding },
             set: { if !$0 { hasCompletedOnboarding = true } }
         )) {
             WelcomeWizardView()

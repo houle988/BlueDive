@@ -1,8 +1,14 @@
 import SwiftUI
 
+func appVersionBuild() -> String {
+    let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+    let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+    return "\(v)-\(b)"
+}
+
 struct DisclaimerView: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("hasAcceptedDisclaimer") private var hasAcceptedDisclaimer = false
+    @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
     @State private var agreed = false
     @State private var appeared = false
 
@@ -40,6 +46,11 @@ struct DisclaimerView: View {
 
                             Text("Please read before continuing")
                                 .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+
+                            Text(verbatim: "Version \(appVersionBuild())")
+                                .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
@@ -99,7 +110,7 @@ struct DisclaimerView: View {
 
                     // Continue button
                     Button {
-                        hasAcceptedDisclaimer = true
+                        lastAcceptedDisclaimerVersion = appVersionBuild()
                         dismiss()
                     } label: {
                         Text("Continue")
@@ -137,6 +148,179 @@ struct DisclaimerView: View {
     // MARK: - Disclaimer Row
 
     private func disclaimerRow(icon: String, color: Color, title: LocalizedStringKey, description: LocalizedStringKey) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(color.opacity(0.12))
+                    .frame(width: 42, height: 42)
+
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundStyle(color)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - Calculator Safety Warning
+
+struct CalculatorSafetyWarningView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("lastAcknowledgedCalculatorWarningVersion") private var lastAcknowledgedCalculatorWarningVersion = ""
+    @State private var agreed = false
+    @State private var appeared = false
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color.platformBackground, Color.orange.opacity(0.06), Color.platformBackground],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        Spacer().frame(height: 30)
+
+                        ZStack {
+                            Circle()
+                                .fill(Color.orange.opacity(0.12))
+                                .frame(width: 90, height: 90)
+
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 40))
+                                .foregroundStyle(.orange)
+                        }
+
+                        VStack(spacing: 6) {
+                            Text("Safety Warning")
+                                .font(.system(size: 26, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.center)
+
+                            Text("Please read before using these tools")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+
+                            Text(verbatim: "Version \(appVersionBuild())")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        VStack(alignment: .leading, spacing: 16) {
+                            warningRow(
+                                icon: "function",
+                                color: .orange,
+                                title: "Estimates Only",
+                                description: "All results are mathematical estimates based on your inputs. They do not account for individual physiology, equipment variation, or real-world conditions."
+                            )
+
+                            warningRow(
+                                icon: "graduationcap.fill",
+                                color: .green,
+                                title: "Proper Training Required",
+                                description: "These calculators do not replace formal diver training or certification. Always plan dives with a qualified instructor or dive professional."
+                            )
+
+                            warningRow(
+                                icon: "shield.lefthalf.filled",
+                                color: .red,
+                                title: "Your Responsibility",
+                                description: "You are solely responsible for verifying all results before any dive. Never use these tools as the sole basis for dive planning or safety decisions."
+                            )
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+
+                        Spacer().frame(height: 8)
+                    }
+                    .padding(.horizontal)
+                }
+
+                VStack(spacing: 16) {
+                    Divider().opacity(0.3).padding(.horizontal, 24)
+
+                    Button {
+                        agreed.toggle()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: agreed ? "checkmark.square.fill" : "square")
+                                .font(.title3)
+                                .foregroundStyle(agreed ? .cyan : .secondary)
+
+                            Text("I understand these tools provide estimates only and do not replace proper dive training")
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        lastAcknowledgedCalculatorWarningVersion = appVersionBuild()
+                        dismiss()
+                    } label: {
+                        Text("Continue")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                Capsule().fill(agreed ? Color.cyan : Color.gray.opacity(0.4))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!agreed)
+                    .padding(.horizontal, 32)
+                    .animation(.easeInOut(duration: 0.2), value: agreed)
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 40)
+            }
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 20)
+        }
+        .interactiveDismissDisabled()
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5)) {
+                appeared = true
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 550, idealWidth: 650, maxWidth: 800, minHeight: 600, idealHeight: 700, maxHeight: 850)
+        #endif
+    }
+
+    private func warningRow(icon: String, color: Color, title: LocalizedStringKey, description: LocalizedStringKey) -> some View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10)

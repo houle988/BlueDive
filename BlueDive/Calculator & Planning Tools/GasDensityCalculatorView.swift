@@ -28,6 +28,8 @@ func calcGasDensity(o2Pct: Double, hePct: Double, depthMetres: Double, isSeawate
 
 struct GasDensityCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("lastAcknowledgedCalculatorWarningVersion") private var lastAcknowledgedCalculatorWarningVersion = ""
+    @State private var showCalculatorWarning = false
 
     private enum UnitMode: CaseIterable, Identifiable {
         case metric, imperial
@@ -94,6 +96,17 @@ struct GasDensityCalculatorView: View {
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showCalculatorWarning) {
+                CalculatorSafetyWarningView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+            }
+            .onAppear {
+                if lastAcknowledgedCalculatorWarningVersion != appVersionBuild() {
+                    showCalculatorWarning = true
+                }
             }
             .onChange(of: unitMode) { _, _ in
                 depthStr = "0"

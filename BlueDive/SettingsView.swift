@@ -428,6 +428,7 @@ struct SettingsView: View {
     @State private var showingAboutSheet = false
     @State private var showWelcomeWizard = false
     @State private var showDisclaimer = false
+    @State private var showCalculatorWarning = false
     @State private var iCloudSyncEnabled = UserDefaults.standard.bool(forKey: BlueDiveApp.iCloudSyncEnabledKey)
     @State private var iCloudAccountStatus: CKAccountStatus = .couldNotDetermine
     @State private var iCloudStatusChecked = false
@@ -1493,6 +1494,43 @@ struct SettingsView: View {
             .buttonStyle(.plain)
 
             Button {
+                showCalculatorWarning = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "function")
+                        .font(.title3)
+                        .foregroundStyle(.orange)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Calculator Safety Warning")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.primary)
+                        Text("Review the calculator tools disclaimer")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
                 showWelcomeWizard = true
             } label: {
                 HStack(spacing: 12) {
@@ -1547,6 +1585,12 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showDisclaimer) {
             DisclaimerView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showCalculatorWarning) {
+            CalculatorSafetyWarningView()
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)

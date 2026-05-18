@@ -66,6 +66,8 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
 
 struct MinimumGasCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("lastAcknowledgedCalculatorWarningVersion") private var lastAcknowledgedCalculatorWarningVersion = ""
+    @State private var showCalculatorWarning = false
 
     private enum UnitMode: CaseIterable, Identifiable {
         case metric, imperial
@@ -174,6 +176,17 @@ struct MinimumGasCalculatorView: View {
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showCalculatorWarning) {
+                CalculatorSafetyWarningView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+            }
+            .onAppear {
+                if lastAcknowledgedCalculatorWarningVersion != appVersionBuild() {
+                    showCalculatorWarning = true
+                }
             }
             .onChange(of: unitMode) { _, newMode in
                 switch newMode {
