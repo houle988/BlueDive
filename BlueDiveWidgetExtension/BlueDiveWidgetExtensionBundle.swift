@@ -7,5 +7,6 @@ struct BlueDiveWidgetExtensionBundle: WidgetBundle {
         ManualDiveWidget()
         BluetoothDiveWidget()
         DiveCountWidget()
+        DiverStatsWidget()
     }
 }

@@ -14,10 +14,15 @@ extension UTType {
     static let uddf = UTType(importedAs: "org.uddf.uddf")
 }
 
+// Must match `appGroupSuite` in BlueDiveWidgetExtension.swift.
+private let widgetAppGroupSuite = "group.app.bluedive.universal"
+
+
 struct ContentView: View {
     @Environment(\.modelContext) var modelContext
     @Query(sort: \Dive.timestamp, order: .reverse) var dives: [Dive]
-    
+    @State private var prefs = UserPreferences.shared
+
     @State var showScannerSheet = false
     @State var showFileImporter = false
     @State var importError: ImportError?
@@ -596,29 +601,118 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: isImporting)
         .onAppear { updateWidgetDiveData() }
-        .onChange(of: dives.map { $0.diverName }) { _, _ in updateWidgetDiveData() }
+        .onChange(of: dives.map { "\($0.diverName)|\($0.maxDepth)|\($0.duration)|\($0.importDistanceUnit)|\($0.timestamp.timeIntervalSince1970)" }) { _, _ in updateWidgetDiveData() }
+        .onChange(of: prefs.depthUnit) { _, _ in updateWidgetDiveData() }
     }
 
     private func updateWidgetDiveData() {
-        let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
-        shared?.set(dives.count, forKey: "totalDiveCount")
+        struct DiveSnapshot {
+            let diverName: String
+            let duration: Int
+            let maxDepth: Double
+            let importDistanceUnit: String
+            let timestamp: TimeInterval
+        }
+        // Capture value types on the main thread; computation runs on a background task.
+        let snapshot = dives.map {
+            DiveSnapshot(diverName: $0.diverName, duration: $0.duration,
+                         maxDepth: $0.maxDepth, importDistanceUnit: $0.importDistanceUnit,
+                         timestamp: $0.timestamp.timeIntervalSince1970)
+        }
+        let suiteName = widgetAppGroupSuite
+        let depthUnitStr = prefs.depthUnit == .feet ? "feet" : "meters"
+        let feetToMeters = 1.0 / DepthUnit.metersToFeetFactor  // captured on main actor; used in detached task
+
+        // Write picker-critical keys synchronously so WidgetKit's suggestedEntities()
+        // always sees the current diver list when the user opens the widget edit UI.
+        // These are fast O(N) operations and safe to run on the main thread.
+        let shared = UserDefaults(suiteName: suiteName)
+        // totalDiveCount counts ALL dives including those with no diver name.
+        // Per-diver buckets below exclude empty names, so the per-diver sum
+        // may be less than totalDiveCount — this is intentional.
+        shared?.set(snapshot.count, forKey: "totalDiveCount")
 
         var countByDiver: [String: Int] = [:]
-        for dive in dives {
+        for dive in snapshot {
             let name = dive.diverName.trimmingCharacters(in: .whitespaces)
-            guard !name.isEmpty else { continue }
+            // "__all__" is the sentinel ID used by DiverEntity for the "All Divers" option;
+            // exclude it here so it never appears as a real diver name in any stored dict.
+            guard !name.isEmpty, name != "__all__" else { continue }
             countByDiver[name, default: 0] += 1
         }
         let diverNames = countByDiver.keys.sorted()
-        if let namesData = try? JSONEncoder().encode(diverNames) {
-            shared?.set(namesData, forKey: "diverNames")
-        }
         if let countData = try? JSONEncoder().encode(countByDiver) {
             shared?.set(countData, forKey: "diveCountByDiver")
         }
+        // DiveCountWidget only needs totalDiveCount and diveCountByDiver to render;
+        // diverNames is written in the detached task below, alongside the per-diver stat
+        // dicts, so the picker never sees a diver whose stats haven't been written yet.
         WidgetCenter.shared.reloadTimelines(ofKind: "DiveCountWidget")
+
+        // Heavy stats aggregation runs in the background; DiverStatsWidget reloads after.
+        Task.detached(priority: .utility) {
+            let shared = UserDefaults(suiteName: suiteName)
+
+            // Depth aggregates are normalised to metres so dives imported in feet and
+            // dives imported in metres can be combined without converting stored values.
+            var totalMinutes: Int = 0
+            var maxDepthMeters: Double = 0
+            var longestDiveMinutes: Int = 0
+            var mostRecent: TimeInterval = 0
+
+            var totalMinutesByDiver: [String: Int] = [:]
+            var maxDepthByDiver: [String: Double] = [:]
+            var longestDiveByDiver: [String: Int] = [:]
+            var mostRecentByDiver: [String: Double] = [:]
+
+            for dive in snapshot {
+                totalMinutes += dive.duration
+                let factor = dive.importDistanceUnit == "feet" ? feetToMeters : 1.0
+                let depthM = dive.maxDepth * factor
+                if depthM > maxDepthMeters { maxDepthMeters = depthM }
+                if dive.duration > longestDiveMinutes { longestDiveMinutes = dive.duration }
+                if dive.timestamp > mostRecent { mostRecent = dive.timestamp }
+
+                let name = dive.diverName.trimmingCharacters(in: .whitespaces)
+                guard !name.isEmpty, name != "__all__" else { continue }
+                totalMinutesByDiver[name, default: 0] += dive.duration
+                if depthM > (maxDepthByDiver[name] ?? 0) { maxDepthByDiver[name] = depthM }
+                if dive.duration > (longestDiveByDiver[name] ?? 0) { longestDiveByDiver[name] = dive.duration }
+                if dive.timestamp > (mostRecentByDiver[name] ?? 0) { mostRecentByDiver[name] = dive.timestamp }
+            }
+
+            shared?.set(totalMinutes, forKey: "totalMinutesUnderwater")
+            shared?.set(maxDepthMeters, forKey: "maxDepthMeters")
+            shared?.set(longestDiveMinutes, forKey: "longestDiveMinutes")
+            shared?.set(depthUnitStr, forKey: "depthUnit")
+            if mostRecent > 0 {
+                shared?.set(mostRecent, forKey: "mostRecentDiveDate")
+            } else {
+                shared?.removeObject(forKey: "mostRecentDiveDate")
+            }
+
+            if let data = try? JSONEncoder().encode(totalMinutesByDiver) {
+                shared?.set(data, forKey: "totalMinutesByDiver")
+            }
+            if let data = try? JSONEncoder().encode(maxDepthByDiver) {
+                shared?.set(data, forKey: "maxDepthMetersByDiver")
+            }
+            if let data = try? JSONEncoder().encode(longestDiveByDiver) {
+                shared?.set(data, forKey: "longestDiveMinutesByDiver")
+            }
+            if let data = try? JSONEncoder().encode(mostRecentByDiver) {
+                shared?.set(data, forKey: "mostRecentDiveDateByDiver")
+            }
+            // Write diverNames here, after all per-diver stat dicts, so the widget
+            // picker never shows a diver whose stats haven't been written yet.
+            if let namesData = try? JSONEncoder().encode(diverNames) {
+                shared?.set(namesData, forKey: "diverNames")
+            }
+
+            WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")
+        }
     }
-    
+
     // MARK: - View Components
     
     @ViewBuilder
@@ -1089,10 +1183,13 @@ struct ContentView: View {
     }
     
     private func confirmDeleteItems(offsets: IndexSet) {
+        // Use filteredAndSortedDives — IndexSet is relative to the displayed list, not the raw query.
+        let displayed = filteredAndSortedDives
         withAnimation {
             for index in offsets {
-                modelContext.delete(dives[index])
+                modelContext.delete(displayed[index])
             }
+            try? modelContext.save()
         }
     }
 

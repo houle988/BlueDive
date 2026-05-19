@@ -15,6 +15,9 @@ enum DepthUnit: String, CaseIterable {
     case meters = "meters"
     case feet   = "feet"
 
+    /// Canonical metres-to-feet conversion factor. Used in both main app and widget targets.
+    static let metersToFeetFactor: Double = 3.28084
+
     var symbol: String {
         switch self {
         case .meters: return "m"
@@ -26,7 +29,7 @@ enum DepthUnit: String, CaseIterable {
     func convert(_ meters: Double) -> Double {
         switch self {
         case .meters: return meters
-        case .feet:   return meters * 3.28084
+        case .feet:   return meters * DepthUnit.metersToFeetFactor
         }
     }
 
@@ -326,7 +329,7 @@ enum AppLanguage: String, CaseIterable {
     var locale: Locale? {
         switch self {
         case .system: return nil
-        case .english: return Locale(identifier: "en")
+        case .english: return Locale(identifier: "en_CA")
         case .frenchCanada: return Locale(identifier: "fr-CA")
         }
     }
@@ -340,7 +343,14 @@ class UserPreferences {
     static let shared = UserPreferences()
 
     var depthUnit: DepthUnit {
-        didSet { UserDefaults.standard.set(depthUnit.rawValue, forKey: "depthUnit") }
+        didSet {
+            UserDefaults.standard.set(depthUnit.rawValue, forKey: "depthUnit")
+            // Write the widget-facing key so the widget reflects the correct unit
+            // even before ContentView.updateWidgetDiveData() runs.
+            UserDefaults(suiteName: "group.app.bluedive.universal")?
+                .set(depthUnit == .feet ? "feet" : "meters", forKey: "depthUnit")
+            WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")
+        }
     }
     var pressureUnit: PressureUnit {
         didSet { UserDefaults.standard.set(pressureUnit.rawValue, forKey: "pressureUnit") }
@@ -381,6 +391,7 @@ class UserPreferences {
         let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
         shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
         shared?.set(self.languageMode.rawValue, forKey: "languageMode")
+        shared?.set(self.depthUnit == .feet ? "feet" : "meters", forKey: "depthUnit")
     }
 
     func resetToDefaults() {
@@ -429,7 +440,7 @@ struct SettingsView: View {
     @State private var showWelcomeWizard = false
     @State private var showDisclaimer = false
     @State private var showCalculatorWarning = false
-    @State private var iCloudSyncEnabled = UserDefaults.standard.bool(forKey: BlueDiveApp.iCloudSyncEnabledKey)
+    @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
     @State private var iCloudAccountStatus: CKAccountStatus = .couldNotDetermine
     @State private var iCloudStatusChecked = false
     #if os(iOS)
@@ -1134,9 +1145,6 @@ struct SettingsView: View {
                     Toggle("", isOn: $iCloudSyncEnabled)
                         .labelsHidden()
                         .tint(.cyan)
-                        .onChange(of: iCloudSyncEnabled) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: BlueDiveApp.iCloudSyncEnabledKey)
-                        }
                 }
                 .padding()
                 .background(
@@ -1804,12 +1812,21 @@ struct SettingsView: View {
             NotificationManager.shared.clearBadge()
             UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
 
-            // Reset widget dive data in the shared App Group suite.
+            // Reset all widget data in the shared App Group suite.
             let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
             shared?.set(0, forKey: "totalDiveCount")
+            shared?.set(0, forKey: "totalMinutesUnderwater")
+            shared?.set(0.0, forKey: "maxDepthMeters")
+            shared?.set(0, forKey: "longestDiveMinutes")
+            shared?.removeObject(forKey: "mostRecentDiveDate")
             shared?.removeObject(forKey: "diverNames")
             shared?.removeObject(forKey: "diveCountByDiver")
+            shared?.removeObject(forKey: "totalMinutesByDiver")
+            shared?.removeObject(forKey: "maxDepthMetersByDiver")
+            shared?.removeObject(forKey: "longestDiveMinutesByDiver")
+            shared?.removeObject(forKey: "mostRecentDiveDateByDiver")
             WidgetCenter.shared.reloadTimelines(ofKind: "DiveCountWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")
             
             // Step 3: Start a 30-second countdown, then close the app.
             // This gives CloudKit enough time to process the local deletions

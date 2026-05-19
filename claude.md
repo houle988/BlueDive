@@ -46,6 +46,10 @@ BlueDive supports running as an iPad app on Apple Silicon Macs via "Designed for
 - **Date pickers**: Use `.adaptiveDatePickerStyle()` (defined in `CrossPlatformImage.swift`) instead of `.datePickerStyle(.compact)`. This shows a full graphical calendar on Mac and compact style on iPhone/iPad.
 - **Platform detection**: Use `ProcessInfo.processInfo.isiOSAppOnMac` to detect "Designed for iPad" mode at runtime. Note that `#if os(iOS)` is `true` in this mode.
 
+## App Group & Widget Data Sharing
+
+BlueDive shares data with the widget extension via an App Group. When a change affects data that the widget reads, update the App Group store as well — do not only update the main app's local storage. Only touch App Group storage when the change is directly relevant to widget-displayed data; do not write to the App Group for data the widget does not consume.
+
 ## Date and Time Formatting
 
 All date and time values displayed in SwiftUI views must respect both the system language and the in-app language override. Always obtain the locale from SwiftUI's environment and apply it to every date format:

@@ -324,7 +324,7 @@ struct MinimumGasCalculatorView: View {
 
     private var detailsSection: some View {
         Section(header: Text("Calculation Details")) {
-            detailRow("Mean Pressure", value: String(format: "%.2f bar", result.pMoy))
+            detailRow("Mean Pressure", value: String(format: "%.2f ATA", result.pMoy))
             detailRow("Ascent Phase 1", value: String(format: "%.1f min", result.t1))
             detailRow("Ascent Phase 2", value: String(format: "%.1f min", result.t2))
             detailRow("Safety Stop",    value: result.safetyStopTime > 0 ? String(format: "%.0f min", result.safetyStopTime) : "—")

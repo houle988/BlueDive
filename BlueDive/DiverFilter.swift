@@ -10,13 +10,15 @@ enum DiverFilter {
     static let storageKey = "selectedDiverFilter"
 
     /// Sorted, deduplicated list of non-empty diver names from a dive collection.
+    /// Names are trimmed to match widget aggregation in ContentView.updateWidgetDiveData.
     static func uniqueDivers(in dives: [Dive]) -> [String] {
-        Array(Set(dives.map(\.diverName).filter { !$0.isEmpty })).sorted()
+        Array(Set(dives.map { $0.diverName.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })).sorted()
     }
 
     /// Returns `dives` filtered to a single diver, or unchanged when no diver is selected.
+    /// Trims stored names before comparison so they match the trimmed picker values.
     static func apply(_ selected: String, to dives: [Dive]) -> [Dive] {
-        selected.isEmpty ? dives : dives.filter { $0.diverName == selected }
+        selected.isEmpty ? dives : dives.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selected }
     }
 }
 
