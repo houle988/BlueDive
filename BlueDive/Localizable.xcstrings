@@ -10618,22 +10618,42 @@
         }
       }
     },
-    "Reserve Margin (bar)" : {
+    "Reserve Gas (bar)" : {
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Marge de réserve (bar)"
+            "value" : "Gaz de réserve (bar)"
           }
         }
       }
     },
-    "Reserve Margin (psi)" : {
+    "Reserve Gas (psi)" : {
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Marge de réserve (psi)"
+            "value" : "Gaz de réserve (psi)"
+          }
+        }
+      }
+    },
+    "Reserve Gas (RG)" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gaz de réserve (GR)"
+          }
+        }
+      }
+    },
+    "Reserve Gas (RG) is the fixed safety buffer set by the Reserve Gas field. It is held back separately from the MG and is never consumed during the dive — it stays in your cylinder as an absolute last resort." : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le gaz de réserve (GR) est le tampon de sécurité fixe défini par le champ Gaz de réserve. Il est conservé séparément du GM et n'est jamais consommé durant la plongée — il reste dans votre bouteille comme dernier recours absolu."
           }
         }
       }
@@ -10779,6 +10799,26 @@
         }
       }
     },
+    "Respiratory Minute Volume (cuft/min)" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume Respiratoire Minute (pi³/min)"
+          }
+        }
+      }
+    },
+    "Respiratory Minute Volume (L/min)" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume Respiratoire Minute (L/min)"
+          }
+        }
+      }
+    },
     "Restricted" : {
       "localizations" : {
         "fr-CA" : {
@@ -10881,12 +10921,12 @@
         }
       }
     },
-    "RMV (cuft/min)" : {
+    "RMV · Measured at the surface" : {
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "VRM (pi³/min)"
+            "value" : "VRM · Mesuré en surface"
           }
         }
       }
@@ -10899,16 +10939,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "VRM (double cylindre)"
-          }
-        }
-      }
-    },
-    "RMV (L/min)" : {
-      "localizations" : {
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "VRM (L/min)"
           }
         }
       }
@@ -12893,6 +12923,16 @@
         }
       }
     },
+    "Three factors justify keeping this reserve: regulators need a minimum inlet pressure to deliver gas reliably, submersible pressure gauges are not perfectly accurate, and gas pressure drops when water temperature is colder than the fill temperature. Together, these account for roughly 40 bar (600 psi) of unusable gas at the bottom of your cylinder." : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trois facteurs justifient cette réserve : les détendeurs nécessitent une pression minimale à l'entrée pour distribuer le gaz de façon fiable, les manomètres de plongée ne sont pas parfaitement précis, et la pression du gaz diminue lorsque la température de l'eau est plus froide que celle du gonflage. Ensemble, ces facteurs représentent environ 40 bar (600 psi) de gaz inutilisable au fond de votre bouteille."
+          }
+        }
+      }
+    },
     "Thresholds" : {
       "localizations" : {
         "fr-CA" : {
@@ -13399,12 +13439,12 @@
         }
       }
     },
-    "Usable Gas (UG) is your total air when full. Gas Plan (GP) is what's left after the MG and safety margin — the air you can actually use during your dive." : {
+    "Usable Gas (UG) is your total air when full. Gas Plan (GP) is what's left after subtracting the MG and the Reserve Gas (RG) — the air you can actually use during your dive." : {
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le gaz utilisable (GU) est la totalité de votre air à pleine pression. Le plan de gaz (PG) est ce qui reste après le GM et la marge de sécurité — l'air que vous pouvez réellement utiliser durant votre plongée."
+            "value" : "Le gaz utilisable (GU) est la totalité de votre air à pleine pression. Le plan de gaz (PG) est ce qui reste après soustraction du GM et du gaz de réserve (GR) — l'air que vous pouvez réellement utiliser durant votre plongée."
           }
         }
       }

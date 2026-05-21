@@ -62,8 +62,6 @@ struct ContentView: View {
     @State private var showRecordsWall = false
     @State private var showCalendarHeatmap = false
     @State private var showDashboard = false
-    @State private var showTankTemplates = false
-    @State private var showGearGroups = false
     @State private var showMinimumGasPlanning = false
     @State private var showGasDensityCalculator = false
     @State private var showCalculatorsPopover = false
@@ -403,18 +401,6 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showDashboard) {
                 StatisticsView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(isPresented: $showTankTemplates) {
-                TankTemplateListView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(isPresented: $showGearGroups) {
-                GearGroupListView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -884,18 +870,6 @@ struct ContentView: View {
             .help("Merge two dives")
             .disabled(dives.count < 2)
 
-            Button(action: { showTankTemplates = true }) {
-                Image(systemName: "cylinder.fill")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Tank Templates")
-
-            Button(action: { showGearGroups = true }) {
-                Image(systemName: "tray.2.fill")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Gear Groups")
-
             Button(action: { showFilterSheet = true }) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
@@ -971,13 +945,6 @@ struct ContentView: View {
                         Button(action: { showMergeDivesSheet = true }) {
                             Label("Merge Dives", systemImage: "arrow.triangle.merge")
                         }
-                    }
-                    Divider()
-                    Button(action: { showTankTemplates = true }) {
-                        Label("Tank Templates", systemImage: "cylinder.fill")
-                    }
-                    Button(action: { showGearGroups = true }) {
-                        Label("Gear Groups", systemImage: "tray.2.fill")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle.fill")

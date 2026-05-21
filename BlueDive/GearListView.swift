@@ -11,6 +11,8 @@ struct GearListView: View {
     @State private var filterCategory: GearCategory?
     @State private var showInactive = false
     @State private var collapsedSections: Set<String> = []
+    @State private var showTankTemplates = false
+    @State private var showGearGroups = false
 
     // MARK: - Computed Properties
     
@@ -99,6 +101,18 @@ struct GearListView: View {
         }
         .sheet(item: $selectedGear) { gear in
             GearServiceView(gear: gear)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showTankTemplates) {
+            TankTemplateListView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showGearGroups) {
+            GearGroupListView()
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -294,6 +308,20 @@ struct GearListView: View {
                 showAddGear = true
             } label: {
                 Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button(action: { showTankTemplates = true }) {
+                    Label("Tank Templates", systemImage: "cylinder.fill")
+                }
+                Button(action: { showGearGroups = true }) {
+                    Label("Gear Groups", systemImage: "tray.2.fill")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle.fill")
                     .font(.title3)
                     .foregroundStyle(.cyan)
             }

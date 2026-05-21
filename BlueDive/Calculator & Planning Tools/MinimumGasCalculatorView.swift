@@ -23,6 +23,8 @@ struct MinimumGasResult {
     let safetyStopTime: Double
     let mg_L: Double
     let mg_bar: Double
+    let rg_L: Double
+    let rg_bar: Double
     let ug_L: Double
     let ug_bar: Double
     let gp_L: Double
@@ -47,16 +49,20 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
     let mg_L   = input.sac * divers * tTotal * pMoy + safetyStopGas_L
     let mg_bar = mg_L / input.cylVol
 
+    let rg_L   = input.margin * input.cylVol
+    let rg_bar = input.margin
+
     let ug_L   = input.cylVol * input.fillPressure
     let ug_bar = input.fillPressure
 
-    let gp_L   = ug_L - mg_L - (input.margin * input.cylVol)
+    let gp_L   = ug_L - mg_L - rg_L
     let gp_bar = gp_L / input.cylVol
 
     return MinimumGasResult(
         pMoy: pMoy, t1: t1, t2: t2, tTotal: tTotal,
         safetyStopTime: safetyStopTime,
         mg_L: mg_L, mg_bar: mg_bar,
+        rg_L: rg_L, rg_bar: rg_bar,
         ug_L: ug_L, ug_bar: ug_bar,
         gp_L: gp_L, gp_bar: gp_bar
     )
@@ -153,10 +159,10 @@ struct MinimumGasCalculatorView: View {
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button { showInfo = true } label: {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.cyan)
@@ -254,10 +260,19 @@ struct MinimumGasCalculatorView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
+                        Label("Reserve Gas (RG)", systemImage: "lock.shield.fill")
+                            .font(.headline)
+                            .foregroundStyle(.orange)
+                        Text("Reserve Gas (RG) is the fixed safety buffer set by the Reserve Gas field. It is held back separately from the MG and is never consumed during the dive — it stays in your cylinder as an absolute last resort.")
+                        Text("Three factors justify keeping this reserve: regulators need a minimum inlet pressure to deliver gas reliably, submersible pressure gauges are not perfectly accurate, and gas pressure drops when water temperature is colder than the fill temperature. Together, these account for roughly 40 bar (600 psi) of unusable gas at the bottom of your cylinder.")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
                         Label("Gas Plan (GP)", systemImage: "gauge.with.needle.fill")
                             .font(.headline)
                             .foregroundStyle(.green)
-                        Text("Usable Gas (UG) is your total air when full. Gas Plan (GP) is what's left after the MG and safety margin — the air you can actually use during your dive.")
+                        Text("Usable Gas (UG) is your total air when full. Gas Plan (GP) is what's left after subtracting the MG and the Reserve Gas (RG) — the air you can actually use during your dive.")
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -304,7 +319,11 @@ struct MinimumGasCalculatorView: View {
     private var parametersSection: some View {
         Section(header: Text("Dive Parameters")) {
             numberRow(unitMode == .metric ? "Depth (m)"                       : "Depth (ft)",                      text: $depthStr)
-            numberRow(unitMode == .metric ? "RMV (L/min)"                     : "RMV (cuft/min)",                  text: $sacStr)
+            numberRow(
+                unitMode == .metric ? "Respiratory Minute Volume (L/min)" : "Respiratory Minute Volume (cuft/min)",
+                text: $sacStr,
+                note: "RMV · Measured at the surface"
+            )
             numberRow("Handling Time (min)",                                                                        text: $tHandlingStr)
             numberRow(unitMode == .metric ? "Ascent Speed 1st Half (m/min)"   : "Ascent Speed 1st Half (ft/min)",  text: $v1Str)
             numberRow(unitMode == .metric ? "Ascent Speed 2nd Half (m/min)"   : "Ascent Speed 2nd Half (ft/min)",  text: $v2Str)
@@ -318,7 +337,7 @@ struct MinimumGasCalculatorView: View {
             numberRow(unitMode == .metric ? "Volume (L)"           : "Volume (cuft)",         text: $cylVolStr)
             Toggle("Twinset", isOn: $isTwinset)
             numberRow(unitMode == .metric ? "Fill Pressure (bar)"  : "Fill Pressure (psi)",   text: $fillPressureStr)
-            numberRow(unitMode == .metric ? "Reserve Margin (bar)" : "Reserve Margin (psi)",  text: $marginStr)
+            numberRow(unitMode == .metric ? "Reserve Gas (bar)" : "Reserve Gas (psi)",  text: $marginStr)
         }
     }
 
@@ -338,6 +357,10 @@ struct MinimumGasCalculatorView: View {
                    primaryValue: displayVol(result.mg_L),  primaryUnit: volUnitLabel,
                    secondaryValue: displayPres(result.mg_bar), secondaryUnit: presUnitLabel,
                    color: .blue)
+            gasRow("Reserve Gas (RG)",
+                   primaryValue: displayVol(result.rg_L),  primaryUnit: volUnitLabel,
+                   secondaryValue: displayPres(result.rg_bar), secondaryUnit: presUnitLabel,
+                   color: .orange)
             gasRow("Usable Gas (UG)",
                    primaryValue: displayVol(result.ug_L),  primaryUnit: volUnitLabel,
                    secondaryValue: displayPres(result.ug_bar), secondaryUnit: presUnitLabel,
@@ -356,28 +379,35 @@ struct MinimumGasCalculatorView: View {
     // MARK: - Row helpers
 
     @ViewBuilder
-    private func numberRow(_ label: LocalizedStringKey, text: Binding<String>) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            HStack(spacing: 0) {
-                TextField("0", text: text)
-                    .multilineTextAlignment(.trailing)
-                    .frame(minWidth: 60)
-                    #if os(iOS)
-                    .keyboardType(.decimalPad)
-                    #endif
-                // Fixed-width slot keeps layout stable when button appears/disappears
-                ZStack {
-                    Color.clear.frame(width: 24, height: 24)
-                    if !text.wrappedValue.isEmpty {
-                        Button { text.wrappedValue = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+    private func numberRow(_ label: LocalizedStringKey, text: Binding<String>, note: LocalizedStringKey? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                Spacer()
+                HStack(spacing: 0) {
+                    TextField("0", text: text)
+                        .multilineTextAlignment(.trailing)
+                        .frame(minWidth: 60)
+                        #if os(iOS)
+                        .keyboardType(.decimalPad)
+                        #endif
+                    // Fixed-width slot keeps layout stable when button appears/disappears
+                    ZStack {
+                        Color.clear.frame(width: 24, height: 24)
+                        if !text.wrappedValue.isEmpty {
+                            Button { text.wrappedValue = "" } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
+            }
+            if let note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

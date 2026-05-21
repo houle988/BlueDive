@@ -73,10 +73,10 @@ struct GasDensityCalculatorView: View {
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button { showInfo = true } label: {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.cyan)
