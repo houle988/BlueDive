@@ -5,6 +5,29 @@ import UniformTypeIdentifiers
 import AppKit
 #endif
 
+// MARK: - UI Extensions
+
+private extension CertificationOrganization {
+    var swiftUIColor: Color {
+        switch self {
+        case .padi: return .blue
+        case .ssi: return .cyan
+        case .cmas: return .orange
+        case .naui: return .green
+        case .sdi: return .purple
+        case .tdi: return .teal
+        case .bsac: return .red
+        case .other: return .gray
+        }
+    }
+}
+
+extension Certification {
+    var organizationColor: Color {
+        CertificationOrganization(rawValue: organization)?.swiftUIColor ?? .gray
+    }
+}
+
 struct CertificationsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
@@ -477,16 +500,8 @@ struct CertificationCard: View {
         return formatter.string(from: date)
     }
     
-    private var orgColor: Color {
-        switch certification.organization {
-        case "PADI": return .blue
-        case "SSI": return .cyan
-        case "CMAS": return .orange
-        case "NAUI": return .green
-        default: return .gray
-        }
-    }
-    
+    private var orgColor: Color { certification.organizationColor }
+
     var body: some View {
         HStack(spacing: 16) {
             // Badge organisation
@@ -569,16 +584,8 @@ struct CertificationDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showEditCertification = false
     
-    private var orgColor: Color {
-        switch certification.organization {
-        case "PADI": return .blue
-        case "SSI": return .cyan
-        case "CMAS": return .orange
-        case "NAUI": return .green
-        default: return .gray
-        }
-    }
-    
+    private var orgColor: Color { certification.organizationColor }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {

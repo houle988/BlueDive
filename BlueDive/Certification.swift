@@ -59,16 +59,6 @@ extension Certification {
         return components.day
     }
     
-    /// Status color
-    var statusColor: String {
-        if isExpired {
-            return "red"
-        } else if isExpiringSoon {
-            return "orange"
-        } else {
-            return "green"
-        }
-    }
 }
 
 // MARK: - Organizations
@@ -79,22 +69,12 @@ enum CertificationOrganization: String, CaseIterable, Identifiable {
     case cmas = "CMAS"
     case naui = "NAUI"
     case sdi = "SDI"
+    case tdi = "TDI"
     case bsac = "BSAC"
     case other = "Other"
     
     var id: String { rawValue }
     
-    var color: String {
-        switch self {
-        case .padi: return "blue"
-        case .ssi: return "cyan"
-        case .cmas: return "orange"
-        case .naui: return "green"
-        case .sdi: return "purple"
-        case .bsac: return "red"
-        case .other: return "gray"
-        }
-    }
 }
 
 // MARK: - Certification Levels per Organization
@@ -263,6 +243,50 @@ extension CertificationOrganization {
                 "Underwater Navigation",
                 "Underwater Photographer",
                 "Wreck Diver",
+                "Other",
+            ]
+        case .tdi:
+            return [
+                // Open Circuit
+                "Nitrox Diver",
+                "Sidemount Diver",
+                "Intro to Tech",
+                "Advanced Nitrox Diver",
+                "Decompression Procedures",
+                "Helitrox Diver",
+                "Extended Range",
+                "Trimix Diver",
+                "Advanced Trimix Diver",
+                "Diver Propulsion Vehicle (DPV)",
+                // Overhead — Open Circuit
+                "Cavern Diver",
+                "Intro to Cave",
+                "Full Cave Diver",
+                "Advanced Wreck Diver",
+                "Mine Diver",
+                "Cave Survey Diver",
+                "Stage Cave Diver",
+                "Cave DPV",
+                // Rebreather
+                "Semi-Closed Rebreather Diver",
+                "Air Diluent CCR Diver",
+                "Air Diluent Deco CCR Diver",
+                "Helitrox CCR Diver",
+                "Mixed Gas CCR Diver",
+                "Advanced Mixed Gas CCR Diver",
+                // Overhead — Rebreather
+                "Rebreather Cavern Diver",
+                "Rebreather Intro to Cave",
+                "Rebreather Full Cave Diver",
+                // Service
+                "Nitrox Blender",
+                "Advanced Gas Blender",
+                "O2 Service Technician",
+                // Professional Levels
+                "Non-Diving Specialty Instructor",
+                "Technical Divemaster",
+                "Instructor",
+                "Instructor Trainer",
                 "Other",
             ]
         case .bsac:

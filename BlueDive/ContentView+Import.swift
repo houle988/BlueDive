@@ -528,8 +528,17 @@ extension ContentView {
     /// Recalculated fields: maxDepth, averageDepth, duration, cns, tempAir, tempHigh, tempLow, endPressure.
     /// The later dive is deleted after merge.
     func mergeDives(_ diveA: Dive, with diveB: Dive) {
-        // Determine which dive is earlier
-        let (earlier, later) = diveA.timestamp <= diveB.timestamp ? (diveA, diveB) : (diveB, diveA)
+        // Determine which dive is earlier.
+        // Primary signal: timestamp. Tiebreaker: tank start pressure (more gas = start of dive),
+        // so that dives with identical timestamps (e.g. date-only precision) are ordered correctly.
+        let (earlier, later): (Dive, Dive) = {
+            if diveA.timestamp != diveB.timestamp {
+                return diveA.timestamp < diveB.timestamp ? (diveA, diveB) : (diveB, diveA)
+            }
+            let aStart = diveA.tanks.first?.startPressure ?? 0
+            let bStart = diveB.tanks.first?.startPressure ?? 0
+            return aStart >= bStart ? (diveA, diveB) : (diveB, diveA)
+        }()
 
         // --- Append samples from the later dive ---
         var combinedSamples = earlier.profileSamples
@@ -582,9 +591,11 @@ extension ContentView {
             earlier.duration = earlier.duration + surfaceMinutes + later.duration
         }
 
-        // --- CNS: take the higher value ---
+        // --- CNS: sum both segments, capped at 100% ---
+        // Addition is conservative (ignores surface off-gassing) but correct when
+        // the dive computer reset its CNS counter between the two dives.
         if let laterCNS = later.cnsPercentage {
-            earlier.cnsPercentage = max(earlier.cnsPercentage ?? 0, laterCNS)
+            earlier.cnsPercentage = min(100, (earlier.cnsPercentage ?? 0) + laterCNS)
         }
 
         // --- tempAir: keep from earlier dive (pre-dive measurement) ---
@@ -598,23 +609,34 @@ extension ContentView {
         // --- tempLow: min of both ---
         earlier.minTemperature = min(earlier.minTemperature, later.minTemperature)
 
-        // --- endPressure: use the later dive's end pressure on the default tank ---
+        // --- Tank pressures: start from earlier dive, end from later dive ---
+        // Tanks are matched by index (tank 0 ↔ tank 0, etc.).
+        // Tanks in the earlier dive that have no counterpart in the later dive are unchanged.
         if !earlier.tanks.isEmpty {
             var updatedTanks = earlier.tanks
-            let tank = updatedTanks[0]
-            updatedTanks[0] = TankData(
-                id: tank.id,
-                o2: tank.o2,
-                he: tank.he,
-                volume: tank.volume,
-                startPressure: tank.startPressure,
-                endPressure: later.tanks.first?.endPressure,
-                workingPressure: tank.workingPressure,
-                tankMaterial: tank.tankMaterial,
-                tankType: tank.tankType
-            )
+            let laterTanks = later.tanks
+            for i in 0..<updatedTanks.count {
+                guard i < laterTanks.count else { break }
+                let tank = updatedTanks[i]
+                updatedTanks[i] = TankData(
+                    id: tank.id,
+                    o2: tank.o2,
+                    he: tank.he,
+                    volume: tank.volume,
+                    startPressure: tank.startPressure,
+                    endPressure: laterTanks[i].endPressure,
+                    workingPressure: tank.workingPressure,
+                    tankMaterial: tank.tankMaterial,
+                    tankType: tank.tankType
+                )
+            }
             earlier.tanks = updatedTanks
         }
+
+        // --- Exit GPS: always taken from the later dive (nil if it has none) ---
+        // Entry GPS stays from the earlier dive.
+        earlier.exitLatitude  = later.exitLatitude
+        earlier.exitLongitude = later.exitLongitude
 
         // --- Delete the later dive ---
         modelContext.delete(later)
