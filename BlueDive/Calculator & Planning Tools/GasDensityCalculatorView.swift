@@ -42,6 +42,7 @@ struct GasDensityCalculatorView: View {
     @State private var heStr = "0"
     @State private var depthStr = "0"
     @State private var showInfo = false
+    @FocusState private var isAnyFieldFocused: Bool
 
     private func toDouble(_ s: String) -> Double {
         Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0
@@ -86,7 +87,7 @@ struct GasDensityCalculatorView: View {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Close") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        isAnyFieldFocused = false
                     }
                 }
                 #endif
@@ -202,6 +203,7 @@ struct GasDensityCalculatorView: View {
                 TextField("0", text: text)
                     .multilineTextAlignment(.trailing)
                     .frame(minWidth: 60)
+                    .focused($isAnyFieldFocused)
                     #if os(iOS)
                     .keyboardType(.decimalPad)
                     #endif

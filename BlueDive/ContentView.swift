@@ -822,9 +822,9 @@ struct ContentView: View {
             .help("Settings")
         }
 
-        ToolbarItem(placement: .navigation) {
-            calculatorsMenu
-        }
+        // ToolbarItem(placement: .navigation) {
+        //     calculatorsMenu
+        // }
 
         ToolbarItem(placement: .navigation) {
             toolsMenu
@@ -1020,12 +1020,12 @@ struct ContentView: View {
         .help("Calculators")
         .popover(isPresented: $showCalculatorsPopover, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 0) {
-                toolsPopoverButton("Minimum Gas Calculator", icon: "wrench.and.screwdriver.fill") {
+                toolsPopoverButton("Minimum Gas", icon: "wrench.and.screwdriver.fill") {
                     showCalculatorsPopover = false
                     showMinimumGasPlanning = true
                 }
                 Divider()
-                toolsPopoverButton("Gas Density Calculator", icon: "atom") {
+                toolsPopoverButton("Gas Density", icon: "atom") {
                     showCalculatorsPopover = false
                     showGasDensityCalculator = true
                 }
@@ -1036,10 +1036,10 @@ struct ContentView: View {
         #else
         Menu {
             Button(action: { showMinimumGasPlanning = true }) {
-                Label("Minimum Gas Calculator", systemImage: "wrench.and.screwdriver.fill")
+                Label("Minimum Gas", systemImage: "wrench.and.screwdriver.fill")
             }
             Button(action: { showGasDensityCalculator = true }) {
-                Label("Gas Density Calculator", systemImage: "atom")
+                Label("Gas Density", systemImage: "atom")
             }
         } label: {
             Image(systemName: "wrench.and.screwdriver.fill")

@@ -4,15 +4,16 @@ import SwiftUI
 
 struct MinimumGasInput {
     var depth: Double
-    var sac: Double = 20
-    var tHandling: Double = 1
-    var v1: Double = 9
-    var v2: Double = 3
-    var cylVol: Double = 12
-    var fillPressure: Double = 230
-    var margin: Double = 40
-    var roundUpAscent: Bool = true
-    var safetyStop: Bool = false
+    var sac: Double
+    var tHandling: Double
+    var v1: Double
+    var v2: Double
+    var cylVol: Double
+    var fillPressure: Double
+    var margin: Double
+    var minMgBar: Double
+    var roundUpAscent: Bool
+    var safetyStop: Bool
 }
 
 struct MinimumGasResult {
@@ -20,20 +21,25 @@ struct MinimumGasResult {
     let t1: Double
     let t2: Double
     let tTotal: Double
+    let tHandling: Double
     let safetyStopTime: Double
     let mg_L: Double
     let mg_bar: Double
+    let mgWasFloored: Bool
     let rg_L: Double
     let rg_bar: Double
     let ug_L: Double
     let ug_bar: Double
     let gp_L: Double
     let gp_bar: Double
+    var tGrand: Double { tTotal + safetyStopTime }
 }
 
 // Calculation always works in metric (m, L/min, bar); callers convert before passing in.
 func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
-    let divers = 2.0
+    let divers                   = 2.0
+    let safetyStopDuration_min   = 3.0
+    let safetyStopPressure_ata   = 1.5  // 5 m in seawater: 0.5 bar gauge + 1 bar surface
     let half = input.depth / 2
 
     let pMoy   = (input.depth / 10) / 2 + 1
@@ -41,13 +47,16 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
     let t2     = input.roundUpAscent ? ceil(half / input.v2) : half / input.v2
     let tTotal = input.tHandling + t1 + t2
 
-    // Safety stop: 3 min at 5 m (1.5 bar) for both divers, calculated at stop depth
-    // rather than folding into tTotal to avoid applying pMoy (max-depth pressure) to stop gas.
-    let safetyStopTime  = input.safetyStop ? 3.0 : 0.0
-    let safetyStopGas_L = input.safetyStop ? input.sac * divers * 3.0 * 1.5 : 0.0
+    // Calculated at stop depth rather than folding into tTotal to avoid applying
+    // pMoy (max-depth pressure) to stop gas.
+    let safetyStopTime  = input.safetyStop ? safetyStopDuration_min : 0.0
+    let safetyStopGas_L = input.safetyStop ? input.sac * divers * safetyStopDuration_min * safetyStopPressure_ata : 0.0
 
-    let mg_L   = input.sac * divers * tTotal * pMoy + safetyStopGas_L
-    let mg_bar = mg_L / input.cylVol
+    let mg_L_raw     = input.sac * divers * tTotal * pMoy + safetyStopGas_L
+    let mg_bar_raw   = mg_L_raw / input.cylVol
+    let mgWasFloored = mg_bar_raw < input.minMgBar
+    let mg_bar       = max(input.minMgBar, mg_bar_raw)
+    let mg_L         = mg_bar * input.cylVol
 
     let rg_L   = input.margin * input.cylVol
     let rg_bar = input.margin
@@ -60,8 +69,9 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
 
     return MinimumGasResult(
         pMoy: pMoy, t1: t1, t2: t2, tTotal: tTotal,
+        tHandling: input.tHandling,
         safetyStopTime: safetyStopTime,
-        mg_L: mg_L, mg_bar: mg_bar,
+        mg_L: mg_L, mg_bar: mg_bar, mgWasFloored: mgWasFloored,
         rg_L: rg_L, rg_bar: rg_bar,
         ug_L: ug_L, ug_bar: ug_bar,
         gp_L: gp_L, gp_bar: gp_bar
@@ -72,6 +82,7 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
 
 struct MinimumGasCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @AppStorage("lastAcknowledgedCalculatorWarningVersion") private var lastAcknowledgedCalculatorWarningVersion = ""
     @State private var showCalculatorWarning = false
 
@@ -90,12 +101,14 @@ struct MinimumGasCalculatorView: View {
     @State private var marginStr = "40"
     @State private var cylVolStr = "12"
     @State private var isTwinset = false
+    @State private var includeReserveGas = false
     @State private var roundUpAscent = true
     @State private var safetyStop = false
     @State private var showInfo = false
+    @FocusState private var isAnyFieldFocused: Bool
 
     private func toDouble(_ s: String) -> Double {
-        Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0
+        Double(s.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")) ?? 0
     }
 
     // Always returns the cylinder water-volume in litres, ready for calcMinimumGas.
@@ -124,7 +137,8 @@ struct MinimumGasCalculatorView: View {
             v2:            max(1, imp ? toDouble(v2Str) / 3.28084       : toDouble(v2Str)),
             cylVol:        cylVolLitres,
             fillPressure:  imp ? toDouble(fillPressureStr) / 14.5038    : toDouble(fillPressureStr),
-            margin:        imp ? toDouble(marginStr) / 14.5038          : toDouble(marginStr),
+            margin:        includeReserveGas ? (imp ? toDouble(marginStr) / 14.5038 : toDouble(marginStr)) : 0,
+            minMgBar:      imp ? 600.0 / 14.5038 : 40.0,
             roundUpAscent: roundUpAscent,
             safetyStop:    safetyStop
         ))
@@ -136,6 +150,11 @@ struct MinimumGasCalculatorView: View {
 
     private func displayPres(_ bar: Double) -> Double {
         unitMode == .metric ? bar : bar * 14.5038
+    }
+
+    private var hasInvalidInputs: Bool {
+        toDouble(sacStr) <= 0 || toDouble(v1Str) <= 0 || toDouble(v2Str) <= 0 ||
+        toDouble(cylVolStr) <= 0 || toDouble(fillPressureStr) <= 0
     }
 
     private var volUnitLabel: LocalizedStringKey { unitMode == .metric ? "Litres" : "cuft" }
@@ -172,7 +191,7 @@ struct MinimumGasCalculatorView: View {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Close") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        isAnyFieldFocused = false
                     }
                 }
                 #endif
@@ -246,9 +265,9 @@ struct MinimumGasCalculatorView: View {
                         )
                         Text(verbatim: String(
                             format: unitMode == .metric ? metricFormat : imperialFormat,
-                            String(format: "%g", max(1, toDouble(v1Str))),
-                            String(format: "%g", max(1, toDouble(v2Str))),
-                            String(format: "%g", toDouble(tHandlingStr))
+                            String(format: "%g", locale: locale, max(1, toDouble(v1Str))),
+                            String(format: "%g", locale: locale, max(1, toDouble(v2Str))),
+                            String(format: "%g", locale: locale, toDouble(tHandlingStr))
                         ))
                     }
 
@@ -256,7 +275,7 @@ struct MinimumGasCalculatorView: View {
                         Label("Safety Stop", systemImage: "pause.circle.fill")
                             .font(.headline)
                             .foregroundStyle(.teal)
-                        Text("When enabled, a 3-minute safety stop at 5 m (15 ft / 1.5 bar) is added to the Minimum Gas for both divers. The stop gas is calculated at stop depth rather than at average dive pressure.")
+                        Text("When enabled, a 3-minute safety stop at 5 m (15 ft / 1.5 ATA) is added to the Minimum Gas for both divers. The stop gas is calculated at stop depth rather than at average dive pressure.")
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
@@ -269,10 +288,10 @@ struct MinimumGasCalculatorView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("Gas Plan (GP)", systemImage: "gauge.with.needle.fill")
+                        Label("Usable Gas (UG)", systemImage: "gauge.with.needle.fill")
                             .font(.headline)
                             .foregroundStyle(.green)
-                        Text("Usable Gas (UG) is your total air when full. Gas Plan (GP) is what's left after subtracting the MG and the Reserve Gas (RG) — the air you can actually use during your dive.")
+                        Text("Total Gas (TG) is your total air when full. Usable Gas (UG) is what's left after subtracting the MG and the Reserve Gas (RG) — the air you can actually use during your dive.")
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -322,11 +341,14 @@ struct MinimumGasCalculatorView: View {
             numberRow(
                 unitMode == .metric ? "Respiratory Minute Volume (L/min)" : "Respiratory Minute Volume (cuft/min)",
                 text: $sacStr,
-                note: "RMV · Measured at the surface"
+                note: "RMV · Measured at the surface",
+                warning: toDouble(sacStr) <= 0 ? "Must be greater than 0" : nil
             )
             numberRow("Handling Time (min)",                                                                        text: $tHandlingStr)
-            numberRow(unitMode == .metric ? "Ascent Speed 1st Half (m/min)"   : "Ascent Speed 1st Half (ft/min)",  text: $v1Str)
-            numberRow(unitMode == .metric ? "Ascent Speed 2nd Half (m/min)"   : "Ascent Speed 2nd Half (ft/min)",  text: $v2Str)
+            numberRow(unitMode == .metric ? "Ascent Speed 1st Half (m/min)"   : "Ascent Speed 1st Half (ft/min)",  text: $v1Str,
+                      warning: toDouble(v1Str) <= 0 ? "Must be greater than 0" : nil)
+            numberRow(unitMode == .metric ? "Ascent Speed 2nd Half (m/min)"   : "Ascent Speed 2nd Half (ft/min)",  text: $v2Str,
+                      warning: toDouble(v2Str) <= 0 ? "Must be greater than 0" : nil)
             Toggle("Round Up Ascent Time", isOn: $roundUpAscent)
             Toggle(unitMode == .metric ? "Safety Stop (5m)" : "Safety Stop (15ft)", isOn: $safetyStop)
         }
@@ -334,20 +356,26 @@ struct MinimumGasCalculatorView: View {
 
     private var cylinderSection: some View {
         Section(header: Text("Tank")) {
-            numberRow(unitMode == .metric ? "Volume (L)"           : "Volume (cuft)",         text: $cylVolStr)
+            numberRow(unitMode == .metric ? "Volume (L)"           : "Volume (cuft)",         text: $cylVolStr,
+                      warning: toDouble(cylVolStr) <= 0 ? "Must be greater than 0" : nil)
             Toggle("Twinset", isOn: $isTwinset)
-            numberRow(unitMode == .metric ? "Fill Pressure (bar)"  : "Fill Pressure (psi)",   text: $fillPressureStr)
-            numberRow(unitMode == .metric ? "Reserve Gas (bar)" : "Reserve Gas (psi)",  text: $marginStr)
+            numberRow(unitMode == .metric ? "Fill Pressure (bar)"  : "Fill Pressure (psi)",   text: $fillPressureStr,
+                      warning: toDouble(fillPressureStr) <= 0 ? "Must be greater than 0" : nil)
+            Toggle("Reserve Gas", isOn: $includeReserveGas)
+            if includeReserveGas {
+                numberRow(unitMode == .metric ? "Reserve Gas (bar)" : "Reserve Gas (psi)", text: $marginStr)
+            }
         }
     }
 
     private var detailsSection: some View {
         Section(header: Text("Calculation Details")) {
-            detailRow("Mean Pressure", value: String(format: "%.2f ATA", result.pMoy))
-            detailRow("Ascent Phase 1", value: String(format: "%.1f min", result.t1))
-            detailRow("Ascent Phase 2", value: String(format: "%.1f min", result.t2))
-            detailRow("Safety Stop",    value: result.safetyStopTime > 0 ? String(format: "%.0f min", result.safetyStopTime) : "—")
-            detailRow("Total Time",     value: String(format: "%.1f min", result.tTotal + result.safetyStopTime))
+            detailRow("Mean Pressure", value: hasInvalidInputs ? "—" : String(format: "%.2f ATA", locale: locale, result.pMoy))
+            detailRow("Handling Time", value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: locale, result.tHandling))
+            detailRow("Ascent Phase 1", value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: locale, result.t1))
+            detailRow("Ascent Phase 2", value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: locale, result.t2))
+            detailRow("Safety Stop",    value: hasInvalidInputs ? "—" : (result.safetyStopTime > 0 ? String(format: "%.0f min", locale: locale, result.safetyStopTime) : "—"))
+            detailRow("Total Time",     value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: locale, result.tGrand))
         }
     }
 
@@ -356,19 +384,32 @@ struct MinimumGasCalculatorView: View {
             gasRow("Minimum Gas (MG)",
                    primaryValue: displayVol(result.mg_L),  primaryUnit: volUnitLabel,
                    secondaryValue: displayPres(result.mg_bar), secondaryUnit: presUnitLabel,
-                   color: .blue)
-            gasRow("Reserve Gas (RG)",
-                   primaryValue: displayVol(result.rg_L),  primaryUnit: volUnitLabel,
-                   secondaryValue: displayPres(result.rg_bar), secondaryUnit: presUnitLabel,
-                   color: .orange)
-            gasRow("Usable Gas (UG)",
+                   color: .blue, isValid: !hasInvalidInputs)
+            if !hasInvalidInputs && result.mgWasFloored {
+                if unitMode == .metric {
+                    Text("Minimum is 40 bar")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("Minimum is 600 psi")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+            if includeReserveGas {
+                gasRow("Reserve Gas (RG)",
+                       primaryValue: displayVol(result.rg_L),  primaryUnit: volUnitLabel,
+                       secondaryValue: displayPres(result.rg_bar), secondaryUnit: presUnitLabel,
+                       color: .orange, isValid: !hasInvalidInputs)
+            }
+            gasRow("Total Gas (TG)",
                    primaryValue: displayVol(result.ug_L),  primaryUnit: volUnitLabel,
                    secondaryValue: displayPres(result.ug_bar), secondaryUnit: presUnitLabel,
-                   color: .cyan)
-            gasRow("Gas Plan (GP)",
+                   color: .cyan, isValid: !hasInvalidInputs)
+            gasRow("Usable Gas (UG)",
                    primaryValue: displayVol(result.gp_L),  primaryUnit: volUnitLabel,
                    secondaryValue: displayPres(result.gp_bar), secondaryUnit: presUnitLabel,
-                   color: result.gp_L >= 0 ? .green : .red)
+                   color: result.gp_L >= 0 ? .green : .red, isValid: !hasInvalidInputs)
             Text("All calculations provided by this tool are estimates. It is the diver's sole responsibility to verify and validate all results before any dive.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -379,7 +420,7 @@ struct MinimumGasCalculatorView: View {
     // MARK: - Row helpers
 
     @ViewBuilder
-    private func numberRow(_ label: LocalizedStringKey, text: Binding<String>, note: LocalizedStringKey? = nil) -> some View {
+    private func numberRow(_ label: LocalizedStringKey, text: Binding<String>, note: LocalizedStringKey? = nil, warning: LocalizedStringKey? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
@@ -388,6 +429,7 @@ struct MinimumGasCalculatorView: View {
                     TextField("0", text: text)
                         .multilineTextAlignment(.trailing)
                         .frame(minWidth: 60)
+                        .focused($isAnyFieldFocused)
                         #if os(iOS)
                         .keyboardType(.decimalPad)
                         #endif
@@ -403,6 +445,11 @@ struct MinimumGasCalculatorView: View {
                         }
                     }
                 }
+            }
+            if let warning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
             if let note {
                 Text(note)
@@ -426,26 +473,27 @@ struct MinimumGasCalculatorView: View {
         _ label: LocalizedStringKey,
         primaryValue: Double,   primaryUnit: LocalizedStringKey,
         secondaryValue: Double, secondaryUnit: LocalizedStringKey,
-        color: Color
+        color: Color,
+        isValid: Bool = true
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(color)
+                .foregroundStyle(isValid ? color : .secondary)
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: String(format: "%.1f", primaryValue))
+                    Text(verbatim: isValid ? String(format: "%.1f", locale: locale, primaryValue) : "—")
                         .font(.title2.monospacedDigit().bold())
-                        .foregroundStyle(color)
+                        .foregroundStyle(isValid ? color : .secondary)
                     Text(primaryUnit)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(verbatim: String(format: "%.1f", secondaryValue))
+                    Text(verbatim: isValid ? String(format: "%.1f", locale: locale, secondaryValue) : "—")
                         .font(.title2.monospacedDigit().bold())
-                        .foregroundStyle(color)
+                        .foregroundStyle(isValid ? color : .secondary)
                     Text(secondaryUnit)
                         .font(.caption)
                         .foregroundStyle(.secondary)
