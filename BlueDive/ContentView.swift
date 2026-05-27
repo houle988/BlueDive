@@ -61,6 +61,7 @@ struct ContentView: View {
     @State private var showDiveTrips = false
     @State private var showRecordsWall = false
     @State private var showCalendarHeatmap = false
+    @State private var showMarineLife = false
     @State private var showDashboard = false
     @State private var showMinimumGasPlanning = false
     @State private var showGasDensityCalculator = false
@@ -395,6 +396,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showCalendarHeatmap) {
                 DiveCalendarHeatmapView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showMarineLife) {
+                MarineLifeView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -821,11 +828,11 @@ struct ContentView: View {
             }
             .help("Settings")
         }
-
+        // Tools Menu - Begin
         // ToolbarItem(placement: .navigation) {
         //     calculatorsMenu
         // }
-
+        // Tools Menu - End
         ToolbarItem(placement: .navigation) {
             toolsMenu
         }
@@ -985,6 +992,11 @@ struct ContentView: View {
                     showToolsPopover = false
                     showCalendarHeatmap = true
                 }
+                Divider()
+                toolsPopoverButton("Marine Life", icon: "fish.fill") {
+                    showToolsPopover = false
+                    showMarineLife = true
+                }
             }
             .frame(width: 220)
             .padding(.vertical, 4)
@@ -1003,6 +1015,10 @@ struct ContentView: View {
             }
             Button(action: { showCalendarHeatmap = true }) {
                 Label("Calendar", systemImage: "calendar")
+            }
+            Divider()
+            Button(action: { showMarineLife = true }) {
+                Label("Marine Life", systemImage: "fish.fill")
             }
         } label: {
             Image(systemName: "square.grid.2x2.fill")
