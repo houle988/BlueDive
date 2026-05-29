@@ -46,9 +46,15 @@ struct DiveRowView: View {
                 Circle()
                     .fill(resolved.color.opacity(0.15))
                     .frame(width: 44, height: 44)
-                
+
                 Text(resolved.flag)
                     .font(.system(size: 24))
+            }
+
+            if !(dive.seenFish?.isEmpty ?? true) {
+                Image(systemName: "fish.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.teal)
             }
         }
     }

@@ -757,7 +757,13 @@ struct DiveMapCard: View {
                 }
                 
                 Spacer()
-                
+
+                if !(dive.seenFish?.isEmpty ?? true) {
+                    Image(systemName: "fish.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.teal)
+                }
+
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title2)
