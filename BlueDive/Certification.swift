@@ -5,6 +5,7 @@ import SwiftData
 final class Certification {
     var id: UUID = UUID()
     var name: String = ""
+    var diverName: String = ""
     var organization: String = "" // PADI, SSI, CMAS, etc.
     var level: String = "" // Open Water, Advanced, Rescue, etc.
     var certificationNumber: String = ""
@@ -12,10 +13,11 @@ final class Certification {
     var expirationDate: Date?
     var instructorName: String?
     var notes: String?
-    
+
     init(
         id: UUID = UUID(),
         name: String,
+        diverName: String = "",
         organization: String,
         level: String,
         certificationNumber: String,
@@ -26,6 +28,7 @@ final class Certification {
     ) {
         self.id = id
         self.name = name
+        self.diverName = diverName
         self.organization = organization
         self.level = level
         self.certificationNumber = certificationNumber

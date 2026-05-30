@@ -12,6 +12,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
     struct ParsedCertification {
         var id: UUID
         var name: String
+        var diverName: String
         var organization: String
         var level: String
         var certificationNumber: String
@@ -34,6 +35,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
 
     private var tempID: String?
     private var tempName: String?
+    private var tempDiverName: String?
     private var tempOrganization: String?
     private var tempLevel: String?
     private var tempCertificationNumber: String?
@@ -119,6 +121,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
         switch elementName {
         case "id":                  tempID = text.nilIfEmpty
         case "name":                tempName = text.nilIfEmpty
+        case "diverName":           tempDiverName = text.nilIfEmpty
         case "organization":        tempOrganization = text.nilIfEmpty
         case "level":               tempLevel = text.nilIfEmpty
         case "certificationNumber": tempCertificationNumber = text.nilIfEmpty
@@ -130,6 +133,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
             let parsed = ParsedCertification(
                 id: UUID(uuidString: tempID ?? "") ?? UUID(),
                 name: tempName ?? "",
+                diverName: tempDiverName ?? "",
                 organization: tempOrganization ?? "",
                 level: tempLevel ?? "",
                 certificationNumber: tempCertificationNumber ?? "",
@@ -150,6 +154,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
     private func resetTemp() {
         tempID = nil
         tempName = nil
+        tempDiverName = nil
         tempOrganization = nil
         tempLevel = nil
         tempCertificationNumber = nil

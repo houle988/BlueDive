@@ -877,6 +877,13 @@ struct AddGearToDiveView: View {
                                             .font(.caption)
                                             .foregroundStyle(.cyan)
                                     }
+
+                                    if !gear.diverName.isEmpty {
+                                        Text(gear.diverName)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
                                 }
 
                                 Spacer()

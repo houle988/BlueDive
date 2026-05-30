@@ -25,16 +25,26 @@ struct AddGearView: View {
     @State private var showNextServiceDue = false
     @State private var serviceHistory = ""
     @State private var gearNotes = ""
-    
+
+    @State private var diverName = ""
+
     // Validation state
     @State private var showValidationError = false
     @State private var validationMessage = ""
-    
+
+    @Query(sort: \Gear.name) private var allGearItems: [Gear]
+    @Query(sort: \Dive.timestamp) private var allDives: [Dive]
+    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
+
     // Available currencies
     private let currencies = ["CAD", "USD", "EUR", "GBP", "CHF", "AUD", "JPY", "Other"]
-    
+
     // MARK: - Computed Properties
     
+    private var diverNameSuggestions: [String] {
+        DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
+    }
+
     private var isFormValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         name.count >= 2
@@ -224,11 +234,19 @@ struct AddGearView: View {
                     .padding(.horizontal, 4)
                     .transition(.scale.combined(with: .opacity))
                 }
+
+                GearAutocompleteField(
+                    label: "Diver Name",
+                    icon: "person.fill",
+                    placeholder: "Diver Name (optional)",
+                    text: $diverName,
+                    suggestions: diverNameSuggestions
+                )
             }
         }
         .cardStyle()
     }
-    
+
     private var detailsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             SectionHeaderView(title: "Technical Details", icon: "doc.text")
@@ -640,6 +658,7 @@ struct AddGearView: View {
             purchasedFrom: purchasedFrom.trimmingCharacters(in: .whitespaces).isEmpty ? nil : purchasedFrom.trimmingCharacters(in: .whitespaces),
             weightContribution: weightContribution,
             weightContributionUnit: weightContributionUnit,
+            diverName: diverName.trimmingCharacters(in: .whitespaces),
             nextServiceDue: showNextServiceDue ? nextServiceDue : nil,
             serviceHistory: serviceHistory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : serviceHistory.trimmingCharacters(in: .whitespacesAndNewlines),
             gearNotes: gearNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : gearNotes.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -790,6 +809,95 @@ struct FormFieldView: View {
             .padding()
             .background(Color.platformSecondaryBackground)
             .cornerRadius(10)
+        }
+    }
+}
+
+// MARK: - Gear Autocomplete Field
+
+struct GearAutocompleteField: View {
+    let label: LocalizedStringKey
+    let icon: String
+    let placeholder: LocalizedStringKey
+    @Binding var text: String
+    let suggestions: [String]
+
+    @State private var showSuggestions = false
+    @FocusState private var isFocused: Bool
+
+    private var filtered: [String] {
+        guard !text.isEmpty else { return [] }
+        return Array(suggestions
+            .filter {
+                $0.localizedCaseInsensitiveContains(text) &&
+                $0.caseInsensitiveCompare(text) != .orderedSame
+            }
+            .prefix(4))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(label, systemImage: icon)
+                .font(.subheadline)
+                .fontWeight(.medium)
+
+            HStack {
+                TextField(placeholder, text: $text)
+                    .textFieldStyle(.plain)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+                    .onChange(of: isFocused) {
+                        if isFocused {
+                            showSuggestions = true
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                showSuggestions = false
+                            }
+                        }
+                    }
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+            .background(Color.platformSecondaryBackground)
+            .cornerRadius(10)
+
+            if showSuggestions && !filtered.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(filtered, id: \.self) { suggestion in
+                        Button {
+                            text = suggestion
+                            showSuggestions = false
+                            isFocused = false
+                        } label: {
+                            HStack {
+                                Image(systemName: "person.fill")
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption)
+                                Text(suggestion)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+
+                        if suggestion != filtered.last {
+                            Divider()
+                        }
+                    }
+                }
+                .background(Color.platformSecondaryBackground)
+                .cornerRadius(10)
+            }
         }
     }
 }

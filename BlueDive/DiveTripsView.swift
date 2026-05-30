@@ -115,6 +115,8 @@ struct TripBuilder {
 struct DiveTripsView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @State private var selectedTrip: DiveTrip? = nil
     @State private var prefs = UserPreferences.shared
     @State private var tripsAppeared = false
@@ -122,7 +124,7 @@ struct DiveTripsView: View {
     @State private var tripsReady = false
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
 
     var body: some View {

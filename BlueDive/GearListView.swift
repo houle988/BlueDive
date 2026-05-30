@@ -3,8 +3,11 @@ import SwiftData
 
 struct GearListView: View {
     @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesForFilter: [Dive]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertificationsForFilter: [Certification]
     @Environment(\.modelContext) private var modelContext
-    
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
+
     @State private var showAddGear = false
     @State private var selectedGear: Gear?
     @State private var searchText = ""
@@ -15,21 +18,30 @@ struct GearListView: View {
     @State private var showGearGroups = false
 
     // MARK: - Computed Properties
-    
+
+    private var uniqueDivers: [String] {
+        DiverFilter.uniqueDivers(in: allDivesForFilter, gear: allGear, certifications: allCertificationsForFilter)
+    }
+
     /// Équipement filtré par recherche et catégorie
     private var filteredGear: [Gear] {
         var gear = allGear
-        
+
         // Filtre par statut actif/inactif
         if !showInactive {
             gear = gear.filter { !$0.isInactive }
         }
-        
+
+        // Filtre par plongeur
+        if !selectedDiver.isEmpty {
+            gear = gear.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
+        }
+
         // Filtre par catégorie
         if let category = filterCategory {
             gear = gear.filter { $0.category == category.rawValue }
         }
-        
+
         // Filtre par recherche
         if !searchText.isEmpty {
             gear = gear.filter { item in
@@ -37,7 +49,7 @@ struct GearListView: View {
                 item.category.localizedCaseInsensitiveContains(searchText)
             }
         }
-        
+
         return gear
     }
     
@@ -93,6 +105,15 @@ struct GearListView: View {
         .animation(.easeInOut(duration: 0.3), value: filterCategory)
         .animation(.easeInOut(duration: 0.3), value: showInactive)
         .toolbar { toolbarContent }
+        .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+        .onChange(of: selectedDiver) {
+            if let cat = filterCategory {
+                let relevant = selectedDiver.isEmpty ? allGear : allGear.filter { $0.diverName == selectedDiver }
+                if !relevant.contains(where: { $0.category == cat.rawValue }) {
+                    filterCategory = nil
+                }
+            }
+        }
         .sheet(isPresented: $showAddGear) {
             AddGearView()
                 .presentationSizing(.page)
@@ -127,15 +148,19 @@ struct GearListView: View {
         if allGear.isEmpty {
             emptyStateView
                 .transition(.opacity)
-        } else if filteredGear.isEmpty {
+        } else if filteredGear.isEmpty && !selectedDiver.isEmpty && filterCategory == nil && searchText.isEmpty {
+            noGearForDiverView
+                .transition(.opacity)
+        } else if filteredGear.isEmpty && filterCategory == nil {
             noResultsView
                 .transition(.opacity)
         } else {
+            // When filterCategory is active with no results, still show gearList so category chips remain accessible.
             gearList
                 .transition(.opacity)
         }
     }
-    
+
     private var emptyStateView: some View {
         ContentUnavailableView(
             "No Equipment",
@@ -143,9 +168,17 @@ struct GearListView: View {
             description: Text("Add your tanks, suits, and regulators to track their usage and maintenance.")
         )
     }
-    
+
     private var noResultsView: some View {
         ContentUnavailableView.search(text: searchText)
+    }
+
+    private var noGearForDiverView: some View {
+        ContentUnavailableView(
+            "No Equipment for Diver",
+            systemImage: "person.slash",
+            description: Text("No equipment was found for the selected diver.")
+        )
     }
     
     /// Banner colour: red when any gear is overdue, orange when only approaching.
@@ -259,8 +292,11 @@ struct GearListView: View {
                     }
                     
                     // Catégories
+                    let diverBase = selectedDiver.isEmpty
+                        ? allGear
+                        : allGear.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
                     ForEach(GearCategory.allCases) { category in
-                        let count = allGear.filter { $0.category == category.rawValue }.count
+                        let count = diverBase.filter { $0.category == category.rawValue }.count
                         if count > 0 {
                             CategoryFilterChip(
                                 title: "gear.category." + category.rawValue,
@@ -287,6 +323,8 @@ struct GearListView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+
         if inactiveCount > 0 {
             ToolbarItem(placement: .primaryAction) {
                 Button {

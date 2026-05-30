@@ -6,6 +6,8 @@ import SwiftData
 struct RecordsWallView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
 
     private let prefs = UserPreferences.shared
     @State private var recordsAppeared = false
@@ -26,7 +28,7 @@ struct RecordsWallView: View {
     @State private var recordsReady = false
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
 
     private func computeRecords(_ dives: [Dive]) async {

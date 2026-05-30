@@ -36,10 +36,15 @@ struct EditGearView: View {
     @State private var showNextServiceDue: Bool
     @State private var serviceHistory: String
     @State private var gearNotes: String
+    @State private var diverName: String
 
     // Validation
     @State private var showValidationError = false
     @State private var validationMessage = ""
+
+    @Query(sort: \Gear.name) private var allGearItems: [Gear]
+    @Query(sort: \Dive.timestamp) private var allDives: [Dive]
+    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
 
     private let currencies = ["CAD", "USD", "EUR", "GBP", "CHF", "AUD", "JPY", "Other"]
 
@@ -70,9 +75,14 @@ struct EditGearView: View {
         _showNextServiceDue = State(initialValue: gear.nextServiceDue != nil)
         _serviceHistory = State(initialValue: gear.serviceHistory ?? "")
         _gearNotes = State(initialValue: gear.gearNotes ?? "")
+        _diverName = State(initialValue: gear.diverName)
     }
 
     // MARK: - Computed Properties
+
+    private var diverNameSuggestions: [String] {
+        DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
+    }
 
     private var isFormValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -293,6 +303,14 @@ struct EditGearView: View {
                     .padding(.horizontal, 4)
                     .transition(.scale.combined(with: .opacity))
                 }
+
+                GearAutocompleteField(
+                    label: "Diver Name",
+                    icon: "person.fill",
+                    placeholder: "Diver Name (optional)",
+                    text: $diverName,
+                    suggestions: diverNameSuggestions
+                )
             }
         }
         .cardStyle()
@@ -634,6 +652,7 @@ struct EditGearView: View {
         gear.weightContribution = weightContribution
         gear.weightContributionUnit = weightContributionUnit
         gear.isInactive = isInactive
+        gear.diverName = diverName.trimmingCharacters(in: .whitespaces)
         
         // Mise à jour de la date d'entretien et programmation de notification
         let hadServiceDate = gear.nextServiceDue != nil

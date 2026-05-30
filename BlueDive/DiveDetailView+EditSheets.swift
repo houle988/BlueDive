@@ -9,6 +9,8 @@ struct EditMenuStatsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Dive.siteName) private var allDives: [Dive]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
 
     @State private var workingMaxDepth: Double
     @State private var workingAvgDepth: Double
@@ -163,6 +165,10 @@ struct EditMenuStatsView: View {
         }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
+    private var uniqueDiverNames: [String] {
+        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications)
+    }
+
     private var uniqueBuddyNames: [String] {
         var seen = Set<String>()
         return allDives.flatMap { d -> [String] in
@@ -247,7 +253,7 @@ struct EditMenuStatsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     macOSModernGroupBox("Diver", icon: "person.fill", color: .blue) {
-                        macOSModernAutocompleteField("Diver", text: $workingDiverName, icon: "person.fill", suggestions: uniqueValues(for: \.diverName))
+                        macOSModernAutocompleteField("Diver", text: $workingDiverName, icon: "person.fill", suggestions: uniqueDiverNames)
                         HStack(spacing: 12) {
                             Image(systemName: "number")
                                 .foregroundStyle(.secondary)
@@ -991,7 +997,7 @@ struct EditMenuStatsView: View {
 
                 Form {
                     Section {
-                        AutocompleteMenuTextField(label: "Diver", text: $workingDiverName, icon: "person.fill", color: .cyan, suggestions: uniqueValues(for: \.diverName))
+                        AutocompleteMenuTextField(label: "Diver", text: $workingDiverName, icon: "person.fill", color: .cyan, suggestions: uniqueDiverNames)
                         HStack(spacing: 12) {
                             Image(systemName: "number")
                                 .foregroundStyle(.orange)

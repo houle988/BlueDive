@@ -171,7 +171,13 @@ struct GearServiceView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                
+
+                if !gear.diverName.isEmpty {
+                    Label(gear.diverName, systemImage: "person.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
                 HStack(spacing: 6) {
                     Circle()
                         .fill(gear.isInactive ? .red : .green)

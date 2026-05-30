@@ -198,6 +198,12 @@ struct AddGearGroupView: View {
                             .font(.caption2)
                             .foregroundStyle(.cyan)
                     }
+                    if !gear.diverName.isEmpty {
+                        Label(gear.diverName, systemImage: "person.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer()

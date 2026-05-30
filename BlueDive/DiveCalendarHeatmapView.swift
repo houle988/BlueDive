@@ -7,6 +7,8 @@ struct DiveCalendarHeatmapView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
 
     @State private var selectedYear: Int = Calendar.current.component(.year, from: .now)
     @State private var selectedDay: Date? = nil
@@ -35,7 +37,7 @@ struct DiveCalendarHeatmapView: View {
     @State private var statsReady = false
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
 
     private func recomputeAllStats(_ dives: [Dive]) {

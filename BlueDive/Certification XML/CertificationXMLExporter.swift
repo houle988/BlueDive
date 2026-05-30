@@ -48,6 +48,7 @@ enum CertificationXMLExporter {
         lines.append("    <certification>")
         lines.append(xmlTag("id",                  cert.id.uuidString,                              indent: 6))
         lines.append(xmlTag("name",                cert.name,                                       indent: 6))
+        lines.append(xmlTag("diverName",           cert.diverName,                                  indent: 6))
         lines.append(xmlTag("organization",        cert.organization,                               indent: 6))
         lines.append(xmlTag("level",               cert.level,                                      indent: 6))
         lines.append(xmlTag("certificationNumber", cert.certificationNumber,                        indent: 6))

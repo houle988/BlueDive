@@ -31,6 +31,9 @@ extension Certification {
 struct CertificationsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     var onClose: (() -> Void)? = nil
     @State private var showAddCertification = false
     @State private var appeared = false
@@ -50,16 +53,26 @@ struct CertificationsView: View {
     @State private var exportFileName: String = ""
     #endif
     
+    private var uniqueDivers: [String] {
+        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: certifications)
+    }
+
+    private var filteredCertifications: [Certification] {
+        selectedDiver.isEmpty ? certifications : certifications.filter {
+            $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver
+        }
+    }
+
     private var activeCertifications: [Certification] {
-        certifications.filter { !$0.isExpired }
+        filteredCertifications.filter { !$0.isExpired }
     }
-    
+
     private var expiredCertifications: [Certification] {
-        certifications.filter { $0.isExpired }
+        filteredCertifications.filter { $0.isExpired }
     }
-    
+
     private var expiringSoon: [Certification] {
-        certifications.filter { $0.isExpiringSoon }
+        filteredCertifications.filter { $0.isExpiringSoon }
     }
     
     var body: some View {
@@ -69,6 +82,11 @@ struct CertificationsView: View {
                     ScrollView {
                         emptyStateView
                     }
+                } else if filteredCertifications.isEmpty {
+                    NoEntriesForDiverView(
+                        title: "No Certifications for Diver",
+                        description: "No certifications were found for the selected diver."
+                    )
                 } else {
                     List {
                         // Alert for certifications expiring soon
@@ -191,6 +209,7 @@ struct CertificationsView: View {
             .navigationTitle("")
             .background(Color.platformBackground.ignoresSafeArea())
             .scrollContentBackground(.hidden)
+            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             .refreshable {
                 try? modelContext.save()
                 NSUbiquitousKeyValueStore.default.synchronize()
@@ -216,6 +235,7 @@ struct CertificationsView: View {
                         }
                     }
                 }
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
                 ToolbarItem(placement: .primaryAction) {
                     HStack(spacing: 12) {
                         Menu {
@@ -456,6 +476,7 @@ struct CertificationsView: View {
 
                     let cert = Certification(
                         name: item.name,
+                        diverName: item.diverName,
                         organization: item.organization,
                         level: item.level,
                         certificationNumber: item.certificationNumber,
@@ -520,7 +541,14 @@ struct CertificationCard: View {
                 Text(certification.name)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                
+
+                if !certification.diverName.isEmpty {
+                    Text(certification.diverName)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .fontWeight(.medium)
+                }
+
                 Group {
                     if certification.level == "Other" {
                         Text("Other")
@@ -631,6 +659,9 @@ struct CertificationDetailView: View {
                         
                         // Details
                         VStack(spacing: 16) {
+                            if !certification.diverName.isEmpty {
+                                DetailRow(icon: "person.fill", title: "Diver Name", value: certification.diverName)
+                            }
                             DetailRow(icon: "building.2.fill", title: "Organization", value: certification.organization)
                             DetailRow(icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "") : certification.level)
                             DetailRow(icon: "number", title: "Number", value: certification.certificationNumber)
@@ -756,17 +787,102 @@ struct DetailRow: View {
     }
 }
 
+// MARK: - Certification Autocomplete Field
+
+private struct CertificationAutocompleteField: View {
+    let label: LocalizedStringKey
+    var placeholder: LocalizedStringKey? = nil
+    @Binding var text: String
+    let suggestions: [String]
+
+    @State private var showSuggestions = false
+    @FocusState private var isFocused: Bool
+
+    private var filtered: [String] {
+        guard !text.isEmpty else { return [] }
+        return suggestions.filter {
+            $0.localizedCaseInsensitiveContains(text) && $0.lowercased() != text.lowercased()
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+            HStack {
+                TextField(placeholder ?? label, text: $text)
+                    .textFieldStyle(.plain)
+                    .focused($isFocused)
+                    .onChange(of: text) {
+                        showSuggestions = isFocused && !filtered.isEmpty
+                    }
+                    .onChange(of: isFocused) {
+                        if isFocused {
+                            showSuggestions = !filtered.isEmpty
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                showSuggestions = false
+                            }
+                        }
+                    }
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.primary.opacity(0.06))
+            )
+            if showSuggestions && !filtered.isEmpty {
+                ForEach(filtered.prefix(4), id: \.self) { suggestion in
+                    Button {
+                        text = suggestion
+                        showSuggestions = false
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(suggestion)
+                                .foregroundStyle(.cyan)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 3)
+                        .padding(.leading, 8)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Add Certification View
 
 struct AddCertificationView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    
+
+    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
+    @Query(sort: \Dive.timestamp) private var allDives: [Dive]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+
     var certificationToEdit: Certification?
-    
+
     private var isEditing: Bool { certificationToEdit != nil }
-    
+
     @State private var name: String = ""
+    @State private var diverName: String = ""
     @State private var organization: String = "PADI"
     @State private var level: String = ""
     @State private var certificationNumber: String = ""
@@ -776,6 +892,10 @@ struct AddCertificationView: View {
     @State private var instructorName: String = ""
     @State private var notes: String = ""
     @State private var nameManuallyEdited: Bool = false
+
+    private var diverNameSuggestions: [String] {
+        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications)
+    }
 
     private var autoGeneratedName: String {
         guard !organization.isEmpty, !level.isEmpty, level != "Other" else { return "" }
@@ -815,6 +935,13 @@ struct AddCertificationView: View {
                         // General Information
                         certificationSectionCard(title: "General Information", icon: "info.circle.fill", color: .cyan) {
                             VStack(spacing: 14) {
+                                CertificationAutocompleteField(
+                                    label: "Diver Name",
+                                    placeholder: "Diver Name (optional)",
+                                    text: $diverName,
+                                    suggestions: diverNameSuggestions
+                                )
+
                                 #if os(macOS)
                                 certificationMenuRow("Organization", selection: organization) {
                                     ForEach(CertificationOrganization.allCases) { org in
@@ -983,6 +1110,7 @@ struct AddCertificationView: View {
             .onAppear {
                 if let cert = certificationToEdit {
                     name = cert.name
+                    diverName = cert.diverName
                     organization = cert.organization
                     level = cert.level
                     certificationNumber = cert.certificationNumber
@@ -1101,6 +1229,7 @@ struct AddCertificationView: View {
     private func saveCertification() {
         if let cert = certificationToEdit {
             cert.name = name.trimmingCharacters(in: .whitespaces)
+            cert.diverName = diverName.trimmingCharacters(in: .whitespaces)
             cert.organization = organization.trimmingCharacters(in: .whitespaces)
             cert.level = level.trimmingCharacters(in: .whitespaces)
             cert.certificationNumber = certificationNumber.trimmingCharacters(in: .whitespaces)
@@ -1110,7 +1239,7 @@ struct AddCertificationView: View {
             cert.instructorName = trimmedInstructor.isEmpty ? nil : trimmedInstructor
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             cert.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
-            
+
             // Reschedule or cancel expiration notification
             if hasExpiration {
                 cert.scheduleExpirationReminder()
@@ -1122,6 +1251,7 @@ struct AddCertificationView: View {
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             let newCert = Certification(
                 name: name.trimmingCharacters(in: .whitespaces),
+                diverName: diverName.trimmingCharacters(in: .whitespaces),
                 organization: organization.trimmingCharacters(in: .whitespaces),
                 level: level.trimmingCharacters(in: .whitespaces),
                 certificationNumber: certificationNumber.trimmingCharacters(in: .whitespaces),

@@ -9,10 +9,17 @@ enum DiverFilter {
     /// Single source of truth for the AppStorage key.
     static let storageKey = "selectedDiverFilter"
 
-    /// Sorted, deduplicated list of non-empty diver names from a dive collection.
-    /// Names are trimmed to match widget aggregation in ContentView.updateWidgetDiveData.
-    static func uniqueDivers(in dives: [Dive]) -> [String] {
-        Array(Set(dives.map { $0.diverName.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })).sorted()
+    /// Sorted, deduplicated list of non-empty diver names across dives, gear, and certifications.
+    /// All parameters are optional so callers can pass only the sources they have.
+    static func uniqueDivers(
+        in dives: [Dive] = [],
+        gear: [Gear] = [],
+        certifications: [Certification] = []
+    ) -> [String] {
+        let names = dives.map { $0.diverName.trimmingCharacters(in: .whitespaces) }
+            + gear.map { $0.diverName.trimmingCharacters(in: .whitespaces) }
+            + certifications.map { $0.diverName.trimmingCharacters(in: .whitespaces) }
+        return Array(Set(names.filter { !$0.isEmpty })).sorted()
     }
 
     /// Returns `dives` filtered to a single diver, or unchanged when no diver is selected.
@@ -45,21 +52,38 @@ struct DiverFilterToolbar: ToolbarContent {
     private var isActive: Bool { !selectedDiver.isEmpty }
 
     private var picker: some View {
-        Picker(selection: $selectedDiver) {
-            Text("All Divers").tag("")
+        Menu {
+            Button {
+                selectedDiver = ""
+            } label: {
+                if selectedDiver.isEmpty {
+                    Label("All Divers", systemImage: "checkmark")
+                } else {
+                    Text("All Divers")
+                }
+            }
+            Divider()
             ForEach(uniqueDivers, id: \.self) { diver in
-                Text(diver).tag(diver)
+                Button {
+                    selectedDiver = diver
+                } label: {
+                    if selectedDiver == diver {
+                        Label(diver, systemImage: "checkmark")
+                    } else {
+                        Text(diver)
+                    }
+                }
             }
         } label: {
-            Label(
-                isActive ? selectedDiver : String(localized: "All Divers"),
-                systemImage: isActive ? "person.fill.checkmark" : "person.2"
-            )
-            .foregroundStyle(isActive ? Color.cyan : Color.secondary)
+            Image(systemName: isActive ? "person.fill.checkmark" : "person.2")
+                .foregroundStyle(isActive ? Color.cyan : Color.secondary)
         }
-        .pickerStyle(.menu)
-        .fixedSize()
-        .accessibilityLabel(Text("Filter by diver"))
+        .accessibilityLabel(isActive
+            ? Text("Filter by diver: \(selectedDiver)")
+            : Text("Filter by diver"))
+        .help(isActive
+            ? NSLocalizedString("Diver: ", bundle: Bundle.forAppLanguage(), comment: "") + selectedDiver
+            : NSLocalizedString("Filter by diver", bundle: Bundle.forAppLanguage(), comment: ""))
     }
 }
 

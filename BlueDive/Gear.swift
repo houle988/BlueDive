@@ -23,6 +23,7 @@ final class Gear {
     var weightContribution: Double = 0.0 // en kg
     var weightContributionUnit: String? // "kg" or "lb"
     var isInactive: Bool = false
+    var diverName: String = ""
     
     // Relation inverse avec les plongées
     @Relationship(inverse: \Dive.usedGear)
@@ -86,6 +87,7 @@ final class Gear {
         weightContribution: Double = 0.0,
         weightContributionUnit: String,
         isInactive: Bool = false,
+        diverName: String = "",
         lastServiceDate: Date? = nil,
         nextServiceDue: Date? = nil,
         serviceHistory: String? = nil,
@@ -104,6 +106,7 @@ final class Gear {
         self.weightContribution = weightContribution
         self.weightContributionUnit = weightContributionUnit
         self.isInactive = isInactive
+        self.diverName = diverName
         self.lastServiceDate = lastServiceDate
         self.nextServiceDue = nextServiceDue
         self.serviceHistory = serviceHistory
