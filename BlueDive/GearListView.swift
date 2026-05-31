@@ -403,10 +403,17 @@ struct GearRow: View {
                 }
                 
                 gearDetails
+
+                if !gear.diverName.isEmpty {
+                    Text(gear.diverName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
-            
+
             Spacer()
-            
+
             // Indicateur d'entretien — orange within 30 days, red when due/past
             if let indicatorColor = serviceIndicatorColor {
                 Image(systemName: "exclamationmark.circle.fill")

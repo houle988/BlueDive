@@ -37,6 +37,7 @@ struct CertificationsView: View {
     var onClose: (() -> Void)? = nil
     @State private var showAddCertification = false
     @State private var appeared = false
+    @State private var collapsedSections: Set<String> = []
     @State private var selectedCertification: Certification?
     @State private var certificationToDelete: Certification?
     @State private var showDeleteConfirmation = false
@@ -63,12 +64,15 @@ struct CertificationsView: View {
         }
     }
 
-    private var activeCertifications: [Certification] {
-        filteredCertifications.filter { !$0.isExpired }
-    }
-
-    private var expiredCertifications: [Certification] {
-        filteredCertifications.filter { $0.isExpired }
+    private var groupedCertifications: [(key: String, value: [Certification])] {
+        let grouped = Dictionary(grouping: filteredCertifications, by: { $0.organization })
+        // Sort by CertificationOrganization.allCases order so "Other" stays last
+        let knownOrder = CertificationOrganization.allCases.map(\.rawValue)
+        return grouped.sorted { a, b in
+            let ai = knownOrder.firstIndex(of: a.key) ?? Int.max
+            let bi = knownOrder.firstIndex(of: b.key) ?? Int.max
+            return ai < bi
+        }
     }
 
     private var expiringSoon: [Certification] {
@@ -99,15 +103,24 @@ struct CertificationsView: View {
                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                             .listRowSeparator(.hidden)
                         }
-                        
-                        // Active certifications
-                        if !activeCertifications.isEmpty {
-                            Section {
-                                ForEach(activeCertifications) { cert in
+
+                        // Certifications grouped by agency
+                        ForEach(groupedCertifications, id: \.key) { agency, certs in
+                            Section(isExpanded: Binding(
+                                get: { !collapsedSections.contains(agency) },
+                                set: { isExpanded in
+                                    if isExpanded {
+                                        collapsedSections.remove(agency)
+                                    } else {
+                                        collapsedSections.insert(agency)
+                                    }
+                                }
+                            )) {
+                                ForEach(certs) { cert in
                                     Button {
                                         selectedCertification = cert
                                     } label: {
-                                        CertificationCard(certification: cert, showExpired: false)
+                                        CertificationCard(certification: cert, showExpired: cert.isExpired)
                                     }
                                     .buttonStyle(.plain)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -142,61 +155,14 @@ struct CertificationsView: View {
                                     .listRowSeparator(.hidden)
                                 }
                             } header: {
-                                Text("Active Certifications")
+                                Text(agency)
                                     .font(.headline)
-                                    .foregroundStyle(.primary)
-                            }
-                        }
-                        
-                        // Expired certifications
-                        if !expiredCertifications.isEmpty {
-                            Section {
-                                ForEach(expiredCertifications) { cert in
-                                    Button {
-                                        selectedCertification = cert
-                                    } label: {
-                                        CertificationCard(certification: cert, showExpired: true)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            certificationToDelete = cert
-                                            showDeleteConfirmation = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                    .contextMenu {
-                                        Button {
-                                            selectedCertification = cert
-                                        } label: {
-                                            Label("View Details", systemImage: "eye")
-                                        }
-                                        Button {
-                                            showEditCertificationFor = cert
-                                        } label: {
-                                            Label("Edit", systemImage: "pencil")
-                                        }
-                                        Divider()
-                                        Button(role: .destructive) {
-                                            certificationToDelete = cert
-                                            showDeleteConfirmation = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                    .listRowBackground(Color.clear)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .listRowSeparator(.hidden)
-                                }
-                            } header: {
-                                Text("Expired Certifications")
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(CertificationOrganization(rawValue: agency)?.swiftUIColor ?? .gray)
+                                    .textCase(nil)
                             }
                         }
                     }
-                    .listStyle(.plain)
+                    .listStyle(.sidebar)
                 }
             }
             .opacity(appeared ? 1.0 : 0.0)
@@ -948,7 +914,9 @@ struct AddCertificationView: View {
                                         Button(org.rawValue) {
                                             DispatchQueue.main.async {
                                                 organization = org.rawValue
-                                                level = ""
+                                                if !org.levels.contains(level) {
+                                                    level = ""
+                                                }
                                                 updateAutoName()
                                             }
                                         }
@@ -977,7 +945,9 @@ struct AddCertificationView: View {
                                     }
                                 }
                                 .onChange(of: organization) {
-                                    level = ""
+                                    if !availableLevels.contains(level) {
+                                        level = ""
+                                    }
                                     updateAutoName()
                                 }
                                 Picker("Level", selection: $level) {

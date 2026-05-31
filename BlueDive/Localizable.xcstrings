@@ -1109,22 +1109,6 @@
         }
       }
     },
-    "Active Certifications" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Active Certifications"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Certifications actives"
-          }
-        }
-      }
-    },
     "Active Equipment" : {
       "localizations" : {
         "en" : {
@@ -5562,22 +5546,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Expiré"
-          }
-        }
-      }
-    },
-    "Expired Certifications" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expired Certifications"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Certifications expirées"
           }
         }
       }
