@@ -4,6 +4,7 @@ import CoreBluetooth
 import UniformTypeIdentifiers
 import WidgetKit
 import LibDCSwift
+import os.log
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -178,6 +179,20 @@ struct ContentView: View {
         if filterDiverName != nil       { count += 1 }
         if !filterMarineLife.isEmpty    { count += 1 }
         return count
+    }
+
+    /// Cheap fingerprint of the fields that `updateWidgetDiveData()` depends on.
+    /// Avoids allocating an O(N) String array on every render (the previous approach).
+    private var widgetDataFingerprint: Int {
+        var hasher = Hasher()
+        for dive in dives {
+            hasher.combine(dive.diverName)
+            hasher.combine(dive.maxDepth.bitPattern)
+            hasher.combine(dive.duration)
+            hasher.combine(dive.importDistanceUnit)
+            hasher.combine(dive.timestamp.timeIntervalSince1970.bitPattern)
+        }
+        return hasher.finalize()
     }
 
     private var filteredAndSortedDives: [Dive] {
@@ -594,7 +609,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: isImporting)
         .onAppear { updateWidgetDiveData() }
-        .onChange(of: dives.map { "\($0.diverName)|\($0.maxDepth)|\($0.duration)|\($0.importDistanceUnit)|\($0.timestamp.timeIntervalSince1970)" }) { _, _ in updateWidgetDiveData() }
+        .onChange(of: widgetDataFingerprint) { _, _ in updateWidgetDiveData() }
         .onChange(of: prefs.depthUnit) { _, _ in updateWidgetDiveData() }
     }
 
@@ -754,6 +769,7 @@ struct ContentView: View {
     
     private var diveList: some View {
         let displayedDives = filteredAndSortedDives
+        let indexLookup = Dictionary(dives.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
         return Group {
             if displayedDives.isEmpty {
                 // No results for search / filters
@@ -789,7 +805,7 @@ struct ContentView: View {
                         NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: filteredAndSortedDives)) {
                             DiveRowView(
                                 dive: dive,
-                                diveNumber: dives.count - (dives.firstIndex(of: dive) ?? 0)
+                                diveNumber: dives.count - (indexLookup[dive.id] ?? 0)
                             )
                         }
                         .listRowBackground(Color.primary.opacity(0.07))
@@ -1133,7 +1149,11 @@ struct ContentView: View {
         guard !isSyncing else { return }
         withAnimation { isSyncing = true }
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            BlueDiveApp.logger.error("❌ iCloud sync save failed: \(error.localizedDescription)")
+        }
         NSUbiquitousKeyValueStore.default.synchronize()
 
         try? await Task.sleep(for: .seconds(1.5))

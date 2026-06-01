@@ -54,8 +54,9 @@ class NotificationManager: NSObject {
         cancelNotification(identifier: "gear-\(gear.id.uuidString)")
         
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "🛠️ Service Required")
-        content.body = String(localized: "\(gear.name) requires servicing in 30 days.")
+        let gearBundle = Bundle.forAppLanguage()
+        content.title = NSLocalizedString("🛠️ Service Required", bundle: gearBundle, comment: "")
+        content.body = String(format: NSLocalizedString("%@ requires servicing in 30 days.", bundle: gearBundle, comment: ""), gear.name)
         content.sound = .default
         content.categoryIdentifier = "GEAR_MAINTENANCE"
         content.userInfo = ["gearId": gear.id.uuidString, "type": "maintenance"]
@@ -108,8 +109,9 @@ class NotificationManager: NSObject {
     
     private func scheduleExpirationNotification(for cert: Certification, date: Date, daysRemaining: Int, identifier: String) {
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "⚠️ Certification Expiring")
-        content.body = String(localized: "Your \(cert.name) certification expires in \(daysRemaining) days.")
+        let certBundle = Bundle.forAppLanguage()
+        content.title = NSLocalizedString("⚠️ Certification Expiring", bundle: certBundle, comment: "")
+        content.body = String(format: NSLocalizedString("Your %@ certification expires in %lld days.", bundle: certBundle, comment: ""), cert.name, Int64(daysRemaining))
         
         content.sound = .default
         content.categoryIdentifier = "CERTIFICATION_EXPIRATION"
@@ -138,8 +140,9 @@ class NotificationManager: NSObject {
         guard milestones.contains(totalDives) else { return }
         
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "🏆 Milestone Reached!")
-        content.body = String(localized: "Congratulations! You've completed \(totalDives) dives! \u{1F389}")
+        let milestoneBundle = Bundle.forAppLanguage()
+        content.title = NSLocalizedString("🏆 Milestone Reached!", bundle: milestoneBundle, comment: "")
+        content.body = String(format: NSLocalizedString("Congratulations! You've completed %lld dives! 🎉", bundle: milestoneBundle, comment: ""), Int64(totalDives))
         content.sound = .default
         content.categoryIdentifier = "MILESTONE"
         

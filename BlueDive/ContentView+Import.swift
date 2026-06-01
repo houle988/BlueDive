@@ -351,6 +351,9 @@ extension ContentView {
             newDive.decoStops = diveData.decoStops
         }
 
+        // Raw dive computer data (from BlueDive XML round-trip)
+        newDive.rawDiveComputerData = diveData.rawDiveComputerData
+
         // ── Save tank data and gas mixes ────────────────────────────────────
         // Priority: Use the new multi-tank array (diveData.tanks) if available,
         // otherwise fall back to the legacy single-gas format (diveData.gases).
@@ -465,6 +468,7 @@ extension ContentView {
                         weightContribution: gearItem.weightContribution ?? 0.0,
                         weightContributionUnit: gearItem.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol,
                         isInactive: gearItem.isInactive,
+                        diverName: gearItem.diverName,
                         nextServiceDue: gearItem.nextServiceDue,
                         serviceHistory: gearItem.serviceHistory,
                         gearNotes: gearItem.gearNotes

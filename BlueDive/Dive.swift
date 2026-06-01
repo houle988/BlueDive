@@ -379,41 +379,84 @@ final class Dive {
     
     @Relationship(deleteRule: .nullify)
     var usedGear: [Gear]? = []
-    
 
-    
+    // MARK: - JSON Decode Caches
+    // @Transient properties are not persisted; they are initialised to their defaults
+    // each time the model is loaded from the store. hashValue of the raw Data blob is
+    // used as the cache key so that external updates (e.g. iCloud sync writing to the
+    // backing Data property directly) are detected and force a re-decode.
+
+    @Transient private var _cachedProfileSamples: [DiveProfilePoint] = []
+    @Transient private var _cachedProfileKey: Int? = nil
+
+    @Transient private var _cachedTanks: [TankData] = []
+    @Transient private var _cachedTanksKey: Int? = nil
+
+    @Transient private var _cachedDecoStops: [DecoStop] = []
+    @Transient private var _cachedDecoStopsKey: Int? = nil
+
     // MARK: Computed Properties
-    
+
     /// Accès au profil de plongée
     var profileSamples: [DiveProfilePoint] {
         get {
-            guard let data = profileData else { return [] }
-            return (try? JSONDecoder().decode([DiveProfilePoint].self, from: data)) ?? []
+            let key = profileData?.hashValue
+            if key == _cachedProfileKey { return _cachedProfileSamples }
+            guard let data = profileData else {
+                _cachedProfileSamples = []; _cachedProfileKey = nil; return []
+            }
+            let decoded = (try? JSONDecoder().decode([DiveProfilePoint].self, from: data)) ?? []
+            _cachedProfileSamples = decoded
+            _cachedProfileKey = key
+            return decoded
         }
         set {
-            profileData = try? JSONEncoder().encode(newValue)
+            let encoded = try? JSONEncoder().encode(newValue)
+            profileData = encoded
+            _cachedProfileSamples = newValue
+            _cachedProfileKey = encoded?.hashValue
         }
     }
-    
+
     /// Accès aux bouteilles
     var tanks: [TankData] {
         get {
-            guard let data = tanksData else { return [] }
-            return (try? JSONDecoder().decode([TankData].self, from: data)) ?? []
+            let key = tanksData?.hashValue
+            if key == _cachedTanksKey { return _cachedTanks }
+            guard let data = tanksData else {
+                _cachedTanks = []; _cachedTanksKey = nil; return []
+            }
+            let decoded = (try? JSONDecoder().decode([TankData].self, from: data)) ?? []
+            _cachedTanks = decoded
+            _cachedTanksKey = key
+            return decoded
         }
         set {
-            tanksData = try? JSONEncoder().encode(newValue)
+            let encoded = try? JSONEncoder().encode(newValue)
+            tanksData = encoded
+            _cachedTanks = newValue
+            _cachedTanksKey = encoded?.hashValue
         }
     }
 
     /// Arrêts de décompression
     var decoStops: [DecoStop] {
         get {
-            guard let data = decoStopsData else { return [] }
-            return (try? JSONDecoder().decode([DecoStop].self, from: data)) ?? []
+            let key = decoStopsData?.hashValue
+            if key == _cachedDecoStopsKey { return _cachedDecoStops }
+            guard let data = decoStopsData else {
+                _cachedDecoStops = []; _cachedDecoStopsKey = nil; return []
+            }
+            let decoded = (try? JSONDecoder().decode([DecoStop].self, from: data)) ?? []
+            _cachedDecoStops = decoded
+            _cachedDecoStopsKey = key
+            return decoded
         }
         set {
-            decoStopsData = try? JSONEncoder().encode(newValue)
+            let encoded = try? JSONEncoder().encode(newValue)
+            decoStopsData = encoded
+            _cachedDecoStops = newValue
+            _cachedDecoStopsKey = encoded?.hashValue
         }
     }
     
@@ -1159,14 +1202,14 @@ final class Dive {
         diveNumber: Int? = nil,
         identifier: String? = nil,
         timestamp: Date = .now,
-        location: String = String(localized: "Unknown"),
-        siteName: String = String(localized: "Dive site"),
+        location: String = NSLocalizedString("Unknown", bundle: .forAppLanguage(), comment: ""),
+        siteName: String = NSLocalizedString("Dive site", bundle: .forAppLanguage(), comment: ""),
         diveTypes: String? = nil,
         tags: String? = nil,
         computerName: String = "Shearwater Perdix 2",
         computerSerialNumber: String? = nil,
         surfaceInterval: String = "0h 00m",
-        diverName: String = String(localized: "Diver"),
+        diverName: String = NSLocalizedString("Diver", bundle: .forAppLanguage(), comment: ""),
         buddies: String = "",
         rating: Int = 0,
         isRepetitiveDive: Bool = false,

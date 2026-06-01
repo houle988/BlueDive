@@ -439,10 +439,10 @@ struct SettingsView: View {
     @State private var showingAboutSheet = false
     @State private var showWelcomeWizard = false
     @State private var showDisclaimer = false
-    @State private var showCalculatorWarning = false
     @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
     @State private var iCloudAccountStatus: CKAccountStatus = .couldNotDetermine
     @State private var iCloudStatusChecked = false
+    @State private var backupError: String?
     #if os(iOS)
     @State private var showBackupExporter = false
     @State private var backupDocument: ExportableFileDocument?
@@ -554,6 +554,14 @@ struct SettingsView: View {
                 backupDocument = nil
             }
             #endif
+            .alert(
+                "Backup Failed",
+                isPresented: Binding(get: { backupError != nil }, set: { if !$0 { backupError = nil } })
+            ) {
+                Button("OK", role: .cancel) { backupError = nil }
+            } message: {
+                Text(backupError ?? "")
+            }
         }
     }
     
@@ -1502,43 +1510,6 @@ struct SettingsView: View {
             .buttonStyle(.plain)
 
             Button {
-                showCalculatorWarning = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "function")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Calculator Safety Warning")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.primary)
-                        Text("Review the calculator tools disclaimer")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-
-            Button {
                 showWelcomeWizard = true
             } label: {
                 HStack(spacing: 12) {
@@ -1593,12 +1564,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showDisclaimer) {
             DisclaimerView()
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showCalculatorWarning) {
-            CalculatorSafetyWarningView()
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -1700,84 +1665,127 @@ struct SettingsView: View {
 
 
     private func backupDatabase() {
+        // Flush pending changes so the WAL is consistent before snapshotting files
+        try? modelContext.save()
+
+        guard let storeURL = modelContext.container.configurations.first?.url else {
+            backupError = NSLocalizedString("Backup failed: could not locate the database.", bundle: .forAppLanguage(), comment: "")
+            return
+        }
+        let storeDir = storeURL.deletingLastPathComponent()
+        let storeBaseName = storeURL.lastPathComponent
+
+        // Move file I/O off the main actor to keep the UI responsive.
+        // The outer Task inherits @MainActor so state writes after the await are safe.
+        Task {
+            let result: Result<(URL, String), BackupFailure> = await Task.detached(priority: .userInitiated) {
+                Self.buildBackupZip(storeDir: storeDir, storeBaseName: storeBaseName)
+            }.value
+
+            switch result {
+            case .failure(.directoryUnreadable):
+                backupError = NSLocalizedString("Backup failed: could not read the database directory.", bundle: .forAppLanguage(), comment: "")
+            case .failure(.noFilesFound):
+                backupError = NSLocalizedString("Backup failed: no database files found.", bundle: .forAppLanguage(), comment: "")
+            case .failure(.copyFailed):
+                backupError = NSLocalizedString("Backup failed: could not copy database files.", bundle: .forAppLanguage(), comment: "")
+            case .failure(.archiveFailed):
+                backupError = NSLocalizedString("Backup failed: could not create the archive.", bundle: .forAppLanguage(), comment: "")
+            case .success(let (finalZipURL, zipName)):
+                #if os(macOS)
+                let savePanel = NSSavePanel()
+                savePanel.title = NSLocalizedString("Save Backup", bundle: .forAppLanguage(), comment: "")
+                savePanel.nameFieldStringValue = zipName
+                savePanel.allowedContentTypes = [.zip]
+                savePanel.canCreateDirectories = true
+
+                if savePanel.runModal() == .OK, let destination = savePanel.url {
+                    let fm = FileManager.default
+                    try? fm.removeItem(at: destination)
+                    try? fm.copyItem(at: finalZipURL, to: destination)
+                }
+                try? FileManager.default.removeItem(at: finalZipURL)
+                #else
+                if let data = try? Data(contentsOf: finalZipURL) {
+                    backupDocument = ExportableFileDocument(data: data)
+                    backupFileName = zipName
+                    showBackupExporter = true
+                } else {
+                    backupError = NSLocalizedString("Backup failed: could not prepare the archive.", bundle: .forAppLanguage(), comment: "")
+                }
+                try? FileManager.default.removeItem(at: finalZipURL)
+                #endif
+            }
+        }
+    }
+
+    private enum BackupFailure: Error {
+        case directoryUnreadable, noFilesFound, copyFailed, archiveFailed
+    }
+
+    // Pure I/O — runs on a background thread via Task.detached, no SwiftUI state access.
+    private nonisolated static func buildBackupZip(storeDir: URL, storeBaseName: String) -> Result<(URL, String), BackupFailure> {
         let fm = FileManager.default
 
-        // Locate the SwiftData store files in Application Support
-        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        // Enumerate store directory including hidden items (options: [] = no .skipsHiddenFiles)
+        // to capture the hidden external-storage directory SwiftData writes for
+        // @Attribute(.externalStorage) blobs (photos, profile samples, tanks data, etc.)
+        let contents: [URL]
+        do {
+            contents = try fm.contentsOfDirectory(
+                at: storeDir,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: []
+            )
+        } catch {
+            return .failure(.directoryUnreadable)
+        }
 
-        let storeURL = appSupport.appendingPathComponent("default.store")
-        let shmURL   = appSupport.appendingPathComponent("default.store-shm")
-        let walURL   = appSupport.appendingPathComponent("default.store-wal")
+        // Match SQLite files by explicit suffix and any hidden directory whose name
+        // starts with ".<storeBaseName>" (covers _SUPPORT, _CoreDataExternalStorage, etc.)
+        let sqliteSuffixes: Set<String> = ["", "-shm", "-wal", "-journal"]
+        let filesToBackup = contents.filter { url in
+            let name = url.lastPathComponent
+            if name.hasPrefix("." + storeBaseName) { return true }
+            guard name.hasPrefix(storeBaseName) else { return false }
+            return sqliteSuffixes.contains(String(name.dropFirst(storeBaseName.count)))
+        }
 
-        // Collect only existing files
-        let filesToBackup = [storeURL, shmURL, walURL].filter { fm.fileExists(atPath: $0.path) }
-        guard !filesToBackup.isEmpty else { return }
+        guard !filesToBackup.isEmpty else { return .failure(.noFilesFound) }
 
-        // Create a temporary directory and copy the database files into it
         let tempDir = fm.temporaryDirectory.appendingPathComponent("BlueDiveBackup-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: tempDir) }
+
         do {
             try fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
             for file in filesToBackup {
                 try fm.copyItem(at: file, to: tempDir.appendingPathComponent(file.lastPathComponent))
             }
         } catch {
-            return
+            return .failure(.copyFailed)
         }
 
-        // Create a zip archive from the temporary directory
         let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        let dateSuffix = dateFormatter.string(from: Date())
-        let zipName = "BlueDive-Backup-\(dateSuffix).zip"
+        let zipName = "BlueDive-Backup-\(dateFormatter.string(from: Date())).zip"
         let zipURL = fm.temporaryDirectory.appendingPathComponent(zipName)
-
-        // Remove any previous zip with the same name
         try? fm.removeItem(at: zipURL)
 
-        // Use NSFileCoordinator to create a zip via the system
-        let coordinator = NSFileCoordinator()
         var coordError: NSError?
         var createdZipURL: URL?
 
-        coordinator.coordinate(readingItemAt: tempDir, options: .forUploading, error: &coordError) { zippedURL in
+        NSFileCoordinator().coordinate(readingItemAt: tempDir, options: .forUploading, error: &coordError) { zippedURL in
             do {
                 try fm.copyItem(at: zippedURL, to: zipURL)
                 createdZipURL = zipURL
-            } catch {
-                // Failed to copy zip
-            }
+            } catch {}
         }
 
-        // Clean up temp directory
-        try? fm.removeItem(at: tempDir)
-
-        guard let finalZipURL = createdZipURL else { return }
-
-        // Present Save As panel
-        #if os(macOS)
-        let savePanel = NSSavePanel()
-        savePanel.title = "Save Backup"
-        savePanel.nameFieldStringValue = zipName
-        savePanel.allowedContentTypes = [.zip]
-        savePanel.canCreateDirectories = true
-
-        if savePanel.runModal() == .OK, let destination = savePanel.url {
-            try? fm.removeItem(at: destination)
-            try? fm.copyItem(at: finalZipURL, to: destination)
-        }
-        // Clean up temp zip
-        try? fm.removeItem(at: finalZipURL)
-        #else
-        // On iOS, use .fileExporter to present the native save-to-files dialog
-        if let data = try? Data(contentsOf: finalZipURL) {
-            backupDocument = ExportableFileDocument(data: data)
-            backupFileName = zipName
-            showBackupExporter = true
-        }
-        try? fm.removeItem(at: finalZipURL)
-        #endif
+        guard coordError == nil, createdZipURL != nil else { return .failure(.archiveFailed) }
+        return .success((zipURL, zipName))
     }
-    
+
     // MARK: - Erase All Data
     
     private func eraseAllData() {

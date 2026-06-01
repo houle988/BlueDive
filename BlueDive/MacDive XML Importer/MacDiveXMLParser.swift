@@ -71,6 +71,7 @@ struct BlueDiveGlobalData: Sendable {
     let samples: [BlueDiveSamplesData]
     let marineLifeSeen: [BlueDiveMarineLifeData]
     let decoStops: [DecoStop]
+    let rawDiveComputerData: Data?
 }
 
 /// Dive site data
@@ -155,6 +156,7 @@ struct BlueDiveGearData: Sendable {
     let serviceHistory: String?
     let gearNotes: String?
     let isInactive: Bool
+    let diverName: String
 }
 
 /// Profile sample data
@@ -501,7 +503,8 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                     nextServiceDue: nil,          // NOT imported from MacDive
                     serviceHistory: nil,          // NOT imported from MacDive
                     gearNotes: nil,               // NOT imported from MacDive
-                    isInactive: false             // NOT imported from MacDive
+                    isInactive: false,            // NOT imported from MacDive
+                    diverName: ""                 // NOT imported from MacDive
                 ))
             }
             isInGearItem = false
@@ -658,7 +661,8 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                 gear: currentGear,
                 samples: currentSamples,
                 marineLifeSeen: [],  // Marine life data NOT imported from MacDive XML (per CSV mapping)
-                decoStops: []
+                decoStops: [],
+                rawDiveComputerData: nil
             ))
             isInDive = false
         default: break

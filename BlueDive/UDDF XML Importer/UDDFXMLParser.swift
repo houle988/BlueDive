@@ -496,7 +496,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                         nextServiceDue: nil,
                         serviceHistory: nil,
                         gearNotes: nil,
-                        isInactive: false
+                        isInactive: false,
+                        diverName: ""             // NOT imported from UDDF
                     ))
                 }
                 isInVariousPieces = false
@@ -876,7 +877,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             gear: ownerGear,
             samples: currentSamples,
             marineLifeSeen: [],
-            decoStops: []
+            decoStops: [],
+            rawDiveComputerData: nil
         ))
     }
 

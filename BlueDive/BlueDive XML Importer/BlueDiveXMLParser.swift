@@ -66,6 +66,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
     private var currentSamples: [BlueDiveSamplesData] = []
     private var currentMarineLife: [BlueDiveMarineLifeData] = []
     private var currentDecoStops: [DecoStop] = []
+    private var currentRawDiveComputerData: Data?
+    private var pendingRawDataEncoding: String?
 
     // MARK: - Parser Context Flags
 
@@ -145,6 +147,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
     private var tempGearServiceHistory: String?
     private var tempGearNotes: String?
     private var tempGearIsInactive: Bool = false
+    private var tempGearDiverName: String = ""
 
     // MARK: - Temporary Marine Life State
 
@@ -221,6 +224,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
              "fish" where isInMarineLifeSeen:
             isInMarineLife = true
             resetTempMarineLife()
+        case "rawDiveComputerData":
+            pendingRawDataEncoding = attributeDict["encoding"]
         case "decoStops":
             isInDecoStops = true
         case "decoStop" where isInDecoStops:
@@ -407,6 +412,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         case "serviceHistory":     tempGearServiceHistory = text.nilIfEmpty
         case "gearNotes":          tempGearNotes = text.nilIfEmpty
         case "isInactive":         tempGearIsInactive = (text.lowercased() == "true")
+        case "diverName":          tempGearDiverName = text
         case "item":
             if let name = tempGearName {
                 currentGear.append(BlueDiveGearData(
@@ -424,7 +430,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
                     nextServiceDue: tempGearNextServiceDue,
                     serviceHistory: tempGearServiceHistory,
                     gearNotes: tempGearNotes,
-                    isInactive: tempGearIsInactive
+                    isInactive: tempGearIsInactive,
+                    diverName: tempGearDiverName
                 ))
             }
             isInGearItem = false
@@ -577,6 +584,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         case "pressureFormat":    pressureFormat    = text.nilIfEmpty ?? pressureFormat
         case "volumeFormat":      volumeFormat      = text.nilIfEmpty ?? volumeFormat
         case "weightFormat":      weightFormat      = text.nilIfEmpty ?? weightFormat
+        case "rawDiveComputerData":
+            guard pendingRawDataEncoding == "base64" else { break }
+            currentRawDiveComputerData = text.nilIfEmpty.flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
         case "dive":
             dives.append(BlueDiveGlobalData(
                 distanceFormat: distanceFormat,
@@ -624,7 +634,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
                 gear: currentGear,
                 samples: currentSamples,
                 marineLifeSeen: currentMarineLife,
-                decoStops: currentDecoStops
+                decoStops: currentDecoStops,
+                rawDiveComputerData: currentRawDiveComputerData
             ))
             isInDive = false
         default: break
@@ -675,6 +686,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         currentSamples = []
         currentMarineLife = []
         currentDecoStops = []
+        currentRawDiveComputerData = nil
+        pendingRawDataEncoding = nil
     }
 
     private func resetTempSite() {
@@ -735,6 +748,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         tempGearServiceHistory = nil
         tempGearNotes = nil
         tempGearIsInactive = false
+        tempGearDiverName = ""
     }
 
     private func resetTempMarineLife() {

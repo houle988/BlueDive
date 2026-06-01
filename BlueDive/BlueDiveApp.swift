@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import CloudKit
 import UserNotifications
 import os.log
 import LibDCSwift
@@ -160,44 +159,23 @@ struct BlueDiveApp: App {
     }
     
     // MARK: - Model Container Setup
-    
+
     /// UserDefaults key for iCloud sync preference.
     static let iCloudSyncEnabledKey = "iCloudSyncEnabled"
-    
-    /// Checks iCloud account status on first launch and sets the default sync preference.
-    /// If the user has no iCloud account, sync defaults to disabled.
-    private static func configureFirstLaunchiCloudDefault() {
-        let defaults = UserDefaults.standard
-        let hasLaunchedKey = "hasConfigurediCloudDefault"
-        
-        guard !defaults.bool(forKey: hasLaunchedKey) else { return }
-        
-        // First launch: check iCloud account status synchronously using a semaphore
-        let semaphore = DispatchSemaphore(value: 0)
-        var accountAvailable = false
-        
-        CKContainer(identifier: "iCloud.app.bluedive.universal").accountStatus { status, _ in
-            accountAvailable = (status == .available)
-            semaphore.signal()
-        }
-        semaphore.wait()
-        
-        defaults.set(accountAvailable, forKey: iCloudSyncEnabledKey)
-        defaults.set(true, forKey: hasLaunchedKey)
-        
-        logger.info("First launch iCloud config: account available = \(accountAvailable), sync enabled = \(accountAvailable)")
-    }
-    
+
     private static func createModelContainer() -> ModelContainer {
         let schema = appSchema
-        
+
         // 🔧 Delete old incompatible database on first launch after schema changes
         // TODO: Comment this out after successful first launch
         // deleteOldDatabase()
-        
-        // Configure iCloud default on first launch
-        configureFirstLaunchiCloudDefault()
-        
+
+        // Default to iCloud enabled so new installs opt-in without blocking the main thread.
+        // The Settings toggle (and its existing "no account" warning) handles the unavailable case.
+        // Existing users who already have the key stored are unaffected — register(defaults:) is
+        // a no-op when the key is already present.
+        UserDefaults.standard.register(defaults: [iCloudSyncEnabledKey: true])
+
         // Read iCloud sync preference
         let iCloudEnabled = UserDefaults.standard.bool(forKey: iCloudSyncEnabledKey)
         let cloudKitDB: ModelConfiguration.CloudKitDatabase = iCloudEnabled

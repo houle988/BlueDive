@@ -237,6 +237,7 @@ enum BlueDiveXMLExporter {
                 lines.append(xmlTag("serviceHistory",     item.serviceHistory ?? "",                                   indent: 8))
                 lines.append(xmlTag("gearNotes",          item.gearNotes ?? "",                                        indent: 8))
                 lines.append(xmlTag("isInactive",         item.isInactive ? "true" : "false",                          indent: 8))
+                lines.append(xmlTag("diverName",          item.diverName,                                              indent: 8))
                 lines.append("      </item>")
             }
             lines.append("    </gear>")
@@ -268,6 +269,19 @@ enum BlueDiveXMLExporter {
                 lines.append("      <sample \(attrString)/>")
             }
             lines.append("    </profileSamples>")
+        }
+
+        // ── Raw dive computer data ────────────────────────────────────────────
+        if let raw = dive.rawDiveComputerData {
+            lines.append("    <!-- Raw dive computer data (Base64-encoded binary) -->")
+            lines.append("    <rawDiveComputerData encoding=\"base64\">")
+            // Wrap at 76 chars per line (MIME convention) to avoid single mega-lines in the XML.
+            // The importer uses .ignoreUnknownCharacters so embedded newlines are harmless.
+            let base64 = raw.base64EncodedString(options: .lineLength76Characters)
+            for chunk in base64.components(separatedBy: CharacterSet.newlines) where !chunk.isEmpty {
+                lines.append("      \(chunk)")
+            }
+            lines.append("    </rawDiveComputerData>")
         }
 
         lines.append("  </dive>")
