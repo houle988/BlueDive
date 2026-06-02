@@ -273,15 +273,12 @@ enum BlueDiveXMLExporter {
 
         // ── Raw dive computer data ────────────────────────────────────────────
         if let raw = dive.rawDiveComputerData {
-            lines.append("    <!-- Raw dive computer data (Base64-encoded binary) -->")
-            lines.append("    <rawDiveComputerData encoding=\"base64\">")
-            // Wrap at 76 chars per line (MIME convention) to avoid single mega-lines in the XML.
-            // The importer uses .ignoreUnknownCharacters so embedded newlines are harmless.
-            let base64 = raw.base64EncodedString(options: .lineLength76Characters)
-            for chunk in base64.components(separatedBy: CharacterSet.newlines) where !chunk.isEmpty {
-                lines.append("      \(chunk)")
-            }
-            lines.append("    </rawDiveComputerData>")
+            appendBase64Element("rawDiveComputerData", raw, comment: "Raw dive computer data (Base64-encoded binary)", into: &lines)
+        }
+
+        // ── Fingerprint ───────────────────────────────────────────────────────
+        if let fp = dive.fingerprintData {
+            appendBase64Element("fingerprintData", fp, comment: "Fingerprint (Base64-encoded binary)", into: &lines)
         }
 
         lines.append("  </dive>")
@@ -305,6 +302,26 @@ enum BlueDiveXMLExporter {
     }
 
     // MARK: - XML Helpers
+
+    /// Appends a Base64-encoded binary element wrapped at 76-char MIME lines.
+    /// The importer decodes with .ignoreUnknownCharacters, so embedded newlines are harmless.
+    private static func appendBase64Element(
+        _ name: String,
+        _ data: Data,
+        comment: String,
+        indent: Int = 4,
+        into lines: inout [String]
+    ) {
+        let pad = String(repeating: " ", count: indent)
+        let chunkPad = String(repeating: " ", count: indent + 2)
+        lines.append("\(pad)<!-- \(comment) -->")
+        lines.append("\(pad)<\(name) encoding=\"base64\">")
+        let base64 = data.base64EncodedString(options: .lineLength76Characters)
+        for chunk in base64.components(separatedBy: CharacterSet.newlines) where !chunk.isEmpty {
+            lines.append("\(chunkPad)\(chunk)")
+        }
+        lines.append("\(pad)</\(name)>")
+    }
 
     private static func xmlTag(_ name: String, _ value: String, indent: Int) -> String {
         let pad = String(repeating: " ", count: indent)

@@ -68,6 +68,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
     private var currentDecoStops: [DecoStop] = []
     private var currentRawDiveComputerData: Data?
     private var pendingRawDataEncoding: String?
+    private var currentFingerprintData: Data?
+    private var pendingFingerprintEncoding: String?
 
     // MARK: - Parser Context Flags
 
@@ -226,6 +228,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
             resetTempMarineLife()
         case "rawDiveComputerData":
             pendingRawDataEncoding = attributeDict["encoding"]
+        case "fingerprintData":
+            pendingFingerprintEncoding = attributeDict["encoding"]
         case "decoStops":
             isInDecoStops = true
         case "decoStop" where isInDecoStops:
@@ -585,8 +589,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         case "volumeFormat":      volumeFormat      = text.nilIfEmpty ?? volumeFormat
         case "weightFormat":      weightFormat      = text.nilIfEmpty ?? weightFormat
         case "rawDiveComputerData":
-            guard pendingRawDataEncoding == "base64" else { break }
-            currentRawDiveComputerData = text.nilIfEmpty.flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
+            currentRawDiveComputerData = decodeBase64(text, encoding: pendingRawDataEncoding)
+        case "fingerprintData":
+            currentFingerprintData = decodeBase64(text, encoding: pendingFingerprintEncoding)
         case "dive":
             dives.append(BlueDiveGlobalData(
                 distanceFormat: distanceFormat,
@@ -635,7 +640,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
                 samples: currentSamples,
                 marineLifeSeen: currentMarineLife,
                 decoStops: currentDecoStops,
-                rawDiveComputerData: currentRawDiveComputerData
+                rawDiveComputerData: currentRawDiveComputerData,
+                fingerprintData: currentFingerprintData
             ))
             isInDive = false
         default: break
@@ -688,6 +694,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         currentDecoStops = []
         currentRawDiveComputerData = nil
         pendingRawDataEncoding = nil
+        currentFingerprintData = nil
+        pendingFingerprintEncoding = nil
     }
 
     private func resetTempSite() {
@@ -757,6 +765,13 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
     }
 
     // MARK: - Parsing Utilities
+
+    /// Decodes a Base64 text node produced by the exporter's `appendBase64Element` helper.
+    /// Returns nil if the encoding attribute is not "base64" or the text is empty/invalid.
+    private func decodeBase64(_ text: String, encoding: String?) -> Data? {
+        guard encoding == "base64" else { return nil }
+        return text.nilIfEmpty.flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
+    }
 
     /// Robustly parses an integer number of seconds from a string.
     /// Handles both integer ("3600") and decimal ("3600.0") representations.

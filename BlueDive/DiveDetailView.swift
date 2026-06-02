@@ -403,19 +403,27 @@ struct DiveDetailView: View {
         }
         .sheet(isPresented: $showEditSheet) {
             editSheetForCurrentTab
-                #if os(iOS)
-                .presentationDetents([.medium, .large])
+                .presentationSizing(.page)
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                #endif
         }
         .sheet(isPresented: $showAddFish) {
             AddFishView(dive: dive)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(item: $fishToEdit) { fish in
             EditFishView(fish: fish)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAddGear) {
             AddGearToDiveView(dive: dive)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         #if os(iOS)
         .fileExporter(

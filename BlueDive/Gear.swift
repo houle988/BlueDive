@@ -85,7 +85,7 @@ final class Gear {
         currency: String? = nil,
         purchasedFrom: String? = nil,
         weightContribution: Double = 0.0,
-        weightContributionUnit: String,
+        weightContributionUnit: String? = nil,
         isInactive: Bool = false,
         diverName: String = "",
         lastServiceDate: Date? = nil,

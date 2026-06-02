@@ -878,7 +878,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             samples: currentSamples,
             marineLifeSeen: [],
             decoStops: [],
-            rawDiveComputerData: nil
+            rawDiveComputerData: nil,
+            fingerprintData: nil
         ))
     }
 

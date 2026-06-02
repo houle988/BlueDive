@@ -1,5 +1,9 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
+#if canImport(AppKit)
+import AppKit
+#endif
 
 struct GearListView: View {
     @Query(sort: \Gear.name) private var allGear: [Gear]
@@ -16,6 +20,16 @@ struct GearListView: View {
     @State private var collapsedSections: Set<String> = []
     @State private var showTankTemplates = false
     @State private var showGearGroups = false
+    @State private var showImportPicker = false
+    @State private var importError: String?
+    @State private var showImportError = false
+    @State private var importedCount: Int = 0
+    @State private var showImportSuccess = false
+    #if os(iOS)
+    @State private var showFileExporter = false
+    @State private var exportDocument: ExportableFileDocument?
+    @State private var exportFileName: String = ""
+    #endif
 
     // MARK: - Computed Properties
 
@@ -137,6 +151,36 @@ struct GearListView: View {
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .fileImporter(
+            isPresented: $showImportPicker,
+            allowedContentTypes: [.xml],
+            allowsMultipleSelection: false
+        ) { result in
+            handleImportResult(result)
+        }
+        #if os(iOS)
+        .fileExporter(
+            isPresented: $showFileExporter,
+            document: exportDocument,
+            contentType: .xml,
+            defaultFilename: exportFileName
+        ) { _ in
+            exportDocument = nil
+        }
+        #endif
+        .alert("Import Successful", isPresented: $showImportSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(verbatim: String(
+                format: NSLocalizedString("%lld gear item(s) imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items from an XML file."),
+                importedCount
+            ))
+        }
+        .alert("Import error", isPresented: $showImportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(verbatim: importError ?? NSLocalizedString("An unknown error occurred.", bundle: Bundle.forAppLanguage(), comment: "Default error message shown in the import error alert when no specific error is available."))
         }
 
     }
@@ -358,6 +402,18 @@ struct GearListView: View {
                 Button(action: { showGearGroups = true }) {
                     Label("Gear Groups", systemImage: "tray.2.fill")
                 }
+                Divider()
+                Button {
+                    exportGearToXML()
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .disabled(allGear.isEmpty)
+                Button {
+                    showImportPicker = true
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
             } label: {
                 Image(systemName: "ellipsis.circle.fill")
                     .font(.title3)
@@ -376,6 +432,93 @@ struct GearListView: View {
                 modelContext.delete(itemToDelete)
             }
             try? modelContext.save()
+        }
+    }
+
+    @MainActor
+    private func exportGearToXML() {
+        let xml = GearXMLExporter.generateXML(for: allGear)
+        guard let data = xml.data(using: .utf8) else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        let datePart = formatter.string(from: Date())
+        let fileName = "BlueDive_Gear_\(datePart).xml"
+
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = fileName
+        panel.allowedContentTypes = [.xml]
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? data.write(to: url)
+        }
+        #else
+        exportDocument = ExportableFileDocument(data: data)
+        exportFileName = fileName
+        showFileExporter = true
+        #endif
+    }
+
+    private func handleImportResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+            do {
+                let data = try Data(contentsOf: url)
+                let parser = GearXMLParser()
+                guard let parsed = parser.parse(data: data), !parsed.isEmpty else {
+                    importError = NSLocalizedString("No gear items found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports an XML file that contains no gear items.")
+                    showImportError = true
+                    return
+                }
+
+                let existingIDs = Set(allGear.map(\.id))
+
+                var count = 0
+                for item in parsed {
+                    // Dedup by UUID; items from different devices with the same gear
+                    // but different UUIDs will both be imported as separate entries.
+                    guard !existingIDs.contains(item.id) else { continue }
+
+                    let gear = Gear(
+                        id: item.id,
+                        name: item.name,
+                        category: item.category,
+                        manufacturer: item.manufacturer,
+                        model: item.model,
+                        serialNumber: item.serialNumber,
+                        datePurchased: item.datePurchased,
+                        purchasePrice: item.purchasePrice,
+                        currency: item.currency,
+                        purchasedFrom: item.purchasedFrom,
+                        weightContribution: item.weightContribution,
+                        weightContributionUnit: item.weightContributionUnit,
+                        isInactive: item.isInactive,
+                        diverName: item.diverName,
+                        lastServiceDate: item.lastServiceDate,
+                        nextServiceDue: item.nextServiceDue,
+                        serviceHistory: item.serviceHistory,
+                        gearNotes: item.gearNotes
+                    )
+                    modelContext.insert(gear)
+                    count += 1
+                }
+                try? modelContext.save()
+                importedCount = count
+                showImportSuccess = true
+            } catch {
+                importError = error.localizedDescription
+                showImportError = true
+            }
+
+        case .failure(let error):
+            importError = error.localizedDescription
+            showImportError = true
         }
     }
 }

@@ -72,6 +72,7 @@ struct BlueDiveGlobalData: Sendable {
     let marineLifeSeen: [BlueDiveMarineLifeData]
     let decoStops: [DecoStop]
     let rawDiveComputerData: Data?
+    let fingerprintData: Data?
 }
 
 /// Dive site data
@@ -662,7 +663,8 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                 samples: currentSamples,
                 marineLifeSeen: [],  // Marine life data NOT imported from MacDive XML (per CSV mapping)
                 decoStops: [],
-                rawDiveComputerData: nil
+                rawDiveComputerData: nil,
+                fingerprintData: nil
             ))
             isInDive = false
         default: break

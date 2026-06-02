@@ -353,6 +353,7 @@ extension ContentView {
 
         // Raw dive computer data (from BlueDive XML round-trip)
         newDive.rawDiveComputerData = diveData.rawDiveComputerData
+        newDive.fingerprintData = diveData.fingerprintData
 
         // ── Save tank data and gas mixes ────────────────────────────────────
         // Priority: Use the new multi-tank array (diveData.tanks) if available,

@@ -1787,34 +1787,59 @@ struct SettingsView: View {
     }
 
     // MARK: - Erase All Data
-    
+
     private func eraseAllData() {
         guard !isErasingData else { return }
         isErasingData = true
         erasePhase = .erasing
-        
+
         Task {
             var errors: [String] = []
-            
-            // Step 1: Delete all local SwiftData objects.
-            // iCloud data is intentionally preserved so the cloud can
-            // replicate everything back down on the next launch.
+
+            // Step 1: Delete all SwiftData objects (local + iCloud).
+            // For each type, attempt batch delete first. If it throws (e.g.
+            // ".externalStorage blob hasn't synced locally"), fall back to
+            // per-object delete. Fallback failures are appended to errors.
             await MainActor.run {
+                do { try modelContext.delete(model: Dive.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<Dive>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("Dive: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: MarineSight.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<MarineSight>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("MarineSight: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: Gear.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<Gear>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("Gear: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: Certification.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<Certification>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("Certification: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: DivingInsurance.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<DivingInsurance>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("DivingInsurance: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: TankTemplate.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<TankTemplate>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("TankTemplate: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: GearGroup.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<GearGroup>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("GearGroup: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: DeviceFingerprint.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<DeviceFingerprint>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("DeviceFingerprint: \(e.localizedDescription)") }
+                }
                 do {
-                    try modelContext.delete(model: Dive.self)
-                    try modelContext.delete(model: MarineSight.self)
-                    try modelContext.delete(model: Gear.self)
-                    try modelContext.delete(model: Certification.self)
-                    try modelContext.delete(model: DivingInsurance.self)
-                    try modelContext.delete(model: TankTemplate.self)
-                    try modelContext.delete(model: GearGroup.self)
-                    try modelContext.delete(model: DeviceFingerprint.self)
                     try modelContext.save()
                 } catch {
-                    errors.append("Local data: \(error.localizedDescription)")
+                    errors.append("Save: \(error.localizedDescription)")
                 }
             }
-            
+
             // Step 2: Remove all pending and delivered notifications.
             NotificationManager.shared.cancelAllNotifications()
             NotificationManager.shared.clearBadge()
@@ -1835,15 +1860,14 @@ struct SettingsView: View {
             shared?.removeObject(forKey: "mostRecentDiveDateByDiver")
             WidgetCenter.shared.reloadTimelines(ofKind: "DiveCountWidget")
             WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")
-            
+
             // Step 3: Start a 30-second countdown, then close the app.
-            // This gives CloudKit enough time to process the local deletions
-            // before the app terminates. On relaunch, the cloud data will
-            // replicate back down automatically.
+            // This gives CloudKit enough time to propagate the local deletions
+            // to iCloud before the app terminates.
             await MainActor.run {
                 erasePhase = .done(errorCount: errors.count, countdown: 30)
             }
-            
+
             // Countdown from 30 to 0
             for remaining in stride(from: 29, through: 0, by: -1) {
                 try? await Task.sleep(for: .seconds(1))
@@ -1851,7 +1875,7 @@ struct SettingsView: View {
                     erasePhase = .done(errorCount: errors.count, countdown: remaining)
                 }
             }
-            
+
             // Close the app
             await MainActor.run {
                 isErasingData = false
