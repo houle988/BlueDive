@@ -449,6 +449,7 @@ struct CertificationsView: View {
                         issueDate: item.issueDate,
                         expirationDate: item.expirationDate,
                         instructorName: item.instructorName,
+                        instructorNumber: item.instructorNumber,
                         notes: item.notes
                     )
                     modelContext.insert(cert)
@@ -639,6 +640,10 @@ struct CertificationDetailView: View {
                             
                             if let instructor = certification.instructorName, !instructor.isEmpty {
                                 DetailRow(icon: "person.fill", title: "Instructor", value: instructor)
+                            }
+
+                            if let instructorCertNum = certification.instructorNumber, !instructorCertNum.isEmpty {
+                                DetailRow(icon: "number", title: "Instructor Number", value: instructorCertNum)
                             }
                             
                             if let notes = certification.notes, !notes.isEmpty {
@@ -856,6 +861,7 @@ struct AddCertificationView: View {
     @State private var hasExpiration: Bool = false
     @State private var expirationDate: Date = Date()
     @State private var instructorName: String = ""
+    @State private var instructorNumber: String = ""
     @State private var notes: String = ""
     @State private var nameManuallyEdited: Bool = false
 
@@ -1007,6 +1013,8 @@ struct AddCertificationView: View {
                             VStack(spacing: 14) {
                                 certificationTextField("Instructor Name", placeholder: "Instructor Name (optional)", text: $instructorName)
 
+                                certificationTextField("Instructor Number", placeholder: "Instructor Number (optional)", text: $instructorNumber)
+
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Notes")
                                         .font(.caption)
@@ -1088,6 +1096,7 @@ struct AddCertificationView: View {
                     hasExpiration = cert.expirationDate != nil
                     expirationDate = cert.expirationDate ?? Date()
                     instructorName = cert.instructorName ?? ""
+                    instructorNumber = cert.instructorNumber ?? ""
                     notes = cert.notes ?? ""
                     nameManuallyEdited = true
                 }
@@ -1207,6 +1216,8 @@ struct AddCertificationView: View {
             cert.expirationDate = hasExpiration ? expirationDate : nil
             let trimmedInstructor = instructorName.trimmingCharacters(in: .whitespaces)
             cert.instructorName = trimmedInstructor.isEmpty ? nil : trimmedInstructor
+            let trimmedInstructorNum = instructorNumber.trimmingCharacters(in: .whitespaces)
+            cert.instructorNumber = trimmedInstructorNum.isEmpty ? nil : trimmedInstructorNum
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             cert.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
 
@@ -1218,6 +1229,7 @@ struct AddCertificationView: View {
             }
         } else {
             let trimmedInstructor = instructorName.trimmingCharacters(in: .whitespaces)
+            let trimmedInstructorNum = instructorNumber.trimmingCharacters(in: .whitespaces)
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             let newCert = Certification(
                 name: name.trimmingCharacters(in: .whitespaces),
@@ -1228,6 +1240,7 @@ struct AddCertificationView: View {
                 issueDate: issueDate,
                 expirationDate: hasExpiration ? expirationDate : nil,
                 instructorName: trimmedInstructor.isEmpty ? nil : trimmedInstructor,
+                instructorNumber: trimmedInstructorNum.isEmpty ? nil : trimmedInstructorNum,
                 notes: trimmedNotes.isEmpty ? nil : trimmedNotes
             )
             modelContext.insert(newCert)

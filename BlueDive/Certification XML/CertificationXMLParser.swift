@@ -19,6 +19,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
         var issueDate: Date
         var expirationDate: Date?
         var instructorName: String?
+        var instructorNumber: String?
         var notes: String?
     }
 
@@ -42,6 +43,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
     private var tempIssueDate: Date?
     private var tempExpirationDate: Date?
     private var tempInstructorName: String?
+    private var tempInstructorNumber: String?
     private var tempNotes: String?
 
     // MARK: - Date Formatter
@@ -127,8 +129,9 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
         case "certificationNumber": tempCertificationNumber = text.nilIfEmpty
         case "issueDate":           tempIssueDate = dateFormatter.date(from: text)
         case "expirationDate":      tempExpirationDate = dateFormatter.date(from: text)
-        case "instructorName":      tempInstructorName = text.nilIfEmpty
-        case "notes":               tempNotes = text.nilIfEmpty
+        case "instructorName":                tempInstructorName = text.nilIfEmpty
+        case "instructorNumber": tempInstructorNumber = text.nilIfEmpty
+        case "notes":                         tempNotes = text.nilIfEmpty
         case "certification":
             let parsed = ParsedCertification(
                 id: UUID(uuidString: tempID ?? "") ?? UUID(),
@@ -140,6 +143,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
                 issueDate: tempIssueDate ?? Date(),
                 expirationDate: tempExpirationDate,
                 instructorName: tempInstructorName,
+                instructorNumber: tempInstructorNumber,
                 notes: tempNotes
             )
             certifications.append(parsed)
@@ -161,6 +165,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
         tempIssueDate = nil
         tempExpirationDate = nil
         tempInstructorName = nil
+        tempInstructorNumber = nil
         tempNotes = nil
     }
 }

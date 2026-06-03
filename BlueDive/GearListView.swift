@@ -7,6 +7,8 @@ import AppKit
 
 struct GearListView: View {
     @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \GearGroup.name) private var allGearGroups: [GearGroup]
+    @Query(sort: \TankTemplate.name) private var allTankTemplates: [TankTemplate]
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesForFilter: [Dive]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertificationsForFilter: [Certification]
     @Environment(\.modelContext) private var modelContext
@@ -24,6 +26,9 @@ struct GearListView: View {
     @State private var importError: String?
     @State private var showImportError = false
     @State private var importedCount: Int = 0
+    @State private var importedGroupCount: Int = 0
+    @State private var importedTemplateCount: Int = 0
+    @State private var importedGroupMissingMemberCount: Int = 0
     @State private var showImportSuccess = false
     #if os(iOS)
     @State private var showFileExporter = false
@@ -172,10 +177,21 @@ struct GearListView: View {
         .alert("Import Successful", isPresented: $showImportSuccess) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(verbatim: String(
-                format: NSLocalizedString("%lld gear item(s) imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items from an XML file."),
-                importedCount
-            ))
+            let base = String(
+                format: NSLocalizedString("%1$lld gear item(s), %2$lld group(s), and %3$lld tank template(s) imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items, gear groups, and tank templates from a gear XML file. Arguments: gear count, group count, template count."),
+                importedCount,
+                importedGroupCount,
+                importedTemplateCount
+            )
+            if importedGroupMissingMemberCount > 0 {
+                let warning = String(
+                    format: NSLocalizedString("%lld group member(s) could not be matched and were skipped.", bundle: Bundle.forAppLanguage(), comment: "Warning appended to the import success message when some gear IDs referenced inside imported gear groups could not be matched to any existing or newly imported gear item."),
+                    importedGroupMissingMemberCount
+                )
+                Text(verbatim: base + "\n" + warning)
+            } else {
+                Text(verbatim: base)
+            }
         }
         .alert("Import error", isPresented: $showImportError) {
             Button("OK", role: .cancel) { }
@@ -437,7 +453,7 @@ struct GearListView: View {
 
     @MainActor
     private func exportGearToXML() {
-        let xml = GearXMLExporter.generateXML(for: allGear)
+        let xml = GearXMLExporter.generateXML(for: allGear, groups: allGearGroups, tankTemplates: allTankTemplates)
         guard let data = xml.data(using: .utf8) else { return }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -471,20 +487,21 @@ struct GearListView: View {
             do {
                 let data = try Data(contentsOf: url)
                 let parser = GearXMLParser()
-                guard let parsed = parser.parse(data: data), !parsed.isEmpty else {
-                    importError = NSLocalizedString("No gear items found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports an XML file that contains no gear items.")
+                guard let result = parser.parse(data: data), !result.isEmpty else {
+                    importError = NSLocalizedString("No gear data found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports a gear XML file that contains no gear items, groups, or tank templates.")
                     showImportError = true
                     return
                 }
 
-                let existingIDs = Set(allGear.map(\.id))
+                // ── Gear Items ────────────────────────────────────────────────
+                let existingGearIDs = Set(allGear.map(\.id))
+                var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
 
                 var count = 0
-                for item in parsed {
-                    // Dedup by UUID; items from different devices with the same gear
-                    // but different UUIDs will both be imported as separate entries.
-                    guard !existingIDs.contains(item.id) else { continue }
-
+                for item in result.gearItems {
+                    // Dedup by UUID; items from different devices with the same gear but different UUIDs
+                    // will both be imported as separate entries.
+                    guard !existingGearIDs.contains(item.id) else { continue }
                     let gear = Gear(
                         id: item.id,
                         name: item.name,
@@ -506,10 +523,50 @@ struct GearListView: View {
                         gearNotes: item.gearNotes
                     )
                     modelContext.insert(gear)
+                    gearByID[item.id] = gear
                     count += 1
                 }
+
+                // ── Gear Groups ───────────────────────────────────────────────
+                let existingGroupIDs = Set(allGearGroups.map(\.id))
+                var groupCount = 0
+                var missingMemberCount = 0
+                for parsedGroup in result.gearGroups {
+                    guard !existingGroupIDs.contains(parsedGroup.id) else { continue }
+                    let members = parsedGroup.gearIDs.compactMap { gearByID[$0] }
+                    // Gear IDs that referenced items not in this import or existing store are dropped silently.
+                    missingMemberCount += parsedGroup.gearIDs.count - members.count
+                    let group = GearGroup(id: parsedGroup.id, name: parsedGroup.name, gear: members)
+                    modelContext.insert(group)
+                    groupCount += 1
+                }
+
+                // ── Tank Templates ────────────────────────────────────────────
+                let existingTemplateIDs = Set(allTankTemplates.map(\.id))
+                var templateCount = 0
+                for parsedTemplate in result.tankTemplates {
+                    guard !existingTemplateIDs.contains(parsedTemplate.id) else { continue }
+                    let template = TankTemplate(
+                        id: parsedTemplate.id,
+                        name: parsedTemplate.name,
+                        volume: parsedTemplate.volume,
+                        workingPressure: parsedTemplate.workingPressure,
+                        volumeUnit: parsedTemplate.volumeUnit,
+                        pressureUnit: parsedTemplate.pressureUnit,
+                        material: parsedTemplate.material,
+                        format: parsedTemplate.format,
+                        manufacturer: parsedTemplate.manufacturer,
+                        model: parsedTemplate.model
+                    )
+                    modelContext.insert(template)
+                    templateCount += 1
+                }
+
                 try? modelContext.save()
                 importedCount = count
+                importedGroupCount = groupCount
+                importedTemplateCount = templateCount
+                importedGroupMissingMemberCount = missingMemberCount
                 showImportSuccess = true
             } catch {
                 importError = error.localizedDescription

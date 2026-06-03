@@ -54,8 +54,9 @@ enum CertificationXMLExporter {
         lines.append(xmlTag("certificationNumber", cert.certificationNumber,                        indent: 6))
         lines.append(xmlTag("issueDate",           formatDate(cert.issueDate),                      indent: 6))
         lines.append(xmlTag("expirationDate",      cert.expirationDate.map(formatDate) ?? "",       indent: 6))
-        lines.append(xmlTag("instructorName",      cert.instructorName ?? "",                        indent: 6))
-        lines.append(xmlTag("notes",               cert.notes ?? "",                                indent: 6))
+        lines.append(xmlTag("instructorName",                cert.instructorName ?? "",               indent: 6))
+        lines.append(xmlTag("instructorNumber", cert.instructorNumber ?? "", indent: 6))
+        lines.append(xmlTag("notes",                         cert.notes ?? "",                        indent: 6))
         lines.append("    </certification>")
 
         return lines

@@ -8,10 +8,10 @@ enum GearXMLExporter {
 
     // MARK: - Public API
 
-    /// Generates a complete BlueDive XML string containing all provided gear items
-    /// wrapped in a single `<blueDiveGearExport>` root element.
+    /// Generates a complete BlueDive XML string containing all provided gear items,
+    /// gear groups, and tank templates wrapped in a single `<blueDiveGearExport>` root element.
     @MainActor
-    static func generateXML(for gearItems: [Gear]) -> String {
+    static func generateXML(for gearItems: [Gear], groups: [GearGroup] = [], tankTemplates: [TankTemplate] = []) -> String {
         var lines: [String] = []
 
         lines.append(#"<?xml version="1.0" encoding="UTF-8"?>"#)
@@ -22,10 +22,12 @@ enum GearXMLExporter {
         let appVersion  = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         lines.append("  <metadata>")
-        lines.append(xmlTag("software",   appName,                          indent: 4))
-        lines.append(xmlTag("version",    "\(appVersion) (\(buildNumber))", indent: 4))
-        lines.append(xmlTag("exportedAt", formatDate(Date()),               indent: 4))
-        lines.append(xmlTag("gearCount",  String(gearItems.count),          indent: 4))
+        lines.append(xmlTag("software",           appName,                          indent: 4))
+        lines.append(xmlTag("version",            "\(appVersion) (\(buildNumber))", indent: 4))
+        lines.append(xmlTag("exportedAt",         formatDate(Date()),               indent: 4))
+        lines.append(xmlTag("gearCount",          String(gearItems.count),          indent: 4))
+        lines.append(xmlTag("gearGroupCount",     String(groups.count),             indent: 4))
+        lines.append(xmlTag("tankTemplateCount",  String(tankTemplates.count),      indent: 4))
         lines.append("  </metadata>")
 
         // ── Gear Items ───────────────────────────────────────────────────────
@@ -34,6 +36,20 @@ enum GearXMLExporter {
             lines.append(contentsOf: gearLines(for: gear))
         }
         lines.append("  </gears>")
+
+        // ── Gear Groups ──────────────────────────────────────────────────────
+        lines.append("  <gearGroups>")
+        for group in groups {
+            lines.append(contentsOf: gearGroupLines(for: group))
+        }
+        lines.append("  </gearGroups>")
+
+        // ── Tank Templates ───────────────────────────────────────────────────
+        lines.append("  <tankTemplates>")
+        for template in tankTemplates {
+            lines.append(contentsOf: tankTemplateLines(for: template))
+        }
+        lines.append("  </tankTemplates>")
 
         lines.append("</blueDiveGearExport>")
         return lines.joined(separator: "\n")
@@ -70,6 +86,43 @@ enum GearXMLExporter {
         lines.append(xmlTag("diverName",            gear.diverName,                            indent: 6))
         lines.append("    </gear>")
 
+        return lines
+    }
+
+    // MARK: - Single Gear Group Block
+
+    @MainActor
+    private static func gearGroupLines(for group: GearGroup) -> [String] {
+        var lines: [String] = []
+        lines.append("    <gearGroup>")
+        lines.append(xmlTag("id",   group.id.uuidString, indent: 6))
+        lines.append(xmlTag("name", group.name,          indent: 6))
+        lines.append("      <gearIDs>")
+        for gear in (group.gear ?? []) {
+            lines.append(xmlTag("gearID", gear.id.uuidString, indent: 8))
+        }
+        lines.append("      </gearIDs>")
+        lines.append("    </gearGroup>")
+        return lines
+    }
+
+    // MARK: - Single Tank Template Block
+
+    @MainActor
+    private static func tankTemplateLines(for template: TankTemplate) -> [String] {
+        var lines: [String] = []
+        lines.append("    <tankTemplate>")
+        lines.append(xmlTag("id",              template.id.uuidString,                       indent: 6))
+        lines.append(xmlTag("name",            template.name,                               indent: 6))
+        lines.append(xmlTag("volume",          template.volume.map { String($0) } ?? "",    indent: 6))
+        lines.append(xmlTag("workingPressure", template.workingPressure.map { String($0) } ?? "", indent: 6))
+        lines.append(xmlTag("volumeUnit",      template.volumeUnit,                         indent: 6))
+        lines.append(xmlTag("pressureUnit",    template.pressureUnit,                       indent: 6))
+        lines.append(xmlTag("material",        template.material ?? "",                     indent: 6))
+        lines.append(xmlTag("format",          template.format ?? "",                       indent: 6))
+        lines.append(xmlTag("manufacturer",    template.manufacturer ?? "",                 indent: 6))
+        lines.append(xmlTag("model",           template.model ?? "",                        indent: 6))
+        lines.append("    </tankTemplate>")
         return lines
     }
 

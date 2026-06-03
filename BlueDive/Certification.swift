@@ -12,6 +12,7 @@ final class Certification {
     var issueDate: Date = Date.now
     var expirationDate: Date?
     var instructorName: String?
+    var instructorNumber: String?
     var notes: String?
 
     init(
@@ -24,6 +25,7 @@ final class Certification {
         issueDate: Date,
         expirationDate: Date? = nil,
         instructorName: String? = nil,
+        instructorNumber: String? = nil,
         notes: String? = nil,
     ) {
         self.id = id
@@ -35,6 +37,7 @@ final class Certification {
         self.issueDate = issueDate
         self.expirationDate = expirationDate
         self.instructorName = instructorName
+        self.instructorNumber = instructorNumber
         self.notes = notes
     }
 }

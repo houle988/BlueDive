@@ -536,13 +536,13 @@ struct SettingsView: View {
             } message: {
                 Text("All preferences will return to their default values.")
             }
-            .alert("Erase all local data?", isPresented: $showingEraseAllDataAlert) {
+            .alert("Erase all local and remote data?", isPresented: $showingEraseAllDataAlert) {
                 Button("Cancel", role: .cancel) { }
-                Button("Erase Local Data", role: .destructive) {
+                Button("Erase All Data", role: .destructive) {
                     eraseAllData()
                 }
             } message: {
-                Text("This will delete all local data and close the app after 30 seconds. Your iCloud data will be preserved and will sync back down when you relaunch the app.")
+                Text("This will permanently delete all your data from this device and iCloud. This action cannot be undone. The app will close after 30 seconds.")
             }
             #if os(iOS)
             .fileExporter(
@@ -1364,10 +1364,10 @@ struct SettingsView: View {
                             .font(.title3)
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Erase all local data")
+                            Text("Erase all data")
                                 .font(.subheadline)
                                 .fontWeight(.bold)
-                            Text("Delete local data and resync from iCloud")
+                            Text("Permanently delete all data from this device and iCloud")
                                 .font(.caption2)
                         }
                         
@@ -1403,9 +1403,9 @@ struct SettingsView: View {
                         Group {
                             switch erasePhase {
                             case .erasing:
-                                Text("Erasing local data…")
+                                Text("Erasing all data…")
                             case .done(let errorCount, let countdown) where errorCount == 0:
-                                Text("Local data erased. App will close in \(countdown)s to trigger iCloud sync on relaunch.")
+                                Text("All data erased. App will close in \(countdown)s.")
                             case .done(let errorCount, let countdown):
                                 Text("Completed with \(errorCount) error(s). App will close in \(countdown)s.")
                             }
