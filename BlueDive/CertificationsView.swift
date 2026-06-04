@@ -162,6 +162,7 @@ struct CertificationsView: View {
                             }
                         }
                     }
+                    // .sidebar is required for Section(isExpanded:) collapse/expand to function
                     .listStyle(.sidebar)
                 }
             }

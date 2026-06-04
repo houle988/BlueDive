@@ -90,13 +90,15 @@ struct ContentView: View {
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @State private var sortOrder: DiveSortOrder = .dateDesc
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
+    @State private var collapsedDiverSections: Set<String> = []
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
-        case dateDesc    = "dateDesc"
-        case dateAsc     = "dateAsc"
-        case depthDesc   = "depthDesc"
-        case durationDesc = "durationDesc"
+        case dateDesc       = "dateDesc"
+        case dateAsc        = "dateAsc"
+        case depthDesc      = "depthDesc"
+        case durationDesc   = "durationDesc"
         case diveNumberDesc = "diveNumberDesc"
+        case diveNumberAsc  = "diveNumberAsc"
         var id: String { rawValue }
         var localizedTitle: LocalizedStringKey {
             switch self {
@@ -105,6 +107,7 @@ struct ContentView: View {
             case .depthDesc:      return "Depth ↓"
             case .durationDesc:   return "Duration ↓"
             case .diveNumberDesc: return "Dive # ↓"
+            case .diveNumberAsc:  return "Dive # ↑"
             }
         }
     }
@@ -296,6 +299,15 @@ struct ContentView: View {
         case .depthDesc:    result.sort { $0.displayMaxDepth > $1.displayMaxDepth }
         case .durationDesc: result.sort { $0.duration > $1.duration }
         case .diveNumberDesc: result.sort { ($0.diveNumber ?? 0) > ($1.diveNumber ?? 0) }
+        case .diveNumberAsc:
+            result.sort {
+                switch ($0.diveNumber, $1.diveNumber) {
+                case let (a?, b?): return a < b
+                case (_?, nil):    return true
+                case (nil, _?):    return false
+                case (nil, nil):   return false
+                }
+            }
         }
         return result
     }
@@ -596,6 +608,9 @@ struct ContentView: View {
         .onChange(of: widgetDataFingerprint) { _, _ in updateWidgetDiveData() }
         .onChange(of: prefs.depthUnit) { _, _ in updateWidgetDiveData() }
         .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+        .onChange(of: uniqueDivers) { _, newDivers in
+            collapsedDiverSections.formIntersection(newDivers)
+        }
     }
 
     private func updateWidgetDiveData() {
@@ -754,7 +769,6 @@ struct ContentView: View {
     
     private var diveList: some View {
         let displayedDives = filteredAndSortedDives
-        let indexLookup = Dictionary(dives.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
         return Group {
             if displayedDives.isEmpty {
                 // No results for search / filters
@@ -785,36 +799,113 @@ struct ContentView: View {
                 }
                 .transition(.opacity)
             } else {
-                List {
-                    ForEach(displayedDives) { dive in
-                        NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: filteredAndSortedDives)) {
-                            DiveRowView(
-                                dive: dive,
-                                diveNumber: dives.count - (indexLookup[dive.id] ?? 0)
-                            )
-                        }
-                        .listRowBackground(Color.primary.opacity(0.07))
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                diveToDeleteDirectly = dive
-                                showDeleteSingleConfirmation = true
-                            } label: {
-                                Label("Delete dive", systemImage: "trash")
+                let indexLookup = Dictionary(dives.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
+                let filteredDiverCount = Set(displayedDives.map { $0.diverName.trimmingCharacters(in: .whitespaces) }).count
+                let showGrouped = selectedDiver.isEmpty && uniqueDivers.count > 1 && filteredDiverCount > 1
+                if showGrouped {
+                    let grouped = groupedDives(from: displayedDives)
+                    List {
+                        ForEach(grouped, id: \.key) { group in
+                            let diver = group.key
+                            let sectionDives = group.value
+                            Section(isExpanded: Binding(
+                                get: { !collapsedDiverSections.contains(diver) },
+                                set: { isExpanded in
+                                    if isExpanded {
+                                        collapsedDiverSections.remove(diver)
+                                    } else {
+                                        collapsedDiverSections.insert(diver)
+                                    }
+                                }
+                            )) {
+                                ForEach(sectionDives) { dive in
+                                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: filteredAndSortedDives)) {
+                                        DiveRowView(
+                                            dive: dive,
+                                            diveNumber: dives.count - (indexLookup[dive.id] ?? 0)
+                                        )
+                                    }
+                                    .listRowBackground(Color.primary.opacity(0.07))
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            diveToDeleteDirectly = dive
+                                            showDeleteSingleConfirmation = true
+                                        } label: {
+                                            Label("Delete dive", systemImage: "trash")
+                                        }
+                                    }
+                                }
+                                .onDelete { offsets in
+                                    if let index = offsets.first {
+                                        diveToDeleteDirectly = sectionDives[index]
+                                        showDeleteSingleConfirmation = true
+                                    }
+                                }
+                            } header: {
+                                Text(verbatim: diver.isEmpty
+                                     ? NSLocalizedString("Unknown Diver", bundle: Bundle.forAppLanguage(), comment: "Section header in the dive list for dives with no diver name assigned")
+                                     : diver)
+                                    .font(.headline)
+                                    .foregroundStyle(.cyan)
+                                    .textCase(nil)
                             }
                         }
                     }
-                    .onDelete(perform: deleteItems)
+                    // .sidebar is required for Section(isExpanded:) collapse/expand to function
+                    .listStyle(.sidebar)
+                    .scrollContentBackground(.hidden)
+                    .refreshable {
+                        await forceiCloudSync()
+                    }
+                    #if os(iOS)
+                    .contentMargins(.top, 0, for: .scrollContent)
+                    #endif
+                } else {
+                    List {
+                        ForEach(displayedDives) { dive in
+                            NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: filteredAndSortedDives)) {
+                                DiveRowView(
+                                    dive: dive,
+                                    diveNumber: dives.count - (indexLookup[dive.id] ?? 0)
+                                )
+                            }
+                            .listRowBackground(Color.primary.opacity(0.07))
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    diveToDeleteDirectly = dive
+                                    showDeleteSingleConfirmation = true
+                                } label: {
+                                    Label("Delete dive", systemImage: "trash")
+                                }
+                            }
+                        }
+                        .onDelete(perform: deleteItems)
+                    }
+                    .scrollContentBackground(.hidden)
+                    .refreshable {
+                        await forceiCloudSync()
+                    }
+                    #if os(iOS)
+                    .listStyle(.plain)
+                    .contentMargins(.top, 0, for: .scrollContent)
+                    #endif
                 }
-                .scrollContentBackground(.hidden)
-                .refreshable {
-                    await forceiCloudSync()
-                }
-                #if os(iOS)
-                .listStyle(.plain)
-                .contentMargins(.top, 0, for: .scrollContent)
-                #endif
             }
         }
+    }
+
+    private func groupedDives(from sortedDives: [Dive]) -> [(key: String, value: [Dive])] {
+        var order: [String] = []
+        var dict: [String: [Dive]] = [:]
+        for dive in sortedDives {
+            let key = dive.diverName.trimmingCharacters(in: .whitespaces)
+            if dict[key] == nil {
+                order.append(key)
+                dict[key] = []
+            }
+            dict[key]!.append(dive)
+        }
+        return order.map { (key: $0, value: dict[$0]!) }
     }
     
     // MARK: - Toolbar

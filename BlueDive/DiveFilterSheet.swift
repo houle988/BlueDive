@@ -990,7 +990,9 @@ extension ContentView.DiveSortOrder {
         case .durationDesc:
             return "clock.arrow.2.circlepath"
         case .diveNumberDesc:
-            return "number"
+            return "arrow.down.to.line"
+        case .diveNumberAsc:
+            return "arrow.up.to.line"
         }
     }
 }
