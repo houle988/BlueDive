@@ -29,10 +29,9 @@ struct DiveMapView: View {
     @State private var filterDiveType: String? = nil
     @State private var filterDiveTypeNegate: Bool = false
     @State private var filterTag: String? = nil
-    @State private var filterDiverName: String? = nil
-    @State private var filterDiverNameNegate: Bool = false
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     private func coordinate(for dive: Dive, mode: MapCoordinateMode) -> CLLocationCoordinate2D? {
         let lat: Double?
@@ -98,9 +97,8 @@ struct DiveMapView: View {
         return tags.sorted()
     }
 
-    private var availableDiverNames: [String] {
-        let names = geolocatedDives.map { $0.diverName }.filter { !$0.isEmpty }
-        return Array(Set(names)).sorted()
+    private var uniqueDivers: [String] {
+        DiverFilter.uniqueDivers(in: dives)
     }
 
     private var availableMarineLife: [String] {
@@ -123,13 +121,12 @@ struct DiveMapView: View {
         if filterCountry != nil         { count += 1 }
         if filterDiveType != nil        { count += 1 }
         if filterTag != nil             { count += 1 }
-        if filterDiverName != nil       { count += 1 }
         if !filterMarineLife.isEmpty    { count += 1 }
         return count
     }
     
     private var filteredDives: [Dive] {
-        dives.filter { dive in
+        DiverFilter.apply(selectedDiver, to: dives).filter { dive in
             if let year = filterYear {
                 let diveYear = Calendar.current.component(.year, from: dive.timestamp)
                 if filterYearNegate {
@@ -193,15 +190,6 @@ struct DiveMapView: View {
                         .split(separator: ",")
                         .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
                     if !diveTags.contains(tag) { return false }
-                }
-            }
-            if let name = filterDiverName {
-                if name.isEmpty {
-                    if !dive.diverName.isEmpty { return false }
-                } else if filterDiverNameNegate {
-                    if dive.diverName == name { return false }
-                } else {
-                    if dive.diverName != name { return false }
                 }
             }
             if !diveMatchesMarineLifeFilter(dive, species: filterMarineLife, mode: filterMarineLifeMode) { return false }
@@ -436,7 +424,6 @@ struct DiveMapView: View {
                     availableCountries: availableCountries,
                     availableDiveTypes: availableDiveTypes,
                     availableTags: availableTags,
-                    availableDiverNames: availableDiverNames,
                     availableMarineLife: availableMarineLife,
                     showSort: false,
                     filterYear: $filterYear,
@@ -451,8 +438,6 @@ struct DiveMapView: View {
                     filterDiveType: $filterDiveType,
                     filterDiveTypeNegate: $filterDiveTypeNegate,
                     filterTag: $filterTag,
-                    filterDiverName: $filterDiverName,
-                    filterDiverNameNegate: $filterDiverNameNegate,
                     filterMarineLife: $filterMarineLife,
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: .constant(.dateDesc)
@@ -461,7 +446,9 @@ struct DiveMapView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             .toolbar {
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
                 ToolbarItem(placement: .principal) {
                     Picker("Coordinate Mode", selection: $coordinateMode) {
                         Text("Entry").tag(MapCoordinateMode.entry)

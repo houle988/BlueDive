@@ -142,6 +142,7 @@ struct BlueDiveTankData: Sendable {
 
 /// Gear / equipment item
 struct BlueDiveGearData: Sendable {
+    let id: UUID?           // Present only in BlueDive XML exports; nil for MacDive/UDDF imports
     let type: String?
     let manufacturer: String?
     let model: String?
@@ -490,6 +491,7 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         case "item":
             if let name = tempGearName {
                 currentGear.append(BlueDiveGearData(
+                    id: nil,                      // NOT imported from MacDive
                     type: tempGearType,
                     manufacturer: tempGearManufacturer,
                     model: nil,                   // NOT imported from MacDive

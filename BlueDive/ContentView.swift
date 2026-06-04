@@ -86,11 +86,10 @@ struct ContentView: View {
     @State private var filterDiveType: String? = nil
     @State private var filterDiveTypeNegate: Bool = false
     @State private var filterTag: String? = nil
-    @State private var filterDiverName: String? = nil
-    @State private var filterDiverNameNegate: Bool = false
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @State private var sortOrder: DiveSortOrder = .dateDesc
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
         case dateDesc    = "dateDesc"
@@ -151,9 +150,8 @@ struct ContentView: View {
         return tags.sorted()
     }
 
-    private var availableDiverNames: [String] {
-        let names = dives.map { $0.diverName }.filter { !$0.isEmpty }
-        return Array(Set(names)).sorted()
+    private var uniqueDivers: [String] {
+        DiverFilter.uniqueDivers(in: dives)
     }
 
     private var availableMarineLife: [String] {
@@ -176,7 +174,6 @@ struct ContentView: View {
         if filterCountry != nil         { count += 1 }
         if filterDiveType != nil        { count += 1 }
         if filterTag != nil             { count += 1 }
-        if filterDiverName != nil       { count += 1 }
         if !filterMarineLife.isEmpty    { count += 1 }
         return count
     }
@@ -196,7 +193,7 @@ struct ContentView: View {
     }
 
     private var filteredAndSortedDives: [Dive] {
-        var result = dives.filter { dive in
+        var result = DiverFilter.apply(selectedDiver, to: dives).filter { dive in
             // Text search
             let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if !query.isEmpty {
@@ -288,16 +285,6 @@ struct ContentView: View {
                     if !diveTags.contains(tag) { return false }
                 }
             }
-            // Diver name filter
-            if let name = filterDiverName {
-                if name.isEmpty {
-                    if !dive.diverName.isEmpty { return false }
-                } else if filterDiverNameNegate {
-                    if dive.diverName == name { return false }
-                } else {
-                    if dive.diverName != name { return false }
-                }
-            }
             // Marine life filter
             if !diveMatchesMarineLifeFilter(dive, species: filterMarineLife, mode: filterMarineLifeMode) { return false }
             return true
@@ -347,7 +334,6 @@ struct ContentView: View {
                     availableCountries: availableCountries,
                     availableDiveTypes: availableDiveTypes,
                     availableTags: availableTags,
-                    availableDiverNames: availableDiverNames,
                     availableMarineLife: availableMarineLife,
                     filterYear: $filterYear,
                     filterYearNegate: $filterYearNegate,
@@ -361,8 +347,6 @@ struct ContentView: View {
                     filterDiveType: $filterDiveType,
                     filterDiveTypeNegate: $filterDiveTypeNegate,
                     filterTag: $filterTag,
-                    filterDiverName: $filterDiverName,
-                    filterDiverNameNegate: $filterDiverNameNegate,
                     filterMarineLife: $filterMarineLife,
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: $sortOrder
@@ -611,6 +595,7 @@ struct ContentView: View {
         .onAppear { updateWidgetDiveData() }
         .onChange(of: widgetDataFingerprint) { _, _ in updateWidgetDiveData() }
         .onChange(of: prefs.depthUnit) { _, _ in updateWidgetDiveData() }
+        .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
     }
 
     private func updateWidgetDiveData() {
@@ -836,6 +821,8 @@ struct ContentView: View {
     
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         ToolbarItem(placement: .navigation) {
             Button(action: { showSettings = true }) {
@@ -1173,8 +1160,6 @@ struct ContentView: View {
         filterDiveType       = nil
         filterDiveTypeNegate = false
         filterTag            = nil
-        filterDiverName      = nil
-        filterDiverNameNegate = false
         filterMarineLife     = []
         filterMarineLifeMode = .any
         sortOrder            = .dateDesc

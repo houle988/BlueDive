@@ -222,6 +222,7 @@ enum BlueDiveXMLExporter {
             lines.append("    <gear>")
             for item in dive.usedGear ?? [] {
                 lines.append("      <item>")
+                lines.append(xmlTag("id",           item.id.uuidString,                            indent: 8))
                 lines.append(xmlTag("type",         item.gearCategory?.exportKey ?? item.category, indent: 8))
                 lines.append(xmlTag("manufacturer", item.manufacturer ?? "", indent: 8))
                 lines.append(xmlTag("model",        item.model ?? "",    indent: 8))

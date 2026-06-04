@@ -416,12 +416,20 @@ extension ContentView {
         // Create gear items from MacDive gear list
         do {
             var equipmentToAdd: [Gear] = []
-            
+
+            // Fetch all gear once; both caches are updated after each insert so gear
+            // created earlier in this loop is visible to subsequent iterations.
+            var gearByID: [UUID: Gear] = {
+                let all = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
+                return Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+            }()
+            var gearList: [Gear] = Array(gearByID.values)
+
             for gearItem in diveData.gear {
                 // Map MacDive gear types to app categories
                 let rawType = gearItem.type ?? "other"
                 let category = mapMacDiveGearType(rawType)
-                
+
                 // BlueDive exports store the full name in <name>; MacDive stores only the model,
                 // so the manufacturer must be prepended for MacDive imports.
                 let gearName: String
@@ -432,31 +440,26 @@ extension ContentView {
                 } else {
                     gearName = gearItem.name
                 }
-                
+
                 // Check if gear already exists.
-                // When a serial number is present it is included in the match so that two
-                // pieces of gear with the same name/type but different serials are kept
-                // as separate items (e.g. two identical regulators owned by the same diver).
-                let gearSerial = gearItem.serial
-                var gearDescriptor = FetchDescriptor<Gear>()
-                gearDescriptor.predicate = #Predicate<Gear> { gear in
-                    gear.name == gearName && gear.category == category
-                }
-                let candidates = (try? modelContext.fetch(gearDescriptor)) ?? []
-                let existingGear: Gear? = candidates.first { candidate in
-                    // If either side has a serial, they must match.
-                    // If neither has a serial, fall back to name+category match.
-                    switch (candidate.serialNumber, gearSerial) {
-                    case let (a?, b?): return a == b
-                    case (nil, nil):   return true
-                    default:           return false
+                // Priority 1: UUID match (BlueDive XML exports carry the canonical gear UUID).
+                // Priority 2: name + category + diverName + serial match — catches gear that was
+                //   previously imported via a dive XML before UUID round-tripping was added, and
+                //   also handles MacDive/UDDF imports that never carry a UUID.
+                let existingGear: Gear?
+                if let gearID = gearItem.id, let byID = gearByID[gearID] {
+                    existingGear = byID
+                } else {
+                    existingGear = gearList.first {
+                        $0.matches(name: gearName, category: category, diverName: gearItem.diverName, serial: gearItem.serial)
                     }
                 }
-                
+
                 if let gear = existingGear {
                     equipmentToAdd.append(gear)
                 } else {
                     let newGear = Gear(
+                        id: gearItem.id ?? UUID(),
                         name: gearName,
                         category: category,
                         manufacturer: gearItem.manufacturer,
@@ -475,6 +478,8 @@ extension ContentView {
                         gearNotes: gearItem.gearNotes
                     )
                     modelContext.insert(newGear)
+                    gearByID[newGear.id] = newGear
+                    gearList.append(newGear)
                     equipmentToAdd.append(newGear)
                 }
             }

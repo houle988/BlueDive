@@ -134,6 +134,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
 
     // MARK: - Temporary Gear State
 
+    private var tempGearID: String?
     private var tempGearType: String?
     private var tempGearManufacturer: String?
     private var tempGearModel: String?
@@ -401,6 +402,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
 
     private func parseGearElement(_ elementName: String, text: String) {
         switch elementName {
+        case "id":                 tempGearID = text.nilIfEmpty
         case "type":               tempGearType = text.nilIfEmpty
         case "manufacturer":       tempGearManufacturer = text.nilIfEmpty
         case "model":              tempGearModel = text.nilIfEmpty
@@ -420,6 +422,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
         case "item":
             if let name = tempGearName {
                 currentGear.append(BlueDiveGearData(
+                    id: tempGearID.flatMap(UUID.init(uuidString:)),
                     type: tempGearType,
                     manufacturer: tempGearManufacturer,
                     model: tempGearModel,
@@ -741,6 +744,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
     }
 
     private func resetTempGear() {
+        tempGearID = nil
         tempGearType = nil
         tempGearManufacturer = nil
         tempGearModel = nil

@@ -30,7 +30,6 @@ struct DiveFilterSheet: View {
     let availableCountries: [String]
     let availableDiveTypes: [String]
     let availableTags: [String]
-    let availableDiverNames: [String]
     let availableMarineLife: [String]
     var showSort: Bool = true
 
@@ -46,8 +45,6 @@ struct DiveFilterSheet: View {
     @Binding var filterDiveType: String?
     @Binding var filterDiveTypeNegate: Bool
     @Binding var filterTag: String?
-    @Binding var filterDiverName: String?
-    @Binding var filterDiverNameNegate: Bool
     @Binding var filterMarineLife: [String]
     @Binding var filterMarineLifeMode: FilterMarineLifeMode
     @Binding var sortOrder: ContentView.DiveSortOrder
@@ -68,7 +65,6 @@ struct DiveFilterSheet: View {
         if filterCountry != nil { count += 1 }
         if filterDiveType != nil { count += 1 }
         if filterTag != nil { count += 1 }
-        if filterDiverName != nil { count += 1 }
         if !filterMarineLife.isEmpty { count += 1 }
         return count
     }
@@ -170,10 +166,6 @@ struct DiveFilterSheet: View {
 
         if !availableCountries.isEmpty {
             countryFilterSection
-        }
-
-        if !availableDiverNames.isEmpty {
-            diverNameFilterSection
         }
 
         if !availableDiveTypes.isEmpty {
@@ -410,68 +402,6 @@ struct DiveFilterSheet: View {
         .filterCardStyle()
     }
     
-    private var diverNameFilterSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                Image(systemName: "person.fill")
-                    .font(.title3)
-                    .foregroundStyle(.cyan)
-                Text("Diver")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                Spacer()
-                if let dn = filterDiverName, !dn.isEmpty {
-                    Picker("", selection: $filterDiverNameNegate) {
-                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
-                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 160)
-                }
-            }
-            .padding(.horizontal, 4)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ModernFilterChip(
-                        label: "All",
-                        isSelected: filterDiverName == nil,
-                        color: .indigo
-                    ) {
-                        withAnimation {
-                            filterDiverName = nil
-                            filterDiverNameNegate = false
-                        }
-                    }
-
-                    ModernFilterChip(
-                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no diver set"),
-                        isSelected: filterDiverName == "",
-                        color: .indigo
-                    ) {
-                        withAnimation {
-                            filterDiverName = ""
-                            filterDiverNameNegate = false
-                        }
-                    }
-
-                    ForEach(availableDiverNames, id: \.self) { name in
-                        ModernFilterChip(
-                            label: name,
-                            isSelected: filterDiverName == name,
-                            color: filterDiverNameNegate ? .orange : .indigo
-                        ) {
-                            withAnimation { filterDiverName = name }
-                        }
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-            .chipRowFade()
-        }
-        .filterCardStyle()
-    }
-
     private var marineLifeFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
@@ -918,8 +848,6 @@ struct DiveFilterSheet: View {
                         filterDiveType       = nil
                         filterDiveTypeNegate = false
                         filterTag            = nil
-                        filterDiverName      = nil
-                        filterDiverNameNegate = false
                         filterMarineLife     = []
                         filterMarineLifeMode = .any
                         marineLifeInput      = ""

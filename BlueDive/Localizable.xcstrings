@@ -196,23 +196,6 @@
       },
       "shouldTranslate" : false
     },
-    "%lld group member(s) could not be matched and were skipped." : {
-      "comment" : "Warning appended to the import success message when some gear IDs referenced inside imported gear groups could not be matched to any existing or newly imported gear item.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld group member(s) could not be matched and were skipped."
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld membre(s) de groupe n'ont pas pu être associés et ont été ignorés."
-          }
-        }
-      }
-    },
     "%1$lld gear item(s), %2$lld group(s), and %3$lld tank template(s) imported successfully." : {
       "comment" : "Success message shown after importing gear items, gear groups, and tank templates from a gear XML file. Arguments: gear count, group count, template count.",
       "localizations" : {
@@ -426,6 +409,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld bientôt dû"
+          }
+        }
+      }
+    },
+    "%lld group member(s) could not be matched and were skipped." : {
+      "comment" : "Warning appended to the import success message when some gear IDs referenced inside imported gear groups could not be matched to any existing or newly imported gear item.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld group member(s) could not be matched and were skipped."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld membre(s) de groupe n'ont pas pu être associés et ont été ignorés."
           }
         }
       }
@@ -1543,6 +1543,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tous les calculs fournis par cet outil sont des estimations. Il est de la seule responsabilité du plongeur de vérifier et valider tous les résultats avant toute plongée."
+          }
+        }
+      }
+    },
+    "All data erased. App will close in %llds." : {
+      "comment" : "Status message shown after all local and iCloud data has been erased. The argument is the countdown in seconds before the app closes.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All data erased. App will close in %llds."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les données supprimées. L'application se fermera dans %llds."
           }
         }
       }
@@ -5386,23 +5403,6 @@
         }
       }
     },
-    "Erase all local and remote data?" : {
-      "comment" : "A confirmation alert title that asks if the user wants to permanently erase all local and iCloud data.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Erase all local and remote data?"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Effacer toutes les données locales et distantes ?"
-          }
-        }
-      }
-    },
     "Erase All Data" : {
       "comment" : "A destructive alert button label that confirms erasing all local and iCloud data.",
       "localizations" : {
@@ -5416,6 +5416,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Effacer toutes les données"
+          }
+        }
+      }
+    },
+    "Erase all local and remote data?" : {
+      "comment" : "A confirmation alert title that asks if the user wants to permanently erase all local and iCloud data.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erase all local and remote data?"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer toutes les données locales et distantes ?"
           }
         }
       }
@@ -7836,23 +7853,6 @@
         }
       }
     },
-    "All data erased. App will close in %llds." : {
-      "comment" : "Status message shown after all local and iCloud data has been erased. The argument is the countdown in seconds before the app closes.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All data erased. App will close in %llds."
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toutes les données supprimées. L'application se fermera dans %llds."
-          }
-        }
-      }
-    },
     "Location" : {
       "comment" : "A row displaying the location of a dive.",
       "isCommentAutoGenerated" : true,
@@ -9707,7 +9707,7 @@
       }
     },
     "None" : {
-      "comment" : "Filter option to show dives with no country set\nFilter option to show dives with no dive type set\nFilter option to show dives with no diver set\nFilter option to show dives with no gas type set\nFilter option to show dives with no tag set",
+      "comment" : "Filter option to show dives with no country set\nFilter option to show dives with no dive type set\nFilter option to show dives with no gas type set\nFilter option to show dives with no tag set",
       "localizations" : {
         "en" : {
           "stringUnit" : {

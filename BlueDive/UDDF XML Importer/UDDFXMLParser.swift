@@ -482,6 +482,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             if isInVariousPieces {
                 if let name = tempGearName {
                     ownerGear.append(BlueDiveGearData(
+                        id: nil,                  // NOT imported from UDDF
                         type: name,
                         manufacturer: tempGearManufacturer,
                         model: nil,               // NOT imported from UDDF

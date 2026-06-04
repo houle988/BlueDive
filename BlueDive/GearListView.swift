@@ -494,14 +494,27 @@ struct GearListView: View {
                 }
 
                 // ── Gear Items ────────────────────────────────────────────────
-                let existingGearIDs = Set(allGear.map(\.id))
+                // gearByID is the single source of truth for dedup: pre-populated from the
+                // existing store and updated after each insert, so both the UUID check and the
+                // fallback check see gear inserted earlier in the same loop.
                 var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
 
                 var count = 0
                 for item in result.gearItems {
-                    // Dedup by UUID; items from different devices with the same gear but different UUIDs
-                    // will both be imported as separate entries.
-                    guard !existingGearIDs.contains(item.id) else { continue }
+                    // Primary dedup: by UUID (same source device, same export).
+                    if gearByID[item.id] != nil {
+                        continue
+                    }
+                    // Secondary dedup: by name + category + diverName + serial — catches gear that was
+                    // previously imported via a dive XML, which assigned a fresh UUID instead
+                    // of the canonical one carried in a gear-only export.
+                    if let existing = gearByID.values.first(where: {
+                        $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
+                    }) {
+                        // Map the file's UUID to the existing gear so group membership resolves correctly.
+                        gearByID[item.id] = existing
+                        continue
+                    }
                     let gear = Gear(
                         id: item.id,
                         name: item.name,

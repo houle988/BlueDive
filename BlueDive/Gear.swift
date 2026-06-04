@@ -121,6 +121,23 @@ final class Gear {
     }
 }
 
+// MARK: - Dedup Helper
+
+extension Gear {
+    /// Returns true if this gear matches the given import attributes.
+    /// Serial comparison trims whitespace and treats nil/"" as equivalent (no serial recorded).
+    func matches(name: String, category: String, diverName: String, serial: String?) -> Bool {
+        guard self.name == name && self.category == category && self.diverName == diverName else { return false }
+        let a = serialNumber.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+        let b = serial.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+        switch (a, b) {
+        case let (x?, y?): return x == y
+        case (nil, nil):   return true
+        default:           return false
+        }
+    }
+}
+
 // MARK: - Gear Category
 
 enum GearCategory: String, CaseIterable, Identifiable {
