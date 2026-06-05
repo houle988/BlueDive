@@ -95,10 +95,16 @@ extension CertificationOrganization {
             return [
                 // Core Levels
                 "Scuba Diver",
+                "Junior Scuba Diver",
                 "Open Water Diver",
+                "Junior Open Water Diver",
+                "Adventure Diver",
                 "Advanced Open Water Diver",
+                "Junior Advanced Open Water Diver",
                 "Rescue Diver",
+                "Junior Rescue Diver",
                 "Master Scuba Diver",
+                "Junior Master Scuba Diver",
                 // Professional Levels
                 "Divemaster",
                 "Assistant Instructor",
