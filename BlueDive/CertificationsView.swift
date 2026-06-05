@@ -451,6 +451,7 @@ struct CertificationsView: View {
                         expirationDate: item.expirationDate,
                         instructorName: item.instructorName,
                         instructorNumber: item.instructorNumber,
+                        divingCentre: item.divingCentre,
                         notes: item.notes
                     )
                     modelContext.insert(cert)
@@ -646,7 +647,11 @@ struct CertificationDetailView: View {
                             if let instructorCertNum = certification.instructorNumber, !instructorCertNum.isEmpty {
                                 DetailRow(icon: "number", title: "Instructor Number", value: instructorCertNum)
                             }
-                            
+
+                            if let center = certification.divingCentre, !center.isEmpty {
+                                DetailRow(icon: "building.2.fill", title: "Diving Centre", value: center)
+                            }
+
                             if let notes = certification.notes, !notes.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Label("Notes", systemImage: "note.text")
@@ -863,6 +868,7 @@ struct AddCertificationView: View {
     @State private var expirationDate: Date = Date()
     @State private var instructorName: String = ""
     @State private var instructorNumber: String = ""
+    @State private var divingCentre: String = ""
     @State private var notes: String = ""
     @State private var nameManuallyEdited: Bool = false
 
@@ -1016,6 +1022,8 @@ struct AddCertificationView: View {
 
                                 certificationTextField("Instructor Number", placeholder: "Instructor Number (optional)", text: $instructorNumber)
 
+                                certificationTextField("Diving Centre", placeholder: "Diving Centre (optional)", text: $divingCentre)
+
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Notes")
                                         .font(.caption)
@@ -1098,6 +1106,7 @@ struct AddCertificationView: View {
                     expirationDate = cert.expirationDate ?? Date()
                     instructorName = cert.instructorName ?? ""
                     instructorNumber = cert.instructorNumber ?? ""
+                    divingCentre = cert.divingCentre ?? ""
                     notes = cert.notes ?? ""
                     nameManuallyEdited = true
                 }
@@ -1219,6 +1228,8 @@ struct AddCertificationView: View {
             cert.instructorName = trimmedInstructor.isEmpty ? nil : trimmedInstructor
             let trimmedInstructorNum = instructorNumber.trimmingCharacters(in: .whitespaces)
             cert.instructorNumber = trimmedInstructorNum.isEmpty ? nil : trimmedInstructorNum
+            let trimmedDivingCenter = divingCentre.trimmingCharacters(in: .whitespaces)
+            cert.divingCentre = trimmedDivingCenter.isEmpty ? nil : trimmedDivingCenter
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             cert.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
 
@@ -1231,6 +1242,7 @@ struct AddCertificationView: View {
         } else {
             let trimmedInstructor = instructorName.trimmingCharacters(in: .whitespaces)
             let trimmedInstructorNum = instructorNumber.trimmingCharacters(in: .whitespaces)
+            let trimmedDivingCenter = divingCentre.trimmingCharacters(in: .whitespaces)
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             let newCert = Certification(
                 name: name.trimmingCharacters(in: .whitespaces),
@@ -1242,6 +1254,7 @@ struct AddCertificationView: View {
                 expirationDate: hasExpiration ? expirationDate : nil,
                 instructorName: trimmedInstructor.isEmpty ? nil : trimmedInstructor,
                 instructorNumber: trimmedInstructorNum.isEmpty ? nil : trimmedInstructorNum,
+                divingCentre: trimmedDivingCenter.isEmpty ? nil : trimmedDivingCenter,
                 notes: trimmedNotes.isEmpty ? nil : trimmedNotes
             )
             modelContext.insert(newCert)

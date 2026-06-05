@@ -20,6 +20,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
         var expirationDate: Date?
         var instructorName: String?
         var instructorNumber: String?
+        var divingCentre: String?
         var notes: String?
     }
 
@@ -44,6 +45,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
     private var tempExpirationDate: Date?
     private var tempInstructorName: String?
     private var tempInstructorNumber: String?
+    private var tempDivingCenter: String?
     private var tempNotes: String?
 
     // MARK: - Date Formatter
@@ -129,9 +131,10 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
         case "certificationNumber": tempCertificationNumber = text.nilIfEmpty
         case "issueDate":           tempIssueDate = dateFormatter.date(from: text)
         case "expirationDate":      tempExpirationDate = dateFormatter.date(from: text)
-        case "instructorName":                tempInstructorName = text.nilIfEmpty
-        case "instructorNumber": tempInstructorNumber = text.nilIfEmpty
-        case "notes":                         tempNotes = text.nilIfEmpty
+        case "instructorName":      tempInstructorName = text.nilIfEmpty
+        case "instructorNumber":    tempInstructorNumber = text.nilIfEmpty
+        case "divingCentre":        tempDivingCenter = text.nilIfEmpty
+        case "notes":               tempNotes = text.nilIfEmpty
         case "certification":
             let parsed = ParsedCertification(
                 id: UUID(uuidString: tempID ?? "") ?? UUID(),
@@ -144,6 +147,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
                 expirationDate: tempExpirationDate,
                 instructorName: tempInstructorName,
                 instructorNumber: tempInstructorNumber,
+                divingCentre: tempDivingCenter,
                 notes: tempNotes
             )
             certifications.append(parsed)
@@ -166,6 +170,7 @@ final class CertificationXMLParser: NSObject, XMLParserDelegate {
         tempExpirationDate = nil
         tempInstructorName = nil
         tempInstructorNumber = nil
+        tempDivingCenter = nil
         tempNotes = nil
     }
 }
