@@ -74,6 +74,7 @@ struct DiveDetailView: View {
     @State var isEditingEquipment = false
     @State var gearToDelete: Gear?
     @State var showDeleteGearAlert = false
+    @State var selectedGearForDetail: Gear?
     @State var isEditingPhotos = false
     @State var photoIndexToDelete: Int?
     @State var showDeletePhotoAlert = false
@@ -425,6 +426,12 @@ struct DiveDetailView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(item: $selectedGearForDetail) { gear in
+            GearServiceView(gear: gear)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         #if os(iOS)
         .fileExporter(
             isPresented: $showFileExporter,
@@ -447,6 +454,7 @@ struct DiveDetailView: View {
             isEditingEquipment = false
             isEditingPhotos = false
             isEditingMarineLife = false
+            selectedGearForDetail = nil
             // Also clear transient targets so they can't point to the previous dive's items.
             selectedPhotoForPreview = nil
             gearToDelete = nil

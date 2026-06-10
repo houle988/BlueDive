@@ -9961,6 +9961,16 @@
         }
       }
     },
+    "Opens gear details" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre les détails de l'équipement"
+          }
+        }
+      }
+    },
     "Operator" : {
       "localizations" : {
         "fr-CA" : {
@@ -12164,6 +12174,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réglages"
+          }
+        }
+      }
+    },
+    "Show gear details" : {
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les détails de l'équipement"
           }
         }
       }

@@ -682,14 +682,20 @@ extension DiveDetailView {
                             ZStack(alignment: .topTrailing) {
                                 GearChipView(gear: gear)
                                     .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if !isEditingEquipment {
+                                            selectedGearForDetail = gear
+                                        }
+                                    }
                                     #if os(iOS)
-                                    .onTapGesture { }
                                     .onLongPressGesture {
                                         withAnimation(.easeInOut(duration: 0.2)) {
                                             isEditingEquipment.toggle()
                                         }
                                     }
                                     #endif
+                                    .accessibilityHint(Text("Opens gear details"))
+                                    .help("Show gear details")
                                 if isEditingEquipment {
                                     Button {
                                         gearToDelete = gear
