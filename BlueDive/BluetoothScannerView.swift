@@ -44,6 +44,7 @@ struct BluetoothScannerView: View {
     @State private var connectedDeviceName: String?
     @State private var downloadAllDives: Bool = false
     @AppStorage("filterUnusedTanks") private var filterUnusedTanks: Bool = false
+    @AppStorage("syncDeviceClock") private var syncDeviceClock: Bool = true
     @State private var diveCountDuringDownload: Int = 0
     @State private var downloadProgressCancellable: AnyCancellable?
     @State private var isSearching: Bool = false
@@ -318,6 +319,12 @@ struct BluetoothScannerView: View {
             }
 
             Section {
+                Toggle("Sync device clock", isOn: $syncDeviceClock)
+            } footer: {
+                Text("Automatically set the dive computer's clock to your device's current time and time zone after each sync.")
+            }
+
+            Section {
                 Button {
                     isSearching = true
                     startScanning()
@@ -380,6 +387,13 @@ struct BluetoothScannerView: View {
                         .disabled(syncState.isActive && syncState != .scanning)
                 } footer: {
                     Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Duplicates will be automatically skipped during import.")
+                }
+
+                Section {
+                    Toggle("Sync device clock", isOn: $syncDeviceClock)
+                        .disabled(syncState.isActive && syncState != .scanning)
+                } footer: {
+                    Text("Automatically set the dive computer's clock to your device's current time and time zone after each sync.")
                 }
             }
             .formStyle(.grouped)
@@ -871,6 +885,7 @@ struct BluetoothScannerView: View {
             device: peripheral,
             viewModel: viewModel,
             bluetoothManager: bleManager,
+            syncClock: syncDeviceClock,
             onProgress: { current, total in
                 DispatchQueue.main.async {
                     // current/total are libdivecomputer transfer bytes — used for the progress bar.
