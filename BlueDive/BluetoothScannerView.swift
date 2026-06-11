@@ -993,6 +993,9 @@ struct BluetoothScannerView: View {
                 }
             }
             
+            // Resolve the diver name once for the entire batch — the same computer is used for all dives.
+            let batchDiverName = resolveDiverName(forSerial: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial })
+
             for (index, diveData) in sortedDives.enumerated() {
                 // Check if the dive already exists (by date and depth)
                 let existingMatch = checkExistingDive(diveData)
@@ -1007,7 +1010,7 @@ struct BluetoothScannerView: View {
                         skippedCount += 1
                     }
                 } else {
-                    let dive = convertToBlueDiveDive(diveData, diveNumber: nextDiveNumber, previousDiveEndTime: previousDiveEndTime)
+                    let dive = convertToBlueDiveDive(diveData, diveNumber: nextDiveNumber, previousDiveEndTime: previousDiveEndTime, diverName: batchDiverName)
                     modelContext.insert(dive)
                     nextDiveNumber += 1
                     importedCount += 1
@@ -1607,8 +1610,47 @@ struct BluetoothScannerView: View {
         return result
     }
     
+    /// Returns the diver name to stamp on a Bluetooth-downloaded dive.
+    ///
+    /// Looks for a gear item of category "Computer" whose serial number matches the connected device.
+    /// Serial comparison is whitespace-trimmed and case-insensitive to handle firmware padding and
+    /// user-entry differences. If multiple computers share the same serial but disagree on the diver
+    /// name (ambiguous ownership), falls back to the profile name. Falls back to the profile name
+    /// when no matching gear is found or the fetch fails.
+    private func resolveDiverName(forSerial computerSerial: String?) -> String {
+        let profileName = (UserDefaults.standard.string(forKey: "userName") ?? "").trimmingCharacters(in: .whitespaces)
+        guard let rawSerial = computerSerial else { return profileName }
+        let serial = rawSerial.trimmingCharacters(in: .whitespaces)
+        guard !serial.isEmpty else { return profileName }
+
+        let computerCategory = GearCategory.computer.rawValue
+        // #Predicate cannot call instance methods, so fetch all computers and filter in-memory
+        // to apply trimmed case-insensitive serial comparison.
+        let predicate = #Predicate<Gear> { gear in
+            gear.category == computerCategory && gear.serialNumber != nil
+        }
+        do {
+            let computers = try modelContext.fetch(FetchDescriptor<Gear>(predicate: predicate))
+            let matches = computers.filter {
+                ($0.serialNumber ?? "").trimmingCharacters(in: .whitespaces)
+                    .caseInsensitiveCompare(serial) == .orderedSame
+                    && !$0.diverName.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            let distinctNames = Set(matches.map { $0.diverName.trimmingCharacters(in: .whitespaces) })
+            if distinctNames.count == 1, let name = distinctNames.first {
+                return name
+            }
+            if distinctNames.count > 1 {
+                Self.logger.warning("Multiple gear computers match serial \(serial) with different diver names — falling back to profile name")
+            }
+        } catch {
+            Self.logger.error("Failed to look up gear for computer serial \(serial): \(error.localizedDescription)")
+        }
+        return profileName
+    }
+
     /// Converts a LibDCSwift DiveData to a BlueDive Dive
-    private func convertToBlueDiveDive(_ diveData: DiveData, diveNumber: Int, previousDiveEndTime: Date?) -> Dive {
+    private func convertToBlueDiveDive(_ diveData: DiveData, diveNumber: Int, previousDiveEndTime: Date?, diverName: String) -> Dive {
         // Convert the dive profile, merging event-only points into time-based points
         let profileSamples = Self.consolidateProfilePoints(diveData.profile)
         
@@ -1758,6 +1800,8 @@ struct BluetoothScannerView: View {
             surfaceIntervalString = "0h 00m"
         }
         
+        let computerSerial = selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial }
+
         // Create the dive
         let dive = Dive(
             diveNumber: diveNumber,
@@ -1767,9 +1811,9 @@ struct BluetoothScannerView: View {
             diveTypes: diveType,
             computerName: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString) }.flatMap { stored in DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family })?.name } ?? connectedDeviceName ?? NSLocalizedString("dive.computer.default_ble_name",
                                                                     comment: "Fallback name for an unknown Bluetooth dive computer"),
-            computerSerialNumber: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial },
+            computerSerialNumber: computerSerial,
             surfaceInterval: surfaceIntervalString,
-            diverName: UserDefaults.standard.string(forKey: "userName") ?? "",
+            diverName: diverName,
             buddies: "",
             rating: 0,
             isRepetitiveDive: isRepetitiveDive,
