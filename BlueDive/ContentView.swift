@@ -90,6 +90,7 @@ struct ContentView: View {
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @State private var sortOrder: DiveSortOrder = .dateDesc
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
+    @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
     @State private var collapsedDiverSections: Set<String> = []
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
@@ -922,11 +923,11 @@ struct ContentView: View {
             }
             .help("Settings")
         }
-        // Tools Menu - Begin
-        // ToolbarItem(placement: .navigation) {
-        //     calculatorsMenu
-        // }
-        // Tools Menu - End
+        if showCalculatorsMenu {
+            ToolbarItem(placement: .navigation) {
+                calculatorsMenu
+            }
+        }
         ToolbarItem(placement: .navigation) {
             toolsMenu
         }

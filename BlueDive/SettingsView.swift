@@ -418,6 +418,7 @@ struct SettingsView: View {
     @AppStorage("certificationReminders")   private var certReminders  = true
     @AppStorage("milestoneNotifications")   private var milestoneNotifs = true
     @AppStorage("filterUnusedTanks")         private var filterUnusedTanks = false
+    @AppStorage("showCalculatorsMenu")       private var showCalculatorsMenu = false
 
     // @State on an @Observable singleton: correct pattern for SwiftUI + Observation.
     // Using @State ensures SwiftUI tracks mutations and re-renders the view.
@@ -467,6 +468,7 @@ struct SettingsView: View {
                         dataManagementSection
                         iCloudSection
                         // diagnosticsSection  // Hidden – uncomment to re-enable Debug section
+                        advancedSection
                         dangerZoneSection
                         aboutSection
                     }
@@ -1248,6 +1250,27 @@ struct SettingsView: View {
         }
     }
     
+    // MARK: - Advanced Section
+
+    private var advancedSection: some View {
+        VStack(spacing: 16) {
+            SectionHeaderModern(title: "Advanced", icon: "wrench.and.screwdriver.fill", color: .purple)
+
+            VStack(spacing: 12) {
+                ModernToggleRow(
+                    isOn: $showCalculatorsMenu,
+                    icon: "wrench.and.screwdriver.fill",
+                    iconColor: .purple,
+                    title: "Show Tools Menu",
+                    subtitle: "Show the Minimum Gas and Gas Density calculators in the toolbar"
+                )
+            }
+            .padding()
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
+        }
+        .padding(.horizontal)
+    }
+
     // MARK: - Diagnostics (Hidden – uncomment to re-enable)
     
 //    private var diagnosticsSection: some View {
