@@ -45,7 +45,7 @@ struct GasDensityCalculatorView: View {
     @FocusState private var isAnyFieldFocused: Bool
 
     private func toDouble(_ s: String) -> Double {
-        Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0
+        Double(s.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")) ?? 0
     }
 
     private var o2: Double { min(100, max(0, toDouble(o2Str))) }

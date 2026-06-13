@@ -66,6 +66,7 @@ struct ContentView: View {
     @State private var showDashboard = false
     @State private var showMinimumGasPlanning = false
     @State private var showGasDensityCalculator = false
+    @State private var showBestMixCalculator = false
     @State private var showCalculatorsPopover = false
     @State private var isSyncing = false
     @State private var showManualDiveDatePicker = false
@@ -382,6 +383,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showGasDensityCalculator) {
                 GasDensityCalculatorView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showBestMixCalculator) {
+                BestMixCalculatorView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -1140,6 +1147,11 @@ struct ContentView: View {
                     showCalculatorsPopover = false
                     showGasDensityCalculator = true
                 }
+                Divider()
+                toolsPopoverButton("Best Mix", icon: "bubbles.and.sparkles") {
+                    showCalculatorsPopover = false
+                    showBestMixCalculator = true
+                }
             }
             .frame(width: 220)
             .padding(.vertical, 4)
@@ -1151,6 +1163,9 @@ struct ContentView: View {
             }
             Button(action: { showGasDensityCalculator = true }) {
                 Label("Gas Density", systemImage: "atom")
+            }
+            Button(action: { showBestMixCalculator = true }) {
+                Label("Best Mix", systemImage: "bubbles.and.sparkles")
             }
         } label: {
             Image(systemName: "wrench.and.screwdriver.fill")

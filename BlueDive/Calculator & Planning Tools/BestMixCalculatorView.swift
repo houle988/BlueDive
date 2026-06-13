@@ -32,7 +32,7 @@ struct BestMixCalculatorView: View {
     @FocusState private var isAnyFieldFocused: Bool
 
     private func toDouble(_ s: String) -> Double {
-        Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0
+        Double(s.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")) ?? 0
     }
 
     private var po2: Double { max(0.01, toDouble(po2Str)) }
@@ -125,8 +125,13 @@ struct BestMixCalculatorView: View {
     }
 
     private var inputSection: some View {
-        Section(header: Text("Parameters")) {
+        Section(header: Text("Dive Parameters")) {
             numberRow("Max PO₂ (ATA)", text: $po2Str)
+            if toDouble(po2Str) > 1.6 {
+                Text("PO₂ above 1.6 ATA exceeds the maximum recommended limit.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
             numberRow(unitMode == .metric ? "Depth (m)" : "Depth (ft)", text: $depthStr)
             Toggle("Seawater", isOn: $isSeawater)
             LabeledContent("Pressure") {
@@ -145,13 +150,15 @@ struct BestMixCalculatorView: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             } else if isAnyMixSafe {
-                Label("Pure O₂ stays below the PO₂ limit at this depth — any mix is safe.", systemImage: "checkmark.circle.fill")
+                Label("Any nitrox blend stays within the PO₂ limit at this depth — verify equipment is rated for the O₂ percentage used.", systemImage: "checkmark.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
             } else {
-                Label("Round down to the nearest available mix.", systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if result.bestMixPct > 40.0 {
+                    Label("Above 40% O₂ requires advanced Nitrox training and oxygen-clean equipment.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
             Text("All calculations provided by this tool are estimates. It is the diver's sole responsibility to verify and validate all results before any dive.")
                 .font(.caption)
@@ -256,13 +263,6 @@ struct BestMixCalculatorView: View {
                         Text("Always use the limit appropriate to your training and dive plan.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("Rounding", systemImage: "arrow.down.to.line")
-                            .font(.headline)
-                            .foregroundStyle(.cyan)
-                        Text("Always round the Best Mix percentage down to the nearest available blend. Rounding up would increase the ppO₂ beyond your target at depth.")
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
