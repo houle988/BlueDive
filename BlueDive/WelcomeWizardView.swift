@@ -55,7 +55,7 @@ struct WelcomeWizardView: View {
                 Feature(icon: "tray.2.fill", color: .brown, title: "Gear Groups", description: "Organize equipment into groups — e.g. tropical kit, cold water setup."),
                 Feature(icon: "cylinder.fill", color: .mint, title: "Tank Templates", description: "Save your favorite tank configurations for quick reuse."),
                 Feature(icon: "graduationcap.fill", color: .blue, title: "Certifications", description: "Store diving certifications and get expiry alerts."),
-                Feature(icon: "medal.fill", color: .yellow, title: "Records Wall", description: "See your personal bests — deepest dive, longest bottom time, and more."),
+                Feature(icon: "chart.bar.xaxis", color: .yellow, title: "Statistics", description: "Track lifetime totals, personal bests, and dive trends — depth, time, gas consumption, and more."),
             ]
         ),
         // Page 5: Dive tools

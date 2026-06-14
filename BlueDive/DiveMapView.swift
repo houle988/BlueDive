@@ -126,75 +126,17 @@ struct DiveMapView: View {
     }
     
     private var filteredDives: [Dive] {
-        DiverFilter.apply(selectedDiver, to: dives).filter { dive in
-            if let year = filterYear {
-                let diveYear = Calendar.current.component(.year, from: dive.timestamp)
-                if filterYearNegate {
-                    if diveYear == year { return false }
-                } else {
-                    if diveYear != year { return false }
-                }
-            }
-            if let gas = filterGasType {
-                if gas.isEmpty {
-                    if !dive.gasType.isEmpty { return false }
-                } else if filterGasTypeNegate {
-                    if dive.gasType == gas { return false }
-                } else {
-                    if dive.gasType != gas { return false }
-                }
-            }
-            if filterMinDepth > 0 || filterMaxDepth > 0 {
-                let depth = dive.displayMaxDepth
-                if filterMinDepth > 0, filterMaxDepth > 0 {
-                    let lo = Swift.min(filterMinDepth, filterMaxDepth)
-                    let hi = Swift.max(filterMinDepth, filterMaxDepth)
-                    if depth < lo || depth > hi { return false }
-                } else if filterMinDepth > 0 {
-                    if depth < filterMinDepth { return false }
-                } else if filterMaxDepth > 0 {
-                    if depth > filterMaxDepth { return false }
-                }
-            }
-            if filterMinRating > 0, dive.rating < filterMinRating { return false }
-            if let country = filterCountry {
-                if country.isEmpty {
-                    guard dive.siteCountry == nil || dive.siteCountry!.isEmpty else { return false }
-                } else if filterCountryNegate {
-                    if let diveCountry = dive.siteCountry, diveCountry == country { return false }
-                } else {
-                    guard let diveCountry = dive.siteCountry, diveCountry == country else { return false }
-                }
-            }
-            if let diveType = filterDiveType {
-                if diveType.isEmpty {
-                    let trimmed = dive.diveTypes?.trimmingCharacters(in: .whitespaces) ?? ""
-                    if !trimmed.isEmpty { return false }
-                } else {
-                    let allTypes = dive.diveTypes?
-                        .split(separator: ",")
-                        .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if filterDiveTypeNegate {
-                        if allTypes.contains(diveType) { return false }
-                    } else {
-                        if !allTypes.contains(diveType) { return false }
-                    }
-                }
-            }
-            if let tag = filterTag {
-                if tag.isEmpty {
-                    let trimmed = dive.tags?.trimmingCharacters(in: .whitespaces) ?? ""
-                    if !trimmed.isEmpty { return false }
-                } else {
-                    let diveTags = dive.tags?
-                        .split(separator: ",")
-                        .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if !diveTags.contains(tag) { return false }
-                }
-            }
-            if !diveMatchesMarineLifeFilter(dive, species: filterMarineLife, mode: filterMarineLifeMode) { return false }
-            return true
-        }
+        DiverFilter.applyDiveFilters(
+            to: DiverFilter.apply(selectedDiver, to: dives),
+            year: filterYear, yearNegate: filterYearNegate,
+            gasType: filterGasType, gasTypeNegate: filterGasTypeNegate,
+            minDepth: filterMinDepth, maxDepth: filterMaxDepth,
+            minRating: filterMinRating,
+            country: filterCountry, countryNegate: filterCountryNegate,
+            diveType: filterDiveType, diveTypeNegate: filterDiveTypeNegate,
+            tag: filterTag,
+            marineLife: filterMarineLife, marineLifeMode: filterMarineLifeMode
+        )
     }
 
     private var divesWithCoordinates: [(dive: Dive, coordinate: CLLocationCoordinate2D)] {

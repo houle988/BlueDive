@@ -16,6 +16,7 @@ func calcBestMix(po2: Double, depthMetres: Double, isSeawater: Bool = true) -> B
 
 struct BestMixCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @AppStorage("lastAcknowledgedCalculatorWarningVersion") private var lastAcknowledgedCalculatorWarningVersion = ""
     @State private var showCalculatorWarning = false
 
@@ -142,11 +143,19 @@ struct BestMixCalculatorView: View {
         }
     }
 
+    private func formatPct(_ integer: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .percent
+        formatter.maximumFractionDigits = 0
+        formatter.locale = locale
+        return formatter.string(from: NSNumber(value: Double(integer) / 100.0)) ?? "\(integer)%"
+    }
+
     private var resultsSection: some View {
         Section(header: Text("Results")) {
             mixResultRow
             if isAirTooRich {
-                Label("Air (21%) exceeds the PO₂ limit at this depth.", systemImage: "exclamationmark.triangle.fill")
+                Label(String(format: NSLocalizedString("Air (%1$@) exceeds the PO₂ limit at this depth.", bundle: Bundle.forAppLanguage(), comment: ""), formatPct(21)), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.red)
             } else if isAnyMixSafe {
@@ -155,7 +164,7 @@ struct BestMixCalculatorView: View {
                     .foregroundStyle(.green)
             } else {
                 if result.bestMixPct > 40.0 {
-                    Label("Above 40% O₂ requires advanced Nitrox training and oxygen-clean equipment.", systemImage: "exclamationmark.triangle.fill")
+                    Label(String(format: NSLocalizedString("Above %1$@ O₂ requires advanced Nitrox training and oxygen-clean equipment.", bundle: Bundle.forAppLanguage(), comment: ""), formatPct(40)), systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }

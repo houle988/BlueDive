@@ -60,7 +60,6 @@ struct ContentView: View {
     @State private var showProfile = false
 
     @State private var showDiveTrips = false
-    @State private var showRecordsWall = false
     @State private var showCalendarHeatmap = false
     @State private var showMarineLife = false
     @State private var showDashboard = false
@@ -403,12 +402,6 @@ struct ContentView: View {
 
             .sheet(isPresented: $showDiveTrips) {
                 DiveTripsView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(isPresented: $showRecordsWall) {
-                RecordsWallView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -1085,11 +1078,6 @@ struct ContentView: View {
                     showDiveTrips = true
                 }
                 Divider()
-                toolsPopoverButton("Records Wall", icon: "medal.fill") {
-                    showToolsPopover = false
-                    showRecordsWall = true
-                }
-                Divider()
                 toolsPopoverButton("Calendar", icon: "calendar") {
                     showToolsPopover = false
                     showCalendarHeatmap = true
@@ -1110,10 +1098,6 @@ struct ContentView: View {
             }
             Button(action: { showDiveTrips = true }) {
                 Label("My Trips", systemImage: "map.fill")
-            }
-            Divider()
-            Button(action: { showRecordsWall = true }) {
-                Label("Records Wall", systemImage: "medal.fill")
             }
             Button(action: { showCalendarHeatmap = true }) {
                 Label("Calendar", systemImage: "calendar")

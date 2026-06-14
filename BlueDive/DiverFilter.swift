@@ -27,6 +27,68 @@ enum DiverFilter {
     static func apply(_ selected: String, to dives: [Dive]) -> [Dive] {
         selected.isEmpty ? dives : dives.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selected }
     }
+
+    /// Applies the 15-parameter dive filter shared by the Map and Statistics views.
+    static func applyDiveFilters(
+        to dives: [Dive],
+        year: Int?, yearNegate: Bool,
+        gasType: String?, gasTypeNegate: Bool,
+        minDepth: Double, maxDepth: Double,
+        minRating: Int,
+        country: String?, countryNegate: Bool,
+        diveType: String?, diveTypeNegate: Bool,
+        tag: String?,
+        marineLife: [String], marineLifeMode: FilterMarineLifeMode
+    ) -> [Dive] {
+        dives.filter { dive in
+            if let year = year {
+                let diveYear = Calendar.current.component(.year, from: dive.timestamp)
+                if yearNegate { if diveYear == year { return false } }
+                else { if diveYear != year { return false } }
+            }
+            if let gas = gasType {
+                if gas.isEmpty { if !dive.gasType.isEmpty { return false } }
+                else if gasTypeNegate { if dive.gasType == gas { return false } }
+                else { if dive.gasType != gas { return false } }
+            }
+            if minDepth > 0 || maxDepth > 0 {
+                let depth = dive.displayMaxDepth
+                if minDepth > 0, maxDepth > 0 {
+                    let lo = Swift.min(minDepth, maxDepth)
+                    let hi = Swift.max(minDepth, maxDepth)
+                    if depth < lo || depth > hi { return false }
+                } else if minDepth > 0 { if depth < minDepth { return false } }
+                else if maxDepth > 0 { if depth > maxDepth { return false } }
+            }
+            if minRating > 0, dive.rating < minRating { return false }
+            if let country = country {
+                if country.isEmpty { guard dive.siteCountry == nil || dive.siteCountry!.isEmpty else { return false } }
+                else if countryNegate { if let dc = dive.siteCountry, dc == country { return false } }
+                else { guard let dc = dive.siteCountry, dc == country else { return false } }
+            }
+            if let diveType = diveType {
+                if diveType.isEmpty {
+                    let trimmed = dive.diveTypes?.trimmingCharacters(in: .whitespaces) ?? ""
+                    if !trimmed.isEmpty { return false }
+                } else {
+                    let allTypes = dive.diveTypes?.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+                    if diveTypeNegate { if allTypes.contains(diveType) { return false } }
+                    else { if !allTypes.contains(diveType) { return false } }
+                }
+            }
+            if let tag = tag {
+                if tag.isEmpty {
+                    let trimmed = dive.tags?.trimmingCharacters(in: .whitespaces) ?? ""
+                    if !trimmed.isEmpty { return false }
+                } else {
+                    let diveTags = dive.tags?.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+                    if !diveTags.contains(tag) { return false }
+                }
+            }
+            if !diveMatchesMarineLifeFilter(dive, species: marineLife, mode: marineLifeMode) { return false }
+            return true
+        }
+    }
 }
 
 // MARK: - Toolbar Picker
