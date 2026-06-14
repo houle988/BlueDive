@@ -1469,6 +1469,7 @@
       }
     },
     "Advanced" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
@@ -2449,6 +2450,7 @@
       }
     },
     "Calculate the density of your breathing gas at depth. Colour-coded thresholds warn you when gas density may impair breathing and increase CO₂ retention risk." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
@@ -2459,6 +2461,7 @@
       }
     },
     "Calculate the minimum breathing gas needed to safely bring you and your buddy to the surface if either of you runs out of air at depth." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
@@ -4429,6 +4432,7 @@
       }
     },
     "Dive Tools" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
@@ -6240,6 +6244,7 @@
       }
     },
     "Gas Density Calculator" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
@@ -8781,6 +8786,7 @@
       }
     },
     "Minimum Gas Calculator" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
@@ -11488,6 +11494,7 @@
       }
     },
     "Safety tools for every dive" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
@@ -12299,6 +12306,7 @@
       }
     },
     "Show the Minimum Gas and Gas Density calculators in the toolbar" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {
@@ -12309,6 +12317,7 @@
       }
     },
     "Show Tools Menu" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr-CA" : {
           "stringUnit" : {

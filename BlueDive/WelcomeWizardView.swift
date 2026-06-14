@@ -27,6 +27,7 @@ struct WelcomeWizardView: View {
             subtitle: "Powerful tools to analyze your dives",
             features: [
                 Feature(icon: "chart.bar.fill", color: .orange, title: "Dashboard", description: "View statistics, charts, and trends across all your dives."),
+                Feature(icon: "chart.bar.xaxis", color: .yellow, title: "Statistics", description: "Track lifetime totals, personal bests, and dive trends — depth, time, gas consumption, and more."),
                 Feature(icon: "map.fill", color: .green, title: "Dive Map", description: "See all your dive sites plotted on an interactive world map."),
                 Feature(icon: "calendar", color: .purple, title: "Calendar Heatmap", description: "Visualize your diving activity over time."),
                 Feature(icon: "map.fill", color: .teal, title: "Dive Trips", description: "Group your dives into trips and relive your dive travel adventures."),
@@ -55,7 +56,6 @@ struct WelcomeWizardView: View {
                 Feature(icon: "tray.2.fill", color: .brown, title: "Gear Groups", description: "Organize equipment into groups — e.g. tropical kit, cold water setup."),
                 Feature(icon: "cylinder.fill", color: .mint, title: "Tank Templates", description: "Save your favorite tank configurations for quick reuse."),
                 Feature(icon: "graduationcap.fill", color: .blue, title: "Certifications", description: "Store diving certifications and get expiry alerts."),
-                Feature(icon: "chart.bar.xaxis", color: .yellow, title: "Statistics", description: "Track lifetime totals, personal bests, and dive trends — depth, time, gas consumption, and more."),
             ]
         ),
         // Page 5: Dive tools (Hidden – uncomment to re-enable calculators page)
@@ -105,7 +105,6 @@ struct WelcomeWizardView: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.3), value: currentPage)
                 #else
                 pageView(pages[currentPage])
                     .id(currentPage)
@@ -130,7 +129,11 @@ struct WelcomeWizardView: View {
                     HStack {
                         if currentPage > 0 {
                             Button {
+                                #if os(iOS)
+                                currentPage -= 1
+                                #else
                                 withAnimation { currentPage -= 1 }
+                                #endif
                             } label: {
                                 Text("Back")
                                     .font(.subheadline)
@@ -146,7 +149,11 @@ struct WelcomeWizardView: View {
 
                         Button {
                             if currentPage < pages.count - 1 {
+                                #if os(iOS)
+                                currentPage += 1
+                                #else
                                 withAnimation { currentPage += 1 }
+                                #endif
                             } else {
                                 hasCompletedOnboarding = true
                                 dismiss()
@@ -180,6 +187,7 @@ struct WelcomeWizardView: View {
                         .transition(.opacity)
                     }
                 }
+                .animation(.easeInOut(duration: 0.25), value: currentPage)
                 .padding(.top, 8)
                 .padding(.bottom, 40)
                 .padding(.horizontal, 8)
