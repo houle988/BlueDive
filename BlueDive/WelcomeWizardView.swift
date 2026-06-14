@@ -58,17 +58,17 @@ struct WelcomeWizardView: View {
                 Feature(icon: "chart.bar.xaxis", color: .yellow, title: "Statistics", description: "Track lifetime totals, personal bests, and dive trends — depth, time, gas consumption, and more."),
             ]
         ),
-        // Page 5: Dive tools
-        WelcomePage(
-            icon: "checklist",
-            iconColor: .red,
-            title: "Dive Tools",
-            subtitle: "Safety tools for every dive",
-            features: [
-                Feature(icon: "lungs.fill", color: .red, title: "Minimum Gas Calculator", description: "Calculate the minimum breathing gas needed to safely bring you and your buddy to the surface if either of you runs out of air at depth."),
-                Feature(icon: "atom", color: .teal, title: "Gas Density Calculator", description: "Calculate the density of your breathing gas at depth. Colour-coded thresholds warn you when gas density may impair breathing and increase CO₂ retention risk."),
-            ]
-        ),
+        // Page 5: Dive tools (Hidden – uncomment to re-enable calculators page)
+//        WelcomePage(
+//            icon: "checklist",
+//            iconColor: .red,
+//            title: "Dive Tools",
+//            subtitle: "Safety tools for every dive",
+//            features: [
+//                Feature(icon: "lungs.fill", color: .red, title: "Minimum Gas Calculator", description: "Calculate the minimum breathing gas needed to safely bring you and your buddy to the surface if either of you runs out of air at depth."),
+//                Feature(icon: "atom", color: .teal, title: "Gas Density Calculator", description: "Calculate the density of your breathing gas at depth. Colour-coded thresholds warn you when gas density may impair breathing and increase CO₂ retention risk."),
+//            ]
+//        ),
         // Page 6: Sync, export, profile, settings
         WelcomePage(
             icon: "gearshape.fill",

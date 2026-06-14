@@ -468,7 +468,7 @@ struct SettingsView: View {
                         dataManagementSection
                         iCloudSection
                         // diagnosticsSection  // Hidden – uncomment to re-enable Debug section
-                        advancedSection
+                        // advancedSection  // Hidden – uncomment to re-enable Advanced section
                         dangerZoneSection
                         aboutSection
                     }
@@ -1250,26 +1250,26 @@ struct SettingsView: View {
         }
     }
     
-    // MARK: - Advanced Section
+    // MARK: - Advanced Section (Hidden – uncomment to re-enable)
 
-    private var advancedSection: some View {
-        VStack(spacing: 16) {
-            SectionHeaderModern(title: "Advanced", icon: "wrench.and.screwdriver.fill", color: .purple)
-
-            VStack(spacing: 12) {
-                ModernToggleRow(
-                    isOn: $showCalculatorsMenu,
-                    icon: "wrench.and.screwdriver.fill",
-                    iconColor: .purple,
-                    title: "Show Tools Menu",
-                    subtitle: "Show the Minimum Gas and Gas Density calculators in the toolbar"
-                )
-            }
-            .padding()
-            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
-        }
-        .padding(.horizontal)
-    }
+//    private var advancedSection: some View {
+//        VStack(spacing: 16) {
+//            SectionHeaderModern(title: "Advanced", icon: "wrench.and.screwdriver.fill", color: .purple)
+//
+//            VStack(spacing: 12) {
+//                ModernToggleRow(
+//                    isOn: $showCalculatorsMenu,
+//                    icon: "wrench.and.screwdriver.fill",
+//                    iconColor: .purple,
+//                    title: "Show Tools Menu",
+//                    subtitle: "Show the Minimum Gas and Gas Density calculators in the toolbar"
+//                )
+//            }
+//            .padding()
+//            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
+//        }
+//        .padding(.horizontal)
+//    }
 
     // MARK: - Diagnostics (Hidden – uncomment to re-enable)
     
