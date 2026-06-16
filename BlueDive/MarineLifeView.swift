@@ -24,17 +24,26 @@ struct MarineLifeView: View {
     struct SpeciesAggregate: Identifiable, Hashable {
         let id: String           // canonical name (lowercased) used for grouping
         let name: String         // display name (most common casing seen)
-        let totalCount: Int      // sum of MarineSight.count
+        let entryCount: Int      // total number of sighting records
         let diveCount: Int       // number of distinct dives where seen
         let lastSeen: Date?
         let diveIDs: Set<UUID>
+        let quantityCounts: [SightingQuantity: Int]  // times each range was recorded
     }
 
     private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
     private var totalSightingsCount: Int {
-        allDives.reduce(0) { partial, dive in
-            partial + (dive.seenFish?.reduce(0) { $0 + max($1.count, 1) } ?? 0)
+        allDives.reduce(0) { $0 + ($1.seenFish?.count ?? 0) }
+    }
+
+    // Changes when any sighting's quantity bucket changes, triggering cache recompute.
+    // Uses non-commutative accumulation so add+remove pairs don't cancel out.
+    private var sightingCountsHash: Int {
+        allDives.reduce(0) { hash, dive in
+            (dive.seenFish ?? []).reduce(hash) { h, sight in
+                (h &* 31) &+ sight.count.hashValue &+ sight.id.hashValue
+            }
         }
     }
 
@@ -45,7 +54,7 @@ struct MarineLifeView: View {
     }
 
     private func computeStats(_ dives: [Dive]) async {
-        var byKey: [String: (name: String, total: Int, dives: Set<UUID>, last: Date?, casings: [String: Int])] = [:]
+        var byKey: [String: (name: String, entryCount: Int, dives: Set<UUID>, last: Date?, casings: [String: Int], qtyCounts: [SightingQuantity: Int])] = [:]
         var totalSightings = 0
         var divesWithLife = 0
         let yieldInterval = 100
@@ -57,10 +66,11 @@ struct MarineLifeView: View {
                 let trimmedName = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmedName.isEmpty else { continue }
                 let key = trimmedName.lowercased()
-                let count = max(entry.count, 1)
-                totalSightings += count
+                let qty = SightingQuantity.from(count: entry.count)
+                totalSightings += 1
                 if var existing = byKey[key] {
-                    existing.total += count
+                    existing.entryCount += 1
+                    existing.qtyCounts[qty, default: 0] += 1
                     existing.dives.insert(dive.id)
                     if let prev = existing.last {
                         existing.last = max(prev, dive.timestamp)
@@ -77,10 +87,11 @@ struct MarineLifeView: View {
                 } else {
                     byKey[key] = (
                         name: trimmedName,
-                        total: count,
+                        entryCount: 1,
                         dives: [dive.id],
                         last: dive.timestamp,
-                        casings: [trimmedName: 1]
+                        casings: [trimmedName: 1],
+                        qtyCounts: [qty: 1]
                     )
                 }
             }
@@ -94,15 +105,16 @@ struct MarineLifeView: View {
             SpeciesAggregate(
                 id: key,
                 name: value.name,
-                totalCount: value.total,
+                entryCount: value.entryCount,
                 diveCount: value.dives.count,
                 lastSeen: value.last,
-                diveIDs: value.dives
+                diveIDs: value.dives,
+                quantityCounts: value.qtyCounts
             )
         }
         .sorted {
             if $0.diveCount != $1.diveCount { return $0.diveCount > $1.diveCount }
-            if $0.totalCount != $1.totalCount { return $0.totalCount > $1.totalCount }
+            if $0.entryCount != $1.entryCount { return $0.entryCount > $1.entryCount }
             return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
 
@@ -155,7 +167,7 @@ struct MarineLifeView: View {
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
             .background(Color.platformBackground.ignoresSafeArea())
-            .task(id: "\(allDives.count):\(totalSightingsCount):\(selectedDiver)") {
+            .task(id: "\(allDives.count):\(totalSightingsCount):\(sightingCountsHash):\(selectedDiver)") {
                 statsReady = false
                 appeared = false
                 await computeStats(filteredDives)
@@ -293,6 +305,16 @@ struct MarineLifeView: View {
         .padding(.horizontal)
     }
 
+    // Builds "3× Abundant · 1× Few" with locale-formatted numbers, highest range first.
+    private func quantitySummary(for species: SpeciesAggregate) -> String {
+        SightingQuantity.allCases.reversed()
+            .compactMap { q -> String? in
+                guard let n = species.quantityCounts[q], n > 0 else { return nil }
+                return "\(n.formatted(.number.locale(locale)))× \(q.label)"
+            }
+            .joined(separator: " · ")
+    }
+
     @ViewBuilder
     private func speciesRow(index: Int, species: SpeciesAggregate) -> some View {
         HStack(spacing: 14) {
@@ -320,10 +342,6 @@ struct MarineLifeView: View {
                     Text(verbatim: species.diveCount == 1
                         ? NSLocalizedString("1 dive", bundle: .forAppLanguage(), comment: "Single dive count")
                         : String(format: NSLocalizedString("%lld dives", bundle: .forAppLanguage(), comment: "Multiple dives count"), species.diveCount))
-                    if species.totalCount != species.diveCount {
-                        Text(verbatim: "·")
-                        Text(verbatim: String(format: NSLocalizedString("%lld seen", bundle: .forAppLanguage(), comment: "Total sightings of a species"), species.totalCount))
-                    }
                     if let last = species.lastSeen {
                         Text(verbatim: "·")
                         Text(last, format: .dateTime.month(.abbreviated).year().locale(locale))
@@ -332,6 +350,14 @@ struct MarineLifeView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+
+                let summary = quantitySummary(for: species)
+                if !summary.isEmpty {
+                    Text(verbatim: summary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()

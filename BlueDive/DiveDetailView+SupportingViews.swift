@@ -37,22 +37,25 @@ struct FishChipView: View {
     let fish: MarineSight
 
     var body: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 4) {
             Text(fish.name)
                 .font(.subheadline)
                 .fontWeight(.bold)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
 
-            Text("x\(fish.count)")
+            Text(SightingQuantity.from(count: fish.count).label)
                 .font(.caption)
                 .fontWeight(.bold)
-                .padding(5)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
                 .background(Color.cyan.opacity(0.2))
-                .clipShape(Circle())
+                .clipShape(Capsule())
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 8)
+        .frame(maxWidth: 140)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Capsule().fill(Color.primary.opacity(0.1)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.1)))
     }
 }
 
@@ -137,7 +140,7 @@ struct AddFishView: View {
     @Bindable var dive: Dive
 
     @State private var fishName = ""
-    @State private var count = 1
+    @State private var quantity = SightingQuantity.single
     @State private var showSuggestions = false
     @FocusState private var isNameFocused: Bool
 
@@ -252,47 +255,39 @@ struct AddFishView: View {
                                 }
                             }
 
-                            // Amount stepper
+                            // Quantity picker
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("Amount")
+                                Text("Quantity")
                                     .font(.caption)
                                     .fontWeight(.medium)
                                     .foregroundStyle(.secondary)
-                                HStack {
-                                    HStack(spacing: 16) {
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                    ForEach(SightingQuantity.allCases, id: \.self) { q in
                                         Button {
-                                            if count > 1 { count -= 1 }
+                                            quantity = q
                                         } label: {
-                                            Image(systemName: "minus.circle.fill")
-                                                .font(.title2)
-                                                .foregroundStyle(count > 1 ? .cyan : .secondary.opacity(0.4))
+                                            VStack(spacing: 3) {
+                                                Text(q.label)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                                Text(q.rangeDescription)
+                                                    .font(.caption2)
+                                                    .foregroundStyle(quantity == q ? .cyan.opacity(0.8) : .secondary)
+                                            }
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .fill(quantity == q ? Color.cyan.opacity(0.18) : Color.primary.opacity(0.06))
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(quantity == q ? Color.cyan : Color.clear, lineWidth: 1.5)
+                                            )
+                                            .foregroundStyle(quantity == q ? .cyan : .primary)
                                         }
                                         .buttonStyle(.plain)
-                                        .disabled(count <= 1)
-
-                                        Text("\(count)")
-                                            .font(.title2)
-                                            .fontWeight(.bold)
-                                            .foregroundStyle(.primary)
-                                            .frame(minWidth: 36)
-
-                                        Button {
-                                            if count < 100 { count += 1 }
-                                        } label: {
-                                            Image(systemName: "plus.circle.fill")
-                                                .font(.title2)
-                                                .foregroundStyle(count < 100 ? .cyan : .secondary.opacity(0.4))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(count >= 100)
                                     }
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 16)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(Color.primary.opacity(0.06))
-                                    )
-                                    Spacer()
                                 }
                             }
                         }
@@ -309,7 +304,7 @@ struct AddFishView: View {
 
                                 HStack {
                                     Spacer()
-                                    FishPreviewChip(name: fishName, count: count)
+                                    FishPreviewChip(name: fishName, quantity: quantity)
                                         .scaleEffect(1.1)
                                     Spacer()
                                 }
@@ -368,7 +363,7 @@ struct AddFishView: View {
     @MainActor
     private func addFish() {
         let trimmedName = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newFish = MarineSight(name: trimmedName, count: count)
+        let newFish = MarineSight(name: trimmedName, count: quantity.rawValue)
 
         // Établir la relation bidirectionnelle
         newFish.dive = dive
@@ -391,7 +386,7 @@ struct EditFishView: View {
     @Bindable var fish: MarineSight
 
     @State private var fishName: String
-    @State private var count: Int
+    @State private var quantity: SightingQuantity
     @State private var showSuggestions = false
     @FocusState private var isNameFocused: Bool
 
@@ -400,7 +395,7 @@ struct EditFishView: View {
     init(fish: MarineSight) {
         self.fish = fish
         _fishName = State(initialValue: fish.name)
-        _count = State(initialValue: fish.count)
+        _quantity = State(initialValue: SightingQuantity.from(count: fish.count))
     }
 
     private var nameSuggestions: [String] {
@@ -512,47 +507,39 @@ struct EditFishView: View {
                                 }
                             }
 
-                            // Amount stepper
+                            // Quantity picker
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("Amount")
+                                Text("Quantity")
                                     .font(.caption)
                                     .fontWeight(.medium)
                                     .foregroundStyle(.secondary)
-                                HStack {
-                                    HStack(spacing: 16) {
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                    ForEach(SightingQuantity.allCases, id: \.self) { q in
                                         Button {
-                                            if count > 1 { count -= 1 }
+                                            quantity = q
                                         } label: {
-                                            Image(systemName: "minus.circle.fill")
-                                                .font(.title2)
-                                                .foregroundStyle(count > 1 ? .cyan : .secondary.opacity(0.4))
+                                            VStack(spacing: 3) {
+                                                Text(q.label)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                                Text(q.rangeDescription)
+                                                    .font(.caption2)
+                                                    .foregroundStyle(quantity == q ? .cyan.opacity(0.8) : .secondary)
+                                            }
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .fill(quantity == q ? Color.cyan.opacity(0.18) : Color.primary.opacity(0.06))
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(quantity == q ? Color.cyan : Color.clear, lineWidth: 1.5)
+                                            )
+                                            .foregroundStyle(quantity == q ? .cyan : .primary)
                                         }
                                         .buttonStyle(.plain)
-                                        .disabled(count <= 1)
-
-                                        Text("\(count)")
-                                            .font(.title2)
-                                            .fontWeight(.bold)
-                                            .foregroundStyle(.primary)
-                                            .frame(minWidth: 36)
-
-                                        Button {
-                                            if count < 100 { count += 1 }
-                                        } label: {
-                                            Image(systemName: "plus.circle.fill")
-                                                .font(.title2)
-                                                .foregroundStyle(count < 100 ? .cyan : .secondary.opacity(0.4))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(count >= 100)
                                     }
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 16)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(Color.primary.opacity(0.06))
-                                    )
-                                    Spacer()
                                 }
                             }
                         }
@@ -569,7 +556,7 @@ struct EditFishView: View {
 
                                 HStack {
                                     Spacer()
-                                    FishPreviewChip(name: fishName, count: count)
+                                    FishPreviewChip(name: fishName, quantity: quantity)
                                         .scaleEffect(1.1)
                                     Spacer()
                                 }
@@ -627,7 +614,7 @@ struct EditFishView: View {
     @MainActor
     private func saveFish() {
         fish.name = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
-        fish.count = count
+        fish.count = quantity.rawValue
         try? modelContext.save()
         dismiss()
     }
@@ -637,7 +624,7 @@ struct EditFishView: View {
 
 struct FishPreviewChip: View {
     let name: String
-    let count: Int
+    let quantity: SightingQuantity
 
     var body: some View {
         HStack(spacing: 8) {
@@ -645,12 +632,13 @@ struct FishPreviewChip: View {
                 .font(.subheadline)
                 .fontWeight(.bold)
 
-            Text("x\(count)")
+            Text(quantity.label)
                 .font(.caption)
                 .fontWeight(.bold)
-                .padding(5)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
                 .background(Color.cyan.opacity(0.2))
-                .clipShape(Circle())
+                .clipShape(Capsule())
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

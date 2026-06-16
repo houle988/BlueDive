@@ -63,7 +63,7 @@ struct DiverProfileView: View {
     private var topCreatures: [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
         for dive in dives {
-            for f in dive.seenFish ?? [] { counts[f.name, default: 0] += f.count }
+            for f in dive.seenFish ?? [] { counts[f.name, default: 0] += 1 }
         }
         return counts
             .map { (name: $0.key, count: $0.value) }

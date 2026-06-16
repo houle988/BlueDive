@@ -211,6 +211,45 @@ final class MarineSight {
     }
 }
 
+// MARK: - Sighting Quantity
+
+/// REEF.org-style abundance categories stored as sentinel Int values in MarineSight.count.
+/// Single=1, Few=2 (2–10), Many=11 (11–100), Abundant=101 (>100).
+/// Existing exact counts fall naturally into the correct bucket on read.
+enum SightingQuantity: Int, CaseIterable {
+    case single   = 1
+    case few      = 2
+    case many     = 11
+    case abundant = 101
+
+    var label: String {
+        switch self {
+        case .single:   return NSLocalizedString("Single", bundle: Bundle.forAppLanguage(), comment: "Marine life quantity: exactly one seen")
+        case .few:      return NSLocalizedString("Few", bundle: Bundle.forAppLanguage(), comment: "Marine life quantity: 2 to 10 seen")
+        case .many:     return NSLocalizedString("Many", bundle: Bundle.forAppLanguage(), comment: "Marine life quantity: 11 to 100 seen")
+        case .abundant: return NSLocalizedString("Abundant", bundle: Bundle.forAppLanguage(), comment: "Marine life quantity: more than 100 seen")
+        }
+    }
+
+    var rangeDescription: String {
+        switch self {
+        case .single:   return NSLocalizedString("sighting_range_1", bundle: Bundle.forAppLanguage(), comment: "Marine life quantity range: exactly 1")
+        case .few:      return NSLocalizedString("sighting_range_2_10", bundle: Bundle.forAppLanguage(), comment: "Marine life quantity range: 2 to 10")
+        case .many:     return NSLocalizedString("sighting_range_11_100", bundle: Bundle.forAppLanguage(), comment: "Marine life quantity range: 11 to 100")
+        case .abundant: return NSLocalizedString("sighting_range_100_plus", bundle: Bundle.forAppLanguage(), comment: "Marine life quantity range: more than 100")
+        }
+    }
+
+    static func from(count: Int) -> SightingQuantity {
+        switch count {
+        case ..<2:     return .single   // covers 0, negatives, and exactly 1
+        case 2...10:   return .few
+        case 11...100: return .many
+        default:       return .abundant
+        }
+    }
+}
+
 // MARK: - Dive Model
 
 @Model
