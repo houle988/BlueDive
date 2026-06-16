@@ -57,6 +57,15 @@ struct ContentView: View {
     }
     @State var pendingImport: PendingImport?
     @State var importFormatOptions = ImportFormatOptions()
+
+    struct PendingDuplicateImport: Identifiable {
+        let id = UUID()
+        let parsedDives: [BlueDiveGlobalData]
+        let duplicates: [DuplicateImportMatch]
+        let fileName: String
+    }
+    @State var pendingDuplicateImport: PendingDuplicateImport?
+
     @State private var showProfile = false
 
     @State private var showDiveTrips = false
@@ -483,12 +492,41 @@ struct ContentView: View {
                 ) {
                     // Confirm: dismiss the picker then start the import.
                     let url = pending.url
+                    let data = pending.data
                     let type = pending.fileType
                     pendingImport = nil
-                    importDiveFile(from: url, formats: importFormatOptions, fileType: type)
+                    importDiveFile(from: url, preloadedData: data, formats: importFormatOptions, fileType: type)
                 } onCancel: {
                     pendingImport = nil
                 }
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $pendingDuplicateImport) { pending in
+                DuplicateImportSheet(
+                    totalCount: pending.parsedDives.count,
+                    duplicates: pending.duplicates,
+                    fileName: pending.fileName,
+                    onSkipDuplicates: {
+                        let duplicateIndices = Set(pending.duplicates.map(\.parsedIndex))
+                        let indices = pending.parsedDives.indices.filter { !duplicateIndices.contains($0) }
+                        let parsed = pending.parsedDives
+                        let fileName = pending.fileName
+                        pendingDuplicateImport = nil
+                        commitParsedDives(parsed, indices: indices, fileName: fileName)
+                    },
+                    onImportAll: {
+                        let parsed = pending.parsedDives
+                        let indices = Array(pending.parsedDives.indices)
+                        let fileName = pending.fileName
+                        pendingDuplicateImport = nil
+                        commitParsedDives(parsed, indices: indices, fileName: fileName)
+                    },
+                    onCancel: {
+                        pendingDuplicateImport = nil
+                    }
+                )
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)

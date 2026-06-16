@@ -8,7 +8,7 @@ import Foundation
 // BlueDiveGearData, BlueDiveSamplesData) are defined in MacDiveXMLParser.swift
 // and reused here to avoid duplicate model properties.
 
-final class BlueDiveXMLParser: NSObject, XMLParserDelegate {
+final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
 
     // MARK: - Public Result
 

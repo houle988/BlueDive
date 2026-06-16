@@ -129,37 +129,34 @@ extension ContentView {
         }
     }
 
-    func importDiveFile(from url: URL, formats: ImportFormatOptions?, fileType: ImportFileType) {
-        // Show loading indicator
+    func importDiveFile(from url: URL, preloadedData: Data? = nil, formats: ImportFormatOptions?, fileType: ImportFileType) {
         isImporting = true
-        
+
         Task {
             do {
-                guard url.startAccessingSecurityScopedResource() else {
-                    throw ImportError.accessDenied
+                let data: Data
+                if let preloaded = preloadedData {
+                    data = preloaded
+                } else {
+                    guard url.startAccessingSecurityScopedResource() else {
+                        throw ImportError.accessDenied
+                    }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    data = try Data(contentsOf: url)
                 }
-                defer { url.stopAccessingSecurityScopedResource() }
-                
-                let data = try Data(contentsOf: url)
-                
-                switch fileType {
-                case .macDive:
-                    let chosenFormats = formats ?? ImportFormatOptions()
-                    try await importMacDiveXML(data: data, fileName: url.lastPathComponent, formats: chosenFormats)
 
-                case .blueDive:
-                    let chosenFormats = formats ?? ImportFormatOptions()
-                    try await importBlueDiveXML(data: data, fileName: url.lastPathComponent, importGear: chosenFormats.importGear)
+                let chosenFormats = formats ?? ImportFormatOptions()
+                let parsedDives = try parseImportData(
+                    data,
+                    fileType: fileType,
+                    formats: chosenFormats
+                )
 
-                case .uddf:
-                    let chosenFormats = formats ?? ImportFormatOptions()
-                    try await importUDDFXML(data: data, fileName: url.lastPathComponent, importGear: chosenFormats.importGear)
-                }
-                
                 await MainActor.run {
                     isImporting = false
+                    routeParsedDives(parsedDives, fileName: url.lastPathComponent)
                 }
-                
+
             } catch let error as ImportError {
                 await MainActor.run {
                     isImporting = false
@@ -176,71 +173,265 @@ extension ContentView {
         }
     }
 
-    private func importMacDiveXML(data: Data, fileName: String, formats: ImportFormatOptions) async throws {
-        let divesData = try await Task.detached(priority: .userInitiated) {
-            let parser = await MacDiveXMLParser()
-            // Inject the user-chosen unit formats before parsing
-            await MainActor.run {
-                parser.distanceFormat    = formats.distanceFormat
-                parser.temperatureFormat = formats.temperatureFormat
-                parser.pressureFormat    = formats.pressureFormat
-                parser.volumeFormat      = formats.volumeFormat
-                parser.weightFormat      = formats.weightFormat
-                parser.importGear        = formats.importGear
-            }
-            guard let parsedData = await parser.parse(data: data), !parsedData.isEmpty else {
-                throw ImportError.parsingFailed
-            }
-            return parsedData
-        }.value
-        
-        await MainActor.run {
-            for diveData in divesData {
-                insertDiveFromMacDive(diveData, fileName: fileName)
-            }
+    // MARK: - Parsing
+
+    // Parse and insert are kept separate so duplicate detection can run between them.
+    private func parseImportData(
+        _ data: Data,
+        fileType: ImportFileType,
+        formats: ImportFormatOptions
+    ) throws -> [BlueDiveGlobalData] {
+        switch fileType {
+        case .macDive:
+            return try parseMacDiveXML(data: data, formats: formats)
+        case .blueDive:
+            return try parseBlueDiveXML(data: data, importGear: formats.importGear)
+        case .uddf:
+            return try parseUDDFXML(data: data, importGear: formats.importGear)
         }
     }
 
-    private func importBlueDiveXML(data: Data, fileName: String, importGear: Bool = true) async throws {
-        // Instantiate the parser on the main actor (where its init is isolated)
-        // before handing off the actual parsing work to a detached task.
+    private func parseMacDiveXML(data: Data, formats: ImportFormatOptions) throws -> [BlueDiveGlobalData] {
+        let parser = MacDiveXMLParser()
+        parser.distanceFormat    = formats.distanceFormat
+        parser.temperatureFormat = formats.temperatureFormat
+        parser.pressureFormat    = formats.pressureFormat
+        parser.volumeFormat      = formats.volumeFormat
+        parser.weightFormat      = formats.weightFormat
+        parser.importGear        = formats.importGear
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    private func parseBlueDiveXML(data: Data, importGear: Bool) throws -> [BlueDiveGlobalData] {
         let parser = BlueDiveXMLParser()
         parser.importGear = importGear
-        let divesData = try await Task.detached(priority: .userInitiated) {
-            // BlueDive XML stores units inside the file, so no format injection needed.
-            guard let parsedData = await parser.parse(data: data), !parsedData.isEmpty else {
-                throw ImportError.parsingFailed
-            }
-            return parsedData
-        }.value
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
 
-        await MainActor.run {
-            for diveData in divesData {
-                // BlueDiveGlobalData is the same type used by MacDive imports,
-                // so we can reuse insertDiveFromMacDive directly.
-                insertDiveFromMacDive(diveData, fileName: fileName)
-            }
+    private func parseUDDFXML(data: Data, importGear: Bool) throws -> [BlueDiveGlobalData] {
+        let parser = UDDFXMLParser()
+        parser.importGear = importGear
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    // MARK: - Duplicate Detection
+
+    @MainActor
+    func routeParsedDives(_ parsed: [BlueDiveGlobalData], fileName: String) {
+        let duplicates = findDuplicateMatches(in: parsed)
+        if duplicates.isEmpty {
+            commitParsedDives(parsed, indices: Array(parsed.indices), fileName: fileName)
+        } else {
+            pendingDuplicateImport = PendingDuplicateImport(
+                parsedDives: parsed,
+                duplicates: duplicates,
+                fileName: fileName
+            )
         }
     }
 
-    private func importUDDFXML(data: Data, fileName: String, importGear: Bool = true) async throws {
-        let parser = UDDFXMLParser()
-        parser.importGear = importGear
-        let divesData = try await Task.detached(priority: .userInitiated) {
-            // UDDF uses SI units; the parser converts to metric display units internally.
-            guard let parsedData = await parser.parse(data: data), !parsedData.isEmpty else {
-                throw ImportError.parsingFailed
-            }
-            return parsedData
-        }.value
+    @MainActor
+    func commitParsedDives(_ parsed: [BlueDiveGlobalData], indices: [Int], fileName: String) {
+        for index in indices {
+            guard parsed.indices.contains(index) else { continue }
+            insertDiveFromMacDive(parsed[index], fileName: fileName)
+        }
+    }
 
-        await MainActor.run {
-            for diveData in divesData {
-                // BlueDiveGlobalData is the same type used by all imports,
-                // so we can reuse insertDiveFromMacDive directly.
-                insertDiveFromMacDive(diveData, fileName: fileName)
+    @MainActor
+    func findDuplicateMatches(in parsed: [BlueDiveGlobalData]) -> [DuplicateImportMatch] {
+        // Build lookup structures once so per-dive matching is O(1) instead of O(N).
+        // One-to-many dict: multiple existing dives can share the same identifier string
+        // (e.g. after a prior double-import). All candidates are kept; the best match is
+        // chosen by temporal proximity rather than silently discarding collision victims.
+        var divesByIdentifier: [String: [Dive]] = [:]
+        for d in dives {
+            let id = (d.identifier ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty else { continue }
+            divesByIdentifier[id, default: []].append(d)
+        }
+        // Bucket existing dives by UTC minute; bucket radius is kept in sync with dateTolerance.
+        let divesByMinute: [Int: [Dive]] = Dictionary(grouping: dives) {
+            Int($0.timestamp.timeIntervalSince1970 / 60)
+        }
+
+        var matches: [DuplicateImportMatch] = []
+        var consumedExistingIDs = Set<UUID>()
+        for (index, dive) in parsed.enumerated() {
+            guard let (existing, reason) = findExistingDuplicate(
+                for: dive,
+                excluding: consumedExistingIDs,
+                divesByIdentifier: divesByIdentifier,
+                divesByMinute: divesByMinute
+            ) else { continue }
+            consumedExistingIDs.insert(existing.id)
+            matches.append(DuplicateImportMatch(
+                parsedIndex: index,
+                incomingDate: dive.date,
+                incomingSiteName: dive.site?.name ?? "",
+                incomingMaxDepth: dive.maxDepth,
+                incomingDuration: dive.duration / 60,
+                incomingDistanceUnit: dive.distanceFormat,
+                existing: existing,
+                reason: reason
+            ))
+        }
+        return matches
+    }
+
+    @MainActor
+    private func findExistingDuplicate(
+        for incoming: BlueDiveGlobalData,
+        excluding consumed: Set<UUID>,
+        divesByIdentifier: [String: [Dive]],
+        divesByMinute: [Int: [Dive]]
+    ) -> (Dive, DuplicateMatchReason)? {
+        // Tracks dives proven to belong to a different computer via identifier path.
+        // Prevents the heuristic path from re-matching a dive already ruled out by serial mismatch
+        // or a failed profile sanity check. Scoped per call so other incoming dives can still claim them.
+        var identifierRejectedIDs = Set<UUID>()
+
+        // Heuristic tolerances — also reused by the identifier path for profile sanity (H1 fix).
+        let dateTolerance: TimeInterval = 180
+        let durationToleranceMin = 2
+        let depthToleranceMeters = 1.0
+
+        // Pre-compute incoming values once; both paths use them.
+        // BlueDiveGlobalData.duration is seconds; Dive.duration is stored in minutes (floor).
+        let incomingDurationMin = incoming.duration / 60
+        let incomingDepthMeters = depthInMeters(incoming.maxDepth, unit: incoming.distanceFormat)
+        let incomingSiteName = (incoming.site?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let incomingSerial = (incoming.serial ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        // MARK: Identifier path
+        // O(1) lookup — computer UID survives unit changes and edits.
+        // Skipped entirely when incoming has no date (nil-date .min is non-deterministic).
+        let trimmedID = (incoming.identifier ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedID.isEmpty, let incomingDate = incoming.date {
+            // M3: divesByIdentifier keys are exact-case from the caller; collect all candidates
+            // whose key case-folds equal to trimmedID so "42A" matches "42a".
+            let loweredID = trimmedID.lowercased()
+            var idCandidates: [Dive] = []
+            for (key, dives) in divesByIdentifier where key.lowercased() == loweredID {
+                idCandidates.append(contentsOf: dives)
+            }
+
+            // H2: try all candidates in temporal order, not just the nearest one.
+            // A later candidate may have a better serial match even if the nearest one is rejected.
+            // M5: deterministic tiebreak on UUID string when two candidates are equidistant.
+            let sortedCandidates = idCandidates
+                .filter { !consumed.contains($0.id) }
+                .sorted { lhs, rhs in
+                    let dl = abs(lhs.timestamp.timeIntervalSince(incomingDate))
+                    let dr = abs(rhs.timestamp.timeIntervalSince(incomingDate))
+                    if dl != dr { return dl < dr }
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+
+            for match in sortedCandidates {
+                let existingSerial = (match.computerSerialNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let bothSerialsMatch = !incomingSerial.isEmpty && !existingSerial.isEmpty && incomingSerial == existingSerial
+                // When both serials are confirmed equal, allow 24 h of clock drift / timezone
+                // ambiguity. Otherwise tighten to 2 h to reduce cross-diver false positives
+                // (MacDive uses sequential numbers like "42" as identifiers).
+                let dateLimit: TimeInterval = bothSerialsMatch ? 86_400 : 7_200
+                let deltaT = abs(match.timestamp.timeIntervalSince(incomingDate))
+
+                // Candidates are sorted nearest-first, but dateLimit varies per candidate
+                // (a later candidate may have bothSerialsMatch and a larger window), so
+                // skip rather than break.
+                guard deltaT < dateLimit else { continue }
+
+                let atLeastOneSerial = !incomingSerial.isEmpty || !existingSerial.isEmpty
+                let serialsCompatible = incomingSerial.isEmpty || existingSerial.isEmpty || incomingSerial == existingSerial
+
+                if atLeastOneSerial && serialsCompatible {
+                    if deltaT <= dateTolerance && bothSerialsMatch {
+                        // Both serials confirmed equal and within heuristic date window — maximum
+                        // confidence. Trust identifier + serial directly; no profile check needed.
+                        return (match, .sameIdentifier)
+                    }
+                    // Outside the heuristic window, or serials not both confirmed: require depth +
+                    // duration sanity before declaring .sameIdentifier. Guards against firmware
+                    // resets that recycle dive IDs — even within a short time window.
+                    let existingDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
+                    if abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
+                       abs(match.duration - incomingDurationMin) <= durationToleranceMin {
+                        return (match, .sameIdentifier)
+                    }
+                    // Profile validation failed — proven wrong dive despite matching identifier+serial.
+                    // Block the heuristic from re-matching this candidate.
+                    identifierRejectedIDs.insert(match.id)
+                } else if !serialsCompatible {
+                    // Hard serial mismatch — proven different computer.
+                    // Block the heuristic and continue to try the next identifier candidate.
+                    identifierRejectedIDs.insert(match.id)
+                }
+                // Both serials empty: fall through; heuristic will validate on profile.
             }
         }
+
+        // MARK: Heuristic path
+        // Fallback for files without identifiers (older MacDive exports, manual logs).
+        // Depth is normalised to metres so a metric re-import of an imperial dive still matches.
+        // 180 s (3 min) tolerates user-edited timestamps / clock-drift corrections while being
+        // narrow enough that two genuinely separate dives (minimum surface interval >> 3 min)
+        // cannot collide even at the same site with the same computer.
+        guard let date = incoming.date else { return nil }
+
+        // Bucket radius must cover the full dateTolerance window; kept in sync automatically.
+        let minuteKey = Int(date.timeIntervalSince1970 / 60)
+        let bucketRadius = Int(ceil(dateTolerance / 60))
+        let candidates = (minuteKey - bucketRadius ... minuteKey + bucketRadius).flatMap { divesByMinute[$0] ?? [] }
+
+        // When both sides have a non-empty site name, require them to match — avoids false
+        // positives for back-to-back resort/training dives with similar profiles.
+        // M5: deterministic tiebreak on UUID string when two candidates are equidistant.
+        let match = candidates
+            .filter { existing in
+                guard !identifierRejectedIDs.contains(existing.id) else { return false }
+                guard !consumed.contains(existing.id) else { return false }
+                guard abs(existing.timestamp.timeIntervalSince(date)) <= dateTolerance else { return false }
+                guard abs(existing.duration - incomingDurationMin) <= durationToleranceMin else { return false }
+                let existingDepthMeters = depthInMeters(existing.maxDepth, unit: existing.importDistanceUnit)
+                guard abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters else { return false }
+                let existingSiteName = existing.siteName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !incomingSiteName.isEmpty, !existingSiteName.isEmpty,
+                   existingSiteName.compare(incomingSiteName,
+                                           options: [.caseInsensitive, .diacriticInsensitive]) != .orderedSame {
+                    return false
+                }
+                // Serial discriminator: when both sides carry a serial number they must match.
+                // Prevents a buddy's simultaneous dive (different computer) from being flagged
+                // as a duplicate when profiles overlap and neither side has a site name.
+                let existingSerial = (existing.computerSerialNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if !incomingSerial.isEmpty, !existingSerial.isEmpty, incomingSerial != existingSerial {
+                    return false
+                }
+                return true
+            }
+            .min { lhs, rhs in
+                let dl = abs(lhs.timestamp.timeIntervalSince(date))
+                let dr = abs(rhs.timestamp.timeIntervalSince(date))
+                if dl != dr { return dl < dr }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+
+        if let match { return (match, .sameDateAndProfile) }
+        return nil
+    }
+
+    private func depthInMeters(_ value: Double, unit: String) -> Double {
+        unit.lowercased() == "feet" ? value / 3.28084 : value
     }
 
     // MARK: - MacDive XML Import
@@ -295,7 +486,7 @@ extension ContentView {
             identifier: diveData.identifier,
             timestamp: diveData.date ?? Date(),
             location: diveData.site?.location ?? "",
-            siteName: diveData.site?.name ?? String(localized: "Unknown site"),
+            siteName: diveData.site?.name ?? NSLocalizedString("Unknown site", bundle: .forAppLanguage(), comment: "Fallback site name when an imported dive has no site name"),
             diveTypes: diveData.types.isEmpty ? nil : diveData.types.joined(separator: ", "),
             tags: diveData.tags,
             computerName: diveData.computer ?? "",
