@@ -71,6 +71,25 @@ struct AboutView: View {
                     }
                     .padding(.horizontal)
                     
+                    // Community Contributors
+                    VStack(spacing: 16) {
+                        sectionHeader(title: "Community Contributors", icon: "person.3.fill", color: .cyan)
+
+                        VStack(spacing: 8) {
+                            contributorRow(name: "Thomas MacDermott", role: "Wiki, testing and ideas for new features")
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.primary.opacity(0.03))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .padding(.horizontal)
+
                     // Acknowledgements
                     VStack(spacing: 16) {
                         sectionHeader(title: "Acknowledgements", icon: "heart.fill", color: .orange)
@@ -159,18 +178,26 @@ struct AboutView: View {
         }
     }
     
-    private func contributorRow(name: String) -> some View {
+    private func contributorRow(name: String, role: LocalizedStringKey? = nil) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "person.fill")
                 .font(.caption)
                 .foregroundStyle(.cyan)
                 .frame(width: 18)
-            
-            Text(name)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
-            
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+
+                if let role {
+                    Text(role)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Spacer()
         }
         .padding(.vertical, 4)
