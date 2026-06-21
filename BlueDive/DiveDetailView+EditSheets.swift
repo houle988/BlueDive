@@ -1502,9 +1502,11 @@ struct EditSiteDetailsView: View {
         workingBodyOfWater = source.siteBodyOfWater ?? ""
         workingDifficulty  = source.siteDifficulty ?? ""
         if copyGPSCoordinates {
-            workingLatitude  = source.siteLatitude.map { String(format: "%.6f", $0) } ?? ""
-            workingLongitude = source.siteLongitude.map { String(format: "%.6f", $0) } ?? ""
-            workingAltitude  = source.siteAltitude.map { String(format: "%.0f", $0) } ?? ""
+            workingLatitude      = source.siteLatitude.map { String(format: "%.6f", $0) } ?? ""
+            workingLongitude     = source.siteLongitude.map { String(format: "%.6f", $0) } ?? ""
+            workingAltitude      = source.siteAltitude.map { String(format: "%.0f", $0) } ?? ""
+            workingExitLatitude  = source.exitLatitude.map { String(format: "%.6f", $0) } ?? ""
+            workingExitLongitude = source.exitLongitude.map { String(format: "%.6f", $0) } ?? ""
         }
     }
 
@@ -1624,7 +1626,7 @@ struct EditSiteDetailsView: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: "location.circle.fill")
                                             .foregroundStyle(.green)
-                                        Text("Include GPS Coordinates")
+                                        Text("Include GPS Coordinates (Entry & Exit)")
                                             .foregroundStyle(.secondary)
                                     }
                                 }
@@ -1888,7 +1890,7 @@ struct EditSiteDetailsView: View {
                         Image(systemName: "location.circle.fill")
                             .foregroundStyle(.green)
                             .frame(width: 24)
-                        Text("Include GPS Coordinates")
+                        Text("Include GPS Coordinates (Entry & Exit)")
                     }
                 }
                 .tint(.green)
