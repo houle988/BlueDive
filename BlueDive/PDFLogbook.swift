@@ -261,14 +261,16 @@ struct PDFDiveLogbook {
         // Header
         y = drawHeader(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: y, width: contentWidth)
 
-        // Dive Information + Site Details (side by side)
+        // Dive Information + Site Details (side by side, equal height)
         y -= 6
         let infoGap: CGFloat = 6
         let infoWidth = contentWidth * 0.38
         let siteDetailWidth = contentWidth - infoWidth - infoGap
         let siteDetailX = margin + infoWidth + infoGap
-        let infoY = drawDiveInfo(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: y, width: infoWidth, tempUnit: tempUnit)
-        let siteDetailY = drawSiteDetails(ctx: ctx, dive: dive, x: siteDetailX, y: y, width: siteDetailWidth)
+        let topSectionMinH = max(fieldGridHeight(fieldCount: 8, columns: 2),
+                                 fieldGridHeight(fieldCount: 13, columns: 3))
+        let infoY = drawDiveInfo(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: y, width: infoWidth, tempUnit: tempUnit, minHeight: topSectionMinH)
+        let siteDetailY = drawSiteDetails(ctx: ctx, dive: dive, x: siteDetailX, y: y, width: siteDetailWidth, minHeight: topSectionMinH)
         y = min(infoY, siteDetailY)
 
         // Dive Profile Chart (only if samples exist)
@@ -288,12 +290,14 @@ struct PDFDiveLogbook {
 
         // Pre-calculate field counts to enforce equal card heights
         let statsFieldCount = 8   // always 8 fields, 3 columns
-        let tanksFieldCount = max(dive.tanks.count, 1) * 6   // 6 fields per tank (or 6 placeholder fields)
+        // Single tank uses original 6-field/2-col layout; multiple tanks use 1-field compact layout
+        let tanksFieldCount = dive.tanks.count > 1 ? dive.tanks.count : 6
+        let tanksColumns    = dive.tanks.count > 1 ? 1 : 2
         let decoStopCount = (dive.isDecompressionDive && !dive.decoStops.isEmpty) ? dive.decoStops.count : 0
         let decoFieldCount = 4 + decoStopCount   // 4 base + deco stops
 
         let statsH = fieldGridHeight(fieldCount: statsFieldCount, columns: 3)
-        let tanksH = fieldGridHeight(fieldCount: tanksFieldCount, columns: 2)
+        let tanksH = fieldGridHeight(fieldCount: tanksFieldCount, columns: tanksColumns)
         let decoH  = fieldGridHeight(fieldCount: decoFieldCount, columns: 2)
         let sectionMinH = max(statsH, max(tanksH, decoH))
 
@@ -454,13 +458,16 @@ struct PDFDiveLogbook {
 
     // MARK: - Dive Information
 
-    private static func drawDiveInfo(ctx: CGContext, dive: Dive, allDives: [Dive], x: CGFloat, y: CGFloat, width: CGFloat, tempUnit: TemperatureUnit) -> CGFloat {
+    private static func drawDiveInfo(ctx: CGContext, dive: Dive, allDives: [Dive], x: CGFloat, y: CGFloat, width: CGFloat, tempUnit: TemperatureUnit, minHeight: CGFloat = 0) -> CGFloat {
+        let appLocale = UserPreferences.shared.languageMode.locale ?? .current
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
+        dateFormatter.locale = appLocale
         let dateStr = dateFormatter.string(from: dive.timestamp)
 
         let timeFormatter = DateFormatter()
         timeFormatter.timeStyle = .short
+        timeFormatter.locale = appLocale
         let timeStr = timeFormatter.string(from: dive.timestamp)
 
         let airTempStr: String = dive.displayAirTemperature.map {
@@ -479,7 +486,7 @@ struct PDFDiveLogbook {
         let fields: [Field] = [
             (NSLocalizedString("Date", bundle: loc, comment: ""),        dateStr,       accentCyan),
             (NSLocalizedString("Time", bundle: loc, comment: ""),        timeStr,       accentCyan),
-            (NSLocalizedString("Max Temp", bundle: loc, comment: ""),    dive.displayMaxTemperature != nil ? "\(Int(dive.displayMaxTemperature!.rounded()))\(tempUnit.symbol)" : "—", accentRed),
+            (NSLocalizedString("Max Temp", bundle: loc, comment: ""),    dive.displayMaxTemperature.map { "\(Int($0.rounded()))\(tempUnit.symbol)" } ?? "—", accentRed),
             (NSLocalizedString("Min Temp", bundle: loc, comment: ""),    dive.minTemperature != 0 ? "\(Int(dive.displayMinTemperature.rounded()))\(tempUnit.symbol)" : "—", accentBlue),
             (NSLocalizedString("Air Temp", bundle: loc, comment: ""),    airTempStr,    accentOrange),
             (NSLocalizedString("Platform", bundle: loc, comment: ""),    dive.entryType ?? "—",   accentPurple),
@@ -488,12 +495,12 @@ struct PDFDiveLogbook {
         ]
 
         return drawFieldGrid(ctx: ctx, title: NSLocalizedString("DIVE INFORMATION", bundle: loc, comment: ""), titleColor: accentCyan,
-                             fields: fields, columns: 2, x: x, y: y, width: width)
+                             fields: fields, columns: 2, x: x, y: y, width: width, minHeight: minHeight)
     }
 
     // MARK: - Site Details
 
-    private static func drawSiteDetails(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+    private static func drawSiteDetails(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat, minHeight: CGFloat = 0) -> CGFloat {
         let prefs = UserPreferences.shared
         let siteStr = dive.siteName.isEmpty ? "—" : dive.siteName
 
@@ -522,6 +529,11 @@ struct PDFDiveLogbook {
             return String(format: "%.6f, %.6f", lat, lon)
         }()
 
+        let gpsExitStr: String = {
+            guard let lat = dive.exitLatitude, let lon = dive.exitLongitude else { return "—" }
+            return String(format: "%.6f, %.6f", lat, lon)
+        }()
+
         let altStr: String = {
             guard let alt = dive.displaySiteAltitude else { return "—" }
             return String(format: "%.0f %@", alt, prefs.depthUnit.symbol)
@@ -538,12 +550,13 @@ struct PDFDiveLogbook {
             (NSLocalizedString("Environment", bundle: loc, comment: ""),   dive.siteWaterType ?? "—",                  accentCyan),
             (NSLocalizedString("Body of Water", bundle: loc, comment: ""), dive.siteBodyOfWater ?? "—",                accentBlue),
             (NSLocalizedString("Difficulty", bundle: loc, comment: ""),     localizedDifficulty(dive.siteDifficulty),   accentPurple),
-            (NSLocalizedString("GPS", bundle: loc, comment: ""),           gpsStr,                                     accentGreen),
+            (NSLocalizedString("GPS Entry", bundle: loc, comment: ""),      gpsStr,                                     accentGreen),
+            (NSLocalizedString("GPS Exit", bundle: loc, comment: ""),      gpsExitStr,                                 accentTeal),
             (NSLocalizedString("Altitude", bundle: loc, comment: ""),      altStr,                                     accentOrange),
         ]
 
         return drawFieldGrid(ctx: ctx, title: NSLocalizedString("SITE DETAILS", bundle: loc, comment: ""), titleColor: accentGreen,
-                             fields: fields, columns: 3, x: x, y: y, width: width)
+                             fields: fields, columns: 3, x: x, y: y, width: width, minHeight: minHeight)
     }
 
     // MARK: - Dive Profile Chart
@@ -686,7 +699,7 @@ struct PDFDiveLogbook {
         let weightsStr: String = dive.weights.map {
             UserPreferences.shared.weightUnit.formatted($0, from: dive.storedWeightUnit)
         } ?? "—"
-        let serialStr = (dive.computerSerialNumber?.isEmpty == false) ? dive.computerSerialNumber!.uppercased() : "—"
+        let serialStr = dive.computerSerialNumber.flatMap { $0.isEmpty ? nil : $0.uppercased() } ?? "—"
 
         let fields: [Field] = [
             (NSLocalizedString("Max Depth", bundle: loc, comment: ""),        maxDepthStr,   accentBlue),
@@ -705,12 +718,48 @@ struct PDFDiveLogbook {
 
     // MARK: - Tanks
 
+    private static func gasString(for tank: TankData) -> String {
+        if tank.hePercentage > 0 {
+            return "\(NSLocalizedString("Trimix", bundle: loc, comment: "")) \(tank.o2Percentage)/\(tank.hePercentage)"
+        }
+        if tank.o2Percentage > 21 {
+            return "\(NSLocalizedString("Nitrox", bundle: loc, comment: "")) \(tank.o2Percentage)%"
+        }
+        return NSLocalizedString("Air", bundle: loc, comment: "")
+    }
+
     private static func drawTanksSection(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat,
                                          pressSymbol: String, minHeight: CGFloat = 0) -> CGFloat {
         let tanks = dive.tanks
 
-        // Build rows for all tanks (show placeholder when empty)
         var allRows: [Field] = []
+
+        if tanks.count > 1 {
+            // Multiple tanks: one compact line per tank ("Type · Gas · Volume · Start→End")
+            for (index, tank) in tanks.enumerated() {
+                let tankLabel = String(format: NSLocalizedString("Tank %lld", bundle: loc, comment: ""), index + 1)
+
+                let volStr: String = tank.volume.map { dive.formattedVolume($0, workingPressureRaw: tank.workingPressure) } ?? ""
+
+                let pressStr: String = {
+                    guard let sp = tank.startPressure else { return "" }
+                    guard let ep = tank.endPressure else { return dive.formattedPressure(sp) }
+                    return String(format: "%.0f→%.0f %@",
+                                  dive.displayPressure(sp), dive.displayPressure(ep), pressSymbol)
+                }()
+
+                var components = [localizedTankType(tank.tankType), gasString(for: tank)]
+                if !volStr.isEmpty { components.append(volStr) }
+                if !pressStr.isEmpty { components.append(pressStr) }
+
+                allRows.append((tankLabel, components.joined(separator: " · "), accentBlue))
+            }
+
+            return drawFieldGrid(ctx: ctx, title: NSLocalizedString("TANKS", bundle: loc, comment: ""), titleColor: accentBlue,
+                                 fields: allRows, columns: 1, x: x, y: y, width: width, minHeight: minHeight)
+        }
+
+        // Single tank (or empty): original 6-field / 2-column layout
         if tanks.isEmpty {
             allRows.append((NSLocalizedString("Tank", bundle: loc, comment: ""), "—", accentBlue))
             allRows.append((NSLocalizedString("Gas", bundle: loc, comment: ""), "—", accentPurple))
@@ -718,28 +767,14 @@ struct PDFDiveLogbook {
             allRows.append((NSLocalizedString("Start", bundle: loc, comment: ""), "—", accentGreen))
             allRows.append((NSLocalizedString("End", bundle: loc, comment: ""), "—", accentOrange))
             allRows.append((NSLocalizedString("Used", bundle: loc, comment: ""), "—", accentRed))
-        }
-        for (index, tank) in tanks.enumerated() {
-            let tankLabel: String
-            if tanks.count > 1 {
-                tankLabel = String(format: NSLocalizedString("Tank %lld", bundle: loc, comment: ""), index + 1)
-            } else {
-                tankLabel = NSLocalizedString("Tank", bundle: loc, comment: "")
-            }
+        } else {
+            let tank = tanks[0]
             let typeStr = localizedTankType(tank.tankType)
             let materialStr = localizedTankMaterial(tank.tankMaterial)
             let headerValue = materialStr.isEmpty ? typeStr : "\(typeStr) · \(materialStr)"
-            allRows.append((tankLabel, headerValue, accentBlue))
+            allRows.append((NSLocalizedString("Tank", bundle: loc, comment: ""), headerValue, accentBlue))
 
-            let gasStr: String = {
-                if tank.hePercentage > 0 {
-                    return "Trimix \(tank.o2Percentage)/\(tank.hePercentage)"
-                } else if tank.o2Percentage > 21 {
-                    return "Nitrox \(tank.o2Percentage)%"
-                }
-                return "Air (21%)"
-            }()
-            allRows.append((NSLocalizedString("Gas", bundle: loc, comment: ""), gasStr, accentPurple))
+            allRows.append((NSLocalizedString("Gas", bundle: loc, comment: ""), gasString(for: tank), accentPurple))
 
             let volStr: String = {
                 guard let vol = tank.volume else { return "—" }
@@ -767,7 +802,6 @@ struct PDFDiveLogbook {
             allRows.append((NSLocalizedString("Used", bundle: loc, comment: ""), consumedStr, accentRed))
         }
 
-        // Tanks use a single column since it's a narrow card now
         return drawFieldGrid(ctx: ctx, title: NSLocalizedString("TANKS", bundle: loc, comment: ""), titleColor: accentBlue,
                              fields: allRows, columns: 2, x: x, y: y, width: width, minHeight: minHeight)
     }
@@ -821,12 +855,9 @@ struct PDFDiveLogbook {
         // Add deco stops if present
         if dive.isDecompressionDive && !dive.decoStops.isEmpty {
             for stop in dive.decoStops {
-                let depthLabel: String
-                if dive.importDistanceUnit == "feet" {
-                    depthLabel = String(format: "%.0f ft", stop.depth * 3.28084)
-                } else {
-                    depthLabel = String(format: "%.0f m", stop.depth)
-                }
+                let depthLabel = String(format: "%.0f %@",
+                                       dive.displayDepth(stop.depth),
+                                       UserPreferences.shared.depthUnit.symbol)
 
                 let timeLabel: String = {
                     let m = Int(stop.time) / 60
@@ -1011,6 +1042,7 @@ struct PDFDiveLogbook {
         // "Generated by" (right-aligned)
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
+        dateFormatter.locale = UserPreferences.shared.languageMode.locale ?? .current
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         let genStr = String(format: NSLocalizedString("Generated by BlueDive %@ (%@) — %@", bundle: loc, comment: ""), appVersion, buildNumber, dateFormatter.string(from: Date()))
