@@ -719,13 +719,7 @@ struct PDFDiveLogbook {
     // MARK: - Tanks
 
     private static func gasString(for tank: TankData) -> String {
-        if tank.hePercentage > 0 {
-            return "\(NSLocalizedString("Trimix", bundle: loc, comment: "")) \(tank.o2Percentage)/\(tank.hePercentage)"
-        }
-        if tank.o2Percentage > 21 {
-            return "\(NSLocalizedString("Nitrox", bundle: loc, comment: "")) \(tank.o2Percentage)%"
-        }
-        return NSLocalizedString("Air", bundle: loc, comment: "")
+        tank.gasDisplayName()
     }
 
     private static func drawTanksSection(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat,

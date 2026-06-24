@@ -101,6 +101,8 @@ struct ContentView: View {
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
     @State private var collapsedDiverSections: Set<String> = []
+    @State private var diveIndexLookup: [Dive.ID: Int] = [:]
+    @State private var uniqueDivers: [String] = []
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
         case dateDesc       = "dateDesc"
@@ -163,9 +165,6 @@ struct ContentView: View {
         return tags.sorted()
     }
 
-    private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: dives)
-    }
 
     private var availableMarineLife: [String] {
         var species = Set<String>()
@@ -643,7 +642,13 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isImporting)
-        .onAppear { updateWidgetDiveData() }
+        .onAppear {
+            rebuildDerivedDiveState()
+        }
+        .task {
+            updateWidgetDiveData()
+        }
+        .onChange(of: dives) { _, _ in rebuildDerivedDiveState() }
         .onChange(of: widgetDataFingerprint) { _, _ in updateWidgetDiveData() }
         .onChange(of: prefs.depthUnit) { _, _ in updateWidgetDiveData() }
         .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
@@ -653,6 +658,7 @@ struct ContentView: View {
     }
 
     private func updateWidgetDiveData() {
+        guard !dives.isEmpty else { return }
         struct DiveSnapshot {
             let diverName: String
             let duration: Int
@@ -693,7 +699,9 @@ struct ContentView: View {
         }
         // DiveCountWidget only needs totalDiveCount and diveCountByDiver to render;
         // diverNames is written in the detached task below, alongside the per-diver stat
-        // dicts, so the picker never sees a diver whose stats haven't been written yet.
+        // dicts, so the picker never sees a diver whose stats haven't been written yet,
+        // and the write happens close enough to reloadTimelines that UserDefaults has
+        // flushed to the shared container before the widget extension reads it.
         WidgetCenter.shared.reloadTimelines(ofKind: "DiveCountWidget")
 
         // Heavy stats aggregation runs in the background; DiverStatsWidget reloads after.
@@ -755,9 +763,16 @@ struct ContentView: View {
             if let namesData = try? JSONEncoder().encode(diverNames) {
                 shared?.set(namesData, forKey: "diverNames")
             }
-
             WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")
         }
+    }
+
+    private func rebuildDerivedDiveState() {
+        diveIndexLookup = Dictionary(
+            dives.enumerated().map { ($1.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        uniqueDivers = DiverFilter.uniqueDivers(in: dives)
     }
 
     // MARK: - View Components
@@ -838,7 +853,6 @@ struct ContentView: View {
                 }
                 .transition(.opacity)
             } else {
-                let indexLookup = Dictionary(dives.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
                 let filteredDiverCount = Set(displayedDives.map { $0.diverName.trimmingCharacters(in: .whitespaces) }).count
                 let showGrouped = selectedDiver.isEmpty && uniqueDivers.count > 1 && filteredDiverCount > 1
                 if showGrouped {
@@ -858,10 +872,10 @@ struct ContentView: View {
                                 }
                             )) {
                                 ForEach(sectionDives) { dive in
-                                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: filteredAndSortedDives)) {
+                                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: displayedDives)) {
                                         DiveRowView(
                                             dive: dive,
-                                            diveNumber: dives.count - (indexLookup[dive.id] ?? 0)
+                                            diveNumber: dives.count - (diveIndexLookup[dive.id] ?? 0)
                                         )
                                     }
                                     .listRowBackground(Color.primary.opacity(0.07))
@@ -902,10 +916,10 @@ struct ContentView: View {
                 } else {
                     List {
                         ForEach(displayedDives) { dive in
-                            NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: filteredAndSortedDives)) {
+                            NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: displayedDives)) {
                                 DiveRowView(
                                     dive: dive,
-                                    diveNumber: dives.count - (indexLookup[dive.id] ?? 0)
+                                    diveNumber: dives.count - (diveIndexLookup[dive.id] ?? 0)
                                 )
                             }
                             .listRowBackground(Color.primary.opacity(0.07))

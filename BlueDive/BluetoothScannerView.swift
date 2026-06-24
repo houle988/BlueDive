@@ -1280,28 +1280,30 @@ struct BluetoothScannerView: View {
             dive.airTemperature = surfaceTemp
         }
         
-        // Build tanks with inline gas data from LibDCSwift
-        // Preserve user-set fields (volume, workingPressure, tankType, tankMaterial)
-        // that dive computers typically do not provide
+        // Build tanks with inline gas data from LibDCSwift.
+        // Preserve user-set fields (volume, workingPressure, tankType, tankMaterial) that dive
+        // computers typically do not provide. Usage times are derived from the fresh profile by
+        // applyGasSwitchUsageTimes below and are intentionally not carried forward here.
+        // Also build gasMixToTankIndex: maps gas-mix index (currentGas) to tank array position.
         let dcGasMixes = diveData.gasMixes ?? []
         let existingTanks = dive.tanks
-        
+        var mergeMixToTankIndex: [Int: Int] = [:]
+        let profileGasMixOrder = Self.orderedGasMixIndices(from: diveData)
+
         if let dcTanks = diveData.tanks, !dcTanks.isEmpty {
             var tanks: [TankData] = []
             for (index, tank) in dcTanks.enumerated() {
-                let mixIndex = tank.gasMix
-                let o2: Double
-                let he: Double
-                if mixIndex >= 0 && mixIndex < dcGasMixes.count {
-                    o2 = dcGasMixes[mixIndex].oxygen
-                    he = dcGasMixes[mixIndex].helium
-                } else if let firstMix = dcGasMixes.first {
-                    o2 = firstMix.oxygen
-                    he = firstMix.helium
-                } else {
-                    o2 = Double(diveData.gasMix ?? 21) / 100.0
-                    he = 0.0
-                }
+                let (o2, he, resolvedMixIdx) = Self.resolveGasMix(
+                    mixIndex: tank.gasMix,
+                    tankIndex: index,
+                    tankCount: dcTanks.count,
+                    tankUsage: tank.usage,
+                    dcGasMixes: dcGasMixes,
+                    profileGasMixOrder: profileGasMixOrder,
+                    deviceFamily: connectedDeviceFamily,
+                    headerGasMix: diveData.gasMix
+                )
+                if let resolved = resolvedMixIdx, mergeMixToTankIndex[resolved] == nil { mergeMixToTankIndex[resolved] = index }
                 // Preserve user-set fields from existing tank at the same index
                 let existing = index < existingTanks.count ? existingTanks[index] : nil
                 // When the dive computer header reports no begin/end pressure (pressure pod scenario),
@@ -1333,17 +1335,24 @@ struct BluetoothScannerView: View {
                                    startPressure: startP, endPressure: endP,
                                    workingPressure: existing?.workingPressure,
                                    tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)]
+            mergeMixToTankIndex[0] = 0
         } else if !dcGasMixes.isEmpty {
             // No tank data but we have gas mixes — store them as tanks with gas only
             let needsFilter = filterUnusedTanks && (connectedDeviceFamily.map { Self.familiesNeedingSwiftTankFilter.contains($0) } ?? true)
             let usedMixes = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
+            // existingIdx walks existingTanks in lockstep with the filtered output.
+            // If filterUnusedTanks was toggled between imports, the shapes may differ and
+            // user-set fields (volume, tankMaterial, etc.) could land on the wrong tank.
             var existingIdx = 0
+            var tankIdx = 0
             dive.tanks = dcGasMixes.enumerated().compactMap { (index, mix) in
                 if let used = usedMixes {
                     guard used.contains(index) else { return nil }
                 }
                 let existing = existingIdx < existingTanks.count ? existingTanks[existingIdx] : nil
                 existingIdx += 1
+                mergeMixToTankIndex[index] = tankIdx
+                tankIdx += 1
                 return TankData(o2: mix.oxygen, he: mix.helium,
                                 volume: existing?.volume, workingPressure: existing?.workingPressure,
                                 tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)
@@ -1354,6 +1363,7 @@ struct BluetoothScannerView: View {
             dive.tanks = [TankData(o2: Double(gasMix) / 100.0, he: 0.0,
                                    volume: existing?.volume, workingPressure: existing?.workingPressure,
                                    tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)]
+            mergeMixToTankIndex[0] = 0
         }
         
         // Decompression
@@ -1368,8 +1378,18 @@ struct BluetoothScannerView: View {
         dive.isDecompressionDive = hadDecoObligation
         
         // Dive profile (always update with fresh data, merge event-only points)
-        dive.profileSamples = Self.consolidateProfilePoints(diveData.profile)
-        
+        // currentGas is remapped from gas-mix index to tank-array index before storage.
+        dive.profileSamples = Self.remapProfileCurrentGas(
+            Self.consolidateProfilePoints(diveData.profile),
+            using: mergeMixToTankIndex)
+        let mergeInitialGasMixIndex = profileGasMixOrder.first
+        dive.tanks = Self.applyGasSwitchUsageTimes(
+            to: dive.tanks,
+            gasMixToTankIndex: mergeMixToTankIndex,
+            initialGasMixIndex: mergeInitialGasMixIndex,
+            profileSamples: dive.profileSamples
+        )
+
         // Computer name — prefer full brand+model name from supportedModels lookup
         if let peripheral = selectedDevice,
            let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
@@ -1411,18 +1431,6 @@ struct BluetoothScannerView: View {
         dive.sourceImport = "Bluetooth"
 
         Self.logger.info("Dive from \(dive.timestamp) merged with computer data (matched by: \(matchReason))")
-    }
-    
-    /// Determines gas type name from oxygen and helium percentages, matching
-    /// the logic used by the XML import path in ContentView.
-    private func determineGasName(oxygen: Int, helium: Int) -> String {
-        if helium > 0 {
-            return "Trimix"
-        } else if oxygen > 21 {
-            return "Nitrox"
-        } else {
-            return "Air"
-        }
     }
     
     // MARK: - Unused Tank Filtering
@@ -1495,10 +1503,24 @@ struct BluetoothScannerView: View {
     }
 
     /// Returns the set of gas mix indices that were actually used during the dive.
+    /// Returns gas mix indices in the order they first appear via DC_SAMPLE_GASMIX in the profile.
+    /// Used to infer which physical tank used which gas when the dive computer reports DC_GASMIX_UNKNOWN.
+    private static func orderedGasMixIndices(from diveData: DiveData) -> [Int] {
+        var seen = Set<Int>()
+        var ordered: [Int] = []
+        for point in diveData.profile {
+            if let gas = point.currentGas, gas >= 0, !seen.contains(gas) {
+                seen.insert(gas)
+                ordered.append(gas)
+            }
+        }
+        return ordered
+    }
+
     /// Checks profile gas-switch samples and the header-level gas mix.
     /// Falls back to {0} when no usage evidence is found (single-gas dive).
     private static func usedGasMixIndices(from diveData: DiveData) -> Set<Int> {
-        var indices = Set(diveData.profile.compactMap { $0.currentGas })
+        var indices = Set(diveData.profile.compactMap { $0.currentGas }.filter { $0 >= 0 })
         // Include the header-level gas mix (last-used gas) when available
         if let headerGas = diveData.gasMix { indices.insert(headerGas) }
         // If no evidence found, assume the primary gas (index 0) was used
@@ -1524,6 +1546,66 @@ struct BluetoothScannerView: View {
         header > 0 ? header : fallback
     }
 
+    /// Resolves the O2/He fractions and the gas-mix index for a single tank, applying
+    /// device-family-specific fallback tiers when the DC reports DC_GASMIX_UNKNOWN.
+    private static func resolveGasMix(
+        mixIndex: Int,
+        tankIndex: Int,
+        tankCount: Int,
+        tankUsage: DiveData.Tank.Usage,
+        dcGasMixes: [GasMix],
+        profileGasMixOrder: [Int],
+        deviceFamily: DeviceConfiguration.DeviceFamily?,
+        headerGasMix: Int?
+    ) -> (o2: Double, he: Double, resolvedMixIdx: Int?) {
+        let o2: Double
+        let he: Double
+        var resolvedMixIdx: Int? = nil
+        if mixIndex >= 0 && mixIndex < dcGasMixes.count {
+            o2 = dcGasMixes[mixIndex].oxygen
+            he = dcGasMixes[mixIndex].helium
+            resolvedMixIdx = mixIndex
+        } else if deviceFamily == .shearwaterPetrel && tankIndex < dcGasMixes.count {
+            // Shearwater-only: tank N uses mix N (DC_GASMIX_UNKNOWN for tanks without AI pod)
+            o2 = dcGasMixes[tankIndex].oxygen
+            he = dcGasMixes[tankIndex].helium
+            resolvedMixIdx = tankIndex
+        } else if deviceFamily == .halcyonSymbios, tankUsage == .oxygen,
+                  let pureO2Idx = dcGasMixes.indices.first(where: { dcGasMixes[$0].oxygen >= 0.99 }) {
+            // Halcyon Symbios CCR: O2 supply tank carries DC_GASMIX_UNKNOWN by design.
+            // Resolve by composition — find the pure-O2 mix (≥99% O2) instead of using index.
+            o2 = dcGasMixes[pureO2Idx].oxygen
+            he = dcGasMixes[pureO2Idx].helium
+            resolvedMixIdx = pureO2Idx
+        } else if deviceFamily != .halcyonSymbios,
+                  tankIndex < profileGasMixOrder.count, profileGasMixOrder[tankIndex] < dcGasMixes.count {
+            // DC_GASMIX_UNKNOWN on non-Shearwater: infer from profile appearance order.
+            // Halcyon Symbios is excluded for two reasons: (a) tank enumeration order is
+            // driven by transmitter wake-up time, decoupled from gas-switch order; (b) on
+            // CCR dives the O2 supply tank and unpaired transmitters carry DC_GASMIX_UNKNOWN
+            // by design and have no corresponding breathed mix — mapping them to "N-th
+            // breathed mix" is semantically wrong. Halcyon falls to the positional tier below.
+            if tankIndex >= dcGasMixes.count {
+                Logger.shared.log("Tank \(tankIndex): \(tankCount) tanks but only \(dcGasMixes.count) mixes; using profile-order fallback", level: .warning)
+            }
+            o2 = dcGasMixes[profileGasMixOrder[tankIndex]].oxygen
+            he = dcGasMixes[profileGasMixOrder[tankIndex]].helium
+            resolvedMixIdx = profileGasMixOrder[tankIndex]
+        } else if tankIndex < dcGasMixes.count {
+            // Positional last resort: no profile evidence for this tank's gas
+            o2 = dcGasMixes[tankIndex].oxygen
+            he = dcGasMixes[tankIndex].helium
+            resolvedMixIdx = tankIndex
+        } else if let firstMix = dcGasMixes.first {
+            o2 = firstMix.oxygen
+            he = firstMix.helium
+        } else {
+            o2 = Double(headerGasMix ?? 21) / 100.0
+            he = 0.0
+        }
+        return (o2, he, resolvedMixIdx)
+    }
+
     /// Converts a LibDCSwift DiveEvent to a BlueDive DiveProfileEvent
     private static func convertDiveEvent(_ event: LibDCSwift.DiveEvent) -> DiveProfileEvent {
         switch event {
@@ -1547,7 +1629,25 @@ struct BluetoothScannerView: View {
             return .deepStop
         }
     }
-    
+
+    /// Remaps `currentGas` on each profile point from gas-mix index to tank-array index
+    /// so consumers can index directly into `Dive.tanks`. Points whose gas-mix index has
+    /// no mapping (e.g. filtered-out mixes) retain `currentGas = nil`.
+    private static func remapProfileCurrentGas(
+        _ points: [DiveProfilePoint],
+        using gasMixToTankIndex: [Int: Int]
+    ) -> [DiveProfilePoint] {
+        points.map { point in
+            guard let gasIdx = point.currentGas, gasIdx >= 0 else { return point }
+            return DiveProfilePoint(
+                time: point.time, depth: point.depth, temperature: point.temperature,
+                tankPressure: point.tankPressure, tankPressures: point.tankPressures,
+                ndl: point.ndl, ppo2: point.ppo2, events: point.events,
+                currentGas: gasMixToTankIndex[gasIdx]
+            )
+        }
+    }
+
     /// Consolidates LibDCSwift profile points by merging event-only points into their
     /// corresponding time-based points, and synthesising events from DC_SAMPLE_DECO data.
     ///
@@ -1575,8 +1675,13 @@ struct BluetoothScannerView: View {
         for group in pointsByTime {
             // Use the first point as the base (the DC_SAMPLE_TIME point)
             let base = group.points[0]
-            // Collect explicit events from all points at this timestamp
-            var allEvents: [DiveProfileEvent] = group.points.flatMap { $0.events }.map { convertDiveEvent($0) }
+            // Collect explicit events from all points at this timestamp, deduplicating by type
+            // (a computer firing both SAMPLE_EVENT_GASCHANGE and DC_SAMPLE_GASMIX at the same
+            // timestamp would otherwise produce two .gasChange entries)
+            var seen = Set<DiveProfileEvent>()
+            var allEvents: [DiveProfileEvent] = group.points.flatMap { $0.events }
+                .map { convertDiveEvent($0) }
+                .filter { seen.insert($0).inserted }
             
             // Synthesize a decoStop event from DC_SAMPLE_DECO data when the dive computer
             // reports a mandatory deco obligation (decoStop depth is only set for DC_DECO_DECOSTOP).
@@ -1595,6 +1700,9 @@ struct BluetoothScannerView: View {
                 dict[0] ?? dict.min(by: { $0.key < $1.key })?.value
             } ?? base.pressure
 
+            // Use the last non-nil currentGas from this group — carries the most recent gas context.
+            let currentGas: Int? = group.points.compactMap { $0.currentGas }.last
+
             result.append(DiveProfilePoint(
                 time: base.time / 60.0, // LibDCSwift uses seconds, BlueDive uses minutes
                 depth: base.depth,
@@ -1603,13 +1711,141 @@ struct BluetoothScannerView: View {
                 tankPressures: perTank,
                 ndl: base.ndl.map { Double($0) / 60.0 }, // Seconds to minutes
                 ppo2: base.po2,
-                events: allEvents
+                events: allEvents,
+                currentGas: currentGas
             ))
         }
         
         return result
     }
-    
+
+    /// Derives per-tank `usageStartTime` / `usageEndTime` from gas-switch events in the profile.
+    /// Times are stored in seconds to match the convention expected by RMV/SAC calculations.
+    ///
+    /// - Parameters:
+    ///   - tanks: Tank array to annotate.
+    ///   - gasMixToTankIndex: Maps gas-mix index (as reported by `currentGas` / DC_SAMPLE_GASMIX)
+    ///     to the corresponding index in `tanks`. Built during tank construction so that the
+    ///     `dcTanks` path (where `tank.gasMix` ≠ array index) and filtered gas-mix paths are
+    ///     handled correctly. When two tanks share the same gas-mix index (e.g. twinset sharing
+    ///     a back-gas blend) the first tank in array order wins: the dictionary is built with
+    ///     a `[resolved] == nil` guard so only the earliest tank keeps the entry and receives
+    ///     usage times. This is intentional — tank 0 (the primary cylinder) should own the
+    ///     gas-switch usage times for a shared blend.
+    ///   - initialGasMixIndex: First gas-mix index active at dive start, derived from
+    ///     `orderedGasMixIndices`. Opens a t=0 segment for the primary tank that the dive computer
+    ///     never reports as an explicit switch event.
+    ///   - profileSamples: Consolidated BlueDive profile points.
+    private static func applyGasSwitchUsageTimes(
+        to tanks: [TankData],
+        gasMixToTankIndex: [Int: Int],
+        initialGasMixIndex: Int?,
+        profileSamples: [DiveProfilePoint]
+    ) -> [TankData] {
+        // currentGas on profile samples is already a tank-array index (remapped before storage).
+        // Negative values are filtered out; nil means no gas context at this sample.
+        let rawSwitches: [(time: Double, tankIdx: Int)] = profileSamples
+            .filter { $0.events.contains(.gasChange) }
+            .compactMap { sample in
+                guard let tankIdx = sample.currentGas, tankIdx >= 0 else { return nil }
+                return (time: sample.time, tankIdx: tankIdx)
+            }
+            .sorted { $0.time < $1.time }
+        guard !rawSwitches.isEmpty else {
+            // Single-tank dive with no gas-change events: seed a full-dive segment so
+            // RMV/SAC is available for the most common case (one tank, one gas, no switches).
+            guard let initMix = initialGasMixIndex, initMix >= 0,
+                  let initTankIdx = gasMixToTankIndex[initMix],
+                  let endTime = profileSamples.last?.time, endTime > 0 else { return tanks }
+            return tanks.enumerated().map { (idx, tank) in
+                guard idx == initTankIdx,
+                      tank.usageStartTime == nil, tank.usageEndTime == nil else { return tank }
+                return TankData(
+                    id: tank.id,
+                    o2: tank.o2, he: tank.he,
+                    volume: tank.volume,
+                    startPressure: tank.startPressure,
+                    endPressure: tank.endPressure,
+                    workingPressure: tank.workingPressure,
+                    tankMaterial: tank.tankMaterial,
+                    tankType: tank.tankType,
+                    usageStartTime: 0,
+                    usageEndTime: endTime * 60.0
+                )
+            }
+        }
+
+        // Coalesce near-simultaneous switches (within 1e-6 minutes ≈ 60 μs) to the last
+        // event at that instant. Prevents a rapid A→B→A double-flip from creating a tiny
+        // non-contiguous gap that would falsely trigger the switch-back guard.
+        let switches = rawSwitches.reduce(into: [(time: Double, tankIdx: Int)]()) { acc, s in
+            if let last = acc.last, abs(last.time - s.time) < 1e-6 {
+                acc[acc.count - 1] = s
+            } else {
+                acc.append(s)
+            }
+        }
+
+        let diveEndMinutes = max(profileSamples.last?.time ?? 0, switches.last!.time)
+
+        // Build (tankArrayIndex, startMinutes, endMinutes) segments.
+        var segments: [(tank: Int, start: Double, end: Double)] = []
+
+        // Open a t=0 segment for the initial gas — derived from profile data, not hardcoded.
+        // The dive computer never emits an explicit switch event for the starting gas, so we
+        // infer it from the first gas-mix index seen in the profile via orderedGasMixIndices.
+        // Guard against a DC that re-asserts the starting gas as its first switch event: if
+        // switches[0] targets the same tank as initTankIdx, the switch itself already covers
+        // the full segment — seeding a duplicate would create mine.count == 2 and falsely
+        // trigger the switch-back skip for the primary tank.
+        if let initMix = initialGasMixIndex, initMix >= 0,
+           let initTankIdx = gasMixToTankIndex[initMix],
+           switches[0].tankIdx != initTankIdx,
+           switches[0].time > 0 {
+            segments.append((tank: initTankIdx, start: 0.0, end: switches[0].time))
+        }
+
+        for i in 0..<switches.count {
+            let endTime = i + 1 < switches.count ? switches[i + 1].time : diveEndMinutes
+            segments.append((tank: switches[i].tankIdx, start: switches[i].time, end: endTime))
+        }
+
+        return tanks.enumerated().map { (idx, tank) in
+            guard tank.usageStartTime == nil && tank.usageEndTime == nil else { return tank }
+            let mine = segments.filter { $0.tank == idx }
+            guard !mine.isEmpty else { return tank }
+            // Merge contiguous same-tank segments produced by duplicate switch events
+            // (e.g. OSTC-style computers that re-emit gasChange at adjacent samples).
+            // Epsilon tolerance guards against sub-ulp float drift from seconds/minutes conversion.
+            let merged = mine.reduce(into: [(tank: Int, start: Double, end: Double)]()) { acc, seg in
+                if let last = acc.last, abs(last.end - seg.start) < 1e-6 {
+                    acc[acc.count - 1] = (tank: last.tank, start: last.start, end: seg.end)
+                } else {
+                    acc.append(seg)
+                }
+            }
+            // Drop zero-duration segments (e.g. seed at t=0 when first switch is also at t=0,
+            // or a trailing gas-change on the very last sample).
+            let valid = merged.filter { $0.end > $0.start }
+            // Skip tanks used in multiple non-contiguous segments (switch-back dives).
+            // A single usageStart…usageEnd span would cover the gap and inflate the RMV/SAC
+            // denominator, producing a falsely low consumption rate.
+            guard valid.count == 1 else { return tank }
+            return TankData(
+                id: tank.id,
+                o2: tank.o2, he: tank.he,
+                volume: tank.volume,
+                startPressure: tank.startPressure,
+                endPressure: tank.endPressure,
+                workingPressure: tank.workingPressure,
+                tankMaterial: tank.tankMaterial,
+                tankType: tank.tankType,
+                usageStartTime: valid[0].start * 60.0,
+                usageEndTime: valid[0].end * 60.0
+            )
+        }
+    }
+
     /// Returns the diver name to stamp on a Bluetooth-downloaded dive.
     ///
     /// Looks for a gear item of category "Computer" whose serial number matches the connected device.
@@ -1651,8 +1887,10 @@ struct BluetoothScannerView: View {
 
     /// Converts a LibDCSwift DiveData to a BlueDive Dive
     private func convertToBlueDiveDive(_ diveData: DiveData, diveNumber: Int, previousDiveEndTime: Date?, diverName: String) -> Dive {
-        // Convert the dive profile, merging event-only points into time-based points
-        let profileSamples = Self.consolidateProfilePoints(diveData.profile)
+        // Convert the dive profile, merging event-only points into time-based points.
+        // currentGas is remapped from gas-mix index to tank-array index after gasMixToTankIndex
+        // is built (see below), so rawProfileSamples is an intermediate variable.
+        let rawProfileSamples = Self.consolidateProfilePoints(diveData.profile)
         
         // Calculate average depth from profile (time-weighted average)
         let averageDepth: Double = diveData.avgDepth
@@ -1662,25 +1900,27 @@ struct BluetoothScannerView: View {
         let minTemperature: Double = diveData.minTemperature ?? profileTemperatures.min() ?? diveData.temperature
         let maxTemperature: Double? = diveData.maxTemperature ?? profileTemperatures.max()
         
-        // Build tanks with inline gas data from LibDCSwift
+        // Build tanks with inline gas data from LibDCSwift.
+        // Also build gasMixToTankIndex: maps gas-mix index (as reported by DC_SAMPLE_GASMIX /
+        // currentGas in profile) to the corresponding position in linkedTanks.
         let dcGasMixes = diveData.gasMixes ?? []
         var linkedTanks: [TankData] = []
-        
+        var gasMixToTankIndex: [Int: Int] = [:]
+        let profileGasMixOrder = Self.orderedGasMixIndices(from: diveData)
+
         if let dcTanks = diveData.tanks, !dcTanks.isEmpty {
             for (index, tank) in dcTanks.enumerated() {
-                let mixIndex = tank.gasMix
-                let o2: Double
-                let he: Double
-                if mixIndex >= 0 && mixIndex < dcGasMixes.count {
-                    o2 = dcGasMixes[mixIndex].oxygen
-                    he = dcGasMixes[mixIndex].helium
-                } else if let firstMix = dcGasMixes.first {
-                    o2 = firstMix.oxygen
-                    he = firstMix.helium
-                } else {
-                    o2 = Double(diveData.gasMix ?? 21) / 100.0
-                    he = 0.0
-                }
+                let (o2, he, resolvedMixIdx) = Self.resolveGasMix(
+                    mixIndex: tank.gasMix,
+                    tankIndex: index,
+                    tankCount: dcTanks.count,
+                    tankUsage: tank.usage,
+                    dcGasMixes: dcGasMixes,
+                    profileGasMixOrder: profileGasMixOrder,
+                    deviceFamily: connectedDeviceFamily,
+                    headerGasMix: diveData.gasMix
+                )
+                if let resolved = resolvedMixIdx, gasMixToTankIndex[resolved] == nil { gasMixToTankIndex[resolved] = index }
                 // When the dive computer header reports no begin/end pressure (pressure pod scenario),
                 // derive start and end pressure from the first/last non-zero profile sample.
                 let profilePressures = (tank.beginPressure <= 0 || tank.endPressure <= 0)
@@ -1701,20 +1941,29 @@ struct BluetoothScannerView: View {
             let startP = diveData.tankPressure.first(where: { $0 > 0 })
             let endP   = diveData.tankPressure.last(where:  { $0 > 0 })
             linkedTanks.append(TankData(o2: o2Fraction, he: 0.0, startPressure: startP, endPressure: endP))
+            gasMixToTankIndex[0] = 0
         } else if !dcGasMixes.isEmpty {
             let needsFilter = filterUnusedTanks && (connectedDeviceFamily.map { Self.familiesNeedingSwiftTankFilter.contains($0) } ?? true)
             let usedMixes = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
+            var tankIdx = 0
             linkedTanks = dcGasMixes.enumerated().compactMap { (index, mix) in
                 if let used = usedMixes {
                     guard used.contains(index) else { return nil }
                 }
+                gasMixToTankIndex[index] = tankIdx
+                tankIdx += 1
                 return TankData(o2: mix.oxygen, he: mix.helium)
             }
         } else {
             let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0
             linkedTanks.append(TankData(o2: o2Fraction, he: 0.0))
+            gasMixToTankIndex[0] = 0
         }
-        
+
+        // Remap profile currentGas from gas-mix index to tank-array index now that
+        // gasMixToTankIndex is fully built.
+        let profileSamples = Self.remapProfileCurrentGas(rawProfileSamples, using: gasMixToTankIndex)
+
         // Dive mode
         let diveType: String
         if let diveMode = diveData.diveMode {
@@ -1841,7 +2090,13 @@ struct BluetoothScannerView: View {
             profileSamples: profileSamples
         )
         
-        dive.tanks = linkedTanks
+        let initialGasMixIndex = profileGasMixOrder.first
+        dive.tanks = Self.applyGasSwitchUsageTimes(
+            to: linkedTanks,
+            gasMixToTankIndex: gasMixToTankIndex,
+            initialGasMixIndex: initialGasMixIndex,
+            profileSamples: profileSamples
+        )
         dive.rawDiveComputerData = diveData.rawData
         dive.fingerprintData = diveData.fingerprint
         dive.decoStops = diveData.decoStop.map { stop in

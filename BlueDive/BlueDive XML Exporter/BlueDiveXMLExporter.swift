@@ -97,7 +97,7 @@ enum BlueDiveXMLExporter {
         lines.append("    <!-- BlueDiveGlobalData: Dive Stats -->")
         lines.append(xmlTag("maxDepth",        formatDouble(dive.maxDepth),                                                indent: 4))
         lines.append(xmlTag("averageDepth",    dive.averageDepth > 0 ? formatDouble(dive.averageDepth) : "",              indent: 4))
-        lines.append(xmlTag("duration",        String(dive.duration * 60),                                                indent: 4))
+        lines.append(xmlTag("duration",        String(dive.durationSeconds),                                              indent: 4))
         lines.append(xmlTag("surfaceInterval", surfaceIntervalMinutes(from: dive.surfaceInterval).map(String.init) ?? "", indent: 4))
 
         // Decompression
@@ -264,6 +264,7 @@ enum BlueDiveXMLExporter {
                 }
                 if let ppo2     = sample.ppo2           { attrs.append(("ppo2", formatDouble(ppo2))) }
                 if let ndl      = sample.ndl            { attrs.append(("ndl", formatDouble(ndl))) }
+                if let gas      = sample.currentGas     { attrs.append(("currentGas", String(gas))) }
                 let eventsStr = sample.events.map { serializeEvent($0) }.joined(separator: ",")
                 attrs.append(("events", eventsStr))
                 let attrString = attrs.map { "\($0.0)=\"\($0.1)\"" }.joined(separator: " ")

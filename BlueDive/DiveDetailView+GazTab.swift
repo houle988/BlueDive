@@ -89,13 +89,8 @@ extension DiveDetailView {
         let o2Pct = tank?.o2Percentage ?? 21
         let hePct = tank?.hePercentage ?? 0
         let n2Pct = max(0, 100 - o2Pct - hePct)
-        let gasName = tank?.gasName ?? "Air"
 
-        let gasTypeDisplay: String = {
-            if hePct > 0 { return "Trimix \(o2Pct)/\(hePct)" }
-            if o2Pct > 21 { return "Nitrox \(o2Pct)%" }
-            return gasName
-        }()
+        let gasTypeDisplay: String = tank?.gasDisplayName() ?? NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Air gas type label")
 
         let volumeDisplay: String = {
             guard let vol = tank?.volume else { return "—" }
@@ -478,12 +473,8 @@ extension DiveDetailView {
     // MARK: - Tank Picker Helper
 
     func tankPickerLabel(index: Int, tank: TankData) -> String {
-        let bundle = Bundle.forAppLanguage()
-        let tankLabel = NSLocalizedString("Tank", bundle: bundle, comment: "")
-        let number = "\(tankLabel) \(index + 1)"
-        let gas = tank.gasName
-        let o2 = "\(tank.o2Percentage)%"
-        return "\(number) — \(gas) \(o2)"
+        let tankLabel = NSLocalizedString("Tank", bundle: Bundle.forAppLanguage(), comment: "")
+        return "\(tankLabel) \(index + 1) — \(tank.gasDisplayName())"
     }
 
     // MARK: - Helper Functions for Decompression

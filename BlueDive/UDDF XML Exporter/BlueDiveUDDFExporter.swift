@@ -462,8 +462,7 @@ enum BlueDiveUDDFExporter {
             if dive.averageDepth > 0 {
                 lines.append("          <averagedepth>\(formatDouble(dive.averageDepth))</averagedepth>")
             }
-            // Duration: stored in minutes, UDDF needs seconds
-            lines.append("          <diveduration>\(dive.duration * 60)</diveduration>")
+            lines.append("          <diveduration>\(dive.durationSeconds)</diveduration>")
 
             if let lowTemp = dive.minTemperature as Double?, lowTemp != 0 {
                 lines.append("          <lowesttemperature>\(formatDouble(celsiusToKelvin(lowTemp)))</lowesttemperature>")

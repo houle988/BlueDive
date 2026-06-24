@@ -1,5 +1,37 @@
 import SwiftUI
 
+// MARK: - Fingerprint Copy Button
+
+private struct FingerprintCopyButton: View {
+    let data: Data
+    @State private var copied = false
+
+    private var hexString: String {
+        data.map { String(format: "%02x", $0) }.joined()
+    }
+
+    var body: some View {
+        Button {
+            #if os(iOS)
+            UIPasteboard.general.string = hexString
+            #elseif os(macOS)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(hexString, forType: .string)
+            #endif
+            copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.clipboard")
+                .foregroundStyle(copied ? .green : .teal)
+                .animation(.easeInOut(duration: 0.2), value: copied)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Copy Fingerprint"))
+    }
+}
+
 // MARK: - Samples Tab
 
 extension DiveDetailView {
@@ -10,6 +42,7 @@ extension DiveDetailView {
                 emptySamplesView
             } else {
                 samplesFormatInfoSection
+                fingerprintSection
                 samplesTableSection
             }
         }
@@ -31,6 +64,39 @@ extension DiveDetailView {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
+    }
+
+    // MARK: - Fingerprint
+
+    var fingerprintSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "barcode.viewfinder")
+                    .foregroundStyle(.teal)
+                Text("Fingerprint")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if let data = dive.fingerprintData {
+                    FingerprintCopyButton(data: data)
+                }
+            }
+
+            if let data = dive.fingerprintData {
+                Text(data.map { String(format: "%02x", $0) }.joined(separator: " "))
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            } else {
+                Text("—")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .padding(.horizontal)
     }
 
     // MARK: - Samples Format Info
@@ -133,6 +199,7 @@ extension DiveDetailView {
                         }
                         Text("PPO₂").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
                         Text("NDL").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                        Text("Gas").font(.caption2).foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
                         Text("Events").font(.caption2).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
                         Spacer()
                     }
@@ -188,6 +255,13 @@ extension DiveDetailView {
                                         .frame(width: 45, alignment: .trailing)
                                 } else {
                                     Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                                }
+                                if let gas = sample.currentGas, gas >= 0, gas < dive.tanks.count {
+                                    Text(verbatim: "T\(gas + 1)")
+                                        .font(.caption).foregroundStyle(.purple)
+                                        .frame(width: 35, alignment: .trailing)
+                                } else {
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
                                 }
                                 if sample.events.isEmpty {
                                     Text("—").font(.caption).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)

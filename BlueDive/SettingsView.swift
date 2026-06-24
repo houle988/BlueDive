@@ -449,7 +449,8 @@ struct SettingsView: View {
     @State private var backupDocument: ExportableFileDocument?
     @State private var backupFileName: String = ""
     #endif
-    
+    @State private var showFingerprintDebug = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -823,6 +824,39 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
+
+                Divider()
+
+                Button {
+                    showFingerprintDebug = true
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue.opacity(0.15))
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "barcode.viewfinder")
+                                .font(.body)
+                                .foregroundStyle(.blue)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sync Fingerprints")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                            Text("View and edit dive computer sync fingerprints")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+                }
+                .buttonStyle(.plain)
             }
             .padding()
             .background(
@@ -1587,6 +1621,12 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showDisclaimer) {
             DisclaimerView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showFingerprintDebug) {
+            FingerprintDebugView()
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)

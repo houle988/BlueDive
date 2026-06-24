@@ -850,14 +850,8 @@ extension DiveDetailView {
     /// Gas mix summary for all tanks, e.g. "Air / Nitrox 32%"
     var allTanksGasMixSummary: String {
         let tanks = dive.tanks
-        guard !tanks.isEmpty else { return dive.formattedGasType }
-        let labels = tanks.map { tank -> String in
-            let o2 = tank.o2Percentage
-            let he = tank.hePercentage
-            if he > 0 { return "Trimix \(o2)/\(he)" }
-            if o2 > 21 { return "Nitrox \(o2)%" }
-            return tank.gasName
-        }
+        guard !tanks.isEmpty else { return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Air gas type label") }
+        let labels = tanks.map { $0.gasDisplayName() }
         return labels.joined(separator: " / ")
     }
 

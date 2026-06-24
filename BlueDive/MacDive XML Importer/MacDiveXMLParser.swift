@@ -171,8 +171,9 @@ struct BlueDiveSamplesData: Sendable {
     let ppo2: Double?
     let ndt: Int?
     let events: [DiveProfileEvent]
+    let currentGas: Int?           // active tank index at this sample point
 
-    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, ndt: Int? = nil, events: [DiveProfileEvent] = []) {
+    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, ndt: Int? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
         self.time = time
         self.depth = depth
         self.pressure = pressure
@@ -181,6 +182,7 @@ struct BlueDiveSamplesData: Sendable {
         self.ppo2 = ppo2
         self.ndt = ndt
         self.events = events
+        self.currentGas = currentGas
     }
 }
 

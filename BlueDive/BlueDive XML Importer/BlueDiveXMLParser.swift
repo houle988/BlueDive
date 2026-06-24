@@ -474,6 +474,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         }
         let ppo2        = attributes["ppo2"].flatMap(Double.init)
         let ndt         = attributes["ndl"].flatMap(Double.init).map(Int.init)
+        let currentGas  = attributes["currentGas"].flatMap(Int.init)
         let events: [DiveProfileEvent]
         if let eventsStr = attributes["events"], !eventsStr.isEmpty {
             events = eventsStr.split(separator: ",").compactMap { parseEvent(String($0)) }
@@ -494,7 +495,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             temperature: temperature,
             ppo2: ppo2,
             ndt: ndt,
-            events: events
+            events: events,
+            currentGas: currentGas
         ))
     }
 

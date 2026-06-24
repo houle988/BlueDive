@@ -22,14 +22,6 @@ struct DiveRowView: View {
         }
     }
     
-    private var formattedTimestamp: String {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: dive.timestamp)
-    }
-
     private var diveIcon: some View {
         let resolved = resolvedFlag
         return VStack(spacing: 4) {
@@ -109,7 +101,7 @@ struct DiveRowView: View {
                     .foregroundStyle(.secondary)
             }
             
-            Text(formattedTimestamp)
+            Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
                 .font(.caption)
                 .foregroundStyle(.gray)
         }

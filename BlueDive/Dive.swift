@@ -46,8 +46,9 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
     let ndl: Double? // No Decompression Limit in minutes
     let ppo2: Double? // Oxygen partial pressure in bar
     let events: [DiveProfileEvent] // Events at this profile point
-    
-    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ppo2: Double? = nil, events: [DiveProfileEvent] = []) {
+    let currentGas: Int? // Active tank index at this point (index into Dive.tanks)
+
+    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ppo2: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
         self.id = id
         self.time = time
         self.depth = depth
@@ -57,8 +58,9 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         self.ndl = ndl
         self.ppo2 = ppo2
         self.events = events
+        self.currentGas = currentGas
     }
-    
+
     // Custom decoder so that profiles serialized before the events field was added
     // can still be read — events defaults to [] when the key is absent.
     init(from decoder: Decoder) throws {
@@ -75,6 +77,7 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         ndl = try container.decodeIfPresent(Double.self, forKey: .ndl)
         ppo2 = try container.decodeIfPresent(Double.self, forKey: .ppo2)
         events = (try? container.decode([DiveProfileEvent].self, forKey: .events)) ?? []
+        currentGas = try container.decodeIfPresent(Int.self, forKey: .currentGas)
     }
 }
 
@@ -103,6 +106,18 @@ struct TankData: Identifiable, Sendable {
         if hePercentage > 0 { return "Trimix" }
         if o2Percentage > 21 { return "Nitrox" }
         return "Air"
+    }
+
+    func gasDisplayName(locale: Locale = UserPreferences.shared.languageMode.locale ?? Locale.autoupdatingCurrent) -> String {
+        if hePercentage > 0 {
+            return String(format: NSLocalizedString("Trimix %d/%d", bundle: .forAppLanguage(), comment: "Trimix gas mix label showing oxygen/helium percentages e.g. Trimix 21/35"), o2Percentage, hePercentage)
+        } else if o2Percentage > 21 {
+            let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(locale))
+            return String(format: NSLocalizedString("Nitrox %@", bundle: .forAppLanguage(), comment: "Nitrox gas mix label, %@ is the pre-formatted oxygen percentage e.g. Nitrox 32%"), pct)
+        } else if o2Percentage < 21 {
+            return NSLocalizedString("Hypoxic", bundle: .forAppLanguage(), comment: "Gas type: oxygen below 21%")
+        }
+        return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Air gas type label")
     }
 
     init(id: UUID = UUID(), o2: Double = 0.21, he: Double = 0.0,
@@ -1351,30 +1366,21 @@ final class Dive {
 // MARK: - Extensions
 
 extension Dive {
+    /// Precise duration in seconds, preferring the profile's last sample time over the whole-minute `duration` field.
+    var durationSeconds: Int {
+        if let last = profileSamples.last?.time, last > 0 {
+            return Int(round(last * 60))
+        }
+        // Heuristic: if duration >= 3600 it was stored in seconds (some importers), otherwise minutes.
+        return (duration >= 3600) ? duration : (duration * 60)
+    }
+
     /// Durée formatée en heures, minutes et secondes, préférant les secondes depuis le profil ou heuristique
     var formattedDuration: String {
-        // Prefer precise seconds from profile if available
-        let samples = profileSamples
-        let secondsFromProfile: Int? = {
-            if let last = samples.last?.time, last > 0 { // time is stored in minutes with fractional part
-                return Int(round(last * 60))
-            }
-            return nil
-        }()
-        
-        // Fallback to seconds from MacDive duration if `duration` appears to be seconds (heuristic)
-        // If duration value is large (>= 3600), consider it as seconds already
-        let secondsHeuristic: Int? = (duration >= 3600) ? duration : nil
-        
-        // Final fallback: treat stored `duration` as minutes
-        let secondsFromMinutes = duration * 60
-        
-        let totalSeconds = secondsFromProfile ?? secondsHeuristic ?? secondsFromMinutes
-        
+        let totalSeconds = durationSeconds
         let h = totalSeconds / 3600
         let m = (totalSeconds % 3600) / 60
         let s = totalSeconds % 60
-        
         if h > 0 {
             return String(format: "%dh %02dm %02ds", h, m, s)
         } else if m > 0 {
@@ -1384,40 +1390,18 @@ extension Dive {
         }
     }
 
-    /// Durée compacte pour les vignettes et listes — ex: "1h 36m 12s" ou "42m 30s"
+    /// Durée compacte pour les vignettes et listes — ex: "1h 36m" ou "0h 42m"
     var shortFormattedDuration: String {
-        let samples = profileSamples
-        let secondsFromProfile: Int? = {
-            if let last = samples.last?.time, last > 0 {
-                return Int(round(last * 60))
-            }
-            return nil
-        }()
-        let secondsHeuristic: Int? = (duration >= 3600) ? duration : nil
-        let totalSeconds = secondsFromProfile ?? secondsHeuristic ?? (duration * 60)
-
+        // Avoid decoding profileData (external-storage blob) per list row.
+        // The heuristic: if duration >= 3600 it was stored in seconds, otherwise minutes.
+        // Seconds are omitted because duration: Int stores whole minutes only.
+        // Format always includes hours to match the surface interval label (e.g. "0h 42m").
+        let totalSeconds = (duration >= 3600) ? duration : (duration * 60)
         let h = totalSeconds / 3600
         let m = (totalSeconds % 3600) / 60
-        let s = totalSeconds % 60
-        if h > 0 {
-            return String(format: "%dh %02dm %02ds", h, m, s)
-        } else {
-            return String(format: "%dm %02ds", m, s)
-        }
+        return String(format: "%dh %02dm", h, m)
     }
 
-    /// Display label derived from tanks[0] O2/He values.
-    var formattedGasType: String {
-        switch gasType {
-        case "Trimix":
-            return "Trimix \(oxygenPercentage)/\(heliumPercentage ?? 0)"
-        case "Nitrox":
-            return "Nitrox \(oxygenPercentage)%"
-        default:
-            return gasType
-        }
-    }
-    
     /// Consommation d'air totale en litres
     var totalAirConsumption: Double {
         var totalLiters = 0.0

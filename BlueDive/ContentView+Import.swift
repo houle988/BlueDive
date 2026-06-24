@@ -245,6 +245,16 @@ extension ContentView {
             guard parsed.indices.contains(index) else { continue }
             insertDiveFromMacDive(parsed[index], fileName: fileName)
         }
+        do {
+            try modelContext.save()
+            if UserDefaults.standard.bool(forKey: "notificationsEnabled") {
+                let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
+                NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
+            }
+        } catch {
+            importError = .saveFailed(error)
+            showErrorAlert = true
+        }
     }
 
     @MainActor
@@ -448,7 +458,8 @@ extension ContentView {
                 tankPressures: sample.tankPressures,
                 ndl: sample.ndt != nil ? Double(sample.ndt!) : nil,
                 ppo2: sample.ppo2,
-                events: sample.events
+                events: sample.events,
+                currentGas: sample.currentGas
             )
         }
         
@@ -690,32 +701,10 @@ extension ContentView {
                 newDive.seenFish!.append(marineSight)
                 modelContext.insert(marineSight)
             }
-            
-            try modelContext.save()
-            
-            // Check for milestones
-            if UserDefaults.standard.bool(forKey: "notificationsEnabled") {
-                let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
-                NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
-            }
-            
-        } catch {
-            importError = .saveFailed(error)
-            showErrorAlert = true
         }
     }
     
     // MARK: - Helper Functions
-    
-    func determineGasName(oxygen: Int, helium: Int) -> String {
-        if helium > 0 {
-            return "Trimix"
-        } else if oxygen > 21 {
-            return "Nitrox"
-        } else {
-            return "Air"
-        }
-    }
     
     func mapMacDiveGearType(_ type: String) -> String {
         // Resolves both our own English export keys and legacy French rawValues.
@@ -761,7 +750,9 @@ extension ContentView {
                 tankPressure: sample.tankPressure,
                 tankPressures: sample.tankPressures,
                 ndl: sample.ndl,
-                ppo2: sample.ppo2
+                ppo2: sample.ppo2,
+                events: sample.events,
+                currentGas: sample.currentGas
             ))
         }
         earlier.profileSamples = combinedSamples

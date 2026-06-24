@@ -2563,7 +2563,6 @@ struct EditGazView: View {
     @Query(sort: \TankTemplate.name) private var templates: [TankTemplate]
     @State private var selectedTemplateName: String = ""
 
-    @State private var workingGasType: String
     @State private var workingO2: Int
     @State private var workingHe: Int
     @State private var workingCylinderSize: Double?
@@ -2608,7 +2607,7 @@ struct EditGazView: View {
         }
     }
 
-    @State private var usageTimeUnit: UsageTimeUnit = .minutes
+    @State private var usageTimeUnit: UsageTimeUnit = .seconds
 
     /// Validation: si le volume saisi semble hors limites selon l'unité stockée.
     private var cylinderSizeIsValid: Bool {
@@ -2659,7 +2658,6 @@ struct EditGazView: View {
         self.tankIndex = tankIndex
         let tanks = dive.tanks
         let tank = tankIndex < tanks.count ? tanks[tankIndex] : nil
-        _workingGasType          = State(initialValue: tank?.gasName ?? "Air")
         _workingO2               = State(initialValue: tank?.o2Percentage ?? 21)
         _workingHe               = State(initialValue: tank?.hePercentage ?? 0)
         _workingCylinderSize     = State(initialValue: tank?.volume)
@@ -2671,9 +2669,9 @@ struct EditGazView: View {
         _workingWorkingPressure  = State(initialValue: tank?.workingPressure)
         _workingPressureText     = State(initialValue: Self.formatDouble(tank?.workingPressure))
         _workingUsageStartTime   = State(initialValue: tank?.usageStartTime)
-        _usageStartTimeText      = State(initialValue: Self.formatDouble(tank?.usageStartTime.map { $0 / 60.0 }))
+        _usageStartTimeText      = State(initialValue: Self.formatDouble(tank?.usageStartTime))
         _workingUsageEndTime     = State(initialValue: tank?.usageEndTime)
-        _usageEndTimeText        = State(initialValue: Self.formatDouble(tank?.usageEndTime.map { $0 / 60.0 }))
+        _usageEndTimeText        = State(initialValue: Self.formatDouble(tank?.usageEndTime))
     }
 
     /// Copy physical tank properties from a template into the working state variables.
@@ -2720,13 +2718,13 @@ struct EditGazView: View {
     /// Détermine automatiquement le type de gaz selon O₂ et He
     private var autoGasLabel: String {
         if workingHe > 0 {
-            return "Trimix"
+            return NSLocalizedString("Trimix", bundle: .forAppLanguage(), comment: "Gas type label: helium present")
         } else if workingO2 == 21 {
-            return "Air"
+            return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Gas type label: 21% oxygen")
         } else if workingO2 > 21 {
-            return "Nitrox"
+            return NSLocalizedString("Nitrox", bundle: .forAppLanguage(), comment: "Gas type label: oxygen above 21%")
         } else {
-            return "Hypoxic"
+            return NSLocalizedString("Hypoxic", bundle: .forAppLanguage(), comment: "Gas type label: oxygen below 21%")
         }
     }
 
@@ -2819,7 +2817,7 @@ struct EditGazView: View {
 
                     gazMacOSGroup("Gas Blend", icon: "bubbles.and.sparkles.fill", color: .green) {
                         gazMacOSRow("Gas Type") {
-                            Text(LocalizedStringKey(autoGasLabel))
+                            Text(verbatim: autoGasLabel)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.green)
@@ -2829,14 +2827,12 @@ struct EditGazView: View {
                             Stepper(value: $workingO2, in: 21...o2Max) {
                                 Text((Double(workingO2) / 100).formatted(.percent.precision(.fractionLength(0))))
                             }
-                                .onChange(of: workingO2) { workingGasType = autoGasLabel }
                         }
                         Divider()
                         gazMacOSRow("Helium (He)") {
                             Stepper(value: $workingHe, in: 0...heMax) {
                                 Text((Double(workingHe) / 100).formatted(.percent.precision(.fractionLength(0))))
                             }
-                                .onChange(of: workingHe) { workingGasType = autoGasLabel }
                         }
                     }
                     gazMacOSGroup("Tank", icon: "cylinder.fill", color: .blue) {
@@ -3111,7 +3107,7 @@ struct EditGazView: View {
                         HStack {
                             Label("Gas Type", systemImage: "bubbles.and.sparkles.fill")
                             Spacer()
-                            Text(LocalizedStringKey(autoGasLabel))
+                            Text(verbatim: autoGasLabel)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.green)
@@ -3129,9 +3125,6 @@ struct EditGazView: View {
                                 .frame(width: 48, alignment: .trailing)
                             Stepper("", value: $workingO2, in: 21...o2Max)
                                 .labelsHidden()
-                                .onChange(of: workingO2) {
-                                    workingGasType = autoGasLabel
-                                }
                         }
 
                         // Helium
@@ -3146,9 +3139,6 @@ struct EditGazView: View {
                                 .frame(width: 48, alignment: .trailing)
                             Stepper("", value: $workingHe, in: 0...heMax)
                                 .labelsHidden()
-                                .onChange(of: workingHe) {
-                                    workingGasType = autoGasLabel
-                                }
                         }
                     }
                     Section {

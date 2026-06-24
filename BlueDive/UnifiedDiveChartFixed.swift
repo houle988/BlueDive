@@ -238,6 +238,7 @@ private struct StaticChartLayer: View, Equatable {
         Chart {
             decoMarks
             depthMarks
+            gasChangeMarks
             temperatureMarks
             pressureMarks
             ndlMarks
@@ -312,6 +313,32 @@ private struct StaticChartLayer: View, Equatable {
             }
         }
         .frame(height: 300)
+    }
+
+    // MARK: - Gas change markers
+
+    @ChartContentBuilder
+    private var gasChangeMarks: some ChartContent {
+        let switches = dive.profileSamples
+            .filter { $0.events.contains(.gasChange) }
+            .sorted { $0.time < $1.time }
+        ForEach(Array(switches.enumerated()), id: \.element.id) { index, sample in
+            PointMark(
+                x: .value("Gas Switch", sample.time),
+                y: .value("Depth", -dive.displayProfileDepth(sample.depth))
+            )
+            .symbol(.circle)
+            .symbolSize(100)
+            .foregroundStyle(Color.purple)
+            .annotation(position: .top, alignment: .center) {
+                Text(verbatim: "G\(index + 1)")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.purple)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.purple.opacity(0.15)))
+            }
+        }
     }
 
     // MARK: - Ascent rates
@@ -904,6 +931,10 @@ struct UnifiedDiveChartOptimized: View {
                         legendDiamond(.orange, "Mandatory stop")
                     }
                 }
+
+                if hasGasChangeData {
+                    legendGasChange(.purple, "Gas switch")
+                }
             }
         }
         .padding(.horizontal)
@@ -941,6 +972,18 @@ struct UnifiedDiveChartOptimized: View {
                 .fill(color.opacity(0.25))
                 .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(color.opacity(0.6), lineWidth: 0.5))
                 .frame(width: 14, height: 8)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Circle swatch for gas switch legend entries.
+    private func legendGasChange(_ color: Color, _ text: LocalizedStringKey) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
             Text(text)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -986,6 +1029,10 @@ struct UnifiedDiveChartOptimized: View {
 
     private var hasDecoData: Bool {
         dive.profileSamples.contains { $0.events.contains(.decoStop) }
+    }
+
+    private var hasGasChangeData: Bool {
+        dive.profileSamples.contains { $0.events.contains(.gasChange) }
     }
     
     
@@ -1118,6 +1165,17 @@ struct ChartTooltipView: View {
         return "\(depth) · \(duration)"
     }
 
+    /// Gas name for a gas switch event at this sample.
+    /// Uses the sample's recorded `currentGas` index directly (set by the dive computer parser),
+    /// which correctly reflects switch-backs to a previously-used tank.
+    private var gasChangeName: String? {
+        guard sample.events.contains(.gasChange),
+              let gasIdx = sample.currentGas,
+              gasIdx >= 0,
+              gasIdx < dive.tanks.count else { return nil }
+        return dive.tanks[gasIdx].gasDisplayName()
+    }
+
     private var ascentSpeedLabel: String? {
         guard let speed = ascentSpeed else { return nil }
         let displaySpeed = prefs.depthUnit.convert(abs(speed))
@@ -1187,6 +1245,11 @@ struct ChartTooltipView: View {
                 if let detail = decoStopDetail {
                     tooltipRow(icon: "smallcircle.filled.circle", color: .orange.opacity(0.7), label: detail)
                 }
+            }
+
+            // Gas switch — always shown when present (gas change markers are always on).
+            if let gasName = gasChangeName {
+                tooltipRow(icon: "cylinder.fill", color: .purple, label: String(format: NSLocalizedString("→ %@", bundle: .forAppLanguage(), comment: "Gas switch tooltip row: arrow followed by gas mix name"), gasName))
             }
         }
         .padding(.horizontal, 10)

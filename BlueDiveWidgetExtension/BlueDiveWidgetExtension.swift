@@ -85,20 +85,16 @@ struct DiverEntity: AppEntity {
 
 struct DiverEntityQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [DiverEntity] {
-        // Only return entities that currently exist in the app group.
-        // Returning nil for a missing identifier signals WidgetKit that the
-        // configuration is stale; it falls back to defaultResult() (All Divers).
-        let knownNames: Set<String>
-        if let data = UserDefaults(suiteName: appGroupSuite)?.data(forKey: "diverNames"),
-           let names = try? JSONDecoder().decode([String].self, from: data) {
-            knownNames = Set(names)
-        } else {
-            knownNames = []
-        }
-        return identifiers.compactMap { id in
-            guard id == allDiversID || knownNames.contains(id) else { return nil }
-            return DiverEntity(id: id)
-        }
+        // Always echo back the configured entities without cross-checking diverNames.
+        // The widget extension is a separate process whose UserDefaults cache can lag
+        // behind the main app's writes, and SwiftData may report dives = [] on first
+        // launch before it has fully loaded. Returning nil for an identifier causes
+        // WidgetKit to PERMANENTLY reset the user's widget configuration to
+        // defaultResult() (= All Divers), so any transient cache miss would silently
+        // destroy the user's diver selection. Graceful fallback for a genuinely absent
+        // diver is already handled in DiverStatsProvider.makeEntry (knownNames check)
+        // and DiveCountProvider.makeEntry (returns count 0 when name not found).
+        identifiers.map { DiverEntity(id: $0) }
     }
 
     func defaultResult() async -> DiverEntity? {
