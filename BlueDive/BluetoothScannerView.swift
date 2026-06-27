@@ -1493,6 +1493,25 @@ struct BluetoothScannerView: View {
         .mcleanExtreme,
     ]
 
+    /// Maximum pressure drop (bar) allowed per profile sample pair before the reading is
+    /// considered an AI transmitter dropout rather than real gas consumption.
+    /// A diver cannot consume 10 bar in a single 5-30 second sample interval under any
+    /// realistic conditions; readings that large are always signal-loss artifacts.
+    private static let dropoutFilterBar = 10.0
+
+    /// Minimum pressure lead (bar) a candidate tank must hold over the runner-up to be
+    /// trusted as the breathing tank during a gas mix's active period. Temperature changes
+    /// on a closed-valve tank can cause ~10-14 bar of accumulated apparent pressure drop as
+    /// the diver descends into colder water; requires the breathing tank's genuine consumption
+    /// to exceed that level to be distinguishable from noise.
+    private static let pressureNoiseCeilingBar = 10.0
+
+    /// Minimum ratio (winner / runner-up accumulated drops) at which the winner is trusted
+    /// even when the absolute margin is below pressureNoiseCeilingBar. Catches short or
+    /// shallow dives where genuine consumption is small in absolute terms but still clearly
+    /// dominant (e.g. 7 bar vs 1 bar = 7× ratio).
+    private static let pressureDropRatioThreshold = 3.0
+
     /// Returns the DeviceFamily of the currently connected device, if known.
     private var connectedDeviceFamily: DeviceConfiguration.DeviceFamily? {
         guard let peripheral = selectedDevice,
@@ -1544,6 +1563,69 @@ struct BluetoothScannerView: View {
     /// Returns the header pressure when reported (> 0), otherwise falls back to a profile-derived value.
     private static func resolvedPressure(header: Double, fallback: Double?) -> Double? {
         header > 0 ? header : fallback
+    }
+
+    /// Infers which DC tank index each gas mix index corresponds to by scanning profile
+    /// pressure data. For each gas mix's active period, the tank whose pressure is
+    /// decreasing the most is the one being breathed.
+    ///
+    /// On Shearwater, DC_GASMIX_UNKNOWN is always reported so the "tank N = mix N"
+    /// heuristic fails when AI transmitter slot order ≠ gas configuration slot order.
+    /// Returns nil when the profile lacks sufficient data for a reliable determination.
+    private static func inferShearwaterGasMixToTank(
+        profile: [LibDCSwift.DiveProfilePoint],
+        tankCount: Int,
+        gasMixCount: Int,
+        minMappings: Int = 2
+    ) -> [Int: Int]? {
+        // Accumulate total pressure drop per (gasMixIndex, tankIndex) pair across all segments.
+        // lastKnownGas carries the active gas mix forward through segments that lack an
+        // explicit annotation — the raw LibDCSwift profile only places a currentGas value
+        // on samples where a DC_SAMPLE_GASMIX event was fired; all other samples are nil.
+        var drops: [Int: [Int: Double]] = [:]
+        var lastKnownGas: Int? = nil
+        for i in 1..<profile.count {
+            let prev = profile[i - 1]
+            let curr = profile[i]
+            // Update lastKnownGas from prev first so the segment [prev→curr] is credited to
+            // the gas that was active during the interval, not the incoming gas after a switch.
+            if let g = prev.currentGas, g >= 0, g < gasMixCount { lastKnownGas = g }
+            guard let gas = lastKnownGas else {
+                if let g = curr.currentGas, g >= 0, g < gasMixCount { lastKnownGas = g }
+                continue
+            }
+            for tankIdx in 0..<tankCount {
+                let prevP = prev.pressures[tankIdx] ?? 0
+                let currP = curr.pressures[tankIdx] ?? 0
+                guard prevP > 0, currP > 0, prevP > currP else { continue }
+                let drop = prevP - currP
+                // Skip transmitter dropout artifacts — genuine consumption cannot exceed
+                // dropoutFilterBar in a single sample interval under any realistic conditions.
+                guard drop <= Self.dropoutFilterBar else { continue }
+                drops[gas, default: [:]][tankIdx, default: 0] += drop
+            }
+            // Advance lastKnownGas after attribution so the next segment inherits the new gas.
+            if let g = curr.currentGas, g >= 0, g < gasMixCount { lastKnownGas = g }
+        }
+        // For each gas mix, pick the tank with the largest accumulated pressure drop.
+        // Trust unconditionally when no competing tank exists (runnerUp == 0). Otherwise
+        // require a convincing absolute margin or ratio over the runner-up to avoid
+        // temperature-artifact false positives. The ratio check handles short or shallow
+        // dives where genuine consumption is small in absolute terms but clearly dominant.
+        var result: [Int: Int] = [:]
+        for (mix, tankDrops) in drops {
+            let sorted = tankDrops.sorted { $0.value > $1.value }
+            guard let best = sorted.first, best.value > 0 else { continue }
+            let runnerUp = sorted.dropFirst().first?.value ?? 0
+            let margin = best.value - runnerUp
+            let ratio  = runnerUp > 0 ? best.value / runnerUp : Double.infinity
+            guard runnerUp == 0 || margin >= Self.pressureNoiseCeilingBar || ratio >= Self.pressureDropRatioThreshold else { continue }
+            result[mix] = best.key
+        }
+        // Only trust the result when at least minMappings confirmed and every mapped mix
+        // resolves to a distinct tank (no two mixes pointing at the same AI transmitter).
+        guard result.count >= minMappings, Set(result.values).count == result.count else { return nil }
+        return result
     }
 
     /// Resolves the O2/He fractions and the gas-mix index for a single tank, applying
@@ -1909,18 +1991,63 @@ struct BluetoothScannerView: View {
         let profileGasMixOrder = Self.orderedGasMixIndices(from: diveData)
 
         if let dcTanks = diveData.tanks, !dcTanks.isEmpty {
+            // For Shearwater AI dives: derive gas-mix→tank assignment from pressure data.
+            // The DC always reports DC_GASMIX_UNKNOWN, so "tank N = mix N" (tier 2) is
+            // unreliable when AI transmitter slot order ≠ gas configuration slot order.
+            // minMappings=1: even a single confirmed mapping is useful — if exactly one
+            // (mix, tank) pair remains undetermined after inference, it is forced by
+            // elimination (the only remaining slot must be the only remaining mix).
+            let pressureGuidedMixForTank: [Int: Int]  // [tankIndex → mixIndex]
+            if connectedDeviceFamily == .shearwaterPetrel, dcGasMixes.count > 1,
+               var pgMap = Self.inferShearwaterGasMixToTank(
+                   profile: diveData.profile,
+                   tankCount: dcTanks.count,
+                   gasMixCount: dcGasMixes.count,
+                   minMappings: 1) {
+                // If exactly one mix→tank pair is still undetermined, it is forced by
+                // elimination: the sole remaining tank slot can only hold the sole
+                // remaining mix. This handles dives where only one gas is ever breathed.
+                let unmappedMixes = Set(dcGasMixes.indices).subtracting(pgMap.keys)
+                let unassignedTanks = Set(0..<dcTanks.count).subtracting(pgMap.values)
+                if unmappedMixes.count == 1, unassignedTanks.count == 1,
+                   let lastMix = unmappedMixes.first, let lastTank = unassignedTanks.first {
+                    pgMap[lastMix] = lastTank
+                }
+                pressureGuidedMixForTank = Dictionary(uniqueKeysWithValues: pgMap.map { ($0.value, $0.key) })
+                for (mixIdx, tankIdx) in pgMap { gasMixToTankIndex[mixIdx] = tankIdx }
+            } else {
+                pressureGuidedMixForTank = [:]
+            }
+
             for (index, tank) in dcTanks.enumerated() {
-                let (o2, he, resolvedMixIdx) = Self.resolveGasMix(
-                    mixIndex: tank.gasMix,
-                    tankIndex: index,
-                    tankCount: dcTanks.count,
-                    tankUsage: tank.usage,
-                    dcGasMixes: dcGasMixes,
-                    profileGasMixOrder: profileGasMixOrder,
-                    deviceFamily: connectedDeviceFamily,
-                    headerGasMix: diveData.gasMix
-                )
-                if let resolved = resolvedMixIdx, gasMixToTankIndex[resolved] == nil { gasMixToTankIndex[resolved] = index }
+                let o2: Double
+                let he: Double
+                var resolvedMixIdx: Int? = nil
+
+                if let mixIdx = pressureGuidedMixForTank[index], mixIdx < dcGasMixes.count {
+                    // Pressure-guided: use the gas mix whose pressure matched this tank.
+                    // gasMixToTankIndex was already pre-populated above.
+                    o2 = dcGasMixes[mixIdx].oxygen
+                    he = dcGasMixes[mixIdx].helium
+                } else {
+                    let result = Self.resolveGasMix(
+                        mixIndex: tank.gasMix,
+                        tankIndex: index,
+                        tankCount: dcTanks.count,
+                        tankUsage: tank.usage,
+                        dcGasMixes: dcGasMixes,
+                        profileGasMixOrder: profileGasMixOrder,
+                        deviceFamily: connectedDeviceFamily,
+                        headerGasMix: diveData.gasMix
+                    )
+                    o2 = result.o2
+                    he = result.he
+                    resolvedMixIdx = result.resolvedMixIdx
+                    if let resolved = resolvedMixIdx, gasMixToTankIndex[resolved] == nil {
+                        gasMixToTankIndex[resolved] = index
+                    }
+                }
+
                 // When the dive computer header reports no begin/end pressure (pressure pod scenario),
                 // derive start and end pressure from the first/last non-zero profile sample.
                 let profilePressures = (tank.beginPressure <= 0 || tank.endPressure <= 0)
@@ -1935,6 +2062,20 @@ struct BluetoothScannerView: View {
                     endPressure: endPressure,
                     workingPressure: tank.workingPressure > 0 ? tank.workingPressure : nil
                 ))
+            }
+
+            // Add TankData for gas mixes not yet claimed by any AI tank.
+            // Handles dives with fewer AI transmitters than gas mixes — e.g. one AI back-gas
+            // plus N non-AI stage/deco bottles. Non-AI tanks carry gas mix data only;
+            // they have no pressure data because there is no transmitter for them.
+            let needsFilter = filterUnusedTanks && (connectedDeviceFamily.map { Self.familiesNeedingSwiftTankFilter.contains($0) } ?? true)
+            let usedMixIndicesForSupplement = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
+            for mixIdx in dcGasMixes.indices {
+                guard gasMixToTankIndex[mixIdx] == nil else { continue }
+                if let used = usedMixIndicesForSupplement, !used.contains(mixIdx) { continue }
+                let tankIdx = linkedTanks.count
+                gasMixToTankIndex[mixIdx] = tankIdx
+                linkedTanks.append(TankData(o2: dcGasMixes[mixIdx].oxygen, he: dcGasMixes[mixIdx].helium))
             }
         } else if !diveData.tankPressure.isEmpty {
             let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0

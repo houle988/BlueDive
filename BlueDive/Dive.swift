@@ -881,7 +881,9 @@ final class Dive {
         if hasUsageTimes, hasSamples {
             let lastTimeMin = samples.last!.time              // minutes
             let usageStartMin = (tank.usageStartTime ?? 0) / 60.0 // seconds → minutes
-            let usageEndMin = tank.usageEndTime.map { $0 / 60.0 } ?? lastTimeMin
+            // usageEndTime=0 means "no end recorded" (same as nil); fall back to dive end
+            let usageEndRaw = tank.usageEndTime ?? 0
+            let usageEndMin = usageEndRaw > 0 ? usageEndRaw / 60.0 : lastTimeMin
             let durationMin = usageEndMin - usageStartMin
             guard durationMin > 0 else { return 0.0 }
             divisor = durationMin
@@ -1001,7 +1003,9 @@ final class Dive {
                       volume > 0, pStart > pEnd else { continue }
 
                 let usageStartMin = (tank.usageStartTime ?? 0) / 60.0         // seconds → minutes
-                let usageEndMin = tank.usageEndTime.map { $0 / 60.0 } ?? durationMinutes
+                // usageEndTime=0 means "no end recorded" (same as nil); fall back to dive end
+                let usageEndRaw = tank.usageEndTime ?? 0
+                let usageEndMin = usageEndRaw > 0 ? usageEndRaw / 60.0 : durationMinutes
                 let durationMin = usageEndMin - usageStartMin
                 guard durationMin > 0 else { continue }
 
@@ -1119,12 +1123,22 @@ final class Dive {
 
         if tanksWithTime.count == validTanks.count {
             // All tanks have usage times: use time-weighted average volume.
-            let totalWeight = tanksWithTime.reduce(0.0) { $0 + ($1.usageEndTime! - $1.usageStartTime!) }
+            // Treat (0, 0) usage windows as full-dive duration — they mean "no times recorded".
+            // Only decode profileSamples when at least one tank actually has a zero window.
+            let hasZeroWindow = tanksWithTime.contains { ($0.usageEndTime! - $0.usageStartTime!) <= 0 }
+            let diveSeconds: Double = hasZeroWindow ? {
+                if let lastTime = profileSamples.last?.time, lastTime > 0 { return lastTime * 60.0 }
+                return Double(duration) * 60.0
+            }() : 0
+            let effectiveDuration: (TankData) -> Double = { tank in
+                let raw = tank.usageEndTime! - tank.usageStartTime!
+                return raw > 0 ? raw : diveSeconds
+            }
+            let totalWeight = tanksWithTime.reduce(0.0) { $0 + effectiveDuration($1) }
             if totalWeight > 0 {
                 avgVolumeLiters = tanksWithTime.reduce(0.0) { sum, tank in
-                    let duration = tank.usageEndTime! - tank.usageStartTime!
                     let vol = waterVolumeLiters(rawVolume: tank.volume!, workingPressureRaw: tank.workingPressure)
-                    return sum + vol * (duration / totalWeight)
+                    return sum + vol * (effectiveDuration(tank) / totalWeight)
                 }
             } else {
                 // All usage durations are zero — use simple average as last resort.
