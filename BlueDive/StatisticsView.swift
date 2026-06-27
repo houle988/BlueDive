@@ -1529,60 +1529,43 @@ struct SiteDivesSheet: View {
     let siteName: String
     let dives: [Dive]
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.locale) private var locale
-    @State private var prefs = UserPreferences.shared
+    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     private var sortedDives: [Dive] { dives.sorted { $0.timestamp > $1.timestamp } }
 
+    private var numberMap: [PersistentIdentifier: Int] {
+        let numbering = selectedDiver.isEmpty
+            ? allDives
+            : allDives.filter { $0.diverName == selectedDiver }
+        let total = numbering.count
+        return Dictionary(uniqueKeysWithValues: numbering.enumerated().map {
+            ($0.element.persistentModelID, total - $0.offset)
+        })
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(sortedDives) { dive in
-                        NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives)) {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
-                                        .font(.subheadline.weight(.semibold))
-                                }
-                                Spacer()
-                                if dive.rating > 0 {
-                                    HStack(spacing: 2) {
-                                        ForEach(1...5, id: \.self) { star in
-                                            Image(systemName: star <= dive.rating ? "star.fill" : "star")
-                                                .font(.system(size: 8))
-                                                .foregroundStyle(star <= dive.rating ? .yellow : .secondary)
-                                        }
-                                    }
-                                }
-                                VStack(alignment: .trailing, spacing: 3) {
-                                    Text(verbatim: String(format: "%.1f %@", dive.displayMaxDepth, prefs.depthUnit.symbol))
-                                        .font(.subheadline.weight(.bold))
-                                        .foregroundStyle(.cyan)
-                                    Text(dive.formattedDuration)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(12)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformSecondaryBackground.opacity(0.6)))
-                        }
-                        .buttonStyle(.plain)
+            List {
+                ForEach(sortedDives) { dive in
+                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives)) {
+                        DiveRowView(
+                            dive: dive,
+                            diveNumber: numberMap[dive.persistentModelID] ?? 0
+                        )
                     }
+                    .listRowBackground(Color.primary.opacity(0.07))
                 }
-                .padding()
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.platformBackground.ignoresSafeArea())
+            #if os(iOS)
+            .listStyle(.plain)
+            #endif
             .navigationTitle(siteName)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            #if os(macOS)
-            .frame(minWidth: 450, idealWidth: 550, maxWidth: 750, minHeight: 400, idealHeight: 500, maxHeight: 700)
-            #endif
-            .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Close") { dismiss() }
@@ -1590,6 +1573,9 @@ struct SiteDivesSheet: View {
                 }
             }
         }
+        #if os(macOS)
+        .frame(minWidth: 500, idealWidth: 650, minHeight: 400, idealHeight: 600)
+        #endif
     }
 }
 

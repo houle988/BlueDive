@@ -402,6 +402,18 @@ struct TripDetailSheet: View {
     let prefs: UserPreferences
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
+    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
+
+    private var numberMap: [PersistentIdentifier: Int] {
+        let numbering = selectedDiver.isEmpty
+            ? allDives
+            : allDives.filter { $0.diverName == selectedDiver }
+        let total = numbering.count
+        return Dictionary(uniqueKeysWithValues: numbering.enumerated().map {
+            ($0.element.persistentModelID, total - $0.offset)
+        })
+    }
 
     var body: some View {
         NavigationStack {
@@ -484,46 +496,23 @@ struct TripDetailSheet: View {
 
     private var divesListSection: some View {
         let sortedDives = trip.dives.sorted { $0.timestamp < $1.timestamp }
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 8) {
             Text("🤿 All Dives (\(trip.totalDives))")
                 .font(.headline)
+                .padding(.bottom, 4)
 
             ForEach(sortedDives) { dive in
                 NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives)) {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(dive.siteName)
-                                .font(.subheadline.weight(.semibold))
-                            Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if dive.rating > 0 {
-                            HStack(spacing: 2) {
-                                ForEach(1...5, id: \.self) { star in
-                                    Image(systemName: star <= dive.rating ? "star.fill" : "star")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(star <= dive.rating ? .yellow : .secondary)
-                                }
-                            }
-                        }
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text(verbatim: String(format: "%.1f %@", dive.displayMaxDepth, prefs.depthUnit.symbol))
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.cyan)
-                            Text(dive.formattedDuration)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(10)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformSecondaryBackground.opacity(0.6)))
+                    DiveRowView(
+                        dive: dive,
+                        diveNumber: numberMap[dive.persistentModelID] ?? 0
+                    )
                 }
                 .buttonStyle(.plain)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .background(Color.primary.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
         }
         .padding()

@@ -605,7 +605,7 @@ struct DiveClusterListCard: View {
                                         Label(prefs.depthUnit.formatted(dive.maxDepth), systemImage: "arrow.down")
                                             .font(.caption2)
                                             .foregroundStyle(.cyan)
-                                        Label(dive.formattedDuration, systemImage: "clock")
+                                        Label(dive.shortFormattedDuration, systemImage: "clock")
                                             .font(.caption2)
                                             .foregroundStyle(.green)
                                     }
@@ -714,7 +714,7 @@ struct DiveMapCard: View {
                     .frame(height: 30)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Label(dive.formattedDuration, systemImage: "clock.fill")
+                    Label(dive.shortFormattedDuration, systemImage: "clock.fill")
                         .font(.caption)
                         .foregroundStyle(.green)
                     Text("Duration")
