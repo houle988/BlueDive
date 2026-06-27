@@ -677,6 +677,30 @@ struct PDFDiveLogbook {
             drawText(depthLabel, attrs: markerAttrs, in: ctx, at: CGPoint(x: labelX, y: labelY))
         }
 
+        // Gas change markers — purple dot + "G1", "G2"... label above each switch
+        let gasSwitches = samples
+            .filter { $0.events.contains(.gasChange) }
+            .sorted { $0.time < $1.time }
+        for (index, sample) in gasSwitches.enumerated() {
+            let gx = chartX + chartW * CGFloat(sample.time / maxTime)
+            let gy = chartTop - (chartTop - profileBottom) * CGFloat(sample.depth / maxDepth)
+            let dotR: CGFloat = 3.5
+            // Halo
+            ctx.setFillColor(CGColor(red: 0.42, green: 0.28, blue: 0.78, alpha: 0.18))
+            ctx.fillEllipse(in: CGRect(x: gx - dotR * 1.6, y: gy - dotR * 1.6, width: dotR * 3.2, height: dotR * 3.2))
+            // Solid dot
+            ctx.setFillColor(accentPurple)
+            ctx.fillEllipse(in: CGRect(x: gx - dotR, y: gy - dotR, width: dotR * 2, height: dotR * 2))
+            // "G{n}" label above the dot
+            let gasLabel = "G\(index + 1)"
+            let gasAttrs: [NSAttributedString.Key: Any] = [
+                .font: boldFont(size: 5),
+                .foregroundColor: platformColor(accentPurple)
+            ]
+            let labelW = (gasLabel as NSString).size(withAttributes: gasAttrs).width
+            drawText(gasLabel, attrs: gasAttrs, in: ctx, at: CGPoint(x: gx - labelW / 2, y: gy + dotR + 2))
+        }
+
         return y - cardH
     }
 
