@@ -1420,11 +1420,19 @@ struct BluetoothScannerView: View {
             [DecoStop(depth: stop.depth, time: stop.time, type: stop.type)]
         } ?? []
 
-        // Extract exit GPS from Shearwater raw data (PNF closing record 9)
-        if let rawData = diveData.rawData,
-           let exitGPS = ShearwaterPNFGPS.extractExitGPS(from: rawData) {
-            dive.exitLatitude = exitGPS.latitude
-            dive.exitLongitude = exitGPS.longitude
+        if let entryLoc = diveData.location,
+           (-90...90).contains(entryLoc.latitude),
+           (-180...180).contains(entryLoc.longitude),
+           !(entryLoc.latitude == 0 && entryLoc.longitude == 0) {
+            dive.siteLatitude = entryLoc.latitude
+            dive.siteLongitude = entryLoc.longitude
+        }
+        if let exitLoc = diveData.exitLocation,
+           (-90...90).contains(exitLoc.latitude),
+           (-180...180).contains(exitLoc.longitude),
+           !(exitLoc.latitude == 0 && exitLoc.longitude == 0) {
+            dive.exitLatitude = exitLoc.latitude
+            dive.exitLongitude = exitLoc.longitude
         }
 
         // Override source import to reflect the Bluetooth re-download
@@ -2151,7 +2159,10 @@ struct BluetoothScannerView: View {
         let latitude: Double?
         let longitude: Double?
         let altitude: Double?
-        if let location = diveData.location {
+        if let location = diveData.location,
+           (-90...90).contains(location.latitude),
+           (-180...180).contains(location.longitude),
+           !(location.latitude == 0 && location.longitude == 0) {
             latitude = location.latitude
             longitude = location.longitude
             altitude = location.altitude
@@ -2244,11 +2255,12 @@ struct BluetoothScannerView: View {
             [DecoStop(depth: stop.depth, time: stop.time, type: stop.type)]
         } ?? []
 
-        // Extract exit GPS from Shearwater raw data (PNF closing record 9)
-        if let rawData = diveData.rawData,
-           let exitGPS = ShearwaterPNFGPS.extractExitGPS(from: rawData) {
-            dive.exitLatitude = exitGPS.latitude
-            dive.exitLongitude = exitGPS.longitude
+        if let exitLoc = diveData.exitLocation,
+           (-90...90).contains(exitLoc.latitude),
+           (-180...180).contains(exitLoc.longitude),
+           !(exitLoc.latitude == 0 && exitLoc.longitude == 0) {
+            dive.exitLatitude = exitLoc.latitude
+            dive.exitLongitude = exitLoc.longitude
         }
 
         return dive
