@@ -6,8 +6,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jdevost/libdc-swift",
       "state" : {
-        "branch" : "libdivecomputer-update",
-        "revision" : "0f6a5b5a9f6fea884f0e396cfb22a03fec3e0503"
+        "revision" : "0d8d284388c07b01f7587224d38b81523171505b"
       }
     }
   ],
