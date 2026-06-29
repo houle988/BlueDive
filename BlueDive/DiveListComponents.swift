@@ -90,7 +90,7 @@ struct DiveRowView: View {
             
             // Location and Country
             HStack(spacing: 4) {
-                if dive.siteLatitude != nil && dive.siteLongitude != nil {
+                if dive.hasGPSCoordinates {
                     Image(systemName: "location.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)

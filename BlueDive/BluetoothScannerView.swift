@@ -54,6 +54,7 @@ struct BluetoothScannerView: View {
     @State private var showingDeleteConfirmation = false
     @State private var modelOverrides: [String: DeviceConfiguration.ComputerModel] = [:]
     @State private var peripheralForModelPicker: CBPeripheral?
+    @State private var showInfo = false
     
     // Logger for debugging
     private static let logger = Logger(subsystem: "com.bluedive.app", category: "Bluetooth")
@@ -127,6 +128,12 @@ struct BluetoothScannerView: View {
                 if let device = deviceToDelete {
                     Text("Remove \(device.computerName) (\(device.serial)) from known devices? The next sync will re-download all dives from this computer.")
                 }
+            }
+            .sheet(isPresented: $showInfo) {
+                infoSheet
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
         // ⚠️ Temporary — remove after testing delete feature - Add Dummy Dive computer to database
@@ -313,9 +320,9 @@ struct BluetoothScannerView: View {
             }
             
             Section {
-                Toggle("Download all dives", isOn: $downloadAllDives)
+                Toggle("Download All Dives", isOn: $downloadAllDives)
             } footer: {
-                Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Duplicates will be automatically skipped during import.")
+                Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Matched dives are merged — computer data is refreshed while your personal notes and entries are kept.")
             }
 
             Section {
@@ -326,6 +333,7 @@ struct BluetoothScannerView: View {
 
             Section {
                 Button {
+                    downloadAllDives = false
                     isSearching = true
                     startScanning()
                 } label: {
@@ -383,10 +391,10 @@ struct BluetoothScannerView: View {
                 }
                 
                 Section {
-                    Toggle("Download all dives", isOn: $downloadAllDives)
-                        .disabled(syncState.isActive && syncState != .scanning)
+                    Toggle("Download All Dives", isOn: $downloadAllDives)
+                        .disabled(true)
                 } footer: {
-                    Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Duplicates will be automatically skipped during import.")
+                    Text("Download All Dives is only available for known dive computers. Sync this device once first, then use it from the main screen.")
                 }
 
                 Section {
@@ -517,7 +525,18 @@ struct BluetoothScannerView: View {
             }
             .disabled(syncState.isActive && syncState != .scanning)
         }
-        
+
+        if !(syncState.isActive && syncState != .scanning) {
+            ToolbarItem(placement: .confirmationAction) {
+                Button {
+                    showInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.cyan)
+                }
+            }
+        }
+
         ToolbarItem(placement: .primaryAction) {
             if syncState == .scanning {
                 HStack(spacing: 12) {
@@ -541,9 +560,73 @@ struct BluetoothScannerView: View {
             }
         }
     }
-    
+
+    // MARK: - Info Sheet
+
+    private var infoSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Sync Computer Clock", systemImage: "clock.arrow.2.circlepath")
+                            .font(.headline)
+                            .foregroundStyle(.blue)
+                        Text("When enabled, your dive computer's internal clock is set to match your device's current time and time zone immediately after each successful sync. This keeps dive timestamps accurate without needing to adjust the computer manually.")
+                        Text("Clock sync is only performed on dive computers that support it. If your computer does not support clock setting, this option has no effect and the sync proceeds normally.")
+                            .foregroundStyle(.secondary)
+                            .font(.callout)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Download All Dives", systemImage: "arrow.down.circle.fill")
+                            .font(.headline)
+                            .foregroundStyle(.orange)
+
+                        Text("Normally, only dives newer than your last sync are fetched. Enabling this toggle clears the sync bookmark so the computer re-sends every dive from the beginning.")
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Duplicate handling")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Dives already in your logbook are normally skipped. In Download All Dives mode, matched dives are merged instead — the computer refreshes its recorded data while your personal entries stay untouched.")
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Refreshed from the computer")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Depth, duration, temperatures, gas mixes, tank pressures, decompression data, dive profile, computer name, raw data, water type, and GPS coordinates.")
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Kept from your logbook")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Notes, buddy, divemaster, rating, dive type, conditions, site name and details, dive number, and surface interval. Tank volume, working pressure, material, and type are also kept unless the computer explicitly reports them.")
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Fingerprint scope")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Only the fingerprint for this specific dive computer is cleared. If no serial number is available yet, no fingerprint is cleared — a first sync has no bookmark to reset anyway.")
+                        }
+                    }
+
+                }
+                .padding(24)
+            }
+            .navigationTitle("Sync Options")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Close") { showInfo = false }
+                }
+            }
+        }
+    }
+
     // MARK: - Computed Properties
-    
+
     private var syncStateColor: Color {
         switch syncState {
         case .idle: return .secondary
@@ -860,11 +943,13 @@ struct BluetoothScannerView: View {
             if let serial = storedDevice?.serial {
                 Self.logger.info("Clearing fingerprint for \(deviceType) (serial: \(serial))")
                 DeviceFingerprintStorage.shared.clearFingerprint(forDeviceType: deviceType, serial: serial)
-            } else {
-                // No hardware serial number stored — clear all fingerprints for this device type
-                Self.logger.warning("No hardware serial number stored — clearing all fingerprints for \(deviceType)")
-                DeviceFingerprintStorage.shared.clearFingerprintsForDeviceType(deviceType)
-            }
+            } // else {
+                // No hardware serial number stored — clearing all fingerprints for this device type
+                // is intentionally disabled: without a serial we have no cached fingerprint to clear anyway,
+                // and wiping all entries for the model would affect other computers of the same model.
+                // Self.logger.warning("No hardware serial number stored — clearing all fingerprints for \(deviceType)")
+                // DeviceFingerprintStorage.shared.clearFingerprintsForDeviceType(deviceType)
+            // }
         }
         
         bleManager.isRetrievingLogs = true

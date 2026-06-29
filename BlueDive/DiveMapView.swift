@@ -675,10 +675,12 @@ struct DiveMapCard: View {
                     
                     // Location + Country
                     HStack(spacing: 4) {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        
+                        if dive.hasGPSCoordinates {
+                            Image(systemName: "location.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+
                         locationText
                             .font(.subheadline)
                             .foregroundStyle(.secondary)

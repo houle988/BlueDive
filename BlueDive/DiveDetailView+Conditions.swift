@@ -48,15 +48,15 @@ extension DiveDetailView {
 
             // Always display Weather field
             conditionRow(icon: "cloud.sun.fill", color: .yellow, label: "Weather",
-                        value: (dive.weather?.isEmpty == false ? dive.weather! : "—"))
+                        value: dive.weather.map { localizedWeather($0) } ?? "—")
 
             // Always display Surface conditions field
             conditionRow(icon: "water.waves", color: .cyan, label: "Surface",
-                        value: (dive.surfaceConditions?.isEmpty == false ? dive.surfaceConditions! : "—"))
+                        value: dive.surfaceConditions.map { localizedSurface($0) } ?? "—")
 
             // Always display Current field
             conditionRow(icon: "wind", color: .teal, label: "Current",
-                        value: (dive.current?.isEmpty == false ? dive.current! : "—"))
+                        value: dive.current.map { localizedCurrent($0) } ?? "—")
 
             // Always display Visibility field
             let depthUnit = prefs.depthUnit == .feet ? "ft" : "m"
@@ -83,6 +83,39 @@ extension DiveDetailView {
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
         .padding(.horizontal)
+    }
+
+    private func localizedWeather(_ raw: String) -> String {
+        switch raw {
+        case "Sunny":    return NSLocalizedString("Sunny", bundle: .forAppLanguage(), comment: "")
+        case "Cloudy":   return NSLocalizedString("Cloudy", bundle: .forAppLanguage(), comment: "")
+        case "Overcast": return NSLocalizedString("Overcast", bundle: .forAppLanguage(), comment: "")
+        case "Rain":     return NSLocalizedString("Rain", bundle: .forAppLanguage(), comment: "")
+        case "Storm":    return NSLocalizedString("Storm", bundle: .forAppLanguage(), comment: "")
+        case "Variable": return NSLocalizedString("Variable", bundle: .forAppLanguage(), comment: "")
+        default:         return raw
+        }
+    }
+
+    private func localizedSurface(_ raw: String) -> String {
+        switch raw {
+        case "Calm":            return NSLocalizedString("Calm", bundle: .forAppLanguage(), comment: "")
+        case "Slightly choppy": return NSLocalizedString("Slightly choppy", bundle: .forAppLanguage(), comment: "")
+        case "Choppy":          return NSLocalizedString("Choppy", bundle: .forAppLanguage(), comment: "")
+        case "Heavy swell":     return NSLocalizedString("Heavy swell", bundle: .forAppLanguage(), comment: "")
+        default:                return raw
+        }
+    }
+
+    private func localizedCurrent(_ raw: String) -> String {
+        switch raw {
+        case "None":        return NSLocalizedString("None", bundle: .forAppLanguage(), comment: "")
+        case "Weak":        return NSLocalizedString("Weak", bundle: .forAppLanguage(), comment: "")
+        case "Moderate":    return NSLocalizedString("Moderate", bundle: .forAppLanguage(), comment: "")
+        case "Strong":      return NSLocalizedString("Strong", bundle: .forAppLanguage(), comment: "")
+        case "Very strong": return NSLocalizedString("Very strong", bundle: .forAppLanguage(), comment: "")
+        default:            return raw
+        }
     }
 
     func conditionRow(icon: String, color: Color, label: LocalizedStringKey, value: String) -> some View {

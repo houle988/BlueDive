@@ -514,6 +514,16 @@ final class Dive {
         }
     }
     
+    // MARK: - GPS Helpers
+
+    var hasGPSCoordinates: Bool {
+        func validPair(_ lat: Double?, _ lon: Double?) -> Bool {
+            guard let lat, let lon else { return false }
+            return !(lat == 0 && lon == 0)
+        }
+        return validPair(siteLatitude, siteLongitude) || validPair(exitLatitude, exitLongitude)
+    }
+
     // MARK: - Computed Gas & Cylinder Properties (from TankData)
     
     /// Gas type derived from the primary tank's gas mix.
