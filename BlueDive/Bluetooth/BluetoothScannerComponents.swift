@@ -10,15 +10,83 @@ extension CBPeripheral: @retroactive Identifiable {
 
 // MARK: - Shared Helpers
 
-private func diveComputerIcon(forName name: String?) -> String {
+// Converts an exact model name (from DeviceConfiguration.supportedModels) to its asset name.
+// "Heinrichs Weikamp OSTC 2" → "DeviceIcon_HeinrichsWeikamp_OSTC_2"
+// "Deepblu Cosmiq+"          → "DeviceIcon_Deepblu_Cosmiq"
+private func modelLevelAssetName(_ name: String) -> String {
+    let sanitized = name
+        .replacingOccurrences(of: "Heinrichs Weikamp", with: "HeinrichsWeikamp")
+        .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_")).inverted)
+        .filter { !$0.isEmpty }
+        .joined(separator: "_")
+    return "DeviceIcon_\(sanitized)"
+}
+
+private func diveComputerAssetName(forName name: String?) -> String? {
+    guard let name = name else { return nil }
+
+    // Exact model name → per-model asset (used when model is known/resolved)
+    if DeviceConfiguration.supportedModels.contains(where: { $0.name == name }) {
+        return modelLevelAssetName(name)
+    }
+
+    // BLE advertisement name → brand-level fallback
+    // Order matters: "oceanic" must precede "oceans"; "deepblu" must precede any future "deep" prefix.
+    let lowercased = name.lowercased()
+    if lowercased.contains("shearwater")                                         { return "DeviceIcon_Shearwater" }
+    if lowercased.contains("suunto")                                             { return "DeviceIcon_Suunto" }
+    if lowercased.contains("scubapro")                                           { return "DeviceIcon_Scubapro" }
+    if lowercased.contains("mares")                                              { return "DeviceIcon_Mares" }
+    if lowercased.contains("oceanic")                                            { return "DeviceIcon_Oceanic" }
+    if lowercased.contains("aqualung")                                           { return "DeviceIcon_Aqualung" }
+    if lowercased.contains("sherwood")                                           { return "DeviceIcon_Sherwood" }
+    if lowercased.contains("heinrichs") || lowercased.contains("weikamp") || lowercased.contains("ostc") {
+        return "DeviceIcon_HeinrichsWeikamp"
+    }
+    if lowercased.contains("cressi")                                             { return "DeviceIcon_Cressi" }
+    if lowercased.contains("divesoft")                                           { return "DeviceIcon_Divesoft" }
+    if lowercased.contains("deep six")                                           { return "DeviceIcon_DeepSix" }
+    if lowercased.contains("deepblu")                                            { return "DeviceIcon_Deepblu" }
+    if lowercased.contains("mclean")                                             { return "DeviceIcon_McLean" }
+    if lowercased.contains("oceans")                                             { return "DeviceIcon_Oceans" }
+    if lowercased.contains("seac")                                               { return "DeviceIcon_Seac" }
+    if lowercased.contains("halcyon")                                            { return "DeviceIcon_Halcyon" }
+    if lowercased.contains("ratio")                                              { return "DeviceIcon_Ratio" }
+    if lowercased.contains("divesystem") || lowercased.contains("idive")        { return "DeviceIcon_DiveSystem" }
+    if lowercased.contains("apeks")                                              { return "DeviceIcon_Apeks" }
+    return nil
+}
+
+private func diveComputerFallbackIcon(forName name: String?) -> String {
     let lowercased = name?.lowercased() ?? ""
-    if lowercased.contains("shearwater") { return "gauge.with.dots.needle.bottom.50percent.badge.plus" }
-    if lowercased.contains("suunto")     { return "dial.medium" }
-    if lowercased.contains("garmin")     { return "applewatch.watchface" }
-    if lowercased.contains("mares")      { return "gauge.with.needle" }
-    if lowercased.contains("scubapro")   { return "gauge.with.dots.needle.33percent" }
-    if lowercased.contains("oceanic") || lowercased.contains("pelagic") { return "water.waves" }
+    if lowercased.contains("garmin") { return "applewatch.watchface" }
     return "gauge.with.dots.needle.bottom.50percent"
+}
+
+// MARK: - Device Icon View
+
+private struct DiveComputerIconView: View {
+    let name: String?
+    let isSelected: Bool
+
+    var body: some View {
+        if let assetName = diveComputerAssetName(forName: name) {
+            Image(assetName)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+        } else {
+            ZStack {
+                Circle()
+                    .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
+                    .frame(width: 44, height: 44)
+                Image(systemName: diveComputerFallbackIcon(forName: name))
+                    .font(.system(size: 20))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+            }
+        }
+    }
 }
 
 // MARK: - Device Row
@@ -34,15 +102,7 @@ struct DeviceRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Device icon
-            ZStack {
-                Circle()
-                    .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
-                    .frame(width: 44, height: 44)
-
-                Image(systemName: deviceIcon)
-                    .font(.system(size: 20))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-            }
+            DiveComputerIconView(name: effectiveModelName, isSelected: isSelected)
 
             // Device information
             Button(action: onTap) {
@@ -118,7 +178,16 @@ struct DeviceRow: View {
         return "Detected: \(detected)"
     }
 
-    private var deviceIcon: String { diveComputerIcon(forName: peripheral.name) }
+    // Resolves the best model name for icon selection: override > stored model > resolved BLE display name
+    private var effectiveModelName: String? {
+        if let override = modelOverride { return override.name }
+        if let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
+           let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
+            return modelInfo.name
+        }
+        guard let name = peripheral.name else { return nil }
+        return DeviceConfiguration.getDeviceDisplayName(from: name)
+    }
 }
 
 // MARK: - Known Device Row
@@ -132,15 +201,7 @@ struct KnownDeviceRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.accentColor.opacity(0.15))
-                        .frame(width: 44, height: 44)
-
-                    Image(systemName: deviceIcon)
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.accentColor)
-                }
+                DiveComputerIconView(name: computerName, isSelected: true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(computerName)
@@ -165,8 +226,6 @@ struct KnownDeviceRow: View {
         }
         .buttonStyle(.plain)
     }
-
-    private var deviceIcon: String { diveComputerIcon(forName: computerName) }
 }
 
 // MARK: - Model Picker Sheet
