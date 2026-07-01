@@ -113,29 +113,19 @@ extension BluetoothScannerView {
             knownDevicesView
         case .scanning, .idle:
             deviceListView
-        default:
-            // .connecting, .downloading, .importing — header shows status
+        case .connecting, .downloading, .importing:
             Spacer()
         }
     }
 
     // MARK: - Known Devices View
 
-    /// Fetches DeviceFingerprint records from the database to display known dive computers.
-    private var knownDevices: [DeviceFingerprint] {
-        let descriptor = FetchDescriptor<DeviceFingerprint>(
-            sortBy: [SortDescriptor(\DeviceFingerprint.updatedAt, order: .reverse)]
-        )
-        return (try? modelContext.fetch(descriptor)) ?? []
-    }
-
     @ViewBuilder
     private var knownDevicesView: some View {
-        let devices = knownDevices
         Form {
-            if !devices.isEmpty {
+            if !knownDevices.isEmpty {
                 Section {
-                    ForEach(devices, id: \.serial) { device in
+                    ForEach(knownDevices, id: \.serial) { device in
                         KnownDeviceRow(
                             computerName: device.computerName,
                             serial: device.serial,
@@ -190,7 +180,7 @@ extension BluetoothScannerView {
                     )
                 }
             } footer: {
-                if devices.isEmpty {
+                if knownDevices.isEmpty {
                     Text("No previously synced dive computers found. Tap to search for nearby Bluetooth devices.")
                 } else {
                     Text("Search for new or previously unpaired dive computers.")
@@ -252,26 +242,21 @@ extension BluetoothScannerView {
                 }
             }
             .formStyle(.grouped)
-            .sheet(isPresented: Binding(
-                get: { peripheralForModelPicker != nil },
-                set: { if !$0 { peripheralForModelPicker = nil } }
-            )) {
-                if let peripheral = peripheralForModelPicker {
-                    ModelPickerSheet(
-                        detectedName: DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown"),
-                        currentOverride: modelOverrides[peripheral.identifier.uuidString],
-                        onSelect: { model in
-                            if let model = model {
-                                modelOverrides[peripheral.identifier.uuidString] = model
-                            } else {
-                                modelOverrides.removeValue(forKey: peripheral.identifier.uuidString)
-                            }
+            .sheet(item: $peripheralForModelPicker) { peripheral in
+                ModelPickerSheet(
+                    detectedName: DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown"),
+                    currentOverride: modelOverrides[peripheral.identifier.uuidString],
+                    onSelect: { model in
+                        if let model = model {
+                            modelOverrides[peripheral.identifier.uuidString] = model
+                        } else {
+                            modelOverrides.removeValue(forKey: peripheral.identifier.uuidString)
                         }
-                    )
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                }
+                    }
+                )
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
         }
     }
@@ -288,7 +273,7 @@ extension BluetoothScannerView {
                 .foregroundStyle(.green)
 
             VStack(spacing: 8) {
-                Text("Sync Complete")
+                Text(imported + merged > 0 ? "Sync Complete" : "No New Dives")
                     .font(.title2)
                     .fontWeight(.semibold)
 
@@ -343,8 +328,11 @@ extension BluetoothScannerView {
             HStack(spacing: 12) {
                 Button("Retry") {
                     isSearching = false
-                    targetDeviceSerial = nil
-                    targetDeviceName = nil
+                    cachedTargetFingerprint = nil
+                    if let seed = pendingDeviceStorageSeed {
+                        modelOverrides.removeValue(forKey: seed.uuid)
+                        pendingDeviceStorageSeed = nil
+                    }
                     syncState = .idle
                 }
                 .buttonStyle(.bordered)
@@ -390,8 +378,11 @@ extension BluetoothScannerView {
                     Button {
                         stopScanning()
                         isSearching = false
-                        targetDeviceSerial = nil
-                        targetDeviceName = nil
+                        cachedTargetFingerprint = nil
+                        if let seed = pendingDeviceStorageSeed {
+                            modelOverrides.removeValue(forKey: seed.uuid)
+                            pendingDeviceStorageSeed = nil
+                        }
                         syncState = .idle
                     } label: {
                         Text("Cancel")
@@ -518,7 +509,7 @@ extension BluetoothScannerView {
                 ? NSLocalizedString("Select a device to begin", bundle: bundle, comment: "Subtitle shown in the Bluetooth scanner when ready to select a device")
                 : NSLocalizedString("Select a dive computer to sync", bundle: bundle, comment: "Subtitle shown in the Bluetooth scanner idle state")
         case .scanning:
-            return targetDeviceSerial != nil
+            return cachedTargetFingerprint != nil
                 ? NSLocalizedString("Looking for your dive computer...", bundle: bundle, comment: "Subtitle shown while scanning for a specific known dive computer")
                 : NSLocalizedString("Searching for Bluetooth dive computers...", bundle: bundle, comment: "Subtitle shown while scanning for Bluetooth dive computers")
         case .connecting:

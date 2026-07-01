@@ -678,11 +678,7 @@ extension BluetoothScannerView {
             || diveData.profile.contains { $0.events.contains(.decoStop) }
 
         // Water type from salinity (g/cm³): ~1.0 = Fresh, ~1.025 = Salt
-        let waterType: String? = diveData.salinity.map { sal in
-            if sal < 1.01 { "Freshwater" }
-            else if sal == 1.02 { "EN13319" }
-            else { "Saltwater" }
-        }
+        let siteWaterType: String? = diveData.salinity.map { waterType(forSalinity: $0) }
 
         // Location GPS
         let latitude: Double?
@@ -764,7 +760,7 @@ extension BluetoothScannerView {
             importVolumeUnit: "liters",
             importWeightUnit: (WeightUnit(rawValue: UserDefaults.standard.string(forKey: "weightUnit") ?? "kilograms") ?? .kilograms).symbol,
             sourceImport: "Bluetooth",
-            siteWaterType: waterType,
+            siteWaterType: siteWaterType,
             siteAltitude: altitude,
             siteLatitude: latitude,
             siteLongitude: longitude,

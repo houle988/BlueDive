@@ -33,9 +33,15 @@ extension BluetoothScannerView {
               let uuid = UUID(uuidString: storedDevice.uuid),
               let peripheral = bleManager.centralManager.retrievePeripherals(withIdentifiers: [uuid]).first else {
             Self.logger.warning("Could not retrieve peripheral for \(device.computerName) — falling back to scan")
-            // Fall back to scanning; checkForTargetDevice will auto-connect
-            targetDeviceSerial = device.serial
-            targetDeviceName = device.computerName
+            // Fall back to scanning; checkForTargetDevice will auto-connect.
+            // Cache the DB record so checkForTargetDevice can use it without
+            // fetching on every advertisement packet.
+            cachedTargetFingerprint = CachedDeviceFingerprint(
+                serial: device.serial,
+                computerName: device.computerName,
+                family: device.family,
+                modelID: device.modelID
+            )
             isSearching = true
             bleManager.clearDiscoveredPeripherals()
             startScanning()
@@ -58,7 +64,7 @@ extension BluetoothScannerView {
 
     /// Checks newly discovered peripherals for the target device and auto-connects (fallback path).
     func checkForTargetDevice() {
-        guard let serial = targetDeviceSerial,
+        guard let serial = cachedTargetFingerprint?.serial,
               case .scanning = syncState else { return }
 
         for peripheral in bleManager.discoveredPeripherals {
@@ -66,9 +72,8 @@ extension BluetoothScannerView {
             if let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: uuid),
                storedDevice.serial == serial {
                 Self.logger.info("Found target device: \(peripheral.name ?? "Unknown") matching serial \(serial)")
-                let savedName = targetDeviceName
-                targetDeviceSerial = nil
-                targetDeviceName = nil
+                let savedName = cachedTargetFingerprint?.computerName
+                cachedTargetFingerprint = nil
                 connectToDevice(peripheral)
                 // Override name with the correct one from the fingerprint record
                 if let name = savedName {
@@ -78,32 +83,40 @@ extension BluetoothScannerView {
                 return
             }
 
-            // DeviceStorage may be empty (reinstall). Try to match by BLE
-            // advertisement name and seed DeviceStorage from the DB record
-            // so that openBLEDevice gets the correct family/model.
-            if DeviceStorage.shared.getStoredDevice(uuid: uuid) == nil {
-                let predicate = #Predicate<DeviceFingerprint> { $0.serial == serial }
-                if let record = try? modelContext.fetch(FetchDescriptor(predicate: predicate)).first,
-                   record.family != nil, record.modelID != 0 {
-                    // We can't verify serial over BLE before connecting, but the
-                    // advertisement name should match the stored computerName.
-                    let bleName = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "")
-                    let dbName = record.computerName
-                    guard bleName == dbName || (peripheral.name ?? "").localizedCaseInsensitiveContains(dbName) else {
-                        continue
-                    }
-                    seedDeviceStorageFromDatabase(for: peripheral, fingerprint: record)
-                    Self.logger.info("Seeded DeviceStorage for scanned peripheral \(peripheral.name ?? "Unknown") from DB — connecting")
-                    let savedName = targetDeviceName
-                    targetDeviceSerial = nil
-                    targetDeviceName = nil
-                    connectToDevice(peripheral)
-                    if let name = savedName {
-                        connectedDeviceName = name
-                        syncState = .connecting(deviceName: name)
-                    }
-                    return
+            // DeviceStorage may be empty (reinstall). Use the fingerprint that was
+            // cached when connectToKnownDevice fell back to scanning — avoids a
+            // per-advertisement-packet DB fetch.
+            if DeviceStorage.shared.getStoredDevice(uuid: uuid) == nil,
+               let record = cachedTargetFingerprint,
+               let family = record.family,
+               record.modelID != 0 {
+                // We can't verify serial over BLE before connecting, but the
+                // advertisement name should match the stored computerName.
+                let bleName = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "")
+                let dbName = record.computerName
+                guard bleName == dbName || (peripheral.name ?? "").localizedCaseInsensitiveContains(dbName) else {
+                    continue
                 }
+                // Defer DeviceStorage seeding until a successful download confirms we connected
+                // to the right peripheral — two computers of the same model share identical BLE
+                // names, so name matching alone cannot prove we have the right unit.
+                // Use pendingDeviceStorageSeed + a temporary model override so openBLEDevice
+                // gets the correct family/model without writing to DeviceStorage yet.
+                // If the model is not in supportedModels (e.g. removed in a library update),
+                // fall back to immediate seeding so openBLEDevice can at least use DeviceStorage.
+                if let model = DeviceConfiguration.supportedModels.first(where: { $0.family == family && $0.modelID == record.modelID }) {
+                    pendingDeviceStorageSeed = (uuid: peripheral.identifier.uuidString, name: record.computerName, family: family, modelID: record.modelID, serial: record.serial)
+                    modelOverrides[peripheral.identifier.uuidString] = model
+                } else {
+                    DeviceStorage.shared.storeDevice(uuid: peripheral.identifier.uuidString, name: record.computerName, family: family, model: record.modelID, serial: record.serial)
+                }
+                Self.logger.info("Deferred DeviceStorage seed for scanned peripheral \(peripheral.name ?? "Unknown") — connecting")
+                let savedName = record.computerName
+                cachedTargetFingerprint = nil
+                connectToDevice(peripheral)
+                connectedDeviceName = savedName
+                syncState = .connecting(deviceName: savedName)
+                return
             }
         }
     }
@@ -274,9 +287,10 @@ extension BluetoothScannerView {
             onProgress: { current, total in
                 DispatchQueue.main.async {
                     // current/total are libdivecomputer transfer bytes — used for the progress bar.
-                    if total > 0 {
-                        self.syncState = .downloading(current: current, total: total)
-                    }
+                    // Guard prevents a late progress event (fired after completion) from
+                    // overwriting .completed or .error back to .downloading.
+                    guard case .downloading = self.syncState, total > 0 else { return }
+                    self.syncState = .downloading(current: current, total: total)
                 }
             },
             completion: { success in
@@ -299,11 +313,23 @@ extension BluetoothScannerView {
 
                         if viewModel.dives.isEmpty {
                             // No new dives, close the connection
+                            self.downloadProgressCancellable = nil
+                            if let seed = self.pendingDeviceStorageSeed {
+                                DeviceStorage.shared.storeDevice(uuid: seed.uuid, name: seed.name, family: seed.family, model: seed.modelID, serial: seed.serial)
+                                self.modelOverrides.removeValue(forKey: seed.uuid)
+                                self.pendingDeviceStorageSeed = nil
+                            }
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
                             self.selectedDevice = nil
                             self.syncState = .completed(imported: 0, merged: 0, skipped: 0)
                         } else {
+                            self.downloadProgressCancellable = nil
+                            if let seed = self.pendingDeviceStorageSeed {
+                                DeviceStorage.shared.storeDevice(uuid: seed.uuid, name: seed.name, family: seed.family, model: seed.modelID, serial: seed.serial)
+                                self.modelOverrides.removeValue(forKey: seed.uuid)
+                                self.pendingDeviceStorageSeed = nil
+                            }
                             self.downloadedDives = viewModel.dives
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
@@ -319,6 +345,11 @@ extension BluetoothScannerView {
                             self.syncState = .error(message: NSLocalizedString("Failed to download dives", bundle: Bundle.forAppLanguage(), comment: "Error message shown when downloading dives from the dive computer fails with no specific reason."))
                         }
                         // Close the connection on failure
+                        self.downloadProgressCancellable = nil
+                        if let seed = self.pendingDeviceStorageSeed {
+                            self.modelOverrides.removeValue(forKey: seed.uuid)
+                            self.pendingDeviceStorageSeed = nil
+                        }
                         self.bleManager.close(clearDevicePtr: true)
                         self.bleManager.clearRetrievalState()
                         self.selectedDevice = nil

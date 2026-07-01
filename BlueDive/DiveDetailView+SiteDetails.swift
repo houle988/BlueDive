@@ -67,7 +67,7 @@ extension DiveDetailView {
 
             // Water Type
             conditionRow(icon: "drop.fill", color: .blue, label: "Water Type",
-                        value: dive.siteWaterType?.isEmpty == false ? dive.siteWaterType! : "—")
+                        value: localizedWaterType(dive.siteWaterType))
 
             Divider().background(.primary.opacity(0.2))
 

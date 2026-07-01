@@ -1687,7 +1687,36 @@ struct EditSiteDetailsView: View {
                     }
 
                     siteDetailsMacOSGroupBox("Water", icon: "drop.fill", color: .teal) {
-                        siteDetailsMacOSAutocompleteField("Water Type", text: $workingWaterType, icon: "drop.fill", suggestions: uniqueOptionalValues(for: \.siteWaterType))
+                        let isCustomWT = !["", "Freshwater", "Saltwater", "EN13319"].contains(workingWaterType)
+                        HStack(spacing: 12) {
+                            Image(systemName: "drop.fill")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            Text("Water Type")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 120, alignment: .leading)
+                            Menu {
+                                Button("—") { workingWaterType = "" }
+                                Button { workingWaterType = "Freshwater" } label: { Text("Freshwater") }
+                                Button { workingWaterType = "Saltwater"  } label: { Text("Saltwater") }
+                                Button { workingWaterType = "EN13319"    } label: { Text("Brackish water (EN13319)") }
+                                if isCustomWT {
+                                    Divider()
+                                    Text(workingWaterType).foregroundStyle(.secondary)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(localizedWaterType(workingWaterType))
+                                        .foregroundStyle(workingWaterType.isEmpty ? .secondary : .primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 4)
                         siteDetailsMacOSAutocompleteField("Body of Water", text: $workingBodyOfWater, icon: "water.waves", suggestions: uniqueOptionalValues(for: \.siteBodyOfWater))
                     }
 
@@ -1945,7 +1974,24 @@ struct EditSiteDetailsView: View {
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Water Type", text: $workingWaterType, icon: "drop.fill", color: .blue, suggestions: uniqueOptionalValues(for: \.siteWaterType))
+                        Picker(selection: $workingWaterType) {
+                            Text("—").tag("")
+                            Text("Freshwater").tag("Freshwater")
+                            Text("Saltwater").tag("Saltwater")
+                            Text("Brackish water (EN13319)").tag("EN13319")
+                            if !["", "Freshwater", "Saltwater", "EN13319"].contains(workingWaterType) {
+                                Text(workingWaterType).tag(workingWaterType)
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "drop.fill")
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 24)
+                                Text("Water Type")
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                        .tint(.blue)
                         AutocompleteMenuTextField(label: "Body of Water", text: $workingBodyOfWater, icon: "water.waves", color: .teal, suggestions: uniqueOptionalValues(for: \.siteBodyOfWater))
                     } header: {
                         MenuSectionHeader(title: "Water", icon: "drop.fill", color: .teal)

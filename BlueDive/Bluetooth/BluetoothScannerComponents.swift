@@ -2,6 +2,25 @@ import SwiftUI
 import CoreBluetooth
 import LibDCSwift
 
+// MARK: - CBPeripheral + Identifiable
+
+extension CBPeripheral: @retroactive Identifiable {
+    public var id: UUID { identifier }
+}
+
+// MARK: - Shared Helpers
+
+private func diveComputerIcon(forName name: String?) -> String {
+    let lowercased = name?.lowercased() ?? ""
+    if lowercased.contains("shearwater") { return "gauge.with.dots.needle.bottom.50percent.badge.plus" }
+    if lowercased.contains("suunto")     { return "dial.medium" }
+    if lowercased.contains("garmin")     { return "applewatch.watchface" }
+    if lowercased.contains("mares")      { return "gauge.with.needle" }
+    if lowercased.contains("scubapro")   { return "gauge.with.dots.needle.33percent" }
+    if lowercased.contains("oceanic") || lowercased.contains("pelagic") { return "water.waves" }
+    return "gauge.with.dots.needle.bottom.50percent"
+}
+
 // MARK: - Device Row
 
 struct DeviceRow: View {
@@ -99,28 +118,7 @@ struct DeviceRow: View {
         return "Detected: \(detected)"
     }
 
-    private var deviceIcon: String {
-        guard let name = peripheral.name?.lowercased() else {
-            return "gauge.with.dots.needle.bottom.50percent"
-        }
-
-        // Custom icons by manufacturer
-        if name.contains("shearwater") {
-            return "gauge.with.dots.needle.bottom.50percent.badge.plus"
-        } else if name.contains("suunto") {
-            return "dial.medium"
-        } else if name.contains("garmin") {
-            return "applewatch.watchface"
-        } else if name.contains("mares") {
-            return "gauge.with.needle"
-        } else if name.contains("scubapro") {
-            return "gauge.with.dots.needle.33percent"
-        } else if name.contains("oceanic") || name.contains("pelagic") {
-            return "water.waves"
-        } else {
-            return "gauge.with.dots.needle.bottom.50percent"
-        }
-    }
+    private var deviceIcon: String { diveComputerIcon(forName: peripheral.name) }
 }
 
 // MARK: - Known Device Row
@@ -168,24 +166,7 @@ struct KnownDeviceRow: View {
         .buttonStyle(.plain)
     }
 
-    private var deviceIcon: String {
-        let name = computerName.lowercased()
-        if name.contains("shearwater") {
-            return "gauge.with.dots.needle.bottom.50percent.badge.plus"
-        } else if name.contains("suunto") {
-            return "dial.medium"
-        } else if name.contains("garmin") {
-            return "applewatch.watchface"
-        } else if name.contains("mares") {
-            return "gauge.with.needle"
-        } else if name.contains("scubapro") {
-            return "gauge.with.dots.needle.33percent"
-        } else if name.contains("oceanic") || name.contains("pelagic") {
-            return "water.waves"
-        } else {
-            return "gauge.with.dots.needle.bottom.50percent"
-        }
-    }
+    private var deviceIcon: String { diveComputerIcon(forName: computerName) }
 }
 
 // MARK: - Model Picker Sheet

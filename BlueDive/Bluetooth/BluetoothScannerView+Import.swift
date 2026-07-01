@@ -476,15 +476,8 @@ extension BluetoothScannerView {
 
         // Water type from salinity (g/cm³): ~1.0 = Fresh, ~1.025 = Salt
         if let sal = diveData.salinity {
-            if sal < 1.01 {
-                dive.siteWaterType = "Freshwater"
-            } else if sal == 1.02 {
-                dive.siteWaterType = "EN13319"
-            } else {
-                dive.siteWaterType = "Saltwater"
-            }
-
-}
+            dive.siteWaterType = waterType(forSalinity: sal)
+        }
 
         // Decompression stops
         dive.decoStops = diveData.decoStop.map { stop in

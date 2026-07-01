@@ -547,7 +547,7 @@ struct PDFDiveLogbook {
             (NSLocalizedString("Weather", bundle: loc, comment: ""),       localizedWeather(dive.weather), accentYellow),
             (NSLocalizedString("Conditions", bundle: loc, comment: ""),    localizedSurfaceConditions(dive.surfaceConditions), accentBlue),
             (NSLocalizedString("Current", bundle: loc, comment: ""),       localizedCurrent(dive.current), accentTeal),
-            (NSLocalizedString("Environment", bundle: loc, comment: ""),   dive.siteWaterType ?? "—",                  accentCyan),
+            (NSLocalizedString("Environment", bundle: loc, comment: ""),   localizedWaterType(dive.siteWaterType),     accentCyan),
             (NSLocalizedString("Body of Water", bundle: loc, comment: ""), dive.siteBodyOfWater ?? "—",                accentBlue),
             (NSLocalizedString("Difficulty", bundle: loc, comment: ""),     localizedDifficulty(dive.siteDifficulty),   accentPurple),
             (NSLocalizedString("GPS Entry", bundle: loc, comment: ""),      gpsStr,                                     accentGreen),

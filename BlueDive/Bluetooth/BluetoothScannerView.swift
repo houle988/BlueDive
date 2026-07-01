@@ -5,6 +5,16 @@ import LibDCSwift
 import Combine
 import os.log
 
+/// Value-type snapshot of the DeviceFingerprint fields read during a BLE scan.
+/// Replaces a live @Model reference in @State so that iCloud/SwiftData mutations
+/// to the source record mid-scan do not affect the cached values.
+struct CachedDeviceFingerprint {
+    let serial: String
+    let computerName: String
+    let family: DeviceConfiguration.DeviceFamily?
+    let modelID: UInt32
+}
+
 // MARK: - Bluetooth Scanner View
 
 struct BluetoothScannerView: View {
@@ -12,6 +22,8 @@ struct BluetoothScannerView: View {
     @Environment(\.modelContext) var modelContext
 
     // MARK: State
+
+    @Query(sort: \DeviceFingerprint.updatedAt, order: .reverse) var knownDevices: [DeviceFingerprint]
 
     @ObservedObject var bleManager = CoreBluetoothManager.sharedManager
     @State var syncState: BluetoothSyncState = .idle
@@ -26,8 +38,8 @@ struct BluetoothScannerView: View {
     @State var diveCountDuringDownload: Int = 0
     @State var downloadProgressCancellable: AnyCancellable?
     @State var isSearching: Bool = false
-    @State var targetDeviceSerial: String?
-    @State var targetDeviceName: String?
+    @State var cachedTargetFingerprint: CachedDeviceFingerprint?
+    @State var pendingDeviceStorageSeed: (uuid: String, name: String, family: DeviceConfiguration.DeviceFamily, modelID: UInt32, serial: String)?
     @State var deviceToDelete: DeviceFingerprint?
     @State var showingDeleteConfirmation = false
     @State var modelOverrides: [String: DeviceConfiguration.ComputerModel] = [:]
@@ -77,9 +89,13 @@ struct BluetoothScannerView: View {
             .onDisappear {
                 stopScanning()
                 bleManager.close(clearDevicePtr: true)
+                downloadProgressCancellable = nil
                 isSearching = false
-                targetDeviceSerial = nil
-                targetDeviceName = nil
+                cachedTargetFingerprint = nil
+                if let seed = pendingDeviceStorageSeed {
+                    modelOverrides.removeValue(forKey: seed.uuid)
+                    pendingDeviceStorageSeed = nil
+                }
                 #if os(iOS)
                 UIApplication.shared.isIdleTimerDisabled = false
                 Self.logger.debug("Screen lock re-enabled (onDisappear)")
