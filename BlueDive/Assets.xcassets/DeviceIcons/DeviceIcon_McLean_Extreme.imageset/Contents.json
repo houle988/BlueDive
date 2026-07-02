@@ -1,5 +1,12 @@
 {
-  "images" : [{ "filename" : "DeviceIcon_McLean_Extreme.svg", "idiom" : "universal" }],
-  "info" : { "author" : "xcode", "version" : 1 },
-  "properties" : { "preserves-vector-representation" : true }
+  "images" : [
+    {
+      "filename" : "McLean_Extreme.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
 }
