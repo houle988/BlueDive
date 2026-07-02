@@ -8,69 +8,14 @@ extension CBPeripheral: @retroactive Identifiable {
     public var id: UUID { identifier }
 }
 
-// MARK: - Shared Helpers
-
-// Converts an exact model name (from DeviceConfiguration.supportedModels) to its asset name.
-// "Heinrichs Weikamp OSTC 2" → "DeviceIcon_HeinrichsWeikamp_OSTC_2"
-// "Deepblu Cosmiq+"          → "DeviceIcon_Deepblu_Cosmiq"
-private func modelLevelAssetName(_ name: String) -> String {
-    let sanitized = name
-        .replacingOccurrences(of: "Heinrichs Weikamp", with: "HeinrichsWeikamp")
-        .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_")).inverted)
-        .filter { !$0.isEmpty }
-        .joined(separator: "_")
-    return "DeviceIcon_\(sanitized)"
-}
-
-private func diveComputerAssetName(forName name: String?) -> String? {
-    guard let name = name else { return nil }
-
-    // Exact model name → per-model asset (used when model is known/resolved)
-    if DeviceConfiguration.supportedModels.contains(where: { $0.name == name }) {
-        return modelLevelAssetName(name)
-    }
-
-    // BLE advertisement name → brand-level fallback
-    // Order matters: "oceanic" must precede "oceans"; "deepblu" must precede any future "deep" prefix.
-    let lowercased = name.lowercased()
-    if lowercased.contains("shearwater")                                         { return "DeviceIcon_Shearwater" }
-    if lowercased.contains("suunto")                                             { return "DeviceIcon_Suunto" }
-    if lowercased.contains("scubapro")                                           { return "DeviceIcon_Scubapro" }
-    if lowercased.contains("mares")                                              { return "DeviceIcon_Mares" }
-    if lowercased.contains("oceanic")                                            { return "DeviceIcon_Oceanic" }
-    if lowercased.contains("aqualung")                                           { return "DeviceIcon_Aqualung" }
-    if lowercased.contains("sherwood")                                           { return "DeviceIcon_Sherwood" }
-    if lowercased.contains("heinrichs") || lowercased.contains("weikamp") || lowercased.contains("ostc") {
-        return "DeviceIcon_HeinrichsWeikamp"
-    }
-    if lowercased.contains("cressi")                                             { return "DeviceIcon_Cressi" }
-    if lowercased.contains("divesoft")                                           { return "DeviceIcon_Divesoft" }
-    if lowercased.contains("deep six")                                           { return "DeviceIcon_DeepSix" }
-    if lowercased.contains("deepblu")                                            { return "DeviceIcon_Deepblu" }
-    if lowercased.contains("mclean")                                             { return "DeviceIcon_McLean" }
-    if lowercased.contains("oceans")                                             { return "DeviceIcon_Oceans" }
-    if lowercased.contains("seac")                                               { return "DeviceIcon_Seac" }
-    if lowercased.contains("halcyon")                                            { return "DeviceIcon_Halcyon" }
-    if lowercased.contains("ratio")                                              { return "DeviceIcon_Ratio" }
-    if lowercased.contains("divesystem") || lowercased.contains("idive")        { return "DeviceIcon_DiveSystem" }
-    if lowercased.contains("apeks")                                              { return "DeviceIcon_Apeks" }
-    return nil
-}
-
-private func diveComputerFallbackIcon(forName name: String?) -> String {
-    let lowercased = name?.lowercased() ?? ""
-    if lowercased.contains("garmin") { return "applewatch.watchface" }
-    return "gauge.with.dots.needle.bottom.50percent"
-}
-
 // MARK: - Device Icon View
 
-private struct DiveComputerIconView: View {
+struct DiveComputerIconView: View {
     let name: String?
     let isSelected: Bool
 
     var body: some View {
-        if let assetName = diveComputerAssetName(forName: name) {
+        if let assetName = Self.assetName(forName: name) {
             Image(assetName)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -81,11 +26,64 @@ private struct DiveComputerIconView: View {
                 Circle()
                     .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
                     .frame(width: 44, height: 44)
-                Image(systemName: diveComputerFallbackIcon(forName: name))
+                Image(systemName: Self.fallbackIcon(forName: name))
                     .font(.system(size: 20))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
             }
         }
+    }
+
+    // MARK: Asset resolution
+
+    private static func assetName(forName name: String?) -> String? {
+        guard let name = name else { return nil }
+        // Exact model name → per-model asset (used when model is known/resolved)
+        if DeviceConfiguration.supportedModels.contains(where: { $0.name == name }) {
+            return modelLevelAssetName(name)
+        }
+        // BLE advertisement name → brand-level fallback
+        // Order matters: "oceanic" must precede "oceans"; "deepblu" must precede any future "deep" prefix.
+        let lowercased = name.lowercased()
+        if lowercased.contains("shearwater")                                         { return "DeviceIcon_Shearwater" }
+        if lowercased.contains("suunto")                                             { return "DeviceIcon_Suunto" }
+        if lowercased.contains("scubapro")                                           { return "DeviceIcon_Scubapro" }
+        if lowercased.contains("mares")                                              { return "DeviceIcon_Mares" }
+        if lowercased.contains("oceanic")                                            { return "DeviceIcon_Oceanic" }
+        if lowercased.contains("aqualung")                                           { return "DeviceIcon_Aqualung" }
+        if lowercased.contains("sherwood")                                           { return "DeviceIcon_Sherwood" }
+        if lowercased.contains("heinrichs") || lowercased.contains("weikamp") || lowercased.contains("ostc") {
+            return "DeviceIcon_HeinrichsWeikamp"
+        }
+        if lowercased.contains("cressi")                                             { return "DeviceIcon_Cressi" }
+        if lowercased.contains("divesoft")                                           { return "DeviceIcon_Divesoft" }
+        if lowercased.contains("deep six")                                           { return "DeviceIcon_DeepSix" }
+        if lowercased.contains("deepblu")                                            { return "DeviceIcon_Deepblu" }
+        if lowercased.contains("mclean")                                             { return "DeviceIcon_McLean" }
+        if lowercased.contains("oceans")                                             { return "DeviceIcon_Oceans" }
+        if lowercased.contains("seac")                                               { return "DeviceIcon_Seac" }
+        if lowercased.contains("halcyon")                                            { return "DeviceIcon_Halcyon" }
+        if lowercased.contains("ratio")                                              { return "DeviceIcon_Ratio" }
+        if lowercased.contains("divesystem") || lowercased.contains("idive")        { return "DeviceIcon_DiveSystem" }
+        if lowercased.contains("apeks")                                              { return "DeviceIcon_Apeks" }
+        return nil
+    }
+
+    // Converts an exact model name to its asset catalog name.
+    // "Heinrichs Weikamp OSTC 2" → "DeviceIcon_HeinrichsWeikamp_OSTC_2"
+    // "Deepblu Cosmiq+"          → "DeviceIcon_Deepblu_Cosmiq"
+    private static func modelLevelAssetName(_ name: String) -> String {
+        let sanitized = name
+            .replacingOccurrences(of: "Heinrichs Weikamp", with: "HeinrichsWeikamp")
+            .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_")).inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: "_")
+        return "DeviceIcon_\(sanitized)"
+    }
+
+    private static func fallbackIcon(forName name: String?) -> String {
+        let lowercased = name?.lowercased() ?? ""
+        if lowercased.contains("garmin") { return "applewatch.watchface" }
+        return "gauge.with.dots.needle.bottom.50percent"
     }
 }
 
