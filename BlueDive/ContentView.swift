@@ -1064,12 +1064,14 @@ struct ContentView: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
+                        .font(.title3)
                         .foregroundStyle(.cyan)
                 }
 
                 Button(action: { showFilterSheet = true }) {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .font(.title3)
                             .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
                         if activeFilterCount > 0 {
                             Text("\(activeFilterCount)")
@@ -1102,6 +1104,7 @@ struct ContentView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle.fill")
+                        .font(.title3)
                         .foregroundStyle(.cyan)
                 }
             }

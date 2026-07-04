@@ -350,6 +350,7 @@ struct DiveMapView: View {
                     })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+
             }
             .navigationTitle("")
             #if os(iOS)
@@ -403,6 +404,7 @@ struct DiveMapView: View {
                     Button(action: { showFilterSheet = true }) {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                                .font(.title3)
                                 .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
                             
                             if activeFilterCount > 0 {
@@ -455,7 +457,8 @@ struct DiveMapView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Image(systemName: "ellipsis.circle.fill")
+                            .font(.title3)
                             .foregroundStyle(.cyan)
                     }
                 }

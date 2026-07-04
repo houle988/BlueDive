@@ -84,6 +84,27 @@ struct EditGearView: View {
         DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
     }
 
+    private var manufacturerSuggestions: [String] {
+        var seen = Set<String>()
+        return allGearItems.compactMap(\.manufacturer)
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .sorted()
+    }
+
+    private var modelSuggestions: [String] {
+        var seen = Set<String>()
+        return allGearItems.compactMap(\.model)
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .sorted()
+    }
+
+    private var purchasedFromSuggestions: [String] {
+        var seen = Set<String>()
+        return allGearItems.compactMap(\.purchasedFrom)
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .sorted()
+    }
+
     private var isFormValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         name.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
@@ -120,15 +141,11 @@ struct EditGearView: View {
             #else
             .background(Color(.systemGroupedBackground))
             #endif
-            .navigationTitle("Edit Equipment")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            #endif
             .toolbar { toolbarContent }
             .alert("Error", isPresented: $showValidationError) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text(validationMessage)
+                Text(LocalizedStringKey(validationMessage))
             }
         }
         #if os(macOS)
@@ -321,9 +338,9 @@ struct EditGearView: View {
             SectionHeaderView(title: "Technical Details", icon: "doc.text")
 
             VStack(spacing: 12) {
-                FormFieldView(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText)
+                GearAutocompleteField(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText, suggestions: manufacturerSuggestions, suggestionIcon: "building.2")
 
-                FormFieldView(label: "Model", icon: "tag", placeholder: "Ex: Perdix 2", text: $modelText)
+                GearAutocompleteField(label: "Model", icon: "tag", placeholder: "Ex: Perdix 2", text: $modelText, suggestions: modelSuggestions, suggestionIcon: "tag")
 
                 FormFieldView(label: "Serial number", icon: "number", placeholder: "Ex: SN123456", text: $serialNumber)
                     .platformKeyboardType(.asciiCapable)
@@ -412,11 +429,13 @@ struct EditGearView: View {
                 }
 
                 // Store
-                FormFieldView(
+                GearAutocompleteField(
                     label: "Purchased from",
                     icon: "storefront",
                     placeholder: "Store name",
-                    text: $purchasedFrom
+                    text: $purchasedFrom,
+                    suggestions: purchasedFromSuggestions,
+                    suggestionIcon: "storefront.fill"
                 )
             }
         }
