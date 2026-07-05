@@ -210,10 +210,10 @@ extension DiveDetailView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(dive.profileSamples.enumerated()), id: \.offset) { i, sample in
                             HStack(spacing: 8) {
-                                Text(String(format: "%.2f", sample.time * 60))
+                                Text(verbatim: (sample.time * 60).localizedString(decimals: 2))
                                     .font(.caption).foregroundStyle(.primary)
                                     .frame(width: 50, alignment: .leading)
-                                Text(String(format: "%.2f", sample.depth))
+                                Text(verbatim: sample.depth.localizedString(decimals: 2))
                                     .font(.caption).foregroundStyle(.cyan)
                                     .frame(width: 45, alignment: .trailing)
                                 if let temp = sample.temperature {
@@ -235,7 +235,7 @@ extension DiveDetailView {
                                     }
                                 } else {
                                     if let press = sample.tankPressure {
-                                        Text(String(format: "%.2f", dive.displayProfilePressure(press)))
+                                        Text(verbatim: dive.displayProfilePressure(press).localizedString(decimals: 2))
                                             .font(.caption).foregroundStyle(.red)
                                             .frame(width: 50, alignment: .trailing)
                                     } else {
@@ -243,7 +243,7 @@ extension DiveDetailView {
                                     }
                                 }
                                 if let ppo2 = sample.ppo2 {
-                                    Text(String(format: "%.2f", ppo2))
+                                    Text(verbatim: ppo2.localizedString(decimals: 2))
                                         .font(.caption).foregroundStyle(ppo2Color(for: ppo2))
                                         .frame(width: 50, alignment: .trailing)
                                 } else {

@@ -44,7 +44,7 @@ struct EditMenuStatsView: View {
         _workingAvgDepth  = State(initialValue: dive.averageDepth)
         _workingDuration  = State(initialValue: dive.duration)
         _workingWeights   = State(initialValue: dive.weights)
-        _workingWeightsText = State(initialValue: dive.weights.map { String($0) } ?? "")
+        _workingWeightsText = State(initialValue: dive.weights.map { $0.localizedString(decimals: 2) } ?? "")
         _workingDiverName = State(initialValue: dive.diverName)
         _workingBuddies   = State(initialValue: dive.buddies)
         _workingTypes = State(initialValue: dive.diveTypes ?? "")
@@ -57,8 +57,8 @@ struct EditMenuStatsView: View {
         _workingBoat       = State(initialValue: dive.boat ?? "")
         _workingDiveCenter = State(initialValue: dive.diveOperator ?? "")
         _workingEntryType  = State(initialValue: dive.entryType ?? "")
-        _workingMaxDepthText  = State(initialValue: dive.maxDepth > 0 ? String(dive.maxDepth) : "")
-        _workingAvgDepthText  = State(initialValue: dive.averageDepth > 0 ? String(dive.averageDepth) : "")
+        _workingMaxDepthText  = State(initialValue: dive.maxDepth > 0 ? dive.maxDepth.localizedString(decimals: 2) : "")
+        _workingAvgDepthText  = State(initialValue: dive.averageDepth > 0 ? dive.averageDepth.localizedString(decimals: 2) : "")
         _workingDurationText  = State(initialValue: dive.duration > 0 ? String(dive.duration) : "")
         _workingComputerName  = State(initialValue: dive.computerName)
         _workingSerialNumber  = State(initialValue: dive.computerSerialNumber ?? "")
@@ -819,58 +819,6 @@ struct EditMenuStatsView: View {
         }
     }
 
-    private func macOSModernNumberField(_ label: LocalizedStringKey, value: Binding<Double>, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            TextField("0.0", value: value, format: .number)
-                .textFieldStyle(.roundedBorder)
-                .overlay(alignment: .trailing) {
-                    if value.wrappedValue != 0 {
-                        Button {
-                            value.wrappedValue = 0
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 6)
-                    }
-                }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func macOSModernNumberField(_ label: LocalizedStringKey, value: Binding<Double?>, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            TextField("", value: value, format: .number)
-                .textFieldStyle(.roundedBorder)
-                .overlay(alignment: .trailing) {
-                    if value.wrappedValue != nil {
-                        Button {
-                            value.wrappedValue = nil
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 6)
-                    }
-                }
-        }
-        .padding(.vertical, 4)
-    }
-
     private func macOSModernPicker(_ label: LocalizedStringKey, selection: Binding<String>, icon: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -1519,7 +1467,7 @@ struct EditSiteDetailsView: View {
         _workingBodyOfWater = State(initialValue: dive.siteBodyOfWater ?? "")
         _workingLatitude     = State(initialValue: dive.siteLatitude.map { String(format: "%.6f", $0) } ?? "")
         _workingLongitude    = State(initialValue: dive.siteLongitude.map { String(format: "%.6f", $0) } ?? "")
-        _workingAltitude     = State(initialValue: dive.siteAltitude.map { String(format: "%.0f", $0) } ?? "")
+        _workingAltitude     = State(initialValue: dive.siteAltitude.map { $0.localizedString(decimals: 0) } ?? "")
         _workingDifficulty   = State(initialValue: dive.siteDifficulty ?? "")
         _workingExitLatitude  = State(initialValue: dive.exitLatitude.map { String(format: "%.6f", $0) } ?? "")
         _workingExitLongitude = State(initialValue: dive.exitLongitude.map { String(format: "%.6f", $0) } ?? "")
@@ -2242,9 +2190,9 @@ struct EditConditionsView: View {
     init(dive: Dive) {
         self.dive = dive
         _workingWaterTemp  = State(initialValue: dive.waterTemperature)
-        _workingMinTemp    = State(initialValue: dive.minTemperature != 0 ? String(format: "%.1f", dive.minTemperature) : "")
-        _workingAirTemp    = State(initialValue: dive.airTemperature.map { String(format: "%.1f", $0) } ?? "")
-        _workingMaxTemp    = State(initialValue: dive.maxTemperature.map { String(format: "%.1f", $0) } ?? "")
+        _workingMinTemp    = State(initialValue: dive.minTemperature != 0 ? dive.minTemperature.localizedString(decimals: 1) : "")
+        _workingAirTemp    = State(initialValue: dive.airTemperature.map { $0.localizedString(decimals: 1) } ?? "")
+        _workingMaxTemp    = State(initialValue: dive.maxTemperature.map { $0.localizedString(decimals: 1) } ?? "")
         _workingWeather    = State(initialValue: dive.weather ?? "")
         _workingSurface    = State(initialValue: dive.surfaceConditions ?? "")
         _workingCurrent    = State(initialValue: dive.current ?? "")
@@ -2363,7 +2311,7 @@ struct EditConditionsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(.cyan)
                 }
             }
         }
@@ -2617,6 +2565,8 @@ struct EditGazView: View {
     @State private var workingCylinderType: String
     @State private var workingStartPressure: Int?
     @State private var workingEndPressure: Int?
+    @State private var workingStartPressureText: String
+    @State private var workingEndPressureText: String
     /// Working pressure of the tank, in the import unit (`storedPressureUnit`).
     /// Used for conversion from gas-capacity → water volume (cu ft → L) in RMV/SAC calculation.
     /// `nil` = not provided (calculation falls back to 3000 PSI default).
@@ -2686,14 +2636,10 @@ struct EditGazView: View {
         return Double(normalized)
     }
 
-    /// Formats a Double? into a string suitable for text field display.
+    /// Formats a Double? into a locale-aware string suitable for text field display.
     private static func formatDouble(_ value: Double?) -> String {
         guard let value else { return "" }
-        // Remove trailing .0 for whole numbers
-        if value == value.rounded() && value.truncatingRemainder(dividingBy: 1) == 0 {
-            return String(format: "%.0f", value)
-        }
-        return String(value)
+        return value.localizedString(decimals: 4)
     }
 
     private let materialOptions = ["Steel", "Galvanized Steel", "Aluminium", "Carbon"]
@@ -2712,6 +2658,8 @@ struct EditGazView: View {
         _workingCylinderType     = State(initialValue: tank?.tankType ?? "")
         _workingStartPressure    = State(initialValue: tank?.startPressure.map { Int($0.rounded()) })
         _workingEndPressure      = State(initialValue: tank?.endPressure.map { Int($0.rounded()) })
+        _workingStartPressureText = State(initialValue: tank?.startPressure.map { String(Int($0.rounded())) } ?? "")
+        _workingEndPressureText   = State(initialValue: tank?.endPressure.map { String(Int($0.rounded())) } ?? "")
         _workingWorkingPressure  = State(initialValue: tank?.workingPressure)
         _workingPressureText     = State(initialValue: Self.formatDouble(tank?.workingPressure))
         _workingUsageStartTime   = State(initialValue: tank?.usageStartTime)
@@ -2974,11 +2922,15 @@ struct EditGazView: View {
                             Text("Start pressure (\(dive.storedPressureUnit.symbol))")
                                 .foregroundStyle(.secondary)
                                 .frame(width: 180, alignment: .leading)
-                            TextField("Start pressure (\(dive.storedPressureUnit.symbol))", value: $workingStartPressure, format: .number)
+                            TextField("Start pressure (\(dive.storedPressureUnit.symbol))", text: $workingStartPressureText)
                                 .textFieldStyle(.roundedBorder)
+                                .onChange(of: workingStartPressureText) {
+                                    workingStartPressure = Int(workingStartPressureText.trimmingCharacters(in: .whitespaces))
+                                }
                                 .overlay(alignment: .trailing) {
-                                    if workingStartPressure != nil {
+                                    if !workingStartPressureText.isEmpty {
                                         Button {
+                                            workingStartPressureText = ""
                                             workingStartPressure = nil
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
@@ -2998,11 +2950,15 @@ struct EditGazView: View {
                             Text("End pressure (\(dive.storedPressureUnit.symbol))")
                                 .foregroundStyle(.secondary)
                                 .frame(width: 180, alignment: .leading)
-                            TextField("End pressure (\(dive.storedPressureUnit.symbol))", value: $workingEndPressure, format: .number)
+                            TextField("End pressure (\(dive.storedPressureUnit.symbol))", text: $workingEndPressureText)
                                 .textFieldStyle(.roundedBorder)
+                                .onChange(of: workingEndPressureText) {
+                                    workingEndPressure = Int(workingEndPressureText.trimmingCharacters(in: .whitespaces))
+                                }
                                 .overlay(alignment: .trailing) {
-                                    if workingEndPressure != nil {
+                                    if !workingEndPressureText.isEmpty {
                                         Button {
+                                            workingEndPressureText = ""
                                             workingEndPressure = nil
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
@@ -3268,11 +3224,15 @@ struct EditGazView: View {
                             Text("Start pressure (\(dive.storedPressureUnit.symbol))")
                                 .foregroundStyle(.primary)
                                 .fixedSize()
-                            TextField("Start pressure (\(dive.storedPressureUnit.symbol))", value: $workingStartPressure, format: .number)
+                            TextField("Start pressure (\(dive.storedPressureUnit.symbol))", text: $workingStartPressureText)
                                 .platformKeyboardType(.numberPad)
                                 .foregroundStyle(.primary)
-                            if workingStartPressure != nil {
+                                .onChange(of: workingStartPressureText) {
+                                    workingStartPressure = Int(workingStartPressureText.trimmingCharacters(in: .whitespaces))
+                                }
+                            if !workingStartPressureText.isEmpty {
                                 Button {
+                                    workingStartPressureText = ""
                                     workingStartPressure = nil
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
@@ -3288,11 +3248,15 @@ struct EditGazView: View {
                             Text("End pressure (\(dive.storedPressureUnit.symbol))")
                                 .foregroundStyle(.primary)
                                 .fixedSize()
-                            TextField("End pressure (\(dive.storedPressureUnit.symbol))", value: $workingEndPressure, format: .number)
+                            TextField("End pressure (\(dive.storedPressureUnit.symbol))", text: $workingEndPressureText)
                                 .platformKeyboardType(.numberPad)
                                 .foregroundStyle(.primary)
-                            if workingEndPressure != nil {
+                                .onChange(of: workingEndPressureText) {
+                                    workingEndPressure = Int(workingEndPressureText.trimmingCharacters(in: .whitespaces))
+                                }
+                            if !workingEndPressureText.isEmpty {
                                 Button {
+                                    workingEndPressureText = ""
                                     workingEndPressure = nil
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")

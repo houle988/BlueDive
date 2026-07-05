@@ -872,7 +872,7 @@ extension DiveDetailView {
         guard !tanks.isEmpty else { return "—" }
         let values = tanks.map { tank -> String in
             guard let ep = tank.endPressure else { return "—" }
-            return String(format: "%.0f \(symbol)", dive.displayPressure(ep))
+            return dive.displayPressure(ep).localizedString(decimals: 0) + " \(symbol)"
         }
         return values.joined(separator: " / ")
     }

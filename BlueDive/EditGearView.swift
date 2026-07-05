@@ -59,15 +59,13 @@ struct EditGearView: View {
             initialValue: GearCategory.allCases.first { $0.rawValue == gear.category } ?? .other
         )
         _weightContribution = State(initialValue: gear.weightContribution)
-        _weightContributionText = State(initialValue: gear.weightContribution == 0 ? "0" : String(gear.weightContribution))
+        _weightContributionText = State(initialValue: gear.weightContribution == 0 ? "0" : gear.weightContribution.localizedString(decimals: 2))
         _weightContributionUnit = State(initialValue: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)
         _datePurchased = State(initialValue: gear.datePurchased)
         _manufacturerText = State(initialValue: gear.manufacturer ?? "")
         _modelText = State(initialValue: gear.model ?? "")
         _serialNumber = State(initialValue: gear.serialNumber ?? "")
-        _purchasePrice = State(initialValue: gear.purchasePrice.map {
-            String(format: "%.2f", $0)
-        } ?? "")
+        _purchasePrice = State(initialValue: gear.purchasePrice.map { $0.localizedString(decimals: 2) } ?? "")
         _currency = State(initialValue: gear.currency ?? "CAD")
         _purchasedFrom = State(initialValue: gear.purchasedFrom ?? "")
         _isInactive = State(initialValue: gear.isInactive)
@@ -381,7 +379,7 @@ struct EditGearView: View {
                             .fontWeight(.medium)
 
                         HStack {
-                            TextField("0.00", text: $purchasePrice)
+                            TextField(0.0.localizedString(decimals: 2), text: $purchasePrice)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                             if !purchasePrice.isEmpty {
@@ -530,7 +528,7 @@ struct EditGearView: View {
                             if weightContribution == 0 {
                                 Text("None")
                             } else {
-                                Text("\(weightContribution, specifier: "%.2f") \(weightContributionUnit)")
+                                Text(verbatim: weightContribution.localizedString(decimals: 2) + " \(weightContributionUnit)")
                             }
                         }
                         .font(.title3)
@@ -544,7 +542,7 @@ struct EditGearView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            TextField("0.0", text: $weightContributionText)
+                            TextField(0.0.localizedString(decimals: 1), text: $weightContributionText)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                                 .padding()

@@ -1115,7 +1115,7 @@ struct ChartTooltipView: View {
     private var depthLabel: String {
         let converted = dive.displayProfileDepth(sample.depth)
         let symbol = UserPreferences.shared.depthUnit.symbol
-        return String(format: "%.1f \(symbol)", converted)
+        return converted.localizedString(decimals: 1) + " \(symbol)"
     }
 
     private var temperatureLabel: String? {
@@ -1180,7 +1180,7 @@ struct ChartTooltipView: View {
         guard let speed = ascentSpeed else { return nil }
         let displaySpeed = prefs.depthUnit.convert(abs(speed))
         let symbol = prefs.depthUnit.symbol
-        return String(format: "%.1f %@/min", displaySpeed, symbol)
+        return displaySpeed.localizedString(decimals: 1) + " \(symbol)/min"
     }
 
     /// Colour for ascent speed: cyan for descent, orange for fast ascent, red for dangerous ascent

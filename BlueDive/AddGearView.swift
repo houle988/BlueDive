@@ -312,7 +312,7 @@ struct AddGearView: View {
                             .fontWeight(.medium)
                         
                         HStack {
-                            TextField("0.00", text: $purchasePrice)
+                            TextField(0.0.localizedString(decimals: 2), text: $purchasePrice)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                             if !purchasePrice.isEmpty {
@@ -384,7 +384,7 @@ struct AddGearView: View {
                         if weightContribution == 0 {
                             Text("None")
                         } else {
-                            Text("\(weightContribution, specifier: "%.2f") kg")
+                            Text(verbatim: weightContribution.localizedString(decimals: 2) + " kg")
                         }
                     }
                         .foregroundStyle(.cyan)
@@ -508,7 +508,7 @@ struct AddGearView: View {
                             if weightContribution == 0 {
                                 Text("None")
                             } else {
-                                Text("\(weightContribution, specifier: "%.2f") \(weightContributionUnit)")
+                                Text(verbatim: weightContribution.localizedString(decimals: 2) + " \(weightContributionUnit)")
                             }
                         }
                         .font(.title3)
@@ -522,7 +522,7 @@ struct AddGearView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             
-                            TextField("0.0", text: $weightContributionText)
+                            TextField(0.0.localizedString(decimals: 1), text: $weightContributionText)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                                 .padding()

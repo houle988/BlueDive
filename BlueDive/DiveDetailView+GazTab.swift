@@ -301,7 +301,7 @@ extension DiveDetailView {
                             .font(.caption)
                             .foregroundStyle(.gray)
                         HStack(spacing: 8) {
-                            Text(String(format: "%.1f%%", cns))
+                            Text(verbatim: cns.localizedString(decimals: 1) + "%")
                                 .font(.title2)
                                 .fontWeight(.bold)
                                 .foregroundStyle(cnsColor(for: cns))
@@ -481,7 +481,7 @@ extension DiveDetailView {
 
     func decoStopDepthLabel(_ depth: Double) -> String {
         let converted = dive.displayDepth(depth)
-        return String(format: "%.0f %@", converted, UserPreferences.shared.depthUnit.symbol)
+        return converted.localizedString(decimals: 0) + " \(UserPreferences.shared.depthUnit.symbol)"
     }
 
     func decoStopTimeLabel(_ seconds: TimeInterval) -> String {

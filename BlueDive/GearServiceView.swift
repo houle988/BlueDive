@@ -349,7 +349,7 @@ struct GearServiceView: View {
                 if let price = gear.purchasePrice {
                     let currency = gear.currency ?? "CAD"
                     gearDetailRow(icon: "dollarsign.circle", label: "Prix d'achat",
-                                  value: String(format: "%.2f \(currency)", price), color: .green)
+                                  value: price.localizedString(decimals: 2, minDecimals: 2) + " \(currency)", color: .green)
                 }
                 if let shop = gear.purchasedFrom, !shop.isEmpty {
                     gearDetailRow(icon: "storefront.fill", label: "Purchased From", value: shop, color: .orange)
@@ -862,7 +862,7 @@ struct GearServiceView: View {
                                 Image(systemName: "arrow.down")
                                     .font(.caption2)
                                     .foregroundStyle(.blue)
-                                Text("\(dive.displayMaxDepth, specifier: "%.1f")\(prefs.depthUnit.symbol)")
+                                Text(verbatim: dive.displayMaxDepth.localizedString(decimals: 1) + prefs.depthUnit.symbol)
                                     .font(.subheadline)
                                     .fontWeight(.bold)
                             }

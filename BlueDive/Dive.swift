@@ -767,6 +767,16 @@ final class Dive {
         }
     }
 
+    /// Formats a number using the user's locale decimal separator (e.g. "12,5" in French CA).
+    private func formatLocalizedNumber(_ value: Double, minDecimals: Int = 0, maxDecimals: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale.current
+        formatter.minimumFractionDigits = minDecimals
+        formatter.maximumFractionDigits = maxDecimals
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+
     /// Formats a raw stored volume for display, appending the correct symbol.
     ///
     /// - Parameters:
@@ -776,7 +786,7 @@ final class Dive {
     func formattedVolume(_ rawValue: Double, workingPressureRaw: Double? = nil, decimals: Int = 1) -> String {
         let display = displayVolume(rawValue, workingPressureRaw: workingPressureRaw)
         let symbol  = UserPreferences.shared.volumeUnit.symbol
-        return String(format: "%.\(decimals)f \(symbol)", display)
+        return formatLocalizedNumber(display, minDecimals: 0, maxDecimals: decimals) + " \(symbol)"
     }
 
 
@@ -949,9 +959,9 @@ final class Dive {
         let valueString: String
         if displayPreference == .psi {
             let rmvCuFt = rmvLiters / 28.3168
-            valueString = String(format: "%.3f cu ft/min", rmvCuFt)
+            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " cu ft/min"
         } else {
-            valueString = String(format: "%.2f L/min", rmvLiters)
+            valueString = formatLocalizedNumber(rmvLiters, minDecimals: 2, maxDecimals: 2) + " L/min"
         }
         return isRMVInNativeUnits ? valueString : valueString + " *"
     }
@@ -962,7 +972,7 @@ final class Dive {
         guard sac > 0 else { return "—" }
         let displaySac = UserPreferences.shared.pressureUnit.convertFromBar(sac)
         let unit = UserPreferences.shared.pressureUnit.symbol
-        return String(format: "%.2f \(unit)/min", displaySac)
+        return formatLocalizedNumber(displaySac, minDecimals: 2, maxDecimals: 2) + " \(unit)/min"
     }
 
     /// Combined RMV across all tanks.
@@ -1087,9 +1097,9 @@ final class Dive {
         let valueString: String
         if displayPreference == .psi {
             let rmvCuFt = rmvLiters / 28.3168
-            valueString = String(format: "%.3f cu ft/min", rmvCuFt)
+            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " cu ft/min"
         } else {
-            valueString = String(format: "%.2f L/min", rmvLiters)
+            valueString = formatLocalizedNumber(rmvLiters, minDecimals: 2, maxDecimals: 2) + " L/min"
         }
         return isRMVInNativeUnits ? valueString : valueString + " *"
     }
@@ -1177,7 +1187,7 @@ final class Dive {
         guard sac > 0 else { return "—" }
         let displaySac = UserPreferences.shared.pressureUnit.convertFromBar(sac)
         let unit = UserPreferences.shared.pressureUnit.symbol
-        return String(format: "%.2f \(unit)/min", displaySac)
+        return formatLocalizedNumber(displaySac, minDecimals: 2, maxDecimals: 2) + " \(unit)/min"
     }
 
     /// SAC expressed in the user's preferred pressure unit per minute.
@@ -1201,7 +1211,7 @@ final class Dive {
     var formattedSAC: String {
         guard let sac = displaySAC else { return "—" }
         let unit = UserPreferences.shared.pressureUnit.symbol
-        return String(format: "%.2f \(unit)/min", sac)
+        return sac.localizedString(decimals: 2) + " \(unit)/min"
     }
 
     /// `true` when both pressure and volume are stored in units that allow a
@@ -1235,9 +1245,9 @@ final class Dive {
         if displayPreference == .psi {
             // Convert L/min → cu ft/min (1 cu ft = 28.3168 L)
             let rmvCuFt = rmvLiters / 28.3168
-            valueString = String(format: "%.3f cu ft/min", rmvCuFt)
+            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " cu ft/min"
         } else {
-            valueString = String(format: "%.2f L/min", rmvLiters)
+            valueString = formatLocalizedNumber(rmvLiters, minDecimals: 2, maxDecimals: 2) + " L/min"
         }
 
         return isRMVInNativeUnits ? valueString : valueString + " *"

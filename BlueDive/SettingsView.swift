@@ -9,6 +9,17 @@ import LibDCSwift
 import AppKit
 #endif
 
+// MARK: - Unit formatting helper
+
+private func formatLocalizedUnit(_ value: Double, decimals: Int, symbol: String) -> String {
+    let formatter = NumberFormatter()
+    formatter.locale = Locale.current
+    formatter.minimumFractionDigits = 0
+    formatter.maximumFractionDigits = decimals
+    formatter.numberStyle = .decimal
+    return (formatter.string(from: NSNumber(value: value)) ?? String(value)) + " \(symbol)"
+}
+
 // MARK: - Depth Unit
 
 enum DepthUnit: String, CaseIterable {
@@ -35,8 +46,7 @@ enum DepthUnit: String, CaseIterable {
 
     /// Formats a metre value with the correct unit symbol.
     func formatted(_ meters: Double, decimals: Int = 1) -> String {
-        let value = convert(meters)
-        return String(format: "%.\(decimals)f \(symbol)", value)
+        formatLocalizedUnit(convert(meters), decimals: decimals, symbol: symbol)
     }
 }
 
@@ -102,8 +112,7 @@ enum PressureUnit: String, CaseIterable {
     ///   - storedUnit: The unit the value was originally imported in.
     ///   - decimals: Number of decimal places (default 0).
     func formatted(_ value: Double, from storedUnit: PressureUnit, decimals: Int = 0) -> String {
-        let display = convert(value, from: storedUnit)
-        return String(format: "%.\(decimals)f \(symbol)", display)
+        formatLocalizedUnit(convert(value, from: storedUnit), decimals: decimals, symbol: symbol)
     }
 
     /// Convenience: converts a value already known to be in bar to the display
@@ -277,8 +286,7 @@ enum WeightUnit: String, CaseIterable {
     ///   - storedUnit: The unit the value was originally imported in.
     ///   - decimals: Number of decimal places (default 1).
     func formatted(_ value: Double, from storedUnit: WeightUnit, decimals: Int = 2) -> String {
-        let display = convert(value, from: storedUnit)
-        return String(format: "%.\(decimals)f \(symbol)", display)
+        formatLocalizedUnit(convert(value, from: storedUnit), decimals: decimals, symbol: symbol)
     }
 
     /// Formats a kilograms value with the correct unit symbol.

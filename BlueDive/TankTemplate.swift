@@ -79,7 +79,7 @@ extension TankTemplate {
         let prefs = UserPreferences.shared
         var parts: [String] = []
         if let displayVol = convertedVolume(to: prefs.volumeUnit) {
-            parts.append(String(format: "%.1f %@", displayVol, prefs.volumeUnit.symbol))
+            parts.append(displayVol.localizedString(decimals: 1) + " \(prefs.volumeUnit.symbol)")
         }
         if let wp = workingPressure {
             let displayWP = prefs.pressureUnit.convert(wp, from: storedPressureUnit)

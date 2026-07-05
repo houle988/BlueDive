@@ -652,7 +652,7 @@ struct PDFDiveLogbook {
             ctx.fillEllipse(in: CGRect(x: dx - 4, y: dy - 4, width: 8, height: 8))
             ctx.setFillColor(accentCyan)
             ctx.fillEllipse(in: CGRect(x: dx - 2, y: dy - 2, width: 4, height: 4))
-            let depthLabel = String(format: "%.1f %@", dive.displayDepth(deepest.depth), depthSymbol)
+            let depthLabel = dive.displayDepth(deepest.depth).localizedString(decimals: 1) + " \(depthSymbol)"
             let markerAttrs: [NSAttributedString.Key: Any] = [
                 .font: boldFont(size: 5.5),
                 .foregroundColor: platformColor(accentCyan)
@@ -708,8 +708,8 @@ struct PDFDiveLogbook {
 
     private static func drawDiveStatistics(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat,
                                            depthSymbol: String, minHeight: CGFloat = 0) -> CGFloat {
-        let maxDepthStr = String(format: "%.1f %@", dive.displayMaxDepth, depthSymbol)
-        let avgDepthStr = String(format: "%.1f %@", dive.displayAverageDepth, depthSymbol)
+        let maxDepthStr = dive.displayMaxDepth.localizedString(decimals: 1) + " \(depthSymbol)"
+        let avgDepthStr = dive.displayAverageDepth.localizedString(decimals: 1) + " \(depthSymbol)"
         let durationStr = dive.formattedDuration
         let rmvStr = dive.formattedRMV
 
@@ -854,7 +854,7 @@ struct PDFDiveLogbook {
         // CNS
         let cnsStr: String = {
             guard let cns = dive.cnsPercentage else { return "—" }
-            return String(format: "%.1f%%", cns)
+            return cns.localizedString(decimals: 1) + "%"
         }()
 
         // Deco type

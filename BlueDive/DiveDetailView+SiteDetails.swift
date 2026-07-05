@@ -103,7 +103,7 @@ extension DiveDetailView {
             if let alt = dive.displaySiteAltitude {
                 let depthUnit = prefs.depthUnit == .feet ? "ft" : "m"
                 conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
-                            value: String(format: "%.0f %@", alt, depthUnit))
+                            value: alt.localizedString(decimals: 0) + " \(depthUnit)")
             } else {
                 conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
                             value: "—")

@@ -400,7 +400,12 @@ struct ContentView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showFingerprintDebug) { FingerprintDebugView() }
+            .sheet(isPresented: $showFingerprintDebug) {
+                FingerprintDebugView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
             .sheet(isPresented: $showProfile) {
                 DiverProfileView()
                     .presentationSizing(.page)

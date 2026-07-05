@@ -293,8 +293,8 @@ struct StatisticsView: View {
             let avgRMVL = rmvValues.reduce(0, +) / Double(rmvValues.count)
             let isMetricRMV = prefs.pressureUnit != .psi
             let avgRMVFormatted = isMetricRMV
-                ? String(format: "%.2f L/min", avgRMVL)
-                : String(format: "%.3f cu ft/min", avgRMVL / 28.3168)
+                ? avgRMVL.formatted(.number.locale(locale).precision(.fractionLength(2))) + " L/min"
+                : (avgRMVL / 28.3168).formatted(.number.locale(locale).precision(.fractionLength(3))) + " cu ft/min"
             let hasNonNative = rmvDives.contains { !$0.isRMVInNativeUnits }
             avgRMVStr = hasNonNative ? avgRMVFormatted + " *" : avgRMVFormatted
             bestRMVDive = rmvDives.min(by: { $0.calculatedRMV < $1.calculatedRMV })
@@ -313,7 +313,7 @@ struct StatisticsView: View {
             let sacUnit = prefs.pressureUnit.symbol
             let sacValues = sacDives.map { $0.calculatedSAC }
             let avgSACBar = sacValues.reduce(0, +) / Double(sacValues.count)
-            avgSACStr = String(format: "%.2f %@/min", prefs.pressureUnit.convertFromBar(avgSACBar), sacUnit)
+            avgSACStr = prefs.pressureUnit.convertFromBar(avgSACBar).formatted(.number.locale(locale).precision(.fractionLength(2))) + " \(sacUnit)/min"
             bestSACDive = sacDives.min(by: { $0.calculatedSAC < $1.calculatedSAC })
             worstSACDive = sacDives.max(by: { $0.calculatedSAC < $1.calculatedSAC })
         }
@@ -766,7 +766,7 @@ struct StatisticsView: View {
                         let converted = prefs.volumeUnit == .cubicFeet
                             ? cachedTotalAirConsumed * 0.0353147
                             : cachedTotalAirConsumed
-                        return String(format: "%.0f %@", converted, prefs.volumeUnit.symbol)
+                        return converted.formatted(.number.locale(locale).precision(.fractionLength(0))) + " \(prefs.volumeUnit.symbol)"
                     }(),
                     label: "Air Consumed",
                     icon: "wind",
@@ -873,7 +873,7 @@ struct StatisticsView: View {
                 }
 
                 VStack(spacing: 4) {
-                    Text(verbatim: String(format: "%.1f %@", cachedAvgDepth, prefs.depthUnit.symbol))
+                    Text(verbatim: cachedAvgDepth.formatted(.number.locale(locale).precision(.fractionLength(1))) + " \(prefs.depthUnit.symbol)")
                         .font(.system(.title, design: .rounded))
                         .fontWeight(.black)
                         .foregroundStyle(.primary)
@@ -891,7 +891,7 @@ struct StatisticsView: View {
                 HStack {
                     Button { selectedDive = cachedDeepestDive } label: {
                         VStack(spacing: 2) {
-                            Text(verbatim: String(format: "%.1f %@", cachedMaxDepthEver, prefs.depthUnit.symbol))
+                            Text(verbatim: cachedMaxDepthEver.localizedString(decimals: 1) + " \(prefs.depthUnit.symbol)")
                                 .font(.system(.title3, design: .rounded))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.secondary)
@@ -917,7 +917,7 @@ struct StatisticsView: View {
 
                     Button { selectedDive = cachedShallowestDive } label: {
                         VStack(spacing: 2) {
-                            Text(verbatim: String(format: "%.1f %@", cachedMinDepth, prefs.depthUnit.symbol))
+                            Text(verbatim: cachedMinDepth.localizedString(decimals: 1) + " \(prefs.depthUnit.symbol)")
                                 .font(.system(.title3, design: .rounded))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.secondary)

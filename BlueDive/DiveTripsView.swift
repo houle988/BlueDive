@@ -329,7 +329,7 @@ struct TripCard: View {
                             .font(.caption)
                             .foregroundStyle(Double(star) <= trip.averageRating ? .yellow : .secondary)
                     }
-                    Text(String(format: "%.1f / 5", trip.averageRating))
+                    Text(verbatim: trip.averageRating.localizedString(decimals: 1) + " / 5")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -458,9 +458,9 @@ struct TripDetailSheet: View {
             TripHeroStat(value: prefs.depthUnit.formatted(trip.averageMaxDepth), label: "Avg. Depth", icon: "arrow.down.circle", color: .blue)
             TripHeroStat(value: "\(trip.uniqueSites)", label: "Sites", icon: "mappin.and.ellipse", color: .purple)
             if trip.averageRMV > 0 {
-                TripHeroStat(value: String(format: "%.1f L/m", trip.averageRMV), label: "Avg. RMV", icon: "wind", color: .teal)
+                TripHeroStat(value: trip.averageRMV.localizedString(decimals: 1) + " L/m", label: "Avg. RMV", icon: "wind", color: .teal)
             } else {
-                TripHeroStat(value: String(format: "%.1f★", trip.averageRating), label: "Avg. Rating", icon: "star.fill", color: .yellow)
+                TripHeroStat(value: trip.averageRating.localizedString(decimals: 1) + "★", label: "Avg. Rating", icon: "star.fill", color: .yellow)
             }
         }
         .padding()

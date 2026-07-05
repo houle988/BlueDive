@@ -160,7 +160,7 @@ struct MinimumGasCalculatorView: View {
     @State private var roundUpAscent = true
     @State private var safetyStop = false
     @State private var safetyMarginEnabled = false
-    @State private var safetyMarginStr = "1.5"
+    @State private var safetyMarginStr = 1.5.localizedString(decimals: 1)
     @State private var showInfo = false
     @FocusState private var isAnyFieldFocused: Bool
 
@@ -290,7 +290,7 @@ struct MinimumGasCalculatorView: View {
                     marginStr       = "40"
                 case .imperial:
                     depthStr        = "100"
-                    sacStr          = "0.75"
+                    sacStr          = 0.75.localizedString(decimals: 2)
                     v1Str           = "30"
                     v2Str           = "10"
                     cylVolStr       = "100"
