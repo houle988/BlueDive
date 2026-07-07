@@ -485,9 +485,7 @@ extension BluetoothScannerView {
         }
 
         // Decompression stops
-        dive.decoStops = diveData.decoStop.map { stop in
-            [DecoStop(depth: stop.depth, time: stop.time, type: stop.type)]
-        } ?? []
+        dive.decoStops = Self.extractDecoStops(from: diveData)
 
         if let entryLoc = diveData.location,
            (-90...90).contains(entryLoc.latitude),

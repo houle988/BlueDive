@@ -776,9 +776,7 @@ extension BluetoothScannerView {
         )
         dive.rawDiveComputerData = diveData.rawData
         dive.fingerprintData = diveData.fingerprint
-        dive.decoStops = diveData.decoStop.map { stop in
-            [DecoStop(depth: stop.depth, time: stop.time, type: stop.type)]
-        } ?? []
+        dive.decoStops = Self.extractDecoStops(from: diveData)
 
         if let exitLoc = diveData.exitLocation,
            (-90...90).contains(exitLoc.latitude),
@@ -789,5 +787,46 @@ extension BluetoothScannerView {
         }
 
         return dive
+    }
+
+    /// Extracts all distinct decompression stops from the dive profile samples.
+    ///
+    /// Each profile sample carries the dive computer's current deco obligation (DC_DECO_DECOSTOP):
+    /// the required stop depth and remaining time at that stop, decreasing as the diver serves it.
+    /// By collecting unique depths and keeping the peak remaining time per depth (the initial
+    /// requirement before the diver begins the stop), we reconstruct all mandatory stops.
+    ///
+    /// Falls back to the header-level deco stop (the last DC_SAMPLE_DECO seen during parsing)
+    /// when no profile samples carry deco stop data.
+    static func extractDecoStops(from diveData: DiveData) -> [DecoStop] {
+        // Key: stop depth rounded to nearest metre; value: representative depth + peak remaining time.
+        var stopsByDepth: [Int: (depth: Double, time: TimeInterval)] = [:]
+
+        for sample in diveData.profile {
+            guard let stopDepth = sample.decoStop,
+                  let stopTime = sample.decoTime,
+                  stopDepth > 0, stopTime > 0 else { continue }
+
+            let key = Int(stopDepth.rounded())
+            let t = TimeInterval(stopTime)
+            if let existing = stopsByDepth[key] {
+                if t > existing.time { stopsByDepth[key] = (depth: stopDepth, time: t) }
+            } else {
+                stopsByDepth[key] = (depth: stopDepth, time: t)
+            }
+        }
+
+        if !stopsByDepth.isEmpty {
+            // Sort deepest stop first; all profile deco stops are DC_DECO_DECOSTOP (type 2).
+            return stopsByDepth.values
+                .sorted { $0.depth > $1.depth }
+                .map { DecoStop(depth: $0.depth, time: $0.time, type: 2) }
+        }
+
+        // Fallback: header-level stop is the last DC_SAMPLE_DECO recorded during parsing.
+        // Only accept it when it is a mandatory deco stop (type 2) to avoid NDL entries.
+        return diveData.decoStop.flatMap { stop in
+            stop.type == 2 ? [DecoStop(depth: stop.depth, time: stop.time, type: stop.type)] : []
+        } ?? []
     }
 }

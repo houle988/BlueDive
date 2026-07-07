@@ -5,7 +5,10 @@ import Foundation
 /// to avoid exact floating-point comparison.
 func waterType(forSalinity sal: Double) -> String {
     if sal < 1.01 { return "Freshwater" }
-    if abs(sal - 1.020) < 0.001 { return "EN13319" }
+    // EN13319 standard uses 1020 kg/m³ exactly (Shearwater → 1.020).
+    // Mares IconHD uses MSW/GRAVITY ≈ 1019.716 kg/m³ → 1.01972 (saltwater, not EN13319).
+    // Threshold 0.0002 sits between the two (margins: Shearwater ≈0, Mares ≈0.000284).
+    if abs(sal - 1.020) < 0.0002 { return "EN13319" }
     return "Saltwater"
 }
 

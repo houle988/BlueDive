@@ -541,8 +541,8 @@ private struct StaticChartLayer: View, Equatable {
     /// This places the diamond exactly on the profile line at the planned stop depth.
     /// Falls back to the deco sample whose depth is closest to `stop.depth` when the
     /// profile does not cross it between consecutive samples.
-    /// Returns tuples of (chart X time, display depth, duration in seconds).
-    private var mandatoryDecoStopPoints: [(time: Double, displayDepth: Double, duration: TimeInterval)] {
+    /// Returns tuples of (chart X time, display depth).
+    private var mandatoryDecoStopPoints: [(time: Double, displayDepth: Double)] {
         let stops = dive.decoStops.filter { $0.type == 2 }
         guard !stops.isEmpty else { return [] }
 
@@ -560,7 +560,7 @@ private struct StaticChartLayer: View, Equatable {
             .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
             .sorted { $0.time < $1.time }
 
-        var result: [(time: Double, displayDepth: Double, duration: TimeInterval)] = []
+        var result: [(time: Double, displayDepth: Double)] = []
         for stop in stops {
             // Look for an ascending crossing only (depth decreasing over time, a > b),
             // which is when the diver ascends to the stop depth during decompression.
@@ -582,8 +582,7 @@ private struct StaticChartLayer: View, Equatable {
             guard let time = crossTime else { continue }
             result.append((
                 time:         time,
-                displayDepth: dive.displayProfileDepth(stop.depth),
-                duration:     stop.time
+                displayDepth: dive.displayProfileDepth(stop.depth)
             ))
         }
         return result
@@ -617,14 +616,6 @@ private struct StaticChartLayer: View, Equatable {
                 .symbol(.diamond)
                 .symbolSize(120)
                 .foregroundStyle(Color.orange)
-                .annotation(position: .top, alignment: .center) {
-                    VStack(spacing: 1) {
-                        Text(String(format: "%.0f%@", point.displayDepth, prefs.depthUnit.symbol))
-                        Text(String(format: "%.0fmin", ceil(point.duration / 60)))
-                    }
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.orange)
-                }
             }
         }
     }
