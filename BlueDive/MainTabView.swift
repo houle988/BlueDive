@@ -8,8 +8,8 @@ struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
-    @AppStorage("gearReminders") private var gearReminders = true
-    @AppStorage("certReminders") private var certReminders = true
+    @AppStorage("gearMaintenanceReminders") private var gearReminders = true
+    @AppStorage("certificationReminders") private var certReminders = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
 
@@ -18,6 +18,8 @@ struct MainTabView: View {
     /// Tracks the active tab so widget deep-links can switch to the Logbook
     /// (where `ContentView` presents the manual/Bluetooth sheets).
     @State private var selectedTab: Int = 0
+    @State private var gearToOpen: Gear? = nil
+    @State private var certToRenew: Certification? = nil
 
     init() {
         // Force black background for all tabs on macOS
@@ -69,7 +71,52 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .addDiveBluetooth)) { _ in
             selectedTab = 0
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openEquipmentForService)) { note in
+            let gearId = note.object as? String
+            Task { @MainActor in
+                UserDefaults.standard.removeObject(forKey: "pendingGearDeepLink")
+                UserDefaults.standard.removeObject(forKey: "pendingGearDeepLinkTime")
+                selectedTab = 2
+                if let gearId {
+                    gearToOpen = fetchGear(id: gearId)
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openCertificationsForRenewal)) { note in
+            let certId = note.object as? String
+            Task { @MainActor in
+                UserDefaults.standard.removeObject(forKey: "pendingCertDeepLink")
+                UserDefaults.standard.removeObject(forKey: "pendingCertDeepLinkTime")
+                selectedTab = 3
+                if let certId {
+                    certToRenew = fetchCertification(id: certId)
+                }
+            }
+        }
         .task {
+            // Cold-launch fallback: NotificationCenter posts are dropped before onReceive
+            // attaches. didReceive writes the UUID + a timestamp to UserDefaults so .task
+            // can recover it. The 5-minute window prevents a stale key (written during an
+            // aborted launch) from spuriously opening a sheet on a later normal launch.
+            let now = Date().timeIntervalSince1970
+            if let gearId = UserDefaults.standard.string(forKey: "pendingGearDeepLink") {
+                let written = UserDefaults.standard.double(forKey: "pendingGearDeepLinkTime")
+                UserDefaults.standard.removeObject(forKey: "pendingGearDeepLink")
+                UserDefaults.standard.removeObject(forKey: "pendingGearDeepLinkTime")
+                if now - written < 300 {
+                    selectedTab = 2
+                    gearToOpen = fetchGear(id: gearId)
+                }
+            }
+            if let certId = UserDefaults.standard.string(forKey: "pendingCertDeepLink") {
+                let written = UserDefaults.standard.double(forKey: "pendingCertDeepLinkTime")
+                UserDefaults.standard.removeObject(forKey: "pendingCertDeepLink")
+                UserDefaults.standard.removeObject(forKey: "pendingCertDeepLinkTime")
+                if now - written < 300 {
+                    selectedTab = 3
+                    certToRenew = fetchCertification(id: certId)
+                }
+            }
             await scheduleNotificationsAtLaunch()
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)
@@ -138,16 +185,51 @@ struct MainTabView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 // Clear badge and delivered notifications when the user opens the app
-                NotificationManager.shared.clearBadge()
+                Task { await NotificationManager.shared.clearBadge() }
                 UNUserNotificationCenter.current().removeAllDeliveredNotifications()
             }
         }
+        .sheet(item: $gearToOpen) { gear in
+            GearServiceView(gear: gear)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $certToRenew) { cert in
+            AddCertificationView(certificationToEdit: cert)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
-    
+
+    // MARK: - Notification Action Handlers
+
+    @MainActor
+    private func fetchGear(id: String) -> Gear? {
+        guard let uuid = UUID(uuidString: id) else { return nil }
+        return try? modelContext.fetch(
+            FetchDescriptor<Gear>(predicate: #Predicate { $0.id == uuid })
+        ).first
+    }
+
+    @MainActor
+    private func fetchCertification(id: String) -> Certification? {
+        guard let uuid = UUID(uuidString: id) else { return nil }
+        return try? modelContext.fetch(
+            FetchDescriptor<Certification>(predicate: #Predicate { $0.id == uuid })
+        ).first
+    }
+
     // MARK: - Notification Scheduling at Launch
     
     private func scheduleNotificationsAtLaunch() async {
-        guard notificationsEnabled else { return }
+        guard notificationsEnabled else {
+            // Cancel any pending notifications left over if the flag was turned off
+            // while the app was backgrounded (onChange wouldn't have fired in that case).
+            NotificationManager.shared.cancelAllNotifications()
+            return
+        }
         
         let status = await NotificationManager.shared.checkAuthorizationStatus()
         guard status == .authorized || status == .provisional else { return }
@@ -157,11 +239,15 @@ struct MainTabView: View {
         if gearReminders {
             let allGear = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
             NotificationManager.shared.scheduleGearMaintenanceReminders(for: allGear)
+        } else {
+            await NotificationManager.shared.cancelNotifications(withPrefix: "gear-")
         }
-        
+
         if certReminders {
             let allCerts = (try? modelContext.fetch(FetchDescriptor<Certification>())) ?? []
             NotificationManager.shared.scheduleCertificationReminders(for: allCerts)
+        } else {
+            await NotificationManager.shared.cancelNotifications(withPrefix: "cert-")
         }
     }
     

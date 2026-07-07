@@ -1710,18 +1710,24 @@ struct SettingsView: View {
     @MainActor
     private func rescheduleGearNotifications() async {
         #if canImport(UserNotifications)
-        guard gearReminders else { return }
-        let allGear = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
-        NotificationManager.shared.scheduleGearMaintenanceReminders(for: allGear)
+        if gearReminders {
+            let allGear = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
+            NotificationManager.shared.scheduleGearMaintenanceReminders(for: allGear)
+        } else {
+            await NotificationManager.shared.cancelNotifications(withPrefix: "gear-")
+        }
         #endif
     }
 
     @MainActor
     private func rescheduleCertNotifications() async {
         #if canImport(UserNotifications)
-        guard certReminders else { return }
-        let allCerts = (try? modelContext.fetch(FetchDescriptor<Certification>())) ?? []
-        NotificationManager.shared.scheduleCertificationReminders(for: allCerts)
+        if certReminders {
+            let allCerts = (try? modelContext.fetch(FetchDescriptor<Certification>())) ?? []
+            NotificationManager.shared.scheduleCertificationReminders(for: allCerts)
+        } else {
+            await NotificationManager.shared.cancelNotifications(withPrefix: "cert-")
+        }
         #endif
     }
 
@@ -1913,8 +1919,9 @@ struct SettingsView: View {
 
             // Step 2: Remove all pending and delivered notifications.
             NotificationManager.shared.cancelAllNotifications()
-            NotificationManager.shared.clearBadge()
+            await NotificationManager.shared.clearBadge()
             UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
+            UserDefaults.standard.removeObject(forKey: "lastMilestoneNotified")
 
             // Reset all widget data in the shared App Group suite.
             let shared = UserDefaults(suiteName: "group.app.bluedive.universal")

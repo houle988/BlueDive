@@ -34,4 +34,8 @@ extension Notification.Name {
     static let addDiveManual    = Notification.Name("AddDiveDeepLink.manual")
     /// Posted when the widget (or any deep-link) requests the Bluetooth scanner.
     static let addDiveBluetooth = Notification.Name("AddDiveDeepLink.bluetooth")
+    /// Posted from a MARK_DONE notification action to navigate to the Equipment tab.
+    static let openEquipmentForService      = Notification.Name("NotificationAction.markDone")
+    /// Posted from a RENEW notification action to navigate to the Certifications tab.
+    static let openCertificationsForRenewal = Notification.Name("NotificationAction.renew")
 }

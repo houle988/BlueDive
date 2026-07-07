@@ -93,6 +93,11 @@ extension BluetoothScannerView {
                 try modelContext.save()
                 Self.logger.info("Import complete: \(importedCount) imported, \(mergedCount) merged, \(skippedCount) skipped")
                 persistFingerprintRecord(for: selectedDevice)
+                if UserDefaults.standard.bool(forKey: "notificationsEnabled"),
+                   UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? true {
+                    let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
+                    NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
+                }
             } catch {
                 Self.logger.error("Save error: \(error.localizedDescription)")
                 downloadedDives = []
