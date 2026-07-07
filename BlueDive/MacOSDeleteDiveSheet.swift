@@ -125,7 +125,7 @@ struct MacOSDeleteDiveSheet: View {
                                         .lineLimit(1)
 
                                     HStack(spacing: 6) {
-                                        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+                                        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
                                             Label(dive.location, systemImage: "mappin")
                                                 .lineLimit(1)
                                         }

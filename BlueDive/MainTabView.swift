@@ -121,12 +121,18 @@ struct MainTabView: View {
             set: { if !$0 { lastAcceptedDisclaimerVersion = currentVersion } }
         )) {
             DisclaimerView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: Binding(
             get: { lastAcceptedDisclaimerVersion == currentVersion && !hasCompletedOnboarding },
             set: { if !$0 { hasCompletedOnboarding = true } }
         )) {
             WelcomeWizardView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         #endif
         .onChange(of: scenePhase) { _, newPhase in

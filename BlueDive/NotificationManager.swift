@@ -182,31 +182,31 @@ extension NotificationManager {
         // Actions for gear maintenance
         let markAsDoneAction = UNNotificationAction(
             identifier: "MARK_DONE",
-            title: String(localized: "Mark as Done"),
+            title: NSLocalizedString("Mark as Done", bundle: Bundle.forAppLanguage(), comment: ""),
             options: .foreground
         )
-        
+
         let remindOneDayAction = UNNotificationAction(
             identifier: "REMIND_1_DAY",
-            title: String(localized: "Remind in 1 Day"),
+            title: NSLocalizedString("Remind in 1 Day", bundle: Bundle.forAppLanguage(), comment: ""),
             options: []
         )
-        
+
         let remindOneWeekAction = UNNotificationAction(
             identifier: "REMIND_1_WEEK",
-            title: String(localized: "Remind in 1 Week"),
+            title: NSLocalizedString("Remind in 1 Week", bundle: Bundle.forAppLanguage(), comment: ""),
             options: []
         )
-        
+
         let remindOneMonthAction = UNNotificationAction(
             identifier: "REMIND_1_MONTH",
-            title: String(localized: "Remind in 1 Month"),
+            title: NSLocalizedString("Remind in 1 Month", bundle: Bundle.forAppLanguage(), comment: ""),
             options: []
         )
-        
+
         let dismissAction = UNNotificationAction(
             identifier: "DISMISS",
-            title: String(localized: "Dismiss"),
+            title: NSLocalizedString("Dismiss", bundle: Bundle.forAppLanguage(), comment: ""),
             options: .destructive
         )
         
@@ -220,7 +220,7 @@ extension NotificationManager {
         // Actions for certifications
         let renewAction = UNNotificationAction(
             identifier: "RENEW",
-            title: String(localized: "Renew"),
+            title: NSLocalizedString("Renew", bundle: Bundle.forAppLanguage(), comment: ""),
             options: .foreground
         )
         

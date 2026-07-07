@@ -459,6 +459,9 @@ struct ContentView: View {
                         showDeleteSingleConfirmation = true
                     }
                 )
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
             #endif
             .sheet(isPresented: $showMergeDivesSheet) {

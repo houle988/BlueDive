@@ -110,14 +110,14 @@ struct DiveRowView: View {
     private var locationText: Text {
         if let country = dive.siteCountry, !country.isEmpty {
             // If both location and country exist, combine them
-            if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+            if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
                 return Text(verbatim: "\(dive.location), \(country)")
             }
             // If only country exists
             return Text(verbatim: country)
         }
         // If only location exists
-        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
             return Text(verbatim: dive.location)
         }
         // Fallback

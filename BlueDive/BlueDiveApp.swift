@@ -113,6 +113,9 @@ struct BlueDiveApp: App {
             #if os(macOS)
                 .sheet(isPresented: $showingAbout) {
                     AboutView()
+                        .presentationSizing(.page)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
                 }
             #endif
         }
