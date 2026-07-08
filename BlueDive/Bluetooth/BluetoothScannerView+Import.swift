@@ -151,14 +151,31 @@ extension BluetoothScannerView {
     /// UserDefaults is a session-level cache for LibDCSwift; DeviceFingerprint is the
     /// persistent source of truth (syncs via iCloud, survives reinstalls).
     func syncFingerprintFromDatabase(for peripheral: CBPeripheral) {
-        guard let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
-              let serial = storedDevice.serial else { return }
+        let uuid = peripheral.identifier.uuidString
 
+        // Resolve serial and device type. During reassociation the new UUID is not yet in DeviceStorage
+        // (written only after a successful download), so fall back to pendingDeviceStorageSeed.
+        let serial: String
         let deviceType: String
-        if let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == storedDevice.model && $0.family == storedDevice.family }) {
-            deviceType = modelInfo.name
+
+        if let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: uuid),
+           let storedSerial = storedDevice.serial {
+            serial = storedSerial
+            if let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == storedDevice.model && $0.family == storedDevice.family }) {
+                deviceType = modelInfo.name
+            } else {
+                deviceType = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
+            }
+        } else if let seed = pendingDeviceStorageSeed, seed.uuid == uuid, !seed.serial.isEmpty {
+            serial = seed.serial
+            if let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.family == seed.family && $0.modelID == seed.modelID }) {
+                deviceType = modelInfo.name
+            } else {
+                deviceType = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
+            }
+            Self.logger.info("[Reassociation] syncFingerprintFromDatabase: resolving via seed for serial \(serial)")
         } else {
-            deviceType = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
+            return
         }
 
         let predicate = #Predicate<DeviceFingerprint> { record in record.serial == serial }

@@ -94,9 +94,19 @@ extension BluetoothScannerView {
                 // advertisement name should match the stored computerName.
                 let bleName = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "")
                 let dbName = record.computerName
-                guard bleName == dbName || (peripheral.name ?? "").localizedCaseInsensitiveContains(dbName) else {
-                    continue
+                let nameMatch = bleName == dbName || (peripheral.name ?? "").localizedCaseInsensitiveContains(dbName)
+                let familyModelMatch: Bool
+                if !nameMatch {
+                    // Resolves the peripheral's model by its advertised name, then checks
+                    // whether that model shares the same family+modelID as the stored fingerprint.
+                    // Only fires for models present in supportedModels; unknown-model peripherals
+                    // are handled by the immediate-seed path below (lines 116-121).
+                    let pm = DeviceConfiguration.supportedModels.first(where: { $0.name == bleName })
+                    familyModelMatch = pm.map { $0.family == family && $0.modelID == record.modelID } ?? false
+                } else {
+                    familyModelMatch = false
                 }
+                guard nameMatch || familyModelMatch else { continue }
                 // Defer DeviceStorage seeding until a successful download confirms we connected
                 // to the right peripheral — two computers of the same model share identical BLE
                 // names, so name matching alone cannot prove we have the right unit.
@@ -108,7 +118,10 @@ extension BluetoothScannerView {
                     pendingDeviceStorageSeed = (uuid: peripheral.identifier.uuidString, name: record.computerName, family: family, modelID: record.modelID, serial: record.serial)
                     modelOverrides[peripheral.identifier.uuidString] = model
                 } else {
+                    // Model absent from supportedModels — seed DeviceStorage immediately so openBLEDevice
+                    // can use it, but also track via pendingDeviceStorageSeed so failure paths can clean up.
                     DeviceStorage.shared.storeDevice(uuid: peripheral.identifier.uuidString, name: record.computerName, family: family, model: record.modelID, serial: record.serial)
+                    pendingDeviceStorageSeed = (uuid: peripheral.identifier.uuidString, name: record.computerName, family: family, modelID: record.modelID, serial: record.serial)
                 }
                 Self.logger.info("Deferred DeviceStorage seed for scanned peripheral \(peripheral.name ?? "Unknown") — connecting")
                 let savedName = record.computerName
@@ -154,15 +167,15 @@ extension BluetoothScannerView {
         // If we call openBLEDevice from the main queue, the callbacks can never be
         // processed and the connection times out.
         // We dispatch on a background thread to free the main RunLoop.
-        DispatchQueue.global(qos: .userInitiated).async {
-            let forcedModel: (family: DeviceConfiguration.DeviceFamily, model: UInt32)?
-            if let override = self.modelOverrides[deviceAddress] {
-                forcedModel = (family: override.family, model: override.modelID)
-                Self.logger.info("Using user-selected model override: \(override.name)")
-            } else {
-                forcedModel = nil
-            }
+        let forcedModel: (family: DeviceConfiguration.DeviceFamily, model: UInt32)?
+        if let override = modelOverrides[deviceAddress] {
+            forcedModel = (family: override.family, model: override.modelID)
+            Self.logger.info("Using user-selected model override: \(override.name)")
+        } else {
+            forcedModel = nil
+        }
 
+        DispatchQueue.global(qos: .userInitiated).async {
             let connected = DeviceConfiguration.openBLEDevice(
                 name: deviceName,
                 deviceAddress: deviceAddress,
@@ -174,6 +187,7 @@ extension BluetoothScannerView {
                     Self.logger.error("Failed to connect to \(deviceName)")
                     self.syncState = .error(message: String(format: NSLocalizedString("Unable to connect to %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when a Bluetooth connection to a dive computer fails. %@ is the device name."), deviceName))
                     self.selectedDevice = nil
+                    self.discardPendingSeed(matchingUUID: deviceAddress)
                 }
                 return
             }
@@ -206,6 +220,17 @@ extension BluetoothScannerView {
                     self.syncState = .error(message: NSLocalizedString("Connection established but device not ready", bundle: Bundle.forAppLanguage(), comment: "Error message shown when the Bluetooth connection succeeded but the device pointer was not available in time."))
                     self.selectedDevice = nil
                     self.bleManager.close(clearDevicePtr: true)
+                    self.bleManager.clearRetrievalState()
+                    self.discardPendingSeed(matchingUUID: deviceAddress)
+                    // openBLEDevice wrote a nil-serial entry to DeviceStorage on success.
+                    // Remove unconditionally — keyed by captured deviceAddress, serial==nil guard is surgical.
+                    if let allDevices = DeviceStorage.shared.getAllStoredDevices() {
+                        let filtered = allDevices.filter { !($0.uuid == deviceAddress && $0.serial == nil) }
+                        if filtered.count < allDevices.count {
+                            DeviceStorage.shared.updateStoredDevices(filtered)
+                            Self.logger.info("[BLE] Removed nil-serial orphan DeviceStorage entry for \(deviceAddress.prefix(8))… after pointer timeout")
+                        }
+                    }
                     return
                 }
                 self.retrieveDiveLogs(from: peripheral)
@@ -314,22 +339,14 @@ extension BluetoothScannerView {
                         if viewModel.dives.isEmpty {
                             // No new dives, close the connection
                             self.downloadProgressCancellable = nil
-                            if let seed = self.pendingDeviceStorageSeed {
-                                DeviceStorage.shared.storeDevice(uuid: seed.uuid, name: seed.name, family: seed.family, model: seed.modelID, serial: seed.serial)
-                                self.modelOverrides.removeValue(forKey: seed.uuid)
-                                self.pendingDeviceStorageSeed = nil
-                            }
+                            self.commitPendingSeed()
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
                             self.selectedDevice = nil
                             self.syncState = .completed(imported: 0, merged: 0, skipped: 0)
                         } else {
                             self.downloadProgressCancellable = nil
-                            if let seed = self.pendingDeviceStorageSeed {
-                                DeviceStorage.shared.storeDevice(uuid: seed.uuid, name: seed.name, family: seed.family, model: seed.modelID, serial: seed.serial)
-                                self.modelOverrides.removeValue(forKey: seed.uuid)
-                                self.pendingDeviceStorageSeed = nil
-                            }
+                            self.commitPendingSeed()
                             self.downloadedDives = viewModel.dives
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
@@ -346,9 +363,15 @@ extension BluetoothScannerView {
                         }
                         // Close the connection on failure
                         self.downloadProgressCancellable = nil
-                        if let seed = self.pendingDeviceStorageSeed {
-                            self.modelOverrides.removeValue(forKey: seed.uuid)
-                            self.pendingDeviceStorageSeed = nil
+                        let failedSeedUUID = self.pendingDeviceStorageSeed?.uuid
+                        self.discardPendingSeed()
+                        if let failedUUID = failedSeedUUID,
+                           let allDevices = DeviceStorage.shared.getAllStoredDevices() {
+                            let filtered = allDevices.filter { $0.uuid != failedUUID }
+                            if filtered.count < allDevices.count {
+                                DeviceStorage.shared.updateStoredDevices(filtered)
+                                Self.logger.info("[BLE] Removed DeviceStorage entry for failed reassociation \(failedUUID.prefix(8))…")
+                            }
                         }
                         self.bleManager.close(clearDevicePtr: true)
                         self.bleManager.clearRetrievalState()
@@ -357,5 +380,150 @@ extension BluetoothScannerView {
                 }
             }
         )
+    }
+
+    // MARK: - Seed Lifecycle
+
+    private static let knownSentinelSerials: Set<String> = ["0", "00000000", "unknown", "n/a"]
+
+    func commitPendingSeed() {
+        guard let seed = pendingDeviceStorageSeed else { return }
+        // Verify the hardware serial the library reported matches the fingerprint record.
+        // If they differ, we connected to the wrong unit — abort to prevent cross-device corruption.
+        if let reportedSerial = DeviceStorage.shared.getStoredDevice(uuid: seed.uuid)?.serial,
+           !reportedSerial.isEmpty,
+           reportedSerial.lowercased() != seed.serial.lowercased() {
+            Self.logger.error("[BLE] Serial mismatch at commit — seed=\(seed.serial) reported=\(reportedSerial). Aborting to prevent cross-device fingerprint corruption.")
+            if let allDevices = DeviceStorage.shared.getAllStoredDevices() {
+                let filtered = allDevices.filter { $0.uuid != seed.uuid }
+                if filtered.count < allDevices.count {
+                    DeviceStorage.shared.updateStoredDevices(filtered)
+                    Self.logger.info("[BLE] Removed DeviceStorage entry for mismatched UUID \(seed.uuid.prefix(8))…")
+                }
+            }
+            discardPendingSeed()
+            return
+        }
+        DeviceStorage.shared.storeDevice(uuid: seed.uuid, name: seed.name, family: seed.family, model: seed.modelID, serial: seed.serial)
+        if !seed.serial.isEmpty && !Self.knownSentinelSerials.contains(seed.serial.lowercased()),
+           let allDevices = DeviceStorage.shared.getAllStoredDevices() {
+            let filtered = allDevices.filter { !($0.serial?.lowercased() == seed.serial.lowercased() && $0.uuid != seed.uuid) }
+            if filtered.count < allDevices.count {
+                DeviceStorage.shared.updateStoredDevices(filtered)
+                Self.logger.info("Removed stale DeviceStorage UUID for \(seed.name) (serial: \(seed.serial))")
+            }
+        }
+        modelOverrides.removeValue(forKey: seed.uuid)
+        pendingDeviceStorageSeed = nil
+    }
+
+    func discardPendingSeed() {
+        guard let seed = pendingDeviceStorageSeed else { return }
+        modelOverrides.removeValue(forKey: seed.uuid)
+        pendingDeviceStorageSeed = nil
+    }
+
+    func discardPendingSeed(matchingUUID uuid: String) {
+        guard pendingDeviceStorageSeed?.uuid == uuid else { return }
+        discardPendingSeed()
+    }
+
+    // MARK: - Reassociation
+
+    /// Intercepts a manual tap on a discovered peripheral. Shows a reassociation prompt
+    /// if the peripheral's display name matches exactly one known DeviceFingerprint with
+    /// a different BLE UUID, a disambiguation picker for multiple matches, or connects
+    /// directly when no match is found.
+    func handleDeviceTap(_ peripheral: CBPeripheral) {
+        let uuid = peripheral.identifier.uuidString
+        // UUID already in DeviceStorage → device is known, connect directly.
+        guard DeviceStorage.shared.getStoredDevice(uuid: uuid) == nil else {
+            Self.logger.info("[Reassociation] UUID \(uuid.prefix(8))… already in DeviceStorage — direct connect")
+            connectToDevice(peripheral)
+            return
+        }
+        let bleName = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "")
+        Self.logger.info("[Reassociation] UUID \(uuid.prefix(8))… not in DeviceStorage — scanning \(knownDevices.count) fingerprint(s) for '\(bleName)'")
+        let diverNames = diverNameBySerial
+        // Prefer the user's explicit model override when resolving the peripheral's model.
+        // This handles the case where the BLE display name (e.g. "Shearwater Peregrine TX")
+        // doesn't match the fingerprint's stored computerName (e.g. "Shearwater Peregrine")
+        // but the user has already identified the correct model via the model picker.
+        // Falls back to BLE-name resolution for the secondary family+modelID match.
+        let resolvedModel = modelOverrides[uuid] ?? DeviceConfiguration.supportedModels.first(where: { $0.name == bleName })
+        let candidates: [ReassociationCandidate] = knownDevices.compactMap { fp in
+            let nameMatch = bleName == fp.computerName
+            let modelMatch: Bool
+            if !nameMatch, let fpFamily = fp.family, let rm = resolvedModel {
+                modelMatch = rm.family == fpFamily && rm.modelID == fp.modelID
+            } else {
+                modelMatch = false
+            }
+            guard nameMatch || modelMatch else { return nil }
+            let trimmedSerial = fp.serial.trimmingCharacters(in: .whitespaces)
+            Self.logger.debug("[Reassociation] Candidate: '\(fp.computerName)' serial=\(trimmedSerial) via \(nameMatch ? "name" : "family+modelID")")
+            return ReassociationCandidate(
+                id: trimmedSerial,
+                serial: trimmedSerial,
+                computerName: fp.computerName,
+                family: fp.family,
+                modelID: fp.modelID,
+                lastSynced: fp.updatedAt,
+                diverName: diverNames[trimmedSerial.lowercased()]
+            )
+        }
+        switch candidates.count {
+        case 0:
+            Self.logger.info("[Reassociation] No matching fingerprints — treating '\(bleName)' as new device")
+            connectToDevice(peripheral)
+        case 1:
+            let c = candidates[0]
+            Self.logger.info("[Reassociation] 1 match for '\(bleName)': '\(c.computerName)' serial=\(c.serial)\(c.diverName.map { " diver=\($0)" } ?? "") — showing alert")
+            peripheralPendingReassociation = peripheral
+            reassociationCandidates = candidates
+            showingReassociationAlert = true
+        default:
+            Self.logger.info("[Reassociation] \(candidates.count) matches for '\(bleName)': \(candidates.map { $0.serial }.joined(separator: ", ")) — showing picker")
+            peripheralForReassociationPicker = peripheral
+            reassociationCandidates = candidates
+        }
+    }
+
+    /// Removes stale DeviceStorage entries for the candidate's serial, sets up a
+    /// deferred seed with the new UUID, and connects. The model override ensures
+    /// connectToDevice resolves the correct display name without a full download.
+    func confirmReassociation(_ peripheral: CBPeripheral, candidate: ReassociationCandidate) {
+        guard let family = candidate.family else {
+            Self.logger.warning("[Reassociation] '\(candidate.computerName)' (serial \(candidate.serial)) has no family/modelID — legacy record, falling back to plain connect")
+            connectToDevice(peripheral)
+            return
+        }
+        guard !syncState.isActive || syncState == .scanning else {
+            Self.logger.warning("[Reassociation] Confirmation aborted — sync already active (\(String(describing: syncState)))")
+            return
+        }
+        let newUUID = peripheral.identifier.uuidString
+        Self.logger.info("[Reassociation] Confirming reassociation: '\(candidate.computerName)' serial=\(candidate.serial) newUUID=\(newUUID.prefix(8))…")
+        pendingDeviceStorageSeed = (uuid: newUUID, name: candidate.computerName,
+                                    family: family, modelID: candidate.modelID,
+                                    serial: candidate.serial)
+        if let model = DeviceConfiguration.supportedModels.first(where: {
+            $0.family == family && $0.modelID == candidate.modelID
+        }) {
+            Self.logger.info("[Reassociation] Model found in library: '\(model.name)' — modelOverride + forcedModel will be used")
+            modelOverrides[newUUID] = model
+        } else {
+            Self.logger.warning("[Reassociation] Model (family=\(String(describing: family)) modelID=\(candidate.modelID)) not in supportedModels — seed set, no forcedModel hint")
+        }
+        connectToDevice(peripheral)
+        connectedDeviceName = candidate.computerName
+        syncState = .connecting(deviceName: candidate.computerName)
+    }
+
+    func clearReassociationState() {
+        peripheralPendingReassociation = nil
+        peripheralForReassociationPicker = nil
+        reassociationCandidates = []
+        showingReassociationAlert = false
     }
 }

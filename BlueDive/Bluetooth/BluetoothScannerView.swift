@@ -15,15 +15,29 @@ struct CachedDeviceFingerprint {
     let modelID: UInt32
 }
 
+/// Value-type snapshot of a DeviceFingerprint used for the reassociation prompt.
+/// Keeps display data stable while the SwiftData record may update mid-scan.
+struct ReassociationCandidate: Identifiable {
+    let id: String
+    let serial: String
+    let computerName: String
+    let family: DeviceConfiguration.DeviceFamily?
+    let modelID: UInt32
+    let lastSynced: Date
+    let diverName: String?
+}
+
 // MARK: - Bluetooth Scanner View
 
 struct BluetoothScannerView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.modelContext) var modelContext
+    @Environment(\.locale) private var locale
 
     // MARK: State
 
     @Query(sort: \DeviceFingerprint.updatedAt, order: .reverse) var knownDevices: [DeviceFingerprint]
+    @Query(filter: #Predicate<Gear> { $0.category == "Computer" }) var gearComputers: [Gear]
 
     @ObservedObject var bleManager = CoreBluetoothManager.sharedManager
     @State var syncState: BluetoothSyncState = .idle
@@ -45,9 +59,33 @@ struct BluetoothScannerView: View {
     @State var modelOverrides: [String: DeviceConfiguration.ComputerModel] = [:]
     @State var peripheralForModelPicker: CBPeripheral?
     @State var showInfo = false
+    @State var peripheralPendingReassociation: CBPeripheral?
+    @State var peripheralForReassociationPicker: CBPeripheral?
+    @State var reassociationCandidates: [ReassociationCandidate] = []
+    @State var showingReassociationAlert = false
 
     // Logger for debugging
     static let logger = Logger(subsystem: "com.bluedive.app", category: "Bluetooth")
+
+    // Keys are lowercased for case-insensitive lookup (some devices report mixed-case serials).
+    var diverNameBySerial: [String: String] {
+        var map: [String: String] = [:]
+        var ambiguous = Set<String>()
+        for gear in gearComputers {
+            guard let rawSerial = gear.serialNumber else { continue }
+            let serial = rawSerial.trimmingCharacters(in: .whitespaces).lowercased()
+            let name = gear.diverName.trimmingCharacters(in: .whitespaces)
+            guard !serial.isEmpty, !name.isEmpty else { continue }
+            if ambiguous.contains(serial) { continue }
+            if let existing = map[serial], existing != name {
+                ambiguous.insert(serial)
+                map.removeValue(forKey: serial)
+            } else {
+                map[serial] = name
+            }
+        }
+        return map
+    }
 
     var body: some View {
         NavigationStack {
@@ -92,10 +130,7 @@ struct BluetoothScannerView: View {
                 downloadProgressCancellable = nil
                 isSearching = false
                 cachedTargetFingerprint = nil
-                if let seed = pendingDeviceStorageSeed {
-                    modelOverrides.removeValue(forKey: seed.uuid)
-                    pendingDeviceStorageSeed = nil
-                }
+                discardPendingSeed()
                 #if os(iOS)
                 UIApplication.shared.isIdleTimerDisabled = false
                 Self.logger.debug("Screen lock re-enabled (onDisappear)")
@@ -122,6 +157,58 @@ struct BluetoothScannerView: View {
                 if let device = deviceToDelete {
                     Text("Remove \(device.computerName) (\(device.serial)) from known devices? The next sync will re-download all dives from this computer.")
                 }
+            }
+            .alert("Update Bluetooth Pairing?", isPresented: $showingReassociationAlert) {
+                Button("Connect") {
+                    if let peripheral = peripheralPendingReassociation,
+                       let candidate = reassociationCandidates.first {
+                        confirmReassociation(peripheral, candidate: candidate)
+                    }
+                    clearReassociationState()
+                }
+                Button("Connect as New Device") {
+                    if let peripheral = peripheralPendingReassociation {
+                        connectToDevice(peripheral)
+                    }
+                    clearReassociationState()
+                }
+                Button("Cancel", role: .cancel) {
+                    clearReassociationState()
+                }
+            } message: {
+                if let candidate = reassociationCandidates.first {
+                    if let diverName = candidate.diverName {
+                        Text(verbatim: String(format: NSLocalizedString(
+                            "This looks like %1$@\u{2019}s %2$@, last synced %3$@. Connect and update the Bluetooth pairing?",
+                            bundle: Bundle.forAppLanguage(),
+                            comment: "Reassociation alert message when a scanned device matches a known dive computer with a diver name. %1$@ = diver name, %2$@ = computer name, %3$@ = last sync date."),
+                            diverName, candidate.computerName,
+                            candidate.lastSynced.formatted(.dateTime.locale(locale).day().month(.wide).year())))
+                    } else {
+                        Text(verbatim: String(format: NSLocalizedString(
+                            "This looks like your %1$@ (serial \u{2026}%2$@), last synced %3$@. Connect and update the Bluetooth pairing?",
+                            bundle: Bundle.forAppLanguage(),
+                            comment: "Reassociation alert message when a scanned device matches a known dive computer without a diver name. %1$@ = computer name, %2$@ = last 4 chars of serial, %3$@ = last sync date."),
+                            candidate.computerName,
+                            String(candidate.serial.suffix(4)).uppercased(),
+                            candidate.lastSynced.formatted(.dateTime.locale(locale).day().month(.wide).year())))
+                    }
+                }
+            }
+            .sheet(item: $peripheralForReassociationPicker, onDismiss: clearReassociationState) { peripheral in
+                DeviceReassociationPickerSheet(
+                    candidates: reassociationCandidates,
+                    onSelect: { selected in
+                        if let candidate = selected {
+                            confirmReassociation(peripheral, candidate: candidate)
+                        } else {
+                            connectToDevice(peripheral)
+                        }
+                    }
+                )
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showInfo) {
                 infoSheet

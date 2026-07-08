@@ -98,14 +98,15 @@ struct DeviceRow: View {
     let onChangeModel: () -> Void
 
     var body: some View {
+        let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString)
         HStack(spacing: 12) {
             // Device icon
-            DiveComputerIconView(name: effectiveModelName, isSelected: isSelected)
+            DiveComputerIconView(name: effectiveModelName(stored: stored), isSelected: isSelected)
 
             // Device information
             Button(action: onTap) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(deviceDisplayName)
+                    Text(deviceDisplayName(stored: stored))
                         .font(.headline)
                         .foregroundStyle(.primary)
 
@@ -115,7 +116,7 @@ struct DeviceRow: View {
                             .foregroundStyle(.orange)
                     }
 
-                    if let serial = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString)?.serial {
+                    if let serial = stored?.serial {
                         Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.uppercased()))
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -156,12 +157,11 @@ struct DeviceRow: View {
         }
     }
 
-    private var deviceDisplayName: String {
+    private func deviceDisplayName(stored: StoredDevice?) -> String {
         if let override = modelOverride {
             return override.name
         }
-        // Check DeviceStorage for a previously saved correct model
-        if let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
+        if let stored = stored,
            let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
             return modelInfo.name
         }
@@ -177,9 +177,9 @@ struct DeviceRow: View {
     }
 
     // Resolves the best model name for icon selection: override > stored model > resolved BLE display name
-    private var effectiveModelName: String? {
+    private func effectiveModelName(stored: StoredDevice?) -> String? {
         if let override = modelOverride { return override.name }
-        if let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
+        if let stored = stored,
            let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
             return modelInfo.name
         }
@@ -194,6 +194,7 @@ struct KnownDeviceRow: View {
     let computerName: String
     let serial: String
     let lastSynced: Date
+    let diverName: String?
     let onTap: () -> Void
 
     var body: some View {
@@ -205,6 +206,12 @@ struct KnownDeviceRow: View {
                     Text(computerName)
                         .font(.headline)
                         .foregroundStyle(.primary)
+
+                    if let name = diverName {
+                        Label(name, systemImage: "person.fill")
+                            .font(.caption)
+                            .foregroundStyle(.teal)
+                    }
 
                     Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.uppercased()))
                         .font(.caption)
@@ -223,6 +230,79 @@ struct KnownDeviceRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Device Reassociation Picker Sheet
+
+struct DeviceReassociationPickerSheet: View {
+    let candidates: [ReassociationCandidate]
+    let onSelect: (ReassociationCandidate?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    ForEach(candidates) { candidate in
+                        Button {
+                            onSelect(candidate)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                DiveComputerIconView(name: candidate.computerName, isSelected: false)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    if let name = candidate.diverName {
+                                        Label(name, systemImage: "person.fill")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.primary)
+                                        Text(candidate.computerName)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    } else {
+                                        Text(candidate.computerName)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.primary)
+                                        Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), candidate.serial.uppercased()))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text(candidate.lastSynced, format: .dateTime.day().month(.wide).year().locale(locale))
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                } header: {
+                    Text("Known Dive Computers")
+                } footer: {
+                    Text("Select the computer you're connecting, or choose to add it as a new device.")
+                }
+
+                Section {
+                    Button {
+                        onSelect(nil)
+                        dismiss()
+                    } label: {
+                        Text("Connect as New Device")
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Which device is this?")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
     }
 }
 

@@ -122,6 +122,7 @@ extension BluetoothScannerView {
 
     @ViewBuilder
     private var knownDevicesView: some View {
+        let diverNames = diverNameBySerial
         Form {
             if !knownDevices.isEmpty {
                 Section {
@@ -130,6 +131,7 @@ extension BluetoothScannerView {
                             computerName: device.computerName,
                             serial: device.serial,
                             lastSynced: device.updatedAt,
+                            diverName: diverNames[device.serial.trimmingCharacters(in: .whitespaces).lowercased()],
                             onTap: { connectToKnownDevice(device) }
                         )
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -209,7 +211,7 @@ extension BluetoothScannerView {
                             isSelected: selectedDevice?.identifier == peripheral.identifier,
                             isConnecting: isConnecting(to: peripheral),
                             modelOverride: modelOverrides[peripheral.identifier.uuidString],
-                            onTap: { connectToDevice(peripheral) },
+                            onTap: { handleDeviceTap(peripheral) },
                             onChangeModel: {
                                 peripheralForModelPicker = peripheral
                             }
@@ -329,10 +331,7 @@ extension BluetoothScannerView {
                 Button("Retry") {
                     isSearching = false
                     cachedTargetFingerprint = nil
-                    if let seed = pendingDeviceStorageSeed {
-                        modelOverrides.removeValue(forKey: seed.uuid)
-                        pendingDeviceStorageSeed = nil
-                    }
+                    discardPendingSeed()
                     syncState = .idle
                 }
                 .buttonStyle(.bordered)
@@ -379,10 +378,7 @@ extension BluetoothScannerView {
                         stopScanning()
                         isSearching = false
                         cachedTargetFingerprint = nil
-                        if let seed = pendingDeviceStorageSeed {
-                            modelOverrides.removeValue(forKey: seed.uuid)
-                            pendingDeviceStorageSeed = nil
-                        }
+                        discardPendingSeed()
                         syncState = .idle
                     } label: {
                         Text("Cancel")
@@ -544,4 +540,5 @@ extension BluetoothScannerView {
 
         return peripheral.identifier == selectedDevice.identifier
     }
+
 }
