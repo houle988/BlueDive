@@ -458,6 +458,8 @@ struct SettingsView: View {
     @State private var backupFileName: String = ""
     #endif
     @State private var showFingerprintDebug = false
+    @State private var showingRecalculateSurfaceAlert = false
+    @State private var showingRecalculateSurfaceDone = false
 
     var body: some View {
         NavigationStack {
@@ -572,6 +574,20 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) { backupError = nil }
             } message: {
                 Text(backupError ?? "")
+            }
+            .alert("Recalculate Surface Intervals?", isPresented: $showingRecalculateSurfaceAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Recalculate") {
+                    recalculateSurfaceIntervals()
+                    showingRecalculateSurfaceDone = true
+                }
+            } message: {
+                Text("This will update the surface interval for all dives based on each diver's previous dive. Dives without a diver name will not be affected.")
+            }
+            .alert("Done", isPresented: $showingRecalculateSurfaceDone) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Surface intervals have been recalculated.")
             }
         }
     }
@@ -1070,6 +1086,50 @@ struct SettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                
+                Button {
+                    showingRecalculateSurfaceAlert = true
+                } label: {
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(Color.indigo.opacity(0.15))
+                                .frame(width: 40, height: 40)
+                            
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                                .font(.body)
+                                .foregroundStyle(.indigo)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Recalculate surface intervals")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                            
+                            Text("Recalculate surface interval for each diver's dives")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.primary.opacity(0.03))
+                    )
+                }
+                .buttonStyle(.plain)
+                
+                Text("Dives without a diver name are not affected.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
                 
                 #if os(macOS)
                 Button {
@@ -1738,6 +1798,43 @@ struct SettingsView: View {
     }
 
     // MARK: - iCloud sync
+
+    // MARK: - Surface Interval Recalculation
+
+    private func recalculateSurfaceIntervals() {
+        let allDives = (try? modelContext.fetch(FetchDescriptor<Dive>())) ?? []
+        let grouped = Dictionary(grouping: allDives) { $0.diverName }
+        for (diver, diverDives) in grouped {
+            guard !diver.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            let sorted = diverDives.sorted { $0.timestamp < $1.timestamp }
+            for (index, dive) in sorted.enumerated() {
+                if index == 0 {
+                    dive.surfaceInterval = "0h 00m"
+                    dive.isRepetitiveDive = false
+                } else {
+                    let prev = sorted[index - 1]
+                    let prevEnd = prev.timestamp.addingTimeInterval(TimeInterval(prev.duration * 60))
+                    let gap = dive.timestamp.timeIntervalSince(prevEnd)
+                    guard gap > 0 else {
+                        dive.surfaceInterval = "0h 00m"
+                        dive.isRepetitiveDive = true
+                        continue
+                    }
+                    let totalMinutes = Int(gap / 60)
+                    let days = totalMinutes / (24 * 60)
+                    let hours = (totalMinutes % (24 * 60)) / 60
+                    let minutes = totalMinutes % 60
+                    if days > 0 {
+                        dive.surfaceInterval = String(format: "%dd %dh %02dm", days, hours, minutes)
+                    } else {
+                        dive.surfaceInterval = String(format: "%dh %02dm", hours, minutes)
+                    }
+                    dive.isRepetitiveDive = totalMinutes < 1440
+                }
+            }
+        }
+        try? modelContext.save()
+    }
 
 
 
