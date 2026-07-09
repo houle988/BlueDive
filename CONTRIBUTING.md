@@ -37,8 +37,8 @@ Look for issues tagged [`good first issue`](../../issues?q=is%3Aissue+is%3Aopen+
 ## Third-party dependencies
 
 BlueDive builds on:
-- [libdivecomputer](https://github.com/libdivecomputer/libdivecomputer) — LGPL-2.1-or-later
-- [libdc-swift](https://github.com/jdevost/libdc-swift) — LGPL-2.1 (BlueDive fork)
+- [libdivecomputer](https://github.com/houle988/libdivecomputer) — LGPL-2.1-or-later (BlueDive fork)
+- [libdc-swift](https://github.com/houle988/libdc-swift) — LGPL-2.1 (BlueDive fork)
 
 Contributions to those libraries should be made directly to their respective repositories.
 
