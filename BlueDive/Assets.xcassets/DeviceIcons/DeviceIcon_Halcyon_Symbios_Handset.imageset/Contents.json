@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "Halcyon_Symbios_Handset.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

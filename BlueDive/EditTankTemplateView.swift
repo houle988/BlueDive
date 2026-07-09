@@ -31,8 +31,8 @@ struct EditTankTemplateView: View {
         self.template = template
 
         _name = State(initialValue: template.name)
-        _volumeText = State(initialValue: template.volume.map { String(format: "%.1f", $0) } ?? "")
-        _workingPressureText = State(initialValue: template.workingPressure.map { String(format: "%.0f", $0) } ?? "")
+        _volumeText = State(initialValue: template.volume.map { $0.localizedString(decimals: 1) } ?? "")
+        _workingPressureText = State(initialValue: template.workingPressure.map { $0.localizedString(decimals: 0) } ?? "")
         _material = State(initialValue: template.material ?? "")
         _format = State(initialValue: template.format ?? "")
         _manufacturerText = State(initialValue: template.manufacturer ?? "")
@@ -240,7 +240,7 @@ struct EditTankTemplateView: View {
                     .fontWeight(.medium)
 
                 HStack {
-                    TextField(template.storedVolumeUnit == .liters ? "e.g. 12.0" : "e.g. 80", text: $volumeText)
+                    TextField(template.storedVolumeUnit == .liters ? "e.g. \(12.0.localizedString(decimals: 1))" : "e.g. 80", text: $volumeText)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()
                         #if os(iOS)

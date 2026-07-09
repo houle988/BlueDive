@@ -92,7 +92,17 @@ struct DetailCard: View {
     // Initializer pour Double avec format
     init(title: LocalizedStringKey, value: Double, specifier: String, unit: String, icon: String, color: Color) {
         self.title = title
-        self.value = String(format: specifier, value) + unit
+        // Parse decimal places from specifier (e.g. "%.1f" → 1) for locale-aware formatting
+        let decimals: Int
+        if let dotIndex = specifier.firstIndex(of: "."),
+           let fIndex = specifier.lastIndex(of: "f"),
+           dotIndex < fIndex,
+           let d = Int(specifier[specifier.index(after: dotIndex)..<fIndex]) {
+            decimals = d
+        } else {
+            decimals = 1
+        }
+        self.value = value.localizedString(decimals: decimals) + unit
         self.localizedValue = nil
         self.subtitle = nil
         self.icon = icon

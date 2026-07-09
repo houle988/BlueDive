@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "Mares_Smart.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

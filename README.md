@@ -14,5 +14,5 @@ The source code is publicly available under the [BlueDive Source Available Licen
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full details on how to get started.
 
 **Built on:**
-- [libdivecomputer](https://github.com/libdivecomputer/libdivecomputer) — LGPL-2.1-or-later
-- [libdc-swift](https://github.com/jdevost/libdc-swift) — LGPL-2.1 (BlueDive fork)
+- [libdivecomputer](https://github.com/houle988/libdivecomputer) — LGPL-2.1-or-later (BlueDive fork)
+- [libdc-swift](https://github.com/houle988/libdc-swift) — LGPL-2.1 (BlueDive fork)

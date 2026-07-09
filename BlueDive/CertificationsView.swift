@@ -204,29 +204,30 @@ struct CertificationsView: View {
                 }
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
                 ToolbarItem(placement: .primaryAction) {
-                    HStack(spacing: 12) {
-                        Menu {
-                            Button {
-                                exportCertificationsToXML()
-                            } label: {
-                                Label("Export", systemImage: "square.and.arrow.up")
-                            }
-                            .disabled(certifications.isEmpty)
-
-                            Button {
-                                showImportPicker = true
-                            } label: {
-                                Label("Import", systemImage: "square.and.arrow.down")
-                            }
+                    Button(action: { showAddCertification = true }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.cyan)
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button {
+                            exportCertificationsToXML()
                         } label: {
-                            Image(systemName: "arrow.up.arrow.down.circle.fill")
-                                .foregroundStyle(.cyan)
+                            Label("Export", systemImage: "square.and.arrow.up")
                         }
+                        .disabled(certifications.isEmpty)
 
-                        Button(action: { showAddCertification = true }) {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(.cyan)
+                        Button {
+                            showImportPicker = true
+                        } label: {
+                            Label("Import", systemImage: "square.and.arrow.down")
                         }
+                    } label: {
+                        Image(systemName: "ellipsis.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.cyan)
                     }
                 }
             }
@@ -578,7 +579,6 @@ struct CertificationDetailView: View {
         formatter.timeStyle = .none
         return formatter.string(from: date)
     }
-    @State private var showDeleteConfirmation = false
     @State private var showEditCertification = false
     
     private var orgColor: Color { certification.organizationColor }
@@ -674,42 +674,27 @@ struct CertificationDetailView: View {
                     .padding(.bottom, 16)
                 }
                 
-                Divider().overlay(Color.primary.opacity(0.08))
-                
-                // Bottom buttons
-                HStack {
+            }
+            .background(Color.platformBackground.ignoresSafeArea())
+            .navigationTitle(certification.name)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
-                    
-                    Spacer()
-                    
-                    Button(role: .destructive) {
-                        showDeleteConfirmation = true
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                            .foregroundStyle(.red)
-                    }
-                    .buttonStyle(.plain)
-                    
+                }
+                ToolbarItem(placement: .confirmationAction) {
                     Button {
                         showEditCertification = true
                     } label: {
                         Text("Edit")
                             .fontWeight(.semibold)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(.cyan)
-                            )
-                            .foregroundStyle(.black)
                     }
-                    .buttonStyle(.plain)
+                    #if os(iOS)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.cyan)
+                    #endif
                 }
-                .padding()
             }
-            .background(Color.platformBackground.ignoresSafeArea())
-            .navigationTitle(certification.name)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -717,16 +702,6 @@ struct CertificationDetailView: View {
             .frame(minWidth: 500, idealWidth: 560, maxWidth: 700, minHeight: 550, idealHeight: 650, maxHeight: 800)
             #endif
 
-            .alert("Delete certification?", isPresented: $showDeleteConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    NotificationManager.shared.cancelNotification(identifier: "cert-30-\(certification.id.uuidString)")
-                    modelContext.delete(certification)
-                    dismiss()
-                }
-            } message: {
-                Text("Are you sure you want to delete \"\(certification.name)\"? This action cannot be undone.")
-            }
             .sheet(isPresented: $showEditCertification) {
                 AddCertificationView(certificationToEdit: certification)
                     .presentationSizing(.page)
@@ -1087,35 +1062,31 @@ struct AddCertificationView: View {
                     .padding(.bottom, 16)
                 }
 
-                Divider().overlay(Color.primary.opacity(0.08))
-
-                // Bottom buttons
-                HStack {
-                    Button("Cancel") { dismiss() }
-                        .keyboardShortcut(.escape, modifiers: [])
-
-                    Spacer()
-
-                    Button {
-                        saveCertification()
-                    } label: {
-                        Text(isEditing ? LocalizedStringKey("Save") : LocalizedStringKey("Add"))
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(isValid ? .cyan : .cyan.opacity(0.3))
-                            )
-                            .foregroundStyle(isValid ? .black : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!isValid)
-                }
-                .padding()
             }
             .background(Color.platformBackground.ignoresSafeArea())
             .navigationTitle(isEditing ? LocalizedStringKey("Edit Certification") : LocalizedStringKey("New Certification"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .keyboardShortcut(.escape, modifiers: [])
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        saveCertification()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text(isEditing ? LocalizedStringKey("Save") : LocalizedStringKey("Add"))
+                        }
+                        .fontWeight(.semibold)
+                    }
+                    .disabled(!isValid)
+                    #if os(iOS)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.cyan)
+                    #endif
+                }
+            }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

@@ -400,7 +400,12 @@ struct ContentView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showFingerprintDebug) { FingerprintDebugView() }
+            .sheet(isPresented: $showFingerprintDebug) {
+                FingerprintDebugView()
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
             .sheet(isPresented: $showProfile) {
                 DiverProfileView()
                     .presentationSizing(.page)
@@ -454,6 +459,9 @@ struct ContentView: View {
                         showDeleteSingleConfirmation = true
                     }
                 )
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
             #endif
             .sheet(isPresented: $showMergeDivesSheet) {
@@ -1064,12 +1072,14 @@ struct ContentView: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
+                        .font(.title3)
                         .foregroundStyle(.cyan)
                 }
 
                 Button(action: { showFilterSheet = true }) {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .font(.title3)
                             .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
                         if activeFilterCount > 0 {
                             Text("\(activeFilterCount)")
@@ -1102,6 +1112,7 @@ struct ContentView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle.fill")
+                        .font(.title3)
                         .foregroundStyle(.cyan)
                 }
             }

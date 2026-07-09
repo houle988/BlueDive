@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "Oceanic_Pro_Plus_4.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

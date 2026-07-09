@@ -196,14 +196,7 @@ private struct FingerprintDebugRow: View {
             withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
         } label: {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "memorychip")
-                        .font(.body)
-                        .foregroundStyle(.blue)
-                }
+                DiveComputerIconView(name: record.computerName, isSelected: false)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Group {

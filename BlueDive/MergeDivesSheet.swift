@@ -279,7 +279,7 @@ struct MergeDivesSheet: View {
                 }
 
                 HStack(spacing: 5) {
-                    if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+                    if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
                         if let country = dive.siteCountry, !country.isEmpty {
                             Text("\(dive.location), \(country)")
                                 .lineLimit(1)

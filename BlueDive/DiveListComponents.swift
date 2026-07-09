@@ -110,14 +110,14 @@ struct DiveRowView: View {
     private var locationText: Text {
         if let country = dive.siteCountry, !country.isEmpty {
             // If both location and country exist, combine them
-            if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+            if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
                 return Text(verbatim: "\(dive.location), \(country)")
             }
             // If only country exists
             return Text(verbatim: country)
         }
         // If only location exists
-        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != String(localized: "Unknown") {
+        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
             return Text(verbatim: dive.location)
         }
         // Fallback
@@ -127,7 +127,7 @@ struct DiveRowView: View {
     private var depthInfo: some View {
         let depthValue = dive.displayMaxDepth
         let depthSymbol = prefs.depthUnit.symbol
-        return Text(String(format: "%.1f\(depthSymbol)", depthValue))
+        return Text(verbatim: depthValue.localizedString(decimals: 1) + depthSymbol)
             .fontWeight(.bold)
             .foregroundStyle(.primary)
     }
@@ -185,7 +185,7 @@ struct StatsHeaderView: View {
             
             StatMiniBox(
                 title: "MAX",
-                value: String(format: "%.1f\(depthSymbol)", depthValue),
+                value: depthValue.localizedString(decimals: 1) + depthSymbol,
                 icon: "arrow.down.circle.fill",
                 color: .cyan
             )

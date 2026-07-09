@@ -27,7 +27,7 @@ struct BestMixCalculatorView: View {
 
     @State private var unitMode: UnitMode = .metric
     @State private var isSeawater = true
-    @State private var po2Str = "1.4"
+    @State private var po2Str = 1.4.localizedString(decimals: 1)
     @State private var depthStr = "30"
     @State private var showInfo = false
     @FocusState private var isAnyFieldFocused: Bool
@@ -136,7 +136,7 @@ struct BestMixCalculatorView: View {
             numberRow(unitMode == .metric ? "Depth (m)" : "Depth (ft)", text: $depthStr)
             Toggle("Seawater", isOn: $isSeawater)
             LabeledContent("Pressure") {
-                Text(verbatim: String(format: "%.2f ATA", result.ata))
+                Text(verbatim: result.ata.localizedString(decimals: 2, minDecimals: 2) + " ATA")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
@@ -189,7 +189,7 @@ struct BestMixCalculatorView: View {
                         } else if isAnyMixSafe {
                             Text(verbatim: "≤ 100 %")
                         } else {
-                            Text(verbatim: String(format: "%.1f %%", result.bestMixPct))
+                            Text(verbatim: result.bestMixPct.localizedString(decimals: 1) + " %")
                         }
                     }
                     .font(.title2.monospacedDigit().bold())
@@ -199,7 +199,7 @@ struct BestMixCalculatorView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(verbatim: String(format: "%.2f ATA", result.ata))
+                Text(verbatim: result.ata.localizedString(decimals: 2, minDecimals: 2) + " ATA")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()

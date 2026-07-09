@@ -19,8 +19,8 @@ Third-party dependencies
 
 This project incorporates third-party libraries that are licensed independently of this license and are not subject to the restrictions above. Specifically:
 
-* libdivecomputer (https://github.com/libdivecomputer/libdivecomputer) — licensed under the GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later)
-* libdc-swift (https://github.com/deepsealabs/libdc-swift, BlueDive fork: https://github.com/jdevost/libdc-swift) — licensed under the GNU Lesser General Public License v2.1 (LGPL-2.1)
+* libdivecomputer (https://github.com/libdivecomputer/libdivecomputer), BlueDive fork: https://github.com/houle988/libdivecomputer) — licensed under the GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later)
+* libdc-swift (https://github.com/deepsealabs/libdc-swift, BlueDive fork: https://github.com/houle988/libdc-swift) — licensed under the GNU Lesser General Public License v2.1 (LGPL-2.1)
 
 Any modifications made to these libraries by the authors of this project are published separately under their respective LGPL licenses. The permissions and restrictions of this license (BDSAL) apply solely to the original code authored under this project and do not extend to, limit, or supersede the rights granted by the LGPL for those libraries.
 

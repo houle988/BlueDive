@@ -59,15 +59,13 @@ struct EditGearView: View {
             initialValue: GearCategory.allCases.first { $0.rawValue == gear.category } ?? .other
         )
         _weightContribution = State(initialValue: gear.weightContribution)
-        _weightContributionText = State(initialValue: gear.weightContribution == 0 ? "0" : String(gear.weightContribution))
+        _weightContributionText = State(initialValue: gear.weightContribution == 0 ? "0" : gear.weightContribution.localizedString(decimals: 2))
         _weightContributionUnit = State(initialValue: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)
         _datePurchased = State(initialValue: gear.datePurchased)
         _manufacturerText = State(initialValue: gear.manufacturer ?? "")
         _modelText = State(initialValue: gear.model ?? "")
         _serialNumber = State(initialValue: gear.serialNumber ?? "")
-        _purchasePrice = State(initialValue: gear.purchasePrice.map {
-            String(format: "%.2f", $0)
-        } ?? "")
+        _purchasePrice = State(initialValue: gear.purchasePrice.map { $0.localizedString(decimals: 2) } ?? "")
         _currency = State(initialValue: gear.currency ?? "CAD")
         _purchasedFrom = State(initialValue: gear.purchasedFrom ?? "")
         _isInactive = State(initialValue: gear.isInactive)
@@ -82,6 +80,27 @@ struct EditGearView: View {
 
     private var diverNameSuggestions: [String] {
         DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
+    }
+
+    private var manufacturerSuggestions: [String] {
+        var seen = Set<String>()
+        return allGearItems.compactMap(\.manufacturer)
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .sorted()
+    }
+
+    private var modelSuggestions: [String] {
+        var seen = Set<String>()
+        return allGearItems.compactMap(\.model)
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .sorted()
+    }
+
+    private var purchasedFromSuggestions: [String] {
+        var seen = Set<String>()
+        return allGearItems.compactMap(\.purchasedFrom)
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .sorted()
     }
 
     private var isFormValid: Bool {
@@ -120,15 +139,11 @@ struct EditGearView: View {
             #else
             .background(Color(.systemGroupedBackground))
             #endif
-            .navigationTitle("Edit Equipment")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            #endif
             .toolbar { toolbarContent }
             .alert("Error", isPresented: $showValidationError) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text(validationMessage)
+                Text(LocalizedStringKey(validationMessage))
             }
         }
         #if os(macOS)
@@ -321,9 +336,9 @@ struct EditGearView: View {
             SectionHeaderView(title: "Technical Details", icon: "doc.text")
 
             VStack(spacing: 12) {
-                FormFieldView(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText)
+                GearAutocompleteField(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText, suggestions: manufacturerSuggestions, suggestionIcon: "building.2")
 
-                FormFieldView(label: "Model", icon: "tag", placeholder: "Ex: Perdix 2", text: $modelText)
+                GearAutocompleteField(label: "Model", icon: "tag", placeholder: "Ex: Perdix 2", text: $modelText, suggestions: modelSuggestions, suggestionIcon: "tag")
 
                 FormFieldView(label: "Serial number", icon: "number", placeholder: "Ex: SN123456", text: $serialNumber)
                     .platformKeyboardType(.asciiCapable)
@@ -364,7 +379,7 @@ struct EditGearView: View {
                             .fontWeight(.medium)
 
                         HStack {
-                            TextField("0.00", text: $purchasePrice)
+                            TextField(0.0.localizedString(decimals: 2), text: $purchasePrice)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                             if !purchasePrice.isEmpty {
@@ -412,11 +427,13 @@ struct EditGearView: View {
                 }
 
                 // Store
-                FormFieldView(
+                GearAutocompleteField(
                     label: "Purchased from",
                     icon: "storefront",
                     placeholder: "Store name",
-                    text: $purchasedFrom
+                    text: $purchasedFrom,
+                    suggestions: purchasedFromSuggestions,
+                    suggestionIcon: "storefront.fill"
                 )
             }
         }
@@ -511,7 +528,7 @@ struct EditGearView: View {
                             if weightContribution == 0 {
                                 Text("None")
                             } else {
-                                Text("\(weightContribution, specifier: "%.2f") \(weightContributionUnit)")
+                                Text(verbatim: weightContribution.localizedString(decimals: 2) + " \(weightContributionUnit)")
                             }
                         }
                         .font(.title3)
@@ -525,7 +542,7 @@ struct EditGearView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            TextField("0.0", text: $weightContributionText)
+                            TextField(0.0.localizedString(decimals: 1), text: $weightContributionText)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                                 .padding()

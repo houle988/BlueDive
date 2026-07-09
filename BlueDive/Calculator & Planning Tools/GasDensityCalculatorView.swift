@@ -134,7 +134,7 @@ struct GasDensityCalculatorView: View {
             numberRow("Helium (He)", unit: "%", text: $heStr)
             LabeledContent {
                 Text(verbatim: isValid
-                    ? String(format: "%.1f %%", result.n2Pct)
+                    ? result.n2Pct.localizedString(decimals: 1) + " %"
                     : String(format: NSLocalizedString("Over %@", bundle: .forAppLanguage(), comment: ""), "100%"))
                     .foregroundStyle(isValid ? Color.secondary : .red)
                     .monospacedDigit()
@@ -157,7 +157,7 @@ struct GasDensityCalculatorView: View {
             numberRow(unitMode == .metric ? "Depth (m)" : "Depth (ft)", text: $depthStr)
             Toggle("Seawater", isOn: $isSeawater)
             LabeledContent("Pressure") {
-                Text(verbatim: String(format: "%.2f ATA", result.ata))
+                Text(verbatim: result.ata.localizedString(decimals: 2, minDecimals: 2) + " ATA")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
@@ -167,10 +167,10 @@ struct GasDensityCalculatorView: View {
     private var resultsSection: some View {
         Section(header: Text("Results")) {
             if isValid {
-                densityRow("Surface Density", value: result.surfaceDensity, color: surfaceDensityColor, ataPart: "1.00 ATA")
+                densityRow("Surface Density", value: result.surfaceDensity, color: surfaceDensityColor, ataPart: 1.0.localizedString(decimals: 2, minDecimals: 2) + " ATA")
                 densityRow("Density at Depth", value: result.depthDensity,
                            color: depthDensityColor,
-                           ataPart: String(format: "%.2f ATA", result.ata))
+                           ataPart: result.ata.localizedString(decimals: 2, minDecimals: 2) + " ATA")
                 densityWarning(result.depthDensity)
             } else {
                 Label {
@@ -229,7 +229,7 @@ struct GasDensityCalculatorView: View {
                 .foregroundStyle(color)
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: String(format: "%.3f", value))
+                    Text(verbatim: value.localizedString(decimals: 3))
                         .font(.title2.monospacedDigit().bold())
                         .foregroundStyle(color)
                     Text(verbatim: "g/L")
@@ -373,7 +373,7 @@ struct GasDensityCalculatorView: View {
         HStack {
             Text(verbatim: gas)
                 .frame(minWidth: 120, alignment: .leading)
-            Text(verbatim: String(format: "%.3f g/L", density))
+            Text(verbatim: density.localizedString(decimals: 3) + " g/L")
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         }

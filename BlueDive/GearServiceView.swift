@@ -8,8 +8,10 @@ struct GearServiceView: View {
     @Environment(\.locale) private var locale
 
     @State private var prefs = UserPreferences.shared
-    @State private var showServiceConfirmation = false
+    @State private var showDatePicker = false
     @State private var serviceDate = Date()
+    @State private var scheduleNextService = false
+    @State private var nextServiceDate = Date()
     @State private var showEditGear = false
     
     private func formattedDate(_ date: Date) -> String {
@@ -100,21 +102,71 @@ struct GearServiceView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .confirmationDialog(
-                "Mark as Serviced",
-                isPresented: $showServiceConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Today") {
-                    markAsServiced(on: Date())
+            .sheet(isPresented: $showDatePicker) {
+                NavigationStack {
+                    Form {
+                        Section("Service Date") {
+                            DatePicker(
+                                "Service Date",
+                                selection: $serviceDate,
+                                in: ...Date(),
+                                displayedComponents: .date
+                            )
+                            .adaptiveDatePickerStyle()
+                        }
+
+                        Section {
+                            Toggle("Schedule Next Service", isOn: $scheduleNextService)
+                                .onChange(of: scheduleNextService) { _, isOn in
+                                    if isOn {
+                                        nextServiceDate = Calendar.current.date(
+                                            byAdding: .year, value: 1, to: serviceDate
+                                        ) ?? serviceDate
+                                    }
+                                }
+                                .onChange(of: serviceDate) { _, newDate in
+                                    if scheduleNextService && nextServiceDate < newDate {
+                                        nextServiceDate = Calendar.current.date(
+                                            byAdding: .year, value: 1, to: newDate
+                                        ) ?? newDate
+                                    }
+                                }
+
+                            if scheduleNextService {
+                                DatePicker(
+                                    "Next Service Date",
+                                    selection: $nextServiceDate,
+                                    in: serviceDate...,
+                                    displayedComponents: .date
+                                )
+                                .adaptiveDatePickerStyle()
+                            }
+                        }
+                    }
+                    .navigationTitle("Select Service Date")
+                    #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                    #endif
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showDatePicker = false }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Confirm") {
+                                if scheduleNextService {
+                                    gear.nextServiceDue = nextServiceDate
+                                } else {
+                                    gear.nextServiceDue = nil
+                                }
+                                showDatePicker = false
+                                markAsServiced(on: serviceDate)
+                            }
+                        }
+                    }
                 }
-                Button("Choose a date") {
-                    // TODO: Display a date picker
-                    markAsServiced(on: serviceDate)
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("On what date was the maintenance performed?")
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
         }
     }
@@ -349,7 +401,7 @@ struct GearServiceView: View {
                 if let price = gear.purchasePrice {
                     let currency = gear.currency ?? "CAD"
                     gearDetailRow(icon: "dollarsign.circle", label: "Prix d'achat",
-                                  value: String(format: "%.2f \(currency)", price), color: .green)
+                                  value: price.localizedString(decimals: 2, minDecimals: 2) + " \(currency)", color: .green)
                 }
                 if let shop = gear.purchasedFrom, !shop.isEmpty {
                     gearDetailRow(icon: "storefront.fill", label: "Purchased From", value: shop, color: .orange)
@@ -594,7 +646,9 @@ struct GearServiceView: View {
             
             // Bouton d'action moderne
             Button {
-                showServiceConfirmation = true
+                serviceDate = Date()
+                scheduleNextService = false
+                showDatePicker = true
             } label: {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
@@ -862,7 +916,7 @@ struct GearServiceView: View {
                                 Image(systemName: "arrow.down")
                                     .font(.caption2)
                                     .foregroundStyle(.blue)
-                                Text("\(dive.displayMaxDepth, specifier: "%.1f")\(prefs.depthUnit.symbol)")
+                                Text(verbatim: dive.displayMaxDepth.localizedString(decimals: 1) + prefs.depthUnit.symbol)
                                     .font(.subheadline)
                                     .fontWeight(.bold)
                             }
@@ -921,7 +975,9 @@ struct GearServiceView: View {
                 Divider()
 
                 Button {
-                    showServiceConfirmation = true
+                    serviceDate = Date()
+                    scheduleNextService = false
+                    showDatePicker = true
                 } label: {
                     Label("Mark as Serviced", systemImage: "checkmark.circle")
                 }

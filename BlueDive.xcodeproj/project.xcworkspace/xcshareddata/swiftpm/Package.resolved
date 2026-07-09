@@ -1,12 +1,13 @@
 {
-  "originHash" : "30ba3e718ee37735705b6456fd8e51a640a6551b6bf12e9d61b0a118efa71b0c",
+  "originHash" : "96b9325833a86efb166e40586a6b252973a21027b34f127b6fc8fe8f7c6d4aff",
   "pins" : [
     {
       "identity" : "libdc-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/jdevost/libdc-swift",
+      "location" : "https://github.com/houle988/libdc-swift",
       "state" : {
-        "revision" : "0d8d284388c07b01f7587224d38b81523171505b"
+        "branch" : "working",
+        "revision" : "48c5ace35278ac9318fdde7003186f16f286ca61"
       }
     }
   ],

@@ -4,6 +4,10 @@ BlueDive is a dive log application for macOS and iOS. It is designed as a featur
 
 ## General Rules
 
+Before making any code changes, confirm the approach with the user and wait for explicit approval. Do not modify files until the user has authorized the change.
+
+Never commit, push, or perform any git or GitHub operations (including creating branches, pull requests, or tags) without explicit user authorization first.
+
 When importing, exporting, processing, and storing data, never convert, normalize, or alter dive data. Preserve original values unless the user explicitly modifies them through the app.
 
 Do not change the data model (structs, properties, enums, relationships) unless explicitly instructed to do so.

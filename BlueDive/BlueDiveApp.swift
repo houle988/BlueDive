@@ -87,7 +87,10 @@ struct BlueDiveApp: App {
         // LibDCSwift.Logger.shared.enableDebugMode()
 
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
-        listPendingNotifications()
+        #if DEBUG
+        // listPendingNotifications()
+        // scheduleDebugNotification()
+        #endif
     }
     
     @State private var prefs = UserPreferences.shared
@@ -113,6 +116,9 @@ struct BlueDiveApp: App {
             #if os(macOS)
                 .sheet(isPresented: $showingAbout) {
                     AboutView()
+                        .presentationSizing(.page)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
                 }
             #endif
         }
@@ -143,6 +149,59 @@ struct BlueDiveApp: App {
         GearGroup.self,
     ])
  
+    #if DEBUG
+    /// Fires a test notification 5 seconds after launch linked to a real gear or cert item.
+    /// Steps: run the app → background it → banner appears → long-press to see actions.
+    /// Toggle `testGearPath` to switch between gear (MARK_DONE) and cert (RENEW) paths.
+    func scheduleDebugNotification() {
+        let testGearPath = false   // false = cert path
+        let context = Self.sharedModelContainer.mainContext
+        Task { @MainActor in
+            let content = UNMutableNotificationContent()
+            content.sound = .default
+
+            if testGearPath {
+                let gear = try? context.fetch(FetchDescriptor<Gear>()).first
+                guard let gear else {
+                    print("⚠️ No gear found — add a piece of equipment first")
+                    return
+                }
+                content.title = "🛠️ Service Required"
+                content.body = "\(gear.name) requires servicing in 30 days."
+                content.categoryIdentifier = "GEAR_MAINTENANCE"
+                content.userInfo = [
+                    "gearId": gear.id.uuidString,
+                    "type": "maintenance",
+                    "gearName": gear.name,
+                    "dueDateTimestamp": (gear.nextServiceDue ?? Date().addingTimeInterval(30 * 86400)).timeIntervalSince1970
+                ]
+                print("🔔 Debug notification for gear: \(gear.name) (\(gear.id.uuidString))")
+            } else {
+                let cert = try? context.fetch(FetchDescriptor<Certification>()).first
+                guard let cert else {
+                    print("⚠️ No certification found — add a certification first")
+                    return
+                }
+                content.title = "⚠️ Certification Expiring"
+                content.body = "Your \(cert.name) certification expires in 30 days."
+                content.categoryIdentifier = "CERTIFICATION_EXPIRATION"
+                content.userInfo = [
+                    "certId": cert.id.uuidString,
+                    "type": "expiration",
+                    "certName": cert.name,
+                    "dueDateTimestamp": (cert.expirationDate ?? Date().addingTimeInterval(30 * 86400)).timeIntervalSince1970
+                ]
+                print("🔔 Debug notification for cert: \(cert.name) (\(cert.id.uuidString))")
+            }
+
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+            let request = UNNotificationRequest(identifier: "debug-notification", content: content, trigger: trigger)
+            try? await UNUserNotificationCenter.current().add(request)
+            print("🔔 Background the app now — banner fires in 5 seconds")
+        }
+    }
+    #endif
+
     //  Added by Steve to list pending notifications
     func listPendingNotifications() {
         let center = UNUserNotificationCenter.current()

@@ -135,7 +135,7 @@ struct AddTankTemplateView: View {
                     .fontWeight(.medium)
 
                 HStack {
-                    TextField(prefs.volumeUnit == .liters ? "e.g. 12.0" : "e.g. 80", text: $volumeText)
+                    TextField(prefs.volumeUnit == .liters ? "e.g. \(12.0.localizedString(decimals: 1))" : "e.g. 80", text: $volumeText)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()
                         #if os(iOS)

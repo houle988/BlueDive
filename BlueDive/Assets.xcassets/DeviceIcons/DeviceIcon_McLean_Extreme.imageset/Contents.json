@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "McLean_Extreme.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

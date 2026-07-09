@@ -136,3 +136,18 @@ extension View {
     }
 }
 #endif
+
+// MARK: - Locale-aware number formatting for TextFields
+
+extension Double {
+    /// Formats the value using the user's locale decimal separator (e.g. "12,5" in French CA).
+    /// Use this when pre-filling TextFields. Pairs with parseFlexibleDouble which accepts both separators.
+    func localizedString(decimals: Int = 1, minDecimals: Int = 0) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale.current
+        formatter.minimumFractionDigits = minDecimals
+        formatter.maximumFractionDigits = decimals
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: self)) ?? String(self)
+    }
+}

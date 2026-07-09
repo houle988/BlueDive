@@ -9,6 +9,17 @@ import LibDCSwift
 import AppKit
 #endif
 
+// MARK: - Unit formatting helper
+
+private func formatLocalizedUnit(_ value: Double, decimals: Int, symbol: String) -> String {
+    let formatter = NumberFormatter()
+    formatter.locale = Locale.current
+    formatter.minimumFractionDigits = 0
+    formatter.maximumFractionDigits = decimals
+    formatter.numberStyle = .decimal
+    return (formatter.string(from: NSNumber(value: value)) ?? String(value)) + " \(symbol)"
+}
+
 // MARK: - Depth Unit
 
 enum DepthUnit: String, CaseIterable {
@@ -35,8 +46,7 @@ enum DepthUnit: String, CaseIterable {
 
     /// Formats a metre value with the correct unit symbol.
     func formatted(_ meters: Double, decimals: Int = 1) -> String {
-        let value = convert(meters)
-        return String(format: "%.\(decimals)f \(symbol)", value)
+        formatLocalizedUnit(convert(meters), decimals: decimals, symbol: symbol)
     }
 }
 
@@ -102,8 +112,7 @@ enum PressureUnit: String, CaseIterable {
     ///   - storedUnit: The unit the value was originally imported in.
     ///   - decimals: Number of decimal places (default 0).
     func formatted(_ value: Double, from storedUnit: PressureUnit, decimals: Int = 0) -> String {
-        let display = convert(value, from: storedUnit)
-        return String(format: "%.\(decimals)f \(symbol)", display)
+        formatLocalizedUnit(convert(value, from: storedUnit), decimals: decimals, symbol: symbol)
     }
 
     /// Convenience: converts a value already known to be in bar to the display
@@ -277,8 +286,7 @@ enum WeightUnit: String, CaseIterable {
     ///   - storedUnit: The unit the value was originally imported in.
     ///   - decimals: Number of decimal places (default 1).
     func formatted(_ value: Double, from storedUnit: WeightUnit, decimals: Int = 2) -> String {
-        let display = convert(value, from: storedUnit)
-        return String(format: "%.\(decimals)f \(symbol)", display)
+        formatLocalizedUnit(convert(value, from: storedUnit), decimals: decimals, symbol: symbol)
     }
 
     /// Formats a kilograms value with the correct unit symbol.
@@ -450,6 +458,8 @@ struct SettingsView: View {
     @State private var backupFileName: String = ""
     #endif
     @State private var showFingerprintDebug = false
+    @State private var showingRecalculateSurfaceAlert = false
+    @State private var showingRecalculateSurfaceDone = false
 
     var body: some View {
         NavigationStack {
@@ -564,6 +574,20 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) { backupError = nil }
             } message: {
                 Text(backupError ?? "")
+            }
+            .alert("Recalculate Surface Intervals?", isPresented: $showingRecalculateSurfaceAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Recalculate") {
+                    recalculateSurfaceIntervals()
+                    showingRecalculateSurfaceDone = true
+                }
+            } message: {
+                Text("This will update the surface interval for all dives based on each diver's previous dive. Dives without a diver name will not be affected.")
+            }
+            .alert("Done", isPresented: $showingRecalculateSurfaceDone) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Surface intervals have been recalculated.")
             }
         }
     }
@@ -1062,6 +1086,50 @@ struct SettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                
+                Button {
+                    showingRecalculateSurfaceAlert = true
+                } label: {
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(Color.indigo.opacity(0.15))
+                                .frame(width: 40, height: 40)
+                            
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                                .font(.body)
+                                .foregroundStyle(.indigo)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Recalculate surface intervals")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                            
+                            Text("Recalculate surface interval for each diver's dives")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.primary.opacity(0.03))
+                    )
+                }
+                .buttonStyle(.plain)
+                
+                Text("Dives without a diver name are not affected.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
                 
                 #if os(macOS)
                 Button {
@@ -1702,18 +1770,24 @@ struct SettingsView: View {
     @MainActor
     private func rescheduleGearNotifications() async {
         #if canImport(UserNotifications)
-        guard gearReminders else { return }
-        let allGear = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
-        NotificationManager.shared.scheduleGearMaintenanceReminders(for: allGear)
+        if gearReminders {
+            let allGear = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
+            NotificationManager.shared.scheduleGearMaintenanceReminders(for: allGear)
+        } else {
+            await NotificationManager.shared.cancelNotifications(withPrefix: "gear-")
+        }
         #endif
     }
 
     @MainActor
     private func rescheduleCertNotifications() async {
         #if canImport(UserNotifications)
-        guard certReminders else { return }
-        let allCerts = (try? modelContext.fetch(FetchDescriptor<Certification>())) ?? []
-        NotificationManager.shared.scheduleCertificationReminders(for: allCerts)
+        if certReminders {
+            let allCerts = (try? modelContext.fetch(FetchDescriptor<Certification>())) ?? []
+            NotificationManager.shared.scheduleCertificationReminders(for: allCerts)
+        } else {
+            await NotificationManager.shared.cancelNotifications(withPrefix: "cert-")
+        }
         #endif
     }
 
@@ -1724,6 +1798,43 @@ struct SettingsView: View {
     }
 
     // MARK: - iCloud sync
+
+    // MARK: - Surface Interval Recalculation
+
+    private func recalculateSurfaceIntervals() {
+        let allDives = (try? modelContext.fetch(FetchDescriptor<Dive>())) ?? []
+        let grouped = Dictionary(grouping: allDives) { $0.diverName }
+        for (diver, diverDives) in grouped {
+            guard !diver.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            let sorted = diverDives.sorted { $0.timestamp < $1.timestamp }
+            for (index, dive) in sorted.enumerated() {
+                if index == 0 {
+                    dive.surfaceInterval = "0h 00m"
+                    dive.isRepetitiveDive = false
+                } else {
+                    let prev = sorted[index - 1]
+                    let prevEnd = prev.timestamp.addingTimeInterval(TimeInterval(prev.duration * 60))
+                    let gap = dive.timestamp.timeIntervalSince(prevEnd)
+                    guard gap > 0 else {
+                        dive.surfaceInterval = "0h 00m"
+                        dive.isRepetitiveDive = true
+                        continue
+                    }
+                    let totalMinutes = Int(gap / 60)
+                    let days = totalMinutes / (24 * 60)
+                    let hours = (totalMinutes % (24 * 60)) / 60
+                    let minutes = totalMinutes % 60
+                    if days > 0 {
+                        dive.surfaceInterval = String(format: "%dd %dh %02dm", days, hours, minutes)
+                    } else {
+                        dive.surfaceInterval = String(format: "%dh %02dm", hours, minutes)
+                    }
+                    dive.isRepetitiveDive = totalMinutes < 1440
+                }
+            }
+        }
+        try? modelContext.save()
+    }
 
 
 
@@ -1905,8 +2016,9 @@ struct SettingsView: View {
 
             // Step 2: Remove all pending and delivered notifications.
             NotificationManager.shared.cancelAllNotifications()
-            NotificationManager.shared.clearBadge()
+            await NotificationManager.shared.clearBadge()
             UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
+            UserDefaults.standard.removeObject(forKey: "lastMilestoneNotified")
 
             // Reset all widget data in the shared App Group suite.
             let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
