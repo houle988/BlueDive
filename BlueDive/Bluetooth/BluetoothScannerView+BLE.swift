@@ -167,6 +167,12 @@ extension BluetoothScannerView {
         // If we call openBLEDevice from the main queue, the callbacks can never be
         // processed and the connection times out.
         // We dispatch on a background thread to free the main RunLoop.
+        //
+        // Set isConnecting synchronously before the dispatch. openBLEDevice sets it
+        // via DispatchQueue.main.async — which can arrive AFTER didDisconnectPeripheral
+        // fires, leaving the guard window open and triggering a spurious auto-reconnect
+        // that races with the real connection and causes a double-free of device_data_t.
+        bleManager.isConnecting = true
         let forcedModel: (family: DeviceConfiguration.DeviceFamily, model: UInt32)?
         if let override = modelOverrides[deviceAddress] {
             forcedModel = (family: override.family, model: override.modelID)
@@ -514,6 +520,20 @@ extension BluetoothScannerView {
             modelOverrides[newUUID] = model
         } else {
             Self.logger.warning("[Reassociation] Model (family=\(String(describing: family)) modelID=\(candidate.modelID)) not in supportedModels — seed set, no forcedModel hint")
+        }
+        // Prune stale DeviceStorage entries for this serial immediately.
+        // The old UUID (e.g. left over after an OS Bluetooth deletion + re-pair)
+        // would cause didDisconnectPeripheral to trigger auto-reconnect during
+        // the openBLEDevice window, racing with this connection and causing a
+        // double-free of device_data_t. commitPendingSeed would prune it on
+        // success, but that's too late to prevent the crash.
+        if !candidate.serial.isEmpty && !Self.knownSentinelSerials.contains(candidate.serial.lowercased()),
+           let allDevices = DeviceStorage.shared.getAllStoredDevices() {
+            let filtered = allDevices.filter { !($0.serial?.lowercased() == candidate.serial.lowercased() && $0.uuid != newUUID) }
+            if filtered.count < allDevices.count {
+                DeviceStorage.shared.updateStoredDevices(filtered)
+                Self.logger.info("[Reassociation] Pruned \(allDevices.count - filtered.count) stale DeviceStorage entry/entries for serial \(candidate.serial) before connect")
+            }
         }
         connectToDevice(peripheral)
         connectedDeviceName = candidate.computerName
