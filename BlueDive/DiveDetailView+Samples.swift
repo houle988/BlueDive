@@ -95,7 +95,7 @@ extension DiveDetailView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 
@@ -139,7 +139,7 @@ extension DiveDetailView {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 
@@ -155,7 +155,7 @@ extension DiveDetailView {
             UnifiedDiveChartOptimized(dive: dive)
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 
@@ -282,7 +282,7 @@ extension DiveDetailView {
 
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 }

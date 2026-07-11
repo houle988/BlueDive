@@ -121,7 +121,7 @@ extension DiveDetailView {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 

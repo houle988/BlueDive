@@ -141,7 +141,7 @@ extension View {
 
 let wikiDocumentationURL = URL(string: "https://github.com/houle988/BlueDive/wiki")!
 
-// MARK: - Shared card background
+// MARK: - Shared card backgrounds
 
 extension View {
     func sectionCardBackground() -> some View {
@@ -153,6 +153,10 @@ extension View {
                         .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                 )
         )
+    }
+
+    func detailCardBackground() -> some View {
+        self.background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
     }
 }
 
