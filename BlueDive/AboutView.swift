@@ -33,14 +33,27 @@ struct AboutView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         
-                        Text("Website: https://www.bluedive.app")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text("Website:")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Link(destination: URL(string: "https://www.bluedive.app")!) {
+                                Text(verbatim: "https://www.bluedive.app")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.cyan)
+                            }
+                        }
 
-                        
-                        Text("Contact: support@bluedive.app")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text("Contact:")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Link(destination: URL(string: "mailto:support@bluedive.app")!) {
+                                Text(verbatim: "support@bluedive.app")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.cyan)
+                            }
+                        }
 
                         Text("A feature-rich dive log for iPadOS & iOS")
                             .font(.subheadline)
@@ -48,6 +61,24 @@ struct AboutView: View {
                             .foregroundStyle(.cyan)
                     }
                     
+                    // Documentation
+                    VStack(spacing: 16) {
+                        sectionHeader(title: "Documentation", icon: "book.fill", color: .blue)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Guides, tips, and reference material to help you get the most out of BlueDive.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            ExternalLinkView(url: wikiDocumentationURL)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .sectionCardBackground()
+                    }
+                    .padding(.horizontal)
+
                     // Contributors
                     VStack(spacing: 16) {
                         sectionHeader(title: "Contributors", icon: "person.3.fill", color: .cyan)
@@ -60,14 +91,7 @@ struct AboutView: View {
                             contributorRow(name: "Jérôme Devost")
                         }
                         .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.primary.opacity(0.03))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                )
-                        )
+                        .sectionCardBackground()
                     }
                     .padding(.horizontal)
                     
@@ -79,14 +103,7 @@ struct AboutView: View {
                             contributorRow(name: "Thomas MacDermott", role: "Wiki, testing and ideas for new features")
                         }
                         .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.primary.opacity(0.03))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                )
-                        )
+                        .sectionCardBackground()
                     }
                     .padding(.horizontal)
 
@@ -110,14 +127,7 @@ struct AboutView: View {
                             )
                         }
                         .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.primary.opacity(0.03))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                )
-                        )
+                        .sectionCardBackground()
                     }
                     .padding(.horizontal)
                     
@@ -222,18 +232,29 @@ struct AboutView: View {
                 .fixedSize(horizontal: false, vertical: true)
             
             if let link = URL(string: url) {
-                Link(destination: link) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up.right.square")
-                            .font(.caption2)
-                        Text(url)
-                            .font(.caption2)
-                    }
-                    .foregroundStyle(.cyan)
-                }
+                ExternalLinkView(url: link)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)
     }
 }
+
+struct ExternalLinkView: View {
+    let url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.right.square")
+                    .font(.caption2)
+                Text(verbatim: url.absoluteString)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .foregroundStyle(.cyan)
+        }
+    }
+}
+
