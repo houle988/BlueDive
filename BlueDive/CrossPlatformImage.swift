@@ -137,6 +137,29 @@ extension View {
 }
 #endif
 
+// MARK: - App links
+
+let wikiDocumentationURL = URL(string: "https://github.com/houle988/BlueDive/wiki")!
+
+// MARK: - Shared card backgrounds
+
+extension View {
+    func sectionCardBackground() -> some View {
+        self.background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+
+    func detailCardBackground() -> some View {
+        self.background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+    }
+}
+
 // MARK: - Locale-aware number formatting for TextFields
 
 extension Double {

@@ -79,7 +79,7 @@ extension DiveDetailView {
             .pickerStyle(.menu)
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 
@@ -141,7 +141,7 @@ extension DiveDetailView {
                         value: tank?.tankType.flatMap { $0.isEmpty ? nil : localizedTankFormat($0) } ?? "—")
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 
@@ -223,7 +223,7 @@ extension DiveDetailView {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 
@@ -433,7 +433,7 @@ extension DiveDetailView {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 

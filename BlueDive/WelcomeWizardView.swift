@@ -81,6 +81,7 @@ struct WelcomeWizardView: View {
                 Feature(icon: "rectangle.3.group.fill", color: .blue, title: "Home Screen Widgets", description: "Add BlueDive widgets to your home screen for quick access to your recent dives and dive stats."),
                 Feature(icon: "person.circle.fill", color: .pink, title: "Diver Profile", description: "Keep your diver info, emergency contacts, and insurance details handy."),
                 Feature(icon: "gearshape.fill", color: .gray, title: "Settings", description: "Choose your units (metric/imperial), appearance, language, and notification preferences."),
+                Feature(icon: "book.fill", color: .blue, title: "Documentation", description: "Guides, tips, and reference material to help you get the most out of BlueDive.", url: wikiDocumentationURL),
             ]
         ),
     ]
@@ -275,19 +276,17 @@ struct WelcomeWizardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if let link = feature.url {
+                    ExternalLinkView(url: link)
+                        .padding(.top, 2)
+                }
             }
 
             Spacer()
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.primary.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                )
-        )
+        .sectionCardBackground()
     }
 }
 
@@ -307,4 +306,5 @@ private struct Feature: Identifiable {
     let color: Color
     let title: LocalizedStringKey
     let description: LocalizedStringKey
+    var url: URL? = nil
 }

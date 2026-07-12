@@ -60,7 +60,7 @@ struct UDDFExportTabView: View {
                 .lineLimit(2)
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 
@@ -164,7 +164,7 @@ struct UDDFExportTabView: View {
             )
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
         .padding(.bottom, 20)
     }

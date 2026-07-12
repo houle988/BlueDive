@@ -521,7 +521,7 @@ extension DiveDetailView {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
         #if os(iOS)
         .onTapGesture {
@@ -720,7 +720,7 @@ extension DiveDetailView {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
         #if os(iOS)
         .onTapGesture {
@@ -776,7 +776,7 @@ extension DiveDetailView {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
         #if os(iOS)
         .onTapGesture {
@@ -1282,7 +1282,7 @@ extension DiveDetailView {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 
@@ -1323,7 +1323,7 @@ extension DiveDetailView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .detailCardBackground()
         .padding(.horizontal)
     }
 }
