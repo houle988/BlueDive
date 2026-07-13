@@ -177,7 +177,7 @@ struct StatisticsView: View {
         let divingDays = Set(dives.map { calendar.startOfDay(for: $0.timestamp) }).sorted()
         var longestStreak = divingDays.isEmpty ? 0 : 1
         var currentStreak = 1
-        for i in 1..<divingDays.count {
+        for i in divingDays.indices.dropFirst() {
             let diff = calendar.dateComponents([.day], from: divingDays[i - 1], to: divingDays[i]).day ?? 999
             currentStreak = diff == 1 ? currentStreak + 1 : 1
             longestStreak = max(longestStreak, currentStreak)
@@ -363,7 +363,12 @@ struct StatisticsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if !allDives.isEmpty && filteredDives.isEmpty {
+                if allDives.isEmpty {
+                    NoEntriesForDiverView(
+                        title: "No Dives Recorded",
+                        description: "Add your first dive to see your statistics."
+                    )
+                } else if filteredDives.isEmpty {
                     NoEntriesForDiverView(
                         title: "No Dives Match Filters",
                         description: "No dives were found matching the current filters."
