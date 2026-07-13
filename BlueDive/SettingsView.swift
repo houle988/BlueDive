@@ -1660,14 +1660,41 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
+                .sectionCardBackground()
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                dismiss()
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    UserDefaults.standard.set(DiveIntroConfig.replayValue, forKey: DiveIntroConfig.versionStorageKey)
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "water.waves")
+                        .font(.title3)
+                        .foregroundStyle(.cyan)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Intro Animation")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.primary)
+                        Text("Replay the launch animation")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "play.fill")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .sectionCardBackground()
             }
             .buttonStyle(.plain)
         }
