@@ -10,20 +10,20 @@ struct DiveCalendarHeatmapView: View {
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
 
-    @State private var selectedYear: Int = Calendar.current.component(.year, from: .now)
+    @State private var selectedYear: Int = Calendar(identifier: .gregorian).component(.year, from: .now)
     @State private var selectedDay: Date? = nil
     @State private var selectedDayDives: [Dive] = []
     @State private var showDaySheet = false
 
     private var calendar: Calendar {
-        var cal = Calendar.current
+        var cal = Calendar(identifier: .gregorian)
         cal.locale = locale
         return cal
     }
     private let monthColumns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 7)
     private var weekdaySymbols: [String] {
         let symbols = calendar.shortStandaloneWeekdaySymbols
-        return Array(symbols[1...]) + [symbols[0]]
+        return (Array(symbols[1...]) + [symbols[0]]).map { $0.prefix(1).uppercased() + $0.dropFirst() }
     }
 
     // Cached statistics — computed once in .task / recomputeYearStats, not on every render
@@ -108,11 +108,12 @@ struct DiveCalendarHeatmapView: View {
         return (weekday + 5) % 7
     }
 
-    // Month name
-    private func monthName(_ month: Int) -> String {
+    // Month names — standalone form for use as standalone headers, pinned to Gregorian to match the grid calendar
+    private var allMonthNames: [String] {
         let formatter = DateFormatter()
         formatter.locale = locale
-        return formatter.monthSymbols[month - 1]
+        formatter.calendar = Calendar(identifier: .gregorian)
+        return formatter.standaloneMonthSymbols.map { $0.prefix(1).uppercased() + $0.dropFirst() }
     }
 
     var body: some View {
@@ -134,12 +135,14 @@ struct DiveCalendarHeatmapView: View {
                             legend
 
                             // Month-by-month calendar grids
+                            let weekdays = weekdaySymbols
+                            let monthNames = allMonthNames
                             ForEach(1...12, id: \.self) { month in
                                 let days = daysInMonth(month)
                                 let monthDiveCount = cachedMonthDiveCounts[month] ?? 0
 
                                 if !days.isEmpty {
-                                    monthSection(month: month, days: days, diveCount: monthDiveCount)
+                                    monthSection(month: month, days: days, diveCount: monthDiveCount, weekdays: weekdays, monthName: monthNames[month - 1])
                                 }
                             }
 
@@ -327,11 +330,11 @@ struct DiveCalendarHeatmapView: View {
 
     // MARK: - Month Section
 
-    private func monthSection(month: Int, days: [Date], diveCount: Int) -> some View {
+    private func monthSection(month: Int, days: [Date], diveCount: Int, weekdays: [String], monthName: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Month header
             HStack(alignment: .firstTextBaseline) {
-                Text(monthName(month))
+                Text(monthName)
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundStyle(.primary)
 
@@ -353,7 +356,7 @@ struct DiveCalendarHeatmapView: View {
 
             // Weekday header row
             LazyVGrid(columns: monthColumns, spacing: 2) {
-                ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { index, symbol in
+                ForEach(Array(weekdays.enumerated()), id: \.offset) { index, symbol in
                     Text(symbol)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(index >= 5 ? Color.cyan.opacity(0.5) : .secondary)
