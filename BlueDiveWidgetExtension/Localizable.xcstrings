@@ -68,6 +68,17 @@
         }
       }
     },
+    "Choose which diver's stats to display." : {
+      "comment" : "Description of Diver Stats widget intent.",
+      "localizations" : {
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez les statistiques du plongeur à afficher."
+          }
+        }
+      }
+    },
     "Days Since" : {
       "comment" : "Widget label for days since last dive",
       "localizations" : {
@@ -120,17 +131,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Statistiques du plongeur"
-          }
-        }
-      }
-    },
-    "Choose which diver's stats to display." : {
-      "comment" : "Description of Diver Stats widget intent.",
-      "localizations" : {
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisissez les statistiques du plongeur à afficher."
           }
         }
       }
@@ -268,6 +268,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Temps total"
+          }
+        }
+      }
+    },
+    "unit.depth.symbol.feet" : {
+      "comment" : "Abbreviated symbol for feet used as a depth unit (e.g. '12 ft')",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ft"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pi"
+          }
+        }
+      }
+    },
+    "unit.depth.symbol.meters" : {
+      "comment" : "Abbreviated symbol for metres used as a depth unit (e.g. '30 m')",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "m"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "m"
           }
         }
       }

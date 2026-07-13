@@ -59,7 +59,7 @@ extension DiveDetailView {
                         value: dive.current.map { localizedCurrent($0) } ?? "—")
 
             // Always display Visibility field
-            let depthUnit = prefs.depthUnit == .feet ? "ft" : "m"
+            let depthUnit = prefs.depthUnit.symbol
             if let visibility = dive.visibility {
                 let visibilityDisplay: String = {
                     let trimmed = visibility.trimmingCharacters(in: .whitespaces)

@@ -31,8 +31,8 @@ enum DepthUnit: String, CaseIterable {
 
     var symbol: String {
         switch self {
-        case .meters: return "m"
-        case .feet:   return "ft"
+        case .meters: return NSLocalizedString("unit.depth.symbol.meters", bundle: .forAppLanguage(), comment: "Depth unit symbol for metres")
+        case .feet:   return NSLocalizedString("unit.depth.symbol.feet", bundle: .forAppLanguage(), comment: "Depth unit symbol for feet")
         }
     }
 
@@ -210,8 +210,8 @@ enum VolumeUnit: String, CaseIterable {
 
     var symbol: String {
         switch self {
-        case .liters:    return "L"
-        case .cubicFeet: return "ft³"
+        case .liters:    return NSLocalizedString("unit.volume.symbol.liters", bundle: .forAppLanguage(), comment: "Volume unit symbol for litres")
+        case .cubicFeet: return NSLocalizedString("unit.volume.symbol.cubicFeet", bundle: .forAppLanguage(), comment: "Volume unit symbol for cubic feet")
         }
     }
 

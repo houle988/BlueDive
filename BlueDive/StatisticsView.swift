@@ -294,7 +294,7 @@ struct StatisticsView: View {
             let isMetricRMV = prefs.pressureUnit != .psi
             let avgRMVFormatted = isMetricRMV
                 ? avgRMVL.formatted(.number.locale(locale).precision(.fractionLength(2))) + " L/min"
-                : (avgRMVL / 28.3168).formatted(.number.locale(locale).precision(.fractionLength(3))) + " cu ft/min"
+                : (avgRMVL / 28.3168).formatted(.number.locale(locale).precision(.fractionLength(3))) + " " + NSLocalizedString("unit.volume.rmv.cu_ft_per_min", bundle: .forAppLanguage(), comment: "RMV unit: cubic feet per minute")
             let hasNonNative = rmvDives.contains { !$0.isRMVInNativeUnits }
             avgRMVStr = hasNonNative ? avgRMVFormatted + " *" : avgRMVFormatted
             bestRMVDive = rmvDives.min(by: { $0.calculatedRMV < $1.calculatedRMV })

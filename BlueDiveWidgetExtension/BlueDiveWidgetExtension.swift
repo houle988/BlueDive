@@ -472,7 +472,10 @@ struct DiverStatsEntry: TimelineEntry {
 }
 
 private extension DiverStatsEntry {
-    var depthSymbol: String { depthUnit == "feet" ? "ft" : "m" }
+    var depthSymbol: String {
+        NSLocalizedString(depthUnit == "feet" ? "unit.depth.symbol.feet" : "unit.depth.symbol.meters",
+                          bundle: .forWidgetLocale(locale), comment: "Depth unit symbol")
+    }
 
     func convertDepth(_ meters: Double) -> Double {
         depthUnit == "feet" ? meters * metersToFeet : meters
