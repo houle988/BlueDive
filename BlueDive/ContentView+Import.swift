@@ -9,6 +9,7 @@ enum ImportFileType {
     case macDive
     case blueDive
     case uddf
+    case gearCSV
 }
 
 // MARK: - Import Error
@@ -188,6 +189,8 @@ extension ContentView {
             return try parseBlueDiveXML(data: data, importGear: formats.importGear)
         case .uddf:
             return try parseUDDFXML(data: data, importGear: formats.importGear)
+        case .gearCSV:
+            throw ImportError.unsupportedFormat
         }
     }
 

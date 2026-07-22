@@ -204,8 +204,20 @@ struct ImportFormatPickerView: View {
                             optionList: weightOptions,
                             apply: { options.weightFormat = $0 }
                         )
+                    } else if fileType == .gearCSV {
+                        unitCard(
+                            icon: "scalemass.fill", iconColor: .purple,
+                            title: "Weight",
+                            autoValue: nil,
+                            currentValue: options.weightFormat,
+                            optionList: weightOptions,
+                            showAutoChip: false,
+                            apply: { options.weightFormat = $0 }
+                        )
                     }
-                    importGearToggle
+                    if fileType != .gearCSV {
+                        importGearToggle
+                    }
                     actionButtons
                 }
                 .padding(.horizontal)
@@ -216,9 +228,9 @@ struct ImportFormatPickerView: View {
         #if os(macOS)
         .frame(
             minWidth: 540, idealWidth: 600, maxWidth: 750,
-            minHeight: fileType == .macDive ? 580 : 280,
-            idealHeight: fileType == .macDive ? 650 : 320,
-            maxHeight: fileType == .macDive ? 850 : 400
+            minHeight: fileType == .macDive ? 580 : fileType == .gearCSV ? 330 : 280,
+            idealHeight: fileType == .macDive ? 650 : fileType == .gearCSV ? 370 : 320,
+            maxHeight: fileType == .macDive ? 850 : fileType == .gearCSV ? 450 : 400
         )
         #endif
     }
@@ -236,12 +248,16 @@ struct ImportFormatPickerView: View {
                     .foregroundStyle(.cyan)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(fileType == .macDive ? "Import Units" : "Import Options")
+                Text(verbatim: fileType == .macDive || fileType == .gearCSV
+                     ? NSLocalizedString("Import Units", bundle: Bundle.forAppLanguage(), comment: "Title of the import units picker sheet.")
+                     : NSLocalizedString("Import Options", bundle: Bundle.forAppLanguage(), comment: "Title of the import options picker sheet."))
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
-                Text(fileType == .macDive
-                     ? "Choose the unit system used by your file"
-                     : "Configure options for your import")
+                Text(verbatim: fileType == .macDive
+                     ? NSLocalizedString("Choose the unit system used by your file", bundle: Bundle.forAppLanguage(), comment: "A description below the title of the unit system picker.")
+                     : fileType == .gearCSV
+                     ? NSLocalizedString("Choose the weight unit used in your MacDive export", bundle: Bundle.forAppLanguage(), comment: "Subtitle on the import units picker when importing a MacDive gear CSV file.")
+                     : NSLocalizedString("Configure options for your import", bundle: Bundle.forAppLanguage(), comment: "A description of the options available in the import format picker."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -266,6 +282,7 @@ struct ImportFormatPickerView: View {
         autoValue: String?,
         currentValue: String,
         optionList: [(label: LocalizedStringKey, value: String)],
+        showAutoChip: Bool = true,
         apply: @escaping (String) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -278,7 +295,9 @@ struct ImportFormatPickerView: View {
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
                 Spacer()
-                autoChip(autoValue: autoValue, currentValue: currentValue, apply: apply)
+                if showAutoChip {
+                    autoChip(autoValue: autoValue, currentValue: currentValue, apply: apply)
+                }
             }
             HStack(spacing: 8) {
                 ForEach(optionList, id: \.value) { option in
