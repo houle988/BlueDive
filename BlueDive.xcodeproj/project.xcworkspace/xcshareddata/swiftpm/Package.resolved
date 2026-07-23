@@ -6,7 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/houle988/libdc-swift",
       "state" : {
-        "revision" : "6293c2f426c139c7dfb589dbdca4a5e575279eda"
+        "branch" : "working",
+        "revision" : "c7bbb381dfe979bd39aa23db4e7735f79ac8bf8c"
       }
     }
   ],
