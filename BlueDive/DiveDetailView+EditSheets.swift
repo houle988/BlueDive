@@ -1635,7 +1635,8 @@ struct EditSiteDetailsView: View {
                     }
 
                     siteDetailsMacOSGroupBox("Water", icon: "drop.fill", color: .teal) {
-                        let isCustomWT = !["", "Freshwater", "Saltwater", "EN13319"].contains(workingWaterType)
+                        let canonicalWaterTypes = ["", "freshwater", "fresh", "saltwater", "salt", "en13319", "brackish"]
+                        let isCustomWT = !canonicalWaterTypes.contains(workingWaterType.lowercased())
                         HStack(spacing: 12) {
                             Image(systemName: "drop.fill")
                                 .foregroundStyle(.secondary)

@@ -30,6 +30,10 @@ enum DiveProfileEvent: Codable, Hashable, Sendable {
         case .deepStop: "Deep Stop"
         }
     }
+
+    static let ppo2HypoxicThreshold: Double = 0.18
+    static let ppo2WarnThreshold: Double = 1.4
+    static let ppo2DangerThreshold: Double = 1.6
 }
 
 // MARK: - Profile Point

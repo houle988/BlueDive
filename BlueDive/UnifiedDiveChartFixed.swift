@@ -62,6 +62,7 @@ struct ChartLineVisibility {
     var showTemperature: Bool = false
     var showPressure: Bool = false
     var showNDL: Bool = false
+    var showPPO2: Bool = false
     /// Independent of the exclusive secondary metrics — deco event bands can be shown
     /// alongside any other overlay because they are background shading, not axis-mapped lines.
     var showDeco: Bool = false
@@ -76,6 +77,7 @@ struct ChartLineVisibility {
         case "temperature": v.showTemperature = true
         case "pressure":    v.showPressure = true
         case "ndl":         v.showNDL = true
+        case "ppo2":        v.showPPO2 = true
         default:            break
         }
         v.showDeco = UserDefaults.standard.bool(forKey: decoKey)
@@ -85,13 +87,61 @@ struct ChartLineVisibility {
     /// Persists the currently active secondary metric to UserDefaults.
     func save() {
         let value: String
-        if showTemperature      { value = "temperature" }
+        if showPPO2             { value = "ppo2" }
+        else if showTemperature { value = "temperature" }
         else if showPressure    { value = "pressure" }
         else if showNDL         { value = "ndl" }
         else                    { value = "none" }
         UserDefaults.standard.set(value, forKey: Self.defaultsKey)
         UserDefaults.standard.set(showDeco, forKey: Self.decoKey)
     }
+}
+
+// MARK: - PPO₂ computation helpers (shared by chart layer and tooltip cache)
+
+/// Per-dive constants used for Dalton's-Law PPO₂ computation.
+/// Build once per dive; call ppo2(o2Fraction:rawDepth:) per sample.
+fileprivate struct PPO2Setup {
+    let depthToMetres: Double
+    let surfacePressure: Double
+    let waterDivisor: Double
+
+    init(dive: Dive) {
+        let isFeet = dive.importDistanceUnit == "feet"
+        depthToMetres = isFeet ? 0.3048 : 1.0
+        let altMeters = isFeet ? (dive.siteAltitude ?? 0) * 0.3048 : (dive.siteAltitude ?? 0)
+        surfacePressure = atmosphericPressure(forAltitudeMeters: altMeters)
+        waterDivisor = waterPressureDivisor(forWaterTypeString: dive.siteWaterType)
+    }
+
+    func ppo2(o2Fraction: Double, rawDepth: Double) -> Double {
+        o2Fraction * (rawDepth * depthToMetres / waterDivisor + surfacePressure)
+    }
+}
+
+/// Builds a per-sample PPO₂ map for all profile samples in `dive`.
+/// Priority per sample: sensor-reported ppo2 → computed from gas mix + depth.
+/// Pass `tanks: dive.tanks` and a pre-built `PPO2Setup` when tanks are non-empty.
+fileprivate func buildPPO2Map(for dive: Dive) -> [UUID: Double] {
+    let tanks = dive.tanks
+    let setup = tanks.isEmpty ? nil : PPO2Setup(dive: dive)
+    var lastKnownGasIdx: Int? = tanks.count > 1 ? 0 : nil
+    var result: [UUID: Double] = [:]
+    for sample in dive.profileSamples {
+        if let g = sample.currentGas, g >= 0, g < tanks.count { lastKnownGasIdx = g }
+        if let sensorPPO2 = sample.ppo2 {
+            result[sample.id] = sensorPPO2
+        } else if let s = setup {
+            let gasIdx: Int?
+            if let idx = sample.currentGas, idx >= 0, idx < tanks.count { gasIdx = idx }
+            else if tanks.count == 1 { gasIdx = 0 }
+            else { gasIdx = lastKnownGasIdx }
+            if let idx = gasIdx, tanks[idx].o2 > 0 {
+                result[sample.id] = s.ppo2(o2Fraction: tanks[idx].o2, rawDepth: sample.depth)
+            }
+        }
+    }
+    return result
 }
 
 /// Bouton de toggle personnalisé pour les contrôles du graphique
@@ -141,13 +191,18 @@ private struct StaticChartLayer: View, Equatable {
     let visibility: ChartLineVisibility
     let xMax: Double
     let prefs: UserPreferences
+    /// Hash of tanks' O₂ fractions — changes when gas mix is edited, allowing the
+    /// Equatable check to detect tank mutations even though dive.id is stable.
+    let tanksO2Hash: Int
 
     static func == (lhs: StaticChartLayer, rhs: StaticChartLayer) -> Bool {
         lhs.dive.id == rhs.dive.id &&
+        lhs.tanksO2Hash == rhs.tanksO2Hash &&
         lhs.visibility.showDepth == rhs.visibility.showDepth &&
         lhs.visibility.showTemperature == rhs.visibility.showTemperature &&
         lhs.visibility.showPressure == rhs.visibility.showPressure &&
         lhs.visibility.showNDL == rhs.visibility.showNDL &&
+        lhs.visibility.showPPO2 == rhs.visibility.showPPO2 &&
         lhs.visibility.showDeco == rhs.visibility.showDeco &&
         lhs.xMax == rhs.xMax
     }
@@ -224,6 +279,14 @@ private struct StaticChartLayer: View, Equatable {
         return "\(Int(value.rounded()))min"
     }
 
+    private let ppo2AxisMax: Double = 2.0
+
+    /// PPO₂ label for a tick. 0 bar at surface (y=0), 2.0 bar at deepest (y=yDomainMin).
+    private func ppo2Label(for y: Double) -> String {
+        let value = ppo2AxisMax * fraction(for: y)
+        return String(format: "%.1f bar", value)
+    }
+
     // The Y domain — depth values are negated so deeper = more negative = lower on chart.
     // Swift Charts naturally puts smaller values at the bottom, so negating gives us
     // surface (0) at top and max depth at bottom with no reversal tricks needed.
@@ -242,6 +305,7 @@ private struct StaticChartLayer: View, Equatable {
             temperatureMarks
             pressureMarks
             ndlMarks
+            ppo2Marks
         }
         // Explicit domain from yDomainMin (deepest, negative) to 0 (surface).
         // No automatic padding — the chart fills exactly to the data.
@@ -279,19 +343,27 @@ private struct StaticChartLayer: View, Equatable {
             }
 
             // ── Right axis: secondary metrics ──
-            if visibility.showPressure || visibility.showTemperature || visibility.showNDL {
+            if visibility.showPressure || visibility.showTemperature || visibility.showNDL || visibility.showPPO2 {
                 AxisMarks(position: .trailing, values: rightAxisTicks) { value in
                     AxisGridLine().foregroundStyle(Color.clear)
                     AxisValueLabel(anchor: .leading) {
                         if let depth = value.as(Double.self) {
                             HStack(spacing: 3) {
+                                if visibility.showPPO2 {
+                                    Text(ppo2Label(for: depth))
+                                        .font(.caption2)
+                                        .foregroundStyle(.indigo)
+                                }
                                 if visibility.showPressure {
+                                    if visibility.showPPO2 {
+                                        Text("|").font(.caption2).foregroundStyle(.secondary)
+                                    }
                                     Text(pressureLabel(for: depth))
                                         .font(.caption2)
                                         .foregroundStyle(.red)
                                 }
                                 if visibility.showTemperature {
-                                    if visibility.showPressure {
+                                    if visibility.showPressure || visibility.showPPO2 {
                                         Text("|").font(.caption2).foregroundStyle(.secondary)
                                     }
                                     Text(temperatureLabel(for: depth))
@@ -299,7 +371,7 @@ private struct StaticChartLayer: View, Equatable {
                                         .foregroundStyle(.green)
                                 }
                                 if visibility.showNDL {
-                                    if visibility.showPressure || visibility.showTemperature {
+                                    if visibility.showPressure || visibility.showTemperature || visibility.showPPO2 {
                                         Text("|").font(.caption2).foregroundStyle(.secondary)
                                     }
                                     Text(ndlLabel(for: depth))
@@ -329,14 +401,14 @@ private struct StaticChartLayer: View, Equatable {
             )
             .symbol(.circle)
             .symbolSize(100)
-            .foregroundStyle(Color.purple)
+            .foregroundStyle(Color.brown)
             .annotation(position: .top, alignment: .center) {
                 Text(verbatim: "G\(index + 1)")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.purple)
+                    .foregroundStyle(Color.brown)
                     .padding(.horizontal, 3)
                     .padding(.vertical, 1)
-                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.purple.opacity(0.15)))
+                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.brown.opacity(0.15)))
             }
         }
     }
@@ -505,6 +577,35 @@ private struct StaticChartLayer: View, Equatable {
         }
     }
 
+    // MARK: - PPO₂ overlay (sensor values preferred per sample; computed as fallback)
+
+    /// Produces (time, ppo2) pairs for each profile sample using the shared `buildPPO2Map` helper.
+    /// Per-sample: sensor value if available, else Dalton's-Law from gas mix + depth.
+    private var ppo2RenderData: [(time: Double, ppo2: Double)] {
+        guard visibility.showPPO2 else { return [] }
+        let map = buildPPO2Map(for: dive)
+        return dive.profileSamples.compactMap { s in map[s.id].map { (time: s.time, ppo2: $0) } }
+    }
+
+    @ChartContentBuilder
+    private var ppo2Marks: some ChartContent {
+        let data = ppo2RenderData
+        let base = dive.displayMaxDepth
+        if base > 0 && !data.isEmpty {
+            ForEach(Array(data.enumerated()), id: \.offset) { _, point in
+                let y = -(base * (point.ppo2 / ppo2AxisMax).clamped(to: 0...1))
+                LineMark(
+                    x: .value("Time", point.time),
+                    y: .value("PPO₂", y),
+                    series: .value("Sequence", "PPO2")
+                )
+                .interpolationMethod(.catmullRom)
+                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .foregroundStyle(Color.indigo)
+            }
+        }
+    }
+
     // MARK: - Deco event blocks
 
     /// Contiguous time ranges during which the dive computer reported a deco obligation.
@@ -638,15 +739,24 @@ struct UnifiedDiveChartOptimized: View {
     @State private var plotWidth: CGFloat = 1       // width of the plot area only
     @State private var lastTooltipUpdate: Date = .distantPast
     @State private var cachedNearestSample: DiveProfilePoint? = nil
+    @State private var cachedNearestPPO2: Double? = nil
+    /// Pre-built per-sample PPO₂ map (UUID → value). Rebuilt once on toggle or dive change.
+    @State private var cachedPPO2BySampleID: [UUID: Double] = [:]
     
     var body: some View {
         VStack(spacing: 16) {
             toggleControls
             chartView
-            
+
             if !dive.profileSamples.isEmpty {
                 legendView
             }
+        }
+        .task(id: "\(dive.id)\(tanksO2Hash)") {
+            if visibility.showPPO2 { rebuildPPO2Cache() }
+        }
+        .onChange(of: visibility.showPPO2) { _, newValue in
+            if newValue { rebuildPPO2Cache() } else { cachedPPO2BySampleID = [:] }
         }
     }
     
@@ -665,6 +775,7 @@ struct UnifiedDiveChartOptimized: View {
                     visibility.showTemperature = false
                     visibility.showPressure = false
                     visibility.showNDL = false
+                    visibility.showPPO2 = false
                 }
                 visibility[keyPath: keyPath] = newValue
                 visibility.save()
@@ -710,6 +821,14 @@ struct UnifiedDiveChartOptimized: View {
                     isAvailable: hasNDLData
                 )
 
+                ToggleButton(
+                    isOn: exclusiveBinding(for: \.showPPO2),
+                    icon: "lungs.fill",
+                    label: "PPO₂",
+                    color: .indigo,
+                    isAvailable: ppo2Available
+                )
+
                 // Deco is independent — it overlays background shading and can be shown
                 // alongside any of the axis-mapped secondary metrics above.
                 ToggleButton(
@@ -739,7 +858,7 @@ struct UnifiedDiveChartOptimized: View {
             : Double(dive.duration)
         let xMax = max(lastSampleTime, storedDurationMinutes)
 
-        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs)
+        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash)
             .equatable()
             // chartOverlay gives us a ChartProxy so we can read the exact plot-area
             // frame — the rectangle inside both Y-axis label gutters.  Everything
@@ -773,6 +892,7 @@ struct UnifiedDiveChartOptimized: View {
                                 tempMax: tempRange.max,
                                 pressMin: pressRange.min,
                                 pressMax: pressRange.max,
+                                ppo2: cachedNearestPPO2,
                                 ascentSpeed: ascentSpeed(for: sample)
                             )
                             .offset(x: tooltipOffsetX(
@@ -805,13 +925,16 @@ struct UnifiedDiveChartOptimized: View {
                                         let now = Date()
                                         if now.timeIntervalSince(lastTooltipUpdate) > 0.033 {
                                             lastTooltipUpdate = now
-                                            cachedNearestSample = nearestSample(at: fraction * xMax)
+                                            let nearest = nearestSample(at: fraction * xMax)
+                                            cachedNearestSample = nearest
+                                            cachedNearestPPO2 = nearest.flatMap { computePPO2(for: $0) }
                                         }
                                     }
                                     .onEnded { _ in
                                         withAnimation(.easeOut(duration: 0.2)) {
                                             cursorX = nil
                                             cachedNearestSample = nil
+                                            cachedNearestPPO2 = nil
                                         }
                                     }
                             )
@@ -879,8 +1002,21 @@ struct UnifiedDiveChartOptimized: View {
         return (pressures.min(), pressures.max())
     }
     
+    // MARK: - PPO2 Helpers
+
+    /// Builds `cachedPPO2BySampleID` using `buildPPO2Map` — called once per toggle or dive change.
+    private func rebuildPPO2Cache() {
+        cachedPPO2BySampleID = buildPPO2Map(for: dive)
+    }
+
+    /// O(1) tooltip lookup — returns the pre-cached PPO₂ for the nearest sample.
+    private func computePPO2(for target: DiveProfilePoint) -> Double? {
+        guard visibility.showPPO2 else { return nil }
+        return cachedPPO2BySampleID[target.id]
+    }
+
     // MARK: - Legend View
-    
+
     private var legendView: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Legend")
@@ -916,6 +1052,10 @@ struct UnifiedDiveChartOptimized: View {
                     metricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
                 }
 
+                if visibility.showPPO2 && ppo2Available {
+                    legendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
+                }
+
                 if visibility.showDeco && hasDecoData {
                     HStack(spacing: 8) {
                         legendBand(.orange, "Deco obligation")
@@ -924,7 +1064,7 @@ struct UnifiedDiveChartOptimized: View {
                 }
 
                 if hasGasChangeData {
-                    legendGasChange(.purple, "Gas switch")
+                    legendGasChange(.brown, "Gas switch")
                 }
             }
         }
@@ -1006,6 +1146,17 @@ struct UnifiedDiveChartOptimized: View {
     
     // MARK: - Helper Properties
     
+    /// Hash of tanks' O₂ fractions used to detect gas-mix edits without changing dive.id.
+    /// Accessed during body so @Observable tracks tanksData as a dependency.
+    private var tanksO2Hash: Int {
+        dive.tanks.reduce(0) { ($0 &* 31) &+ Int($1.o2 * 1_000_000) }
+    }
+
+    private var ppo2Available: Bool {
+        dive.tanks.contains { $0.o2 > 0 }
+            || dive.profileSamples.contains { $0.ppo2 != nil }
+    }
+
     private var hasTemperatureData: Bool {
         dive.profileSamples.contains { $0.temperature != nil }
     }
@@ -1088,6 +1239,9 @@ struct ChartTooltipView: View {
     let tempMax: Double?
     let pressMin: Double?
     let pressMax: Double?
+
+    /// Pre-computed PPO2 value for this sample (nil when PPO2 overlay is off)
+    let ppo2: Double?
 
     /// Ascent/descent speed in m/min at this sample (positive = ascending, negative = descending)
     let ascentSpeed: Double?
@@ -1229,6 +1383,15 @@ struct ChartTooltipView: View {
                 tooltipRow(icon: "timer", color: .ndlYellow, label: nLabel)
             }
 
+            // PPO2 — shown if enabled
+            if visibility.showPPO2, let p = ppo2 {
+                let ppo2Color: Color = p < DiveProfileEvent.ppo2HypoxicThreshold ? .cyan
+                    : p < DiveProfileEvent.ppo2WarnThreshold ? .green
+                    : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
+                    : .red
+                tooltipRow(icon: "lungs.fill", color: ppo2Color, label: String(format: "%.2f bar", p))
+            }
+
             // Deco event — shown if enabled and this sample carries a deco obligation.
             if visibility.showDeco && sample.events.contains(.decoStop) {
                 tooltipRow(icon: "exclamationmark.triangle.fill", color: .orange, label: decoDiveLabel)
@@ -1240,7 +1403,7 @@ struct ChartTooltipView: View {
 
             // Gas switch — always shown when present (gas change markers are always on).
             if let gasName = gasChangeName {
-                tooltipRow(icon: "cylinder.fill", color: .purple, label: String(format: NSLocalizedString("→ %@", bundle: .forAppLanguage(), comment: "Gas switch tooltip row: arrow followed by gas mix name"), gasName))
+                tooltipRow(icon: "cylinder.fill", color: .brown, label: String(format: NSLocalizedString("→ %@", bundle: .forAppLanguage(), comment: "Gas switch tooltip row: arrow followed by gas mix name"), gasName))
             }
         }
         .padding(.horizontal, 10)

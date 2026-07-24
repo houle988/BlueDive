@@ -541,7 +541,7 @@ extension ContentView {
             siteCountry: diveData.site?.country,
             siteBodyOfWater: diveData.site?.bodyOfWater,
             siteDifficulty: diveData.site?.difficulty,
-            siteWaterType: diveData.site?.waterType,
+            siteWaterType: canonicalWaterType(diveData.site?.waterType),
             siteAltitude: diveData.site?.altitude,
             siteLatitude: diveData.site?.latitude,
             siteLongitude: diveData.site?.longitude,

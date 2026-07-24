@@ -698,7 +698,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                 if let k = Double(text) { tempWaypointTemperature = kelvinToCelsius(k) }
             }
         case "calculatedpo2":
-            if isInWaypoint { tempWaypointPPO2 = Double(text) }
+            if isInWaypoint, let pa = Double(text) { tempWaypointPPO2 = pascalToBar(pa) }
         case "nodecotime":
             // UDDF nodecotime is in seconds; convert to minutes for BlueDiveSamplesData.ndt
             if isInWaypoint, let seconds = parseSeconds(text), seconds > 0 {
