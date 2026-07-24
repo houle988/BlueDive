@@ -441,7 +441,7 @@ enum BlueDiveUDDFExporter {
                         lines.append("            <tankpressure>\(formatDouble(barToPascal(pressure)))</tankpressure>")
                     }
                     if let ppo2 = sample.ppo2 {
-                        lines.append("            <calculatedpo2>\(formatDouble(ppo2))</calculatedpo2>")
+                        lines.append("            <calculatedpo2>\(formatDouble(barToPascal(ppo2)))</calculatedpo2>")
                     }
                     if let ndl = sample.ndl {
                         // NDL: profile stores minutes, UDDF needs seconds

@@ -12,8 +12,29 @@ struct MainTabView: View {
     @AppStorage("certificationReminders") private var certReminders = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
+    @Environment(\.introVisible) private var introVisible
 
-    private let currentVersion = appVersionBuild()
+    private var shouldShowDisclaimer: Bool {
+        !introVisible && lastAcceptedDisclaimerVersion != DiveIntroConfig.currentVersion
+    }
+
+    private var shouldShowWelcome: Bool {
+        !introVisible && lastAcceptedDisclaimerVersion == DiveIntroConfig.currentVersion && !hasCompletedOnboarding
+    }
+
+    private var disclaimerBinding: Binding<Bool> {
+        Binding(
+            get: { shouldShowDisclaimer },
+            set: { if !$0 { lastAcceptedDisclaimerVersion = DiveIntroConfig.currentVersion } }
+        )
+    }
+
+    private var welcomeBinding: Binding<Bool> {
+        Binding(
+            get: { shouldShowWelcome },
+            set: { if !$0 { hasCompletedOnboarding = true } }
+        )
+    }
 
     /// Tracks the active tab so widget deep-links can switch to the Logbook
     /// (where `ContentView` presents the manual/Bluetooth sheets).
@@ -128,34 +149,22 @@ struct MainTabView: View {
         #if os(iOS)
         .applyIf(!ProcessInfo.processInfo.isiOSAppOnMac) { view in
             view
-                .fullScreenCover(isPresented: Binding(
-                    get: { lastAcceptedDisclaimerVersion != currentVersion },
-                    set: { if !$0 { lastAcceptedDisclaimerVersion = currentVersion } }
-                )) {
+                .fullScreenCover(isPresented: disclaimerBinding) {
                     DisclaimerView()
                 }
-                .fullScreenCover(isPresented: Binding(
-                    get: { lastAcceptedDisclaimerVersion == currentVersion && !hasCompletedOnboarding },
-                    set: { if !$0 { hasCompletedOnboarding = true } }
-                )) {
+                .fullScreenCover(isPresented: welcomeBinding) {
                     WelcomeWizardView()
                 }
         }
         .applyIf(ProcessInfo.processInfo.isiOSAppOnMac) { view in
             view
-                .sheet(isPresented: Binding(
-                    get: { lastAcceptedDisclaimerVersion != currentVersion },
-                    set: { if !$0 { lastAcceptedDisclaimerVersion = currentVersion } }
-                )) {
+                .sheet(isPresented: disclaimerBinding) {
                     DisclaimerView()
                         .presentationSizing(.page)
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
                 }
-                .sheet(isPresented: Binding(
-                    get: { lastAcceptedDisclaimerVersion == currentVersion && !hasCompletedOnboarding },
-                    set: { if !$0 { hasCompletedOnboarding = true } }
-                )) {
+                .sheet(isPresented: welcomeBinding) {
                     WelcomeWizardView()
                         .presentationSizing(.page)
                         .presentationDetents([.large])
@@ -163,19 +172,13 @@ struct MainTabView: View {
                 }
         }
         #else
-        .sheet(isPresented: Binding(
-            get: { lastAcceptedDisclaimerVersion != currentVersion },
-            set: { if !$0 { lastAcceptedDisclaimerVersion = currentVersion } }
-        )) {
+        .sheet(isPresented: disclaimerBinding) {
             DisclaimerView()
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: Binding(
-            get: { lastAcceptedDisclaimerVersion == currentVersion && !hasCompletedOnboarding },
-            set: { if !$0 { hasCompletedOnboarding = true } }
-        )) {
+        .sheet(isPresented: welcomeBinding) {
             WelcomeWizardView()
                 .presentationSizing(.page)
                 .presentationDetents([.large])

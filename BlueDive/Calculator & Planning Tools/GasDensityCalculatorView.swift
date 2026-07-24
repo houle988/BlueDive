@@ -17,7 +17,8 @@ struct GasDensityResult {
 
 func calcGasDensity(o2Pct: Double, hePct: Double, depthMetres: Double, isSeawater: Bool = true) -> GasDensityResult {
     let n2Pct = max(0.0, 100.0 - o2Pct - hePct)
-    let ata = depthMetres / (isSeawater ? 10.0 : 10.3) + 1.0
+    let divisor = waterPressureDivisor(forWaterTypeString: isSeawater ? nil : "Freshwater")
+    let ata = depthMetres / divisor + 1.0
     let base = (o2Pct / 100.0 * kDensityO2)
              + (n2Pct / 100.0 * kDensityN2)
              + (hePct / 100.0 * kDensityHe)
@@ -317,7 +318,7 @@ struct GasDensityCalculatorView: View {
                             .foregroundStyle(.green)
                         Text(verbatim: "Density (g/L) = (O₂% × 1.428 + N₂% × 1.251 + He% × 0.179) × ATA")
                             .font(.system(.body, design: .monospaced))
-                        Text("Seawater: depth (m) ÷ 10 + 1 | Freshwater: depth (m) ÷ 10.3 + 1")
+                        Text("Seawater: depth (m) ÷ 9.90 + 1 | Freshwater: depth (m) ÷ 10.19 + 1")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

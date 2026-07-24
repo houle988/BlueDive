@@ -30,6 +30,10 @@ enum DiveProfileEvent: Codable, Hashable, Sendable {
         case .deepStop: "Deep Stop"
         }
     }
+
+    static let ppo2HypoxicThreshold: Double = 0.18
+    static let ppo2WarnThreshold: Double = 1.4
+    static let ppo2DangerThreshold: Double = 1.6
 }
 
 // MARK: - Profile Point
@@ -959,7 +963,7 @@ final class Dive {
         let valueString: String
         if displayPreference == .psi {
             let rmvCuFt = rmvLiters / 28.3168
-            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " cu ft/min"
+            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " " + NSLocalizedString("unit.volume.rmv.cu_ft_per_min", bundle: .forAppLanguage(), comment: "RMV unit: cubic feet per minute")
         } else {
             valueString = formatLocalizedNumber(rmvLiters, minDecimals: 2, maxDecimals: 2) + " L/min"
         }
@@ -1097,7 +1101,7 @@ final class Dive {
         let valueString: String
         if displayPreference == .psi {
             let rmvCuFt = rmvLiters / 28.3168
-            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " cu ft/min"
+            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " " + NSLocalizedString("unit.volume.rmv.cu_ft_per_min", bundle: .forAppLanguage(), comment: "RMV unit: cubic feet per minute")
         } else {
             valueString = formatLocalizedNumber(rmvLiters, minDecimals: 2, maxDecimals: 2) + " L/min"
         }
@@ -1245,7 +1249,7 @@ final class Dive {
         if displayPreference == .psi {
             // Convert L/min → cu ft/min (1 cu ft = 28.3168 L)
             let rmvCuFt = rmvLiters / 28.3168
-            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " cu ft/min"
+            valueString = formatLocalizedNumber(rmvCuFt, minDecimals: 3, maxDecimals: 3) + " " + NSLocalizedString("unit.volume.rmv.cu_ft_per_min", bundle: .forAppLanguage(), comment: "RMV unit: cubic feet per minute")
         } else {
             valueString = formatLocalizedNumber(rmvLiters, minDecimals: 2, maxDecimals: 2) + " L/min"
         }

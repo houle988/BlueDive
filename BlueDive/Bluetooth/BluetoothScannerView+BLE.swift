@@ -156,7 +156,10 @@ extension BluetoothScannerView {
         Self.logger.info("peripheral: \(peripheral)")
 
         #if DEBUG
-        Logger.shared.shouldShowRawData = true
+        Logger.shared.shouldShowRawData = false
+        Logger.shared.onPacket = { event in
+            print("[\(event.direction.rawValue.uppercased())] \(event.characteristicUUID) (\(event.data.count) bytes)\n\(event.hexDump)")
+        }
         #endif
 
         // Stop scanning

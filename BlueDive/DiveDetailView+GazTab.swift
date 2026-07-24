@@ -548,11 +548,11 @@ extension DiveDetailView {
     /// Color code for PPO2 values based on safety ranges
     func ppo2Color(for ppo2: Double) -> Color {
         switch ppo2 {
-        case 0..<0.18:
+        case 0..<DiveProfileEvent.ppo2HypoxicThreshold:
             return .cyan // Hypoxic
-        case 0.18..<1.4:
+        case DiveProfileEvent.ppo2HypoxicThreshold..<DiveProfileEvent.ppo2WarnThreshold:
             return .green // Safe
-        case 1.4..<1.6:
+        case DiveProfileEvent.ppo2WarnThreshold..<DiveProfileEvent.ppo2DangerThreshold:
             return .orange // Caution
         default:
             return .red // Dangerous (hyperoxic)

@@ -124,16 +124,45 @@ final class Gear {
 // MARK: - Dedup Helper
 
 extension Gear {
+    /// Placeholder values that should not be treated as real serial numbers.
+    /// Items whose serial normalises to one of these fall through to the name+diverName branch.
+    private static let sentinelSerials: Set<String> = [
+        "n/a", "na", "unknown", "none", "0", "00", "-", "--"
+    ]
+
+    /// Trims whitespace and newlines, returns nil for empty strings and known sentinel values.
+    private static func normalizedSerial(_ s: String?) -> String? {
+        guard let trimmed = s?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return sentinelSerials.contains(trimmed.lowercased()) ? nil : trimmed
+    }
+
     /// Returns true if this gear matches the given import attributes.
-    /// Serial comparison trims whitespace and treats nil/"" as equivalent (no serial recorded).
+    /// Name is always compared (trimmed, case-insensitive). When both items have a
+    /// real serial, only the serial is compared (diverName is ignored). When neither
+    /// has a serial, diverName must match exactly (trimmed, case-insensitive); items
+    /// with differing diverNames — including empty vs. non-empty — are never merged.
+    /// Known sentinel serials (e.g. "N/A", "0") are normalised to nil.
     func matches(name: String, category: String, diverName: String, serial: String?) -> Bool {
-        guard self.name == name && self.category == category && self.diverName == diverName else { return false }
-        let a = serialNumber.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
-        let b = serial.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+        let trimmedSelfName = self.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedSelfName.caseInsensitiveCompare(trimmedName) == .orderedSame &&
+              self.category == category else { return false }
+        let a = Gear.normalizedSerial(serialNumber)
+        let b = Gear.normalizedSerial(serial)
         switch (a, b) {
-        case let (x?, y?): return x == y
-        case (nil, nil):   return true
-        default:           return false
+        case let (x?, y?):
+            // Serial number uniquely identifies a physical item — diverName not required.
+            return x.caseInsensitiveCompare(y) == .orderedSame
+        case (nil, nil):
+            // No serial on either side: require an exact (case-insensitive) diverName match.
+            // Items with different diverNames — including empty vs. non-empty — are treated
+            // as distinct records so that a diver-attributed import never silently merges
+            // into an unattributed record and discards the diver information.
+            let storedDiver = self.diverName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let incomingDiver = diverName.trimmingCharacters(in: .whitespacesAndNewlines)
+            return storedDiver.caseInsensitiveCompare(incomingDiver) == .orderedSame
+        default:
+            return false
         }
     }
 }
@@ -232,6 +261,7 @@ enum GearCategory: String, CaseIterable, Identifiable {
         "smb": .surfaceMarker,
         "surface marker": .surfaceMarker,
         "torch": .light,
+        "strobe": .light,
         "cylinder": .tank,
         "bottle": .tank,
         "o2 analyzer": .analyzer,
@@ -239,6 +269,9 @@ enum GearCategory: String, CaseIterable, Identifiable {
         "gas analyzer": .analyzer,
         "pressure gauge": .spg,
         "submersible pressure gauge": .spg,
+        "spool": .reel,
+        "lift bag": .other,
+        "underwear": .underwear,
     ]
 
     /// Initialises a category from an XML export key (English) or a rawValue (French),

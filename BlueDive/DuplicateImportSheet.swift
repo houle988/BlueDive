@@ -264,7 +264,7 @@ struct DuplicateImportSheet: View {
 
     private func duplicateRow(match: DuplicateImportMatch) -> some View {
         let existing = match.existing
-        let depthUnit = match.incomingDistanceUnit == "feet" ? "ft" : "m"
+        let depthUnit = (match.incomingDistanceUnit == "feet" ? DepthUnit.feet : DepthUnit.meters).symbol
         let depthString = match.incomingMaxDepth.localizedString(decimals: 1) + " \(depthUnit)"
         let durationString: String = {
             let fmt = NSLocalizedString("%lld min", bundle: .forAppLanguage(), comment: "Duration in minutes")

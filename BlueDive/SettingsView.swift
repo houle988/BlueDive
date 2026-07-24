@@ -31,8 +31,8 @@ enum DepthUnit: String, CaseIterable {
 
     var symbol: String {
         switch self {
-        case .meters: return "m"
-        case .feet:   return "ft"
+        case .meters: return NSLocalizedString("unit.depth.symbol.meters", bundle: .forAppLanguage(), comment: "Depth unit symbol for metres")
+        case .feet:   return NSLocalizedString("unit.depth.symbol.feet", bundle: .forAppLanguage(), comment: "Depth unit symbol for feet")
         }
     }
 
@@ -210,8 +210,8 @@ enum VolumeUnit: String, CaseIterable {
 
     var symbol: String {
         switch self {
-        case .liters:    return "L"
-        case .cubicFeet: return "ft³"
+        case .liters:    return NSLocalizedString("unit.volume.symbol.liters", bundle: .forAppLanguage(), comment: "Volume unit symbol for litres")
+        case .cubicFeet: return NSLocalizedString("unit.volume.symbol.cubicFeet", bundle: .forAppLanguage(), comment: "Volume unit symbol for cubic feet")
         }
     }
 
@@ -1660,14 +1660,41 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
+                .sectionCardBackground()
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                dismiss()
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    UserDefaults.standard.set(DiveIntroConfig.replayValue, forKey: DiveIntroConfig.versionStorageKey)
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "water.waves")
+                        .font(.title3)
+                        .foregroundStyle(.cyan)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Intro Animation")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.primary)
+                        Text("Replay the launch animation")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "play.fill")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .sectionCardBackground()
             }
             .buttonStyle(.plain)
         }

@@ -29,7 +29,11 @@ struct GearListView: View {
     @State private var importedGroupCount: Int = 0
     @State private var importedTemplateCount: Int = 0
     @State private var importedGroupMissingMemberCount: Int = 0
+    @State private var importedGearOnly = false
     @State private var showImportSuccess = false
+    @State private var pendingGearCSVData: Data?
+    @State private var csvFormatOptions = ImportFormatOptions()
+    @State private var showGearCSVFormatPicker = false
     #if os(iOS)
     @State private var showFileExporter = false
     @State private var exportDocument: ExportableFileDocument?
@@ -157,9 +161,26 @@ struct GearListView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showGearCSVFormatPicker) {
+            ImportFormatPickerView(
+                options: $csvFormatOptions,
+                fileType: .gearCSV,
+                onConfirm: {
+                    showGearCSVFormatPicker = false
+                    commitGearCSVImport()
+                },
+                onCancel: {
+                    showGearCSVFormatPicker = false
+                    pendingGearCSVData = nil
+                }
+            )
+            .presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
         .fileImporter(
             isPresented: $showImportPicker,
-            allowedContentTypes: [.xml],
+            allowedContentTypes: [.xml, .commaSeparatedText],
             allowsMultipleSelection: false
         ) { result in
             handleImportResult(result)
@@ -177,20 +198,27 @@ struct GearListView: View {
         .alert("Import Successful", isPresented: $showImportSuccess) {
             Button("OK", role: .cancel) { }
         } message: {
-            let base = String(
-                format: NSLocalizedString("%1$lld gear item(s), %2$lld group(s), and %3$lld tank template(s) imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items, gear groups, and tank templates from a gear XML file. Arguments: gear count, group count, template count."),
-                importedCount,
-                importedGroupCount,
-                importedTemplateCount
-            )
-            if importedGroupMissingMemberCount > 0 {
-                let warning = String(
-                    format: NSLocalizedString("%lld group member(s) could not be matched and were skipped.", bundle: Bundle.forAppLanguage(), comment: "Warning appended to the import success message when some gear IDs referenced inside imported gear groups could not be matched to any existing or newly imported gear item."),
-                    importedGroupMissingMemberCount
-                )
-                Text(verbatim: base + "\n" + warning)
+            if importedGearOnly {
+                Text(verbatim: String(
+                    format: NSLocalizedString("%lld gear item(s) imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items from a MacDive CSV file. Argument: gear count."),
+                    importedCount
+                ))
             } else {
-                Text(verbatim: base)
+                let base = String(
+                    format: NSLocalizedString("%1$lld gear item(s), %2$lld group(s), and %3$lld tank template(s) imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items, gear groups, and tank templates from a gear XML file. Arguments: gear count, group count, template count."),
+                    importedCount,
+                    importedGroupCount,
+                    importedTemplateCount
+                )
+                if importedGroupMissingMemberCount > 0 {
+                    let warning = String(
+                        format: NSLocalizedString("%lld group member(s) could not be matched and were skipped.", bundle: Bundle.forAppLanguage(), comment: "Warning appended to the import success message when some gear IDs referenced inside imported gear groups could not be matched to any existing or newly imported gear item."),
+                        importedGroupMissingMemberCount
+                    )
+                    Text(verbatim: base + "\n" + warning)
+                } else {
+                    Text(verbatim: base)
+                }
             }
         }
         .alert("Import error", isPresented: $showImportError) {
@@ -487,6 +515,17 @@ struct GearListView: View {
 
             do {
                 let data = try Data(contentsOf: url)
+
+                // ── CSV path: MacDive gear export ─────────────────────────────
+                // Store data and show the weight-unit picker before importing.
+                if url.pathExtension.lowercased() == "csv" {
+                    pendingGearCSVData = data
+                    csvFormatOptions = ImportFormatOptions()
+                    showGearCSVFormatPicker = true
+                    return
+                }
+
+                // ── XML path: BlueDive gear export ────────────────────────────
                 let parser = GearXMLParser()
                 guard let result = parser.parse(data: data), !result.isEmpty else {
                     importError = NSLocalizedString("No gear data found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports a gear XML file that contains no gear items, groups, or tank templates.")
@@ -494,52 +533,11 @@ struct GearListView: View {
                     return
                 }
 
-                // ── Gear Items ────────────────────────────────────────────────
                 // gearByID is the single source of truth for dedup: pre-populated from the
-                // existing store and updated after each insert, so both the UUID check and the
-                // fallback check see gear inserted earlier in the same loop.
+                // existing store and updated after each insert, so both paths see gear
+                // inserted earlier in the same loop.
                 var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
-
-                var count = 0
-                for item in result.gearItems {
-                    // Primary dedup: by UUID (same source device, same export).
-                    if gearByID[item.id] != nil {
-                        continue
-                    }
-                    // Secondary dedup: by name + category + diverName + serial — catches gear that was
-                    // previously imported via a dive XML, which assigned a fresh UUID instead
-                    // of the canonical one carried in a gear-only export.
-                    if let existing = gearByID.values.first(where: {
-                        $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
-                    }) {
-                        // Map the file's UUID to the existing gear so group membership resolves correctly.
-                        gearByID[item.id] = existing
-                        continue
-                    }
-                    let gear = Gear(
-                        id: item.id,
-                        name: item.name,
-                        category: item.category,
-                        manufacturer: item.manufacturer,
-                        model: item.model,
-                        serialNumber: item.serialNumber,
-                        datePurchased: item.datePurchased,
-                        purchasePrice: item.purchasePrice,
-                        currency: item.currency,
-                        purchasedFrom: item.purchasedFrom,
-                        weightContribution: item.weightContribution,
-                        weightContributionUnit: item.weightContributionUnit,
-                        isInactive: item.isInactive,
-                        diverName: item.diverName,
-                        lastServiceDate: item.lastServiceDate,
-                        nextServiceDue: item.nextServiceDue,
-                        serviceHistory: item.serviceHistory,
-                        gearNotes: item.gearNotes
-                    )
-                    modelContext.insert(gear)
-                    gearByID[item.id] = gear
-                    count += 1
-                }
+                let count = insertGearItems(result.gearItems, into: &gearByID)
 
                 // ── Gear Groups ───────────────────────────────────────────────
                 let existingGroupIDs = Set(allGearGroups.map(\.id))
@@ -581,6 +579,7 @@ struct GearListView: View {
                 importedGroupCount = groupCount
                 importedTemplateCount = templateCount
                 importedGroupMissingMemberCount = missingMemberCount
+                importedGearOnly = false
                 showImportSuccess = true
             } catch {
                 importError = error.localizedDescription
@@ -591,6 +590,75 @@ struct GearListView: View {
             importError = error.localizedDescription
             showImportError = true
         }
+    }
+
+    @MainActor
+    private func commitGearCSVImport() {
+        guard let data = pendingGearCSVData else { return }
+        pendingGearCSVData = nil
+        let diverName = UserDefaults.standard.string(forKey: "userName") ?? ""
+        let csvParser = GearCSVParser()
+        guard let items = csvParser.parse(data: data, diverName: diverName, weightUnit: csvFormatOptions.weightFormat) else {
+            importError = NSLocalizedString("No gear data found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports a gear XML file that contains no gear items, groups, or tank templates.")
+            showImportError = true
+            return
+        }
+        var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        let count = insertGearItems(items, into: &gearByID)
+        try? modelContext.save()
+        importedCount = count
+        importedGroupCount = 0
+        importedTemplateCount = 0
+        importedGroupMissingMemberCount = 0
+        importedGearOnly = true
+        showImportSuccess = true
+    }
+
+    // MARK: - Gear Insert Helper
+
+    /// Inserts gear items not already present, updating `gearByID` after each insert
+    /// so subsequent lookups (e.g. group membership) see newly added items.
+    /// Returns the count of newly inserted items.
+    @discardableResult
+    private func insertGearItems(_ items: [GearXMLParser.ParsedGear], into gearByID: inout [UUID: Gear]) -> Int {
+        var count = 0
+        for item in items {
+            // Primary dedup: by UUID (same source device, same export).
+            if gearByID[item.id] != nil { continue }
+            // Secondary dedup: by name + category + diverName + serial — catches gear previously
+            // imported via a dive XML, which assigned a fresh UUID instead of the canonical one,
+            // and also handles CSV imports that always assign a fresh UUID.
+            if let existing = gearByID.values.first(where: {
+                $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
+            }) {
+                gearByID[item.id] = existing
+                continue
+            }
+            let gear = Gear(
+                id: item.id,
+                name: item.name,
+                category: item.category,
+                manufacturer: item.manufacturer,
+                model: item.model,
+                serialNumber: item.serialNumber,
+                datePurchased: item.datePurchased,
+                purchasePrice: item.purchasePrice,
+                currency: item.currency,
+                purchasedFrom: item.purchasedFrom,
+                weightContribution: item.weightContribution,
+                weightContributionUnit: item.weightContributionUnit,
+                isInactive: item.isInactive,
+                diverName: item.diverName,
+                lastServiceDate: item.lastServiceDate,
+                nextServiceDue: item.nextServiceDue,
+                serviceHistory: item.serviceHistory,
+                gearNotes: item.gearNotes
+            )
+            modelContext.insert(gear)
+            gearByID[item.id] = gear
+            count += 1
+        }
+        return count
     }
 }
 
