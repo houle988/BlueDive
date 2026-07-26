@@ -624,13 +624,17 @@ struct GearListView: View {
         var count = 0
         for item in items {
             // Primary dedup: by UUID (same source device, same export).
-            if gearByID[item.id] != nil { continue }
+            if let existing = gearByID[item.id] {
+                existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory)
+                continue
+            }
             // Secondary dedup: by name + category + diverName + serial — catches gear previously
             // imported via a dive XML, which assigned a fresh UUID instead of the canonical one,
             // and also handles CSV imports that always assign a fresh UUID.
             if let existing = gearByID.values.first(where: {
                 $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
             }) {
+                existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory)
                 gearByID[item.id] = existing
                 continue
             }

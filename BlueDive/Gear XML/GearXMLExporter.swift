@@ -78,7 +78,7 @@ enum GearXMLExporter {
         lines.append(xmlTag("purchasedFrom",        gear.purchasedFrom ?? "",                  indent: 6))
         lines.append(xmlTag("lastServiceDate",      gear.lastServiceDate.map(formatDate) ?? "", indent: 6))
         lines.append(xmlTag("nextServiceDue",       gear.nextServiceDue.map(formatDate) ?? "", indent: 6))
-        lines.append(xmlTag("serviceHistory",       gear.serviceHistory ?? "",                 indent: 6))
+        lines.append(contentsOf: serviceHistoryXMLLines(for: gear, indent: 6))
         lines.append(xmlTag("gearNotes",            gear.gearNotes ?? "",                      indent: 6))
         lines.append(xmlTag("weightContribution",   String(gear.weightContribution),           indent: 6))
         lines.append(xmlTag("weightContributionUnit", gear.weightContributionUnit ?? "",       indent: 6))
@@ -126,6 +126,41 @@ enum GearXMLExporter {
         return lines
     }
 
+    // MARK: - Shared Service History Block
+
+    /// Generates the `<serviceHistory>` element and optional `<serviceRecords>` block for
+    /// `gear` at the given base `indent`. Called from both `GearXMLExporter` and
+    /// `BlueDiveXMLExporter` so the emission logic is not duplicated.
+    @MainActor
+    static func serviceHistoryXMLLines(for gear: Gear, indent: Int) -> [String] {
+        var lines: [String] = []
+        guard gear.hasStructuredServiceHistory else {
+            lines.append(xmlTag("serviceHistory", gear.serviceHistory ?? "", indent: indent))
+            return lines
+        }
+        let allRecords = gear.exportableServiceRecords
+        guard !allRecords.isEmpty else {
+            lines.append(xmlTag("serviceHistory", gear.serviceHistory ?? "", indent: indent))
+            return lines
+        }
+        let outerPad = String(repeating: " ", count: indent)
+        let innerPad = String(repeating: " ", count: indent + 2)
+        lines.append("\(outerPad)<serviceRecords>")
+        for record in allRecords {
+            lines.append("\(innerPad)<serviceRecord>")
+            lines.append(xmlTag("id",          record.id.uuidString,                indent: indent + 4))
+            lines.append(xmlTag("date",        formatDate(record.date),             indent: indent + 4))
+            lines.append(xmlTag("description", record.description,                  indent: indent + 4))
+            if let cost = record.cost {
+                lines.append(xmlTag("cost",    String(format: "%.2f", cost),        indent: indent + 4))
+            }
+            lines.append(xmlTag("isLegacy",    record.isLegacy ? "true" : "false", indent: indent + 4))
+            lines.append("\(innerPad)</serviceRecord>")
+        }
+        lines.append("\(outerPad)</serviceRecords>")
+        return lines
+    }
+
     // MARK: - XML Helpers
 
     private static func xmlTag(_ name: String, _ value: String, indent: Int) -> String {
@@ -146,7 +181,7 @@ enum GearXMLExporter {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
+        f.timeZone = TimeZone.current
         return f
     }()
 

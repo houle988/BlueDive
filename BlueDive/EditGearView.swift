@@ -34,7 +34,6 @@ struct EditGearView: View {
     // Service
     @State private var nextServiceDue: Date
     @State private var showNextServiceDue: Bool
-    @State private var serviceHistory: String
     @State private var gearNotes: String
     @State private var diverName: String
 
@@ -71,7 +70,6 @@ struct EditGearView: View {
         _isInactive = State(initialValue: gear.isInactive)
         _nextServiceDue = State(initialValue: gear.nextServiceDue ?? Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date())
         _showNextServiceDue = State(initialValue: gear.nextServiceDue != nil)
-        _serviceHistory = State(initialValue: gear.serviceHistory ?? "")
         _gearNotes = State(initialValue: gear.gearNotes ?? "")
         _diverName = State(initialValue: gear.diverName)
     }
@@ -493,20 +491,6 @@ struct EditGearView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
 
-                // Service history
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Service history", systemImage: "list.bullet.clipboard")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-
-                    TextField("Service notes...", text: $serviceHistory, axis: .vertical)
-                        .lineLimit(3...6)
-                        .textFieldStyle(.plain)
-                        .autocorrectionDisabled()
-                        .padding()
-                        .background(Color.platformSecondaryBackground)
-                        .cornerRadius(10)
-                }
             }
         }
         .cardStyle()
@@ -683,7 +667,6 @@ struct EditGearView: View {
             NotificationManager.shared.cancelNotification(identifier: "gear-\(gear.id.uuidString)")
         }
         
-        gear.serviceHistory = serviceHistory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : serviceHistory.trimmingCharacters(in: .whitespacesAndNewlines)
         gear.gearNotes = gearNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : gearNotes.trimmingCharacters(in: .whitespacesAndNewlines)
 
         try? modelContext.save()

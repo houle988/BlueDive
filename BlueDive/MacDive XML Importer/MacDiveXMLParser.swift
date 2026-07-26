@@ -154,6 +154,7 @@ struct BlueDiveGearData: Sendable {
     let purchasedFrom: String?
     let weightContribution: Double?
     let weightContributionUnit: String?
+    let lastServiceDate: Date?
     let nextServiceDue: Date?
     let serviceHistory: String?
     let gearNotes: String?
@@ -505,6 +506,7 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                     purchasedFrom: nil,           // NOT imported from MacDive
                     weightContribution: nil,      // NOT imported from MacDive
                     weightContributionUnit: nil,  // NOT imported from MacDive
+                    lastServiceDate: nil,         // NOT imported from MacDive
                     nextServiceDue: nil,          // NOT imported from MacDive
                     serviceHistory: nil,          // NOT imported from MacDive
                     gearNotes: nil,               // NOT imported from MacDive

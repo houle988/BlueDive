@@ -494,6 +494,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                         purchasedFrom: nil,
                         weightContribution: nil,
                         weightContributionUnit: nil,  // NOT imported from UDDF
+                        lastServiceDate: nil,         // NOT imported from UDDF
                         nextServiceDue: nil,
                         serviceHistory: nil,
                         gearNotes: nil,

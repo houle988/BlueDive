@@ -23,7 +23,6 @@ struct AddGearView: View {
     @State private var purchasedFrom = ""
     @State private var nextServiceDue: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var showNextServiceDue = false
-    @State private var serviceHistory = ""
     @State private var gearNotes = ""
 
     @State private var diverName = ""
@@ -473,20 +472,6 @@ struct AddGearView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
                 
-                // Service history
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Service history", systemImage: "list.bullet.clipboard")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    TextField("Service notes...", text: $serviceHistory, axis: .vertical)
-                        .lineLimit(3...6)
-                        .textFieldStyle(.plain)
-                        .autocorrectionDisabled()
-                        .padding()
-                        .background(Color.platformSecondaryBackground)
-                        .cornerRadius(10)
-                }
             }
         }
         .cardStyle()
@@ -679,7 +664,6 @@ struct AddGearView: View {
             weightContributionUnit: weightContributionUnit,
             diverName: diverName.trimmingCharacters(in: .whitespaces),
             nextServiceDue: showNextServiceDue ? nextServiceDue : nil,
-            serviceHistory: serviceHistory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : serviceHistory.trimmingCharacters(in: .whitespacesAndNewlines),
             gearNotes: gearNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : gearNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         

@@ -5,6 +5,62 @@ import Foundation
 /// Parses XML files produced by GearXMLExporter.
 /// The root element is `<blueDiveGearExport>` and contains
 /// `<gears>`, `<gearGroups>`, and `<tankTemplates>` sections.
+/// Accumulates `<serviceRecord>` child elements during XML parsing.
+/// Shared by `GearXMLParser` and `BlueDiveXMLParser` to avoid duplicating the logic.
+struct ServiceRecordXMLAccumulator {
+    var records: [ServiceRecord] = []
+    private var id: String?
+    private var date: Date?
+    private var description: String?
+    private var cost: Double?
+    private var isLegacy = false
+
+    /// Resets in-progress temp vars for the next `<serviceRecord>` element.
+    /// Does NOT clear `records` — reinitialise the struct itself to start a new gear.
+    mutating func reset() {
+        id = nil; date = nil; description = nil; cost = nil; isLegacy = false
+    }
+
+    /// Processes one `</elementName>` close event.
+    /// Returns `true` when `</serviceRecord>` is reached and a complete record was appended.
+    @discardableResult
+    mutating func consume(_ elementName: String, text: String, dateFormatter: DateFormatter) -> Bool {
+        switch elementName {
+        case "id":          id = text.nilIfEmpty
+        case "date":        date = dateFormatter.date(from: text)
+        case "description": description = text
+        case "cost":
+            // Reject non-finite values (e.g. "inf", "nan") — JSONEncoder throws on them.
+            if let v = Double(text), v.isFinite { cost = v }
+        case "isLegacy":    isLegacy = (text.lowercased() == "true")
+        case "serviceRecord":
+            records.append(ServiceRecord(
+                id: UUID(uuidString: id ?? "") ?? UUID(),
+                date: date ?? .distantPast,
+                description: description ?? "",
+                cost: cost,
+                // A missing or unparseable date means the date is unknown — treat as legacy
+                // so the record gets the "Legacy Note" badge and never anchors lastServiceDate.
+                isLegacy: isLegacy || date == nil
+            ))
+            return true
+        default: break
+        }
+        return false
+    }
+
+    /// Encodes accumulated records to a JSON string suitable for storage in `serviceHistory`.
+    /// Returns nil when there are no records or encoding fails.
+    func encodedJSON() -> String? {
+        guard !records.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(records),
+              let json = String(data: data, encoding: .utf8) else { return nil }
+        return json
+    }
+}
+
 final class GearXMLParser: NSObject, XMLParserDelegate {
 
     // MARK: - Parsed Result Types
@@ -70,6 +126,8 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
     private var isInGearIDs = false
     private var isInTankTemplate = false
     private var isInMetadata = false
+    private var isInServiceRecords = false
+    private var isInServiceRecord = false
 
     // MARK: - Temporary State — Gear
 
@@ -86,11 +144,16 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
     private var tempLastServiceDate: Date?
     private var tempNextServiceDue: Date?
     private var tempServiceHistory: String?
+    private var tempStructuredServiceHistory: String?
     private var tempGearNotes: String?
     private var tempWeightContribution: String?
     private var tempWeightContributionUnit: String?
     private var tempIsInactive: String?
     private var tempDiverName: String?
+
+    // MARK: - Temporary State — Service Record
+
+    private var serviceRecordAccumulator = ServiceRecordXMLAccumulator()
 
     // MARK: - Temporary State — Gear Group
 
@@ -117,7 +180,7 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = TimeZone.current
         return formatter
     }()
 
@@ -157,6 +220,16 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
             resetTemplateTemp()
         case "metadata":
             isInMetadata = true
+        case "serviceRecords":
+            if isInGear {
+                isInServiceRecords = true
+                serviceRecordAccumulator = ServiceRecordXMLAccumulator()
+            }
+        case "serviceRecord":
+            if isInServiceRecords {
+                isInServiceRecord = true
+                serviceRecordAccumulator.reset()
+            }
         default:
             break
         }
@@ -198,7 +271,30 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
     // MARK: - Gear Element Parsing
 
     private func parseGearElement(_ elementName: String, text: String) {
+        // Route service-record child elements to a dedicated function so shared element
+        // names (id, date, description) never collide with gear-level fields regardless
+        // of switch case order.
+        if isInServiceRecord {
+            if elementName == "serviceRecords" {
+                // Malformed XML: </serviceRecords> arrived while a <serviceRecord> was still
+                // open (no closing </serviceRecord> tag). Discard the incomplete in-progress
+                // record and close both contexts so the valid records already accumulated
+                // are still saved.
+                serviceRecordAccumulator.reset()
+                tempStructuredServiceHistory = serviceRecordAccumulator.encodedJSON()
+                isInServiceRecords = false
+                isInServiceRecord = false
+                return
+            }
+            parseServiceRecordChildElement(elementName, text: text)
+            return
+        }
         switch elementName {
+        case "serviceRecords":
+            // encodedJSON() returns nil when empty, so no separate isEmpty guard needed.
+            tempStructuredServiceHistory = serviceRecordAccumulator.encodedJSON()
+            isInServiceRecords = false
+            isInServiceRecord = false
         case "id":                   tempID = text.nilIfEmpty
         case "name":                 tempName = text.nilIfEmpty
         case "category":             tempCategory = text.nilIfEmpty
@@ -236,7 +332,7 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
                 purchasedFrom: tempPurchasedFrom,
                 lastServiceDate: tempLastServiceDate,
                 nextServiceDue: tempNextServiceDue,
-                serviceHistory: tempServiceHistory,
+                serviceHistory: tempStructuredServiceHistory ?? tempServiceHistory,
                 gearNotes: tempGearNotes,
                 // 0.0 matches the model's documented default; a missing <weightContribution> tag means no weight data.
                 weightContribution: tempWeightContribution.flatMap(Double.init) ?? 0.0,
@@ -248,6 +344,14 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
             isInGear = false
         default:
             break
+        }
+    }
+
+    // MARK: - Service Record Child Element Parsing
+
+    private func parseServiceRecordChildElement(_ elementName: String, text: String) {
+        if serviceRecordAccumulator.consume(elementName, text: text, dateFormatter: dateFormatter) {
+            isInServiceRecord = false
         }
     }
 
@@ -332,11 +436,15 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
         tempLastServiceDate = nil
         tempNextServiceDue = nil
         tempServiceHistory = nil
+        tempStructuredServiceHistory = nil
         tempGearNotes = nil
         tempWeightContribution = nil
         tempWeightContributionUnit = nil
         tempIsInactive = nil
         tempDiverName = nil
+        serviceRecordAccumulator = ServiceRecordXMLAccumulator()
+        isInServiceRecords = false
+        isInServiceRecord = false
     }
 
     private func resetGroupTemp() {

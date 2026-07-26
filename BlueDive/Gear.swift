@@ -112,13 +112,7 @@ final class Gear {
         self.serviceHistory = serviceHistory
         self.gearNotes = gearNotes
     }
-    
-    // MARK: - Service Methods
-    
-    /// Marque l'équipement comme entretenu à la date donnée
-    func markAsServiced(on date: Date = Date()) {
-        lastServiceDate = date
-    }
+
 }
 
 // MARK: - Dedup Helper
@@ -358,4 +352,207 @@ enum GearCategory: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Service Records
+
+struct ServiceRecord: Codable, Identifiable {
+    var id: UUID
+    var date: Date
+    var description: String
+    var cost: Double?
+    var isLegacy: Bool
+
+    init(id: UUID = UUID(), date: Date, description: String, cost: Double? = nil, isLegacy: Bool = false) {
+        self.id = id
+        self.date = date
+        self.description = description
+        self.cost = cost
+        self.isLegacy = isLegacy
+    }
+}
+
+extension Gear {
+    // Stable sentinel UUID used only for in-memory legacy plain-text records (never stored in JSON).
+    static let legacySentinelID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+
+    /// True when `serviceHistory` holds structured JSON rather than a legacy plain-text note.
+    /// Use this instead of repeating `hasPrefix("[")` at call sites.
+    var hasStructuredServiceHistory: Bool {
+        serviceHistory?.hasPrefix("[") == true
+    }
+
+    /// Parses structured records from `serviceHistory`. Falls back to a synthetic legacy
+    /// record when the field contains plain text written before structured records were introduced.
+    var parsedServiceRecords: [ServiceRecord] {
+        guard let raw = serviceHistory, !raw.isEmpty else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let data = raw.data(using: .utf8),
+           let records = try? decoder.decode([ServiceRecord].self, from: data) {
+            return records
+        }
+        // If the value looks like JSON but failed to decode (e.g. written by a newer schema version),
+        // return empty rather than treating the raw JSON blob as a legacy plain-text note.
+        // syncServiceData() prevents malformed JSON from entering via imports, so this guard
+        // is only reached in the event of storage corruption.
+        if raw.hasPrefix("[") { return [] }
+        // Legacy plain text — wrap in a synthetic record so it displays in the list.
+        return [ServiceRecord(id: Gear.legacySentinelID, date: lastServiceDate ?? .distantPast, description: raw, isLegacy: true)]
+    }
+
+    /// Returns `parsedServiceRecords` with any in-memory sentinel UUID promoted to a stable
+    /// export UUID, ready for XML export. Never persist the result — promotion is for serialisation only.
+    ///
+    /// The export UUID is derived deterministically from the gear's own `id` so that repeated
+    /// exports of the same gear always produce the same UUID for the legacy record, keeping
+    /// exported XML stable across multiple export passes.
+    ///
+    /// The sentinel can only appear in `parsedServiceRecords` for plain-text gear (serviceHistory
+    /// does not start with "["). Since `serviceHistoryXMLLines` early-returns for plain-text gear
+    /// without calling this property, the sentinel promotion branch is not triggered through the
+    /// current export path. The promotion logic is retained as a safety net for future callers.
+    var exportableServiceRecords: [ServiceRecord] {
+        parsedServiceRecords.map { r in
+            r.id == Gear.legacySentinelID
+                ? ServiceRecord(id: legacyExportID, date: r.date, description: r.description, cost: r.cost, isLegacy: r.isLegacy)
+                : r
+        }
+    }
+
+    /// A stable export UUID for the legacy sentinel record, derived deterministically from the
+    /// gear's own `id` by XOR-ing two boundary bytes with fixed markers. Ensures that
+    /// repeated exports of the same gear always produce the same UUID for the legacy record.
+    private var legacyExportID: UUID {
+        var bytes = id.uuid
+        bytes.0 ^= 0x4C   // 'L' for legacy
+        bytes.15 ^= 0x47  // 'G' for gear
+        let derived = UUID(uuid: bytes)
+        // Guard against the astronomically unlikely case where the XOR yields the reserved sentinel.
+        // Perturbing byte[1] produces a different but still deterministic UUID for this gear.
+        if derived == Gear.legacySentinelID {
+            bytes.1 ^= 0x01
+            return UUID(uuid: bytes)
+        }
+        return derived
+    }
+
+    /// Returns true when `json` is a valid JSON-encoded `[ServiceRecord]` array.
+    /// Used to validate incoming history blobs before mutating any stored state.
+    private static func canDecodeServiceHistory(_ json: String) -> Bool {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = json.data(using: .utf8) else { return false }
+        return (try? decoder.decode([ServiceRecord].self, from: data)) != nil
+    }
+
+    /// Merges service data from a re-import.
+    ///
+    /// When `importedDate` is provided, the function acts as a freshness-gated merge:
+    /// the call is a no-op when the incoming date is not newer than `lastServiceDate`.
+    /// When `importedDate` is nil, the function fills in a missing `serviceHistory` only
+    /// if the gear currently has none (never overwrites).
+    ///
+    /// In both paths, malformed JSON is validated and rejected before any state is mutated.
+    /// Plain-text history never overwrites existing structured JSON history.
+    func syncServiceData(importedDate: Date?, importedHistory: String?) {
+        // Treat an empty string identically to nil — both mean "no history provided."
+        let importedHistory = importedHistory.flatMap { $0.isEmpty ? nil : $0 }
+        if let importedDate {
+            guard lastServiceDate == nil || importedDate > lastServiceDate! else { return }
+            // Validate incoming JSON before mutating any state so a malformed blob leaves
+            // `lastServiceDate` and `serviceHistory` completely untouched.
+            if let incoming = importedHistory, incoming.hasPrefix("[") {
+                guard Self.canDecodeServiceHistory(incoming) else { return }
+            }
+            if let incoming = importedHistory {
+                // Never let incoming plain text overwrite existing structured JSON history.
+                // If that would be the case, skip the entire update — advancing lastServiceDate
+                // without also updating serviceHistory would create a date/record mismatch where
+                // the displayed "Last Maintenance" date doesn't correspond to any stored record.
+                guard !hasStructuredServiceHistory || incoming.hasPrefix("[") else { return }
+                serviceHistory = incoming
+            } else if hasStructuredServiceHistory {
+                // No history provided but gear already has structured records. Advancing
+                // lastServiceDate without a matching record would violate the invariant that
+                // lastServiceDate is always derivable from stored records.
+                return
+            }
+            lastServiceDate = importedDate
+        } else {
+            // No date anchor: only fill in history when the gear has none, and validate
+            // incoming JSON so a malformed blob is rejected rather than stored silently.
+            guard let incoming = importedHistory, serviceHistory == nil else { return }
+            if incoming.hasPrefix("[") {
+                guard Self.canDecodeServiceHistory(incoming) else { return }
+            }
+            serviceHistory = incoming
+        }
+    }
+
+    /// Encodes `records` as JSON into `serviceHistory` and keeps `lastServiceDate` in sync.
+    func saveServiceRecords(_ records: [ServiceRecord]) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if records.isEmpty {
+            serviceHistory = nil
+            // lastServiceDate intentionally NOT cleared here — callers that want a full wipe
+            // must set lastServiceDate = nil explicitly before calling this method.
+            // Both the "Clear All Records" action (GearServiceView) and deleteServiceRecord
+            // (when the last record is removed) do this explicitly.
+            // nextServiceDue is also intentionally NOT cleared here; only "Clear All Records"
+            // resets it explicitly after warning the user the reminder will be removed.
+        } else {
+            // Promote any in-memory legacy sentinel IDs to real UUIDs before persisting
+            // so the sentinel ID (reserved for the parse-time synthetic record) is never stored in JSON.
+            var toSave = records
+            for i in toSave.indices where toSave[i].id == Gear.legacySentinelID {
+                toSave[i].id = UUID()
+            }
+            if let data = try? encoder.encode(toSave),
+               let json = String(data: data, encoding: .utf8) {
+                serviceHistory = json
+                // Derive lastServiceDate from ALL records (including legacy) so that adding an
+                // older non-legacy record to legacy-only gear does not regress the displayed date.
+                // Exclude .distantPast, which is the sentinel for "unknown date" on synthetic
+                // records built from gear whose original service date was never recorded.
+                if let maxDate = toSave
+                    .filter({ $0.date > .distantPast })
+                    .max(by: { $0.date < $1.date })?.date {
+                    lastServiceDate = maxDate
+                } else {
+                    lastServiceDate = nil
+                }
+            }
+        }
+    }
+
+    func addServiceRecord(date: Date, description: String, cost: Double?) {
+        // If serviceHistory looks like JSON but failed to decode (storage corruption or a newer
+        // schema version), parsedServiceRecords returns [] and a naive append would overwrite the
+        // unreadable blob with a single-record array, silently discarding whatever was there.
+        // Bail out instead — silent data loss is worse than failing to add the new record.
+        guard !(hasStructuredServiceHistory && parsedServiceRecords.isEmpty) else { return }
+        var records = parsedServiceRecords
+        records.append(ServiceRecord(date: date, description: description, cost: cost))
+        records.sort { $0.date > $1.date }
+        saveServiceRecords(records)
+    }
+
+    func updateServiceRecord(_ updated: ServiceRecord, originalId: UUID? = nil) {
+        var records = parsedServiceRecords
+        let searchId = originalId ?? updated.id
+        if let index = records.firstIndex(where: { $0.id == searchId }) {
+            records[index] = updated
+            records.sort { $0.date > $1.date }
+            saveServiceRecords(records)
+        }
+    }
+
+    func deleteServiceRecord(id: UUID) {
+        let records = parsedServiceRecords.filter { $0.id != id }
+        if records.isEmpty {
+            lastServiceDate = nil
+        }
+        saveServiceRecords(records)
+    }
+}
 

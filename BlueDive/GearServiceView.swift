@@ -8,18 +8,49 @@ struct GearServiceView: View {
     @Environment(\.locale) private var locale
 
     @State private var prefs = UserPreferences.shared
-    @State private var showDatePicker = false
+    private enum ServiceSheetMode: Identifiable {
+        case add
+        case edit(ServiceRecord)
+        var id: String {
+            switch self {
+            case .add: return "add"
+            case .edit(let r): return r.id.uuidString
+            }
+        }
+        var isEdit: Bool {
+            if case .edit = self { return true }
+            return false
+        }
+    }
+
+    @State private var serviceSheetMode: ServiceSheetMode? = nil
     @State private var serviceDate = Date()
     @State private var scheduleNextService = false
     @State private var nextServiceDate = Date()
     @State private var showEditGear = false
-    
+    @State private var serviceDescription = ""
+    @State private var serviceCost = ""
+    @State private var showDeleteConfirmation = false
+    @State private var showClearAllConfirmation = false
+
     private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
+        date.formatted(.dateTime.day().month().year().locale(locale))
+    }
+
+    private func formattedCost(_ value: Double, grouping: Bool = true) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.usesGroupingSeparator = grouping
+        f.minimumFractionDigits = 2
+        f.maximumFractionDigits = 2
+        f.locale = locale
+        return f.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
+    }
+
+    private var costIsInvalid: Bool {
+        let normalized = serviceCost.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        guard !normalized.isEmpty else { return false }
+        return Double(normalized).flatMap { $0.isFinite ? $0 : nil } == nil
     }
 
     // MARK: - Computed Properties
@@ -102,7 +133,7 @@ struct GearServiceView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showDatePicker) {
+            .sheet(item: $serviceSheetMode) { mode in
                 NavigationStack {
                     Form {
                         Section("Service Date") {
@@ -113,60 +144,174 @@ struct GearServiceView: View {
                                 displayedComponents: .date
                             )
                             .adaptiveDatePickerStyle()
+                            // Informational reminder when editing a legacy record with no known date.
+                            // Saving always promotes the record — verify the date shown is correct.
+                            if case .edit(let record) = mode,
+                               record.isLegacy,
+                               record.date == .distantPast {
+                                Label("Original date unknown — verify before saving.", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
                         }
 
-                        Section {
-                            Toggle("Schedule Next Service", isOn: $scheduleNextService)
-                                .onChange(of: scheduleNextService) { _, isOn in
-                                    if isOn {
-                                        nextServiceDate = Calendar.current.date(
-                                            byAdding: .year, value: 1, to: serviceDate
-                                        ) ?? serviceDate
+                        Section("Description") {
+                            TextField("Description", text: $serviceDescription, axis: .vertical)
+                                .lineLimit(4...)
+                                .overlay(alignment: .trailing) {
+                                    if !serviceDescription.isEmpty {
+                                        Button { serviceDescription = "" } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(.trailing, 4)
                                     }
                                 }
-                                .onChange(of: serviceDate) { _, newDate in
-                                    if scheduleNextService && nextServiceDate < newDate {
-                                        nextServiceDate = Calendar.current.date(
-                                            byAdding: .year, value: 1, to: newDate
-                                        ) ?? newDate
-                                    }
-                                }
+                        }
 
-                            if scheduleNextService {
-                                DatePicker(
-                                    "Next Service Date",
-                                    selection: $nextServiceDate,
-                                    in: serviceDate...,
-                                    displayedComponents: .date
-                                )
-                                .adaptiveDatePickerStyle()
+                        Section("Cost (optional)") {
+                            TextField(formattedCost(0, grouping: false), text: $serviceCost)
+                                .platformKeyboardType(.decimalPad)
+                                .overlay(alignment: .trailing) {
+                                    if !serviceCost.isEmpty {
+                                        Button { serviceCost = "" } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(.trailing, 4)
+                                    }
+                                }
+                            if costIsInvalid {
+                                Text("Invalid amount.")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+
+                        if mode.isEdit {
+                            Section {
+                                Button(role: .destructive) {
+                                    showDeleteConfirmation = true
+                                } label: {
+                                    Label("Delete Record", systemImage: "trash")
+                                        .frame(maxWidth: .infinity, alignment: .center)
+                                }
+                            }
+                        }
+
+                        if !mode.isEdit {
+                            Section {
+                                Toggle("Schedule Next Service", isOn: $scheduleNextService)
+                                    .onChange(of: scheduleNextService) { _, isOn in
+                                        if isOn {
+                                            nextServiceDate = Calendar.current.date(
+                                                byAdding: .year, value: 1, to: serviceDate
+                                            ) ?? serviceDate
+                                        }
+                                    }
+                                    .onChange(of: serviceDate) { _, newDate in
+                                        if scheduleNextService && nextServiceDate < newDate {
+                                            nextServiceDate = Calendar.current.date(
+                                                byAdding: .year, value: 1, to: newDate
+                                            ) ?? newDate
+                                        }
+                                    }
+
+                                if scheduleNextService {
+                                    DatePicker(
+                                        "Next Service Date",
+                                        selection: $nextServiceDate,
+                                        in: serviceDate...,
+                                        displayedComponents: .date
+                                    )
+                                    .adaptiveDatePickerStyle()
+                                }
                             }
                         }
                     }
-                    .navigationTitle("Select Service Date")
+                    .confirmationDialog("Delete this service record?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                        Button("Delete", role: .destructive) {
+                            if case .edit(let record) = mode {
+                                withAnimation { gear.deleteServiceRecord(id: record.id) }
+                                saveAndReschedule()
+                            }
+                            serviceSheetMode = nil
+                        }
+                    }
+                    .navigationTitle(mode.isEdit ? "Edit Service Record" : "Log Service")
                     #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
                     #endif
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") { showDatePicker = false }
+                            Button("Cancel") { serviceSheetMode = nil }
                         }
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Confirm") {
-                                if scheduleNextService {
-                                    gear.nextServiceDue = nextServiceDate
-                                } else {
-                                    gear.nextServiceDue = nil
+                            Button(mode.isEdit ? "Save" : "Confirm") {
+                                let desc = serviceDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                                let normalized = serviceCost.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+                                // Reject non-finite values (e.g. "inf", "nan") — JSONEncoder throws on them,
+                                // which would cause saveServiceRecords to silently drop the entire record.
+                                let parsedCost: Double? = normalized.isEmpty ? nil : Double(normalized).flatMap { $0.isFinite ? $0 : nil }
+                                switch mode {
+                                case .edit(let record):
+                                    var updated = record
+                                    updated.date = serviceDate
+                                    updated.description = desc
+                                    // Blank or whitespace-only → remove cost. Parseable → use it.
+                                    // Non-empty but unparseable → preserve original to avoid silent data loss.
+                                    if normalized.isEmpty {
+                                        updated.cost = nil
+                                    } else if let c = parsedCost {
+                                        updated.cost = c
+                                    }
+                                    // Saving always promotes the record: clear isLegacy so the
+                                    // confirmed date anchors lastServiceDate. Any sentinel ID is
+                                    // promoted to a fresh UUID so it is never persisted to JSON.
+                                    updated.isLegacy = false
+                                    if updated.id == Gear.legacySentinelID {
+                                        updated.id = UUID()
+                                    }
+                                    gear.updateServiceRecord(updated, originalId: record.id)
+                                case .add:
+                                    if scheduleNextService {
+                                        gear.nextServiceDue = nextServiceDate
+                                    }
+                                    // Do not clear nextServiceDue when toggle is off — the user
+                                    // may be logging a historical service and has a future
+                                    // reminder already scheduled that should be preserved.
+                                    gear.addServiceRecord(date: serviceDate, description: desc, cost: parsedCost)
                                 }
-                                showDatePicker = false
-                                markAsServiced(on: serviceDate)
+                                serviceSheetMode = nil
+                                saveAndReschedule()
                             }
+                            .disabled(costIsInvalid)
                         }
                     }
                 }
+                .onAppear {
+                    if case .edit(let record) = mode {
+                        serviceDate = (record.isLegacy && record.date == .distantPast) ? Date() : record.date
+                        serviceDescription = record.description
+                        serviceCost = record.cost.map { formattedCost($0, grouping: false) } ?? ""
+                    }
+                }
+                .onDisappear { showDeleteConfirmation = false }
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+            }
+            .confirmationDialog("Clear all service records?", isPresented: $showClearAllConfirmation, titleVisibility: .visible) {
+                Button("Clear All Records", role: .destructive) {
+                    gear.nextServiceDue = nil
+                    gear.lastServiceDate = nil
+                    gear.saveServiceRecords([])
+                    saveAndReschedule()
+                }
+            } message: {
+                Text("This will also clear the scheduled maintenance reminder.")
             }
         }
     }
@@ -350,81 +495,6 @@ struct GearServiceView: View {
         .padding(.bottom, 8)
     }
     
-    private var gearInfoCard: some View {
-        VStack(spacing: 12) {
-            // Icône et nom
-            HStack {
-                if let category = gear.gearCategory {
-                    Image(systemName: category.icon)
-                        .font(.largeTitle)
-                        .foregroundStyle(.cyan)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(gear.name)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                    
-                    Text(gear.gearCategory?.localizedName ?? LocalizedStringKey(gear.category))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    
-                    if let model = gear.model, !model.isEmpty {
-                        Text(model)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                Spacer()
-
-                // Quick edit shortcut
-                Button {
-                    showEditGear = true
-                } label: {
-                    Image(systemName: "pencil.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.cyan)
-                }
-                .buttonStyle(.plain)
-            }
-            
-            Divider()
-            
-            // Détails achat
-            VStack(alignment: .leading, spacing: 8) {
-                if let serial = gear.serialNumber, !serial.isEmpty {
-                    gearDetailRow(icon: "number", label: "N° de série", value: serial, color: .gray)
-                }
-                gearDetailRow(icon: "calendar", label: "Date d'achat",
-                              value: formattedDate(gear.datePurchased), color: .cyan)
-                if let price = gear.purchasePrice {
-                    let currency = gear.currency ?? "CAD"
-                    gearDetailRow(icon: "dollarsign.circle", label: "Prix d'achat",
-                                  value: price.localizedString(decimals: 2, minDecimals: 2) + " \(currency)", color: .green)
-                }
-                if let shop = gear.purchasedFrom, !shop.isEmpty {
-                    gearDetailRow(icon: "storefront.fill", label: "Purchased From", value: shop, color: .orange)
-                }
-                if gear.weightContribution > 0 {
-                    gearDetailRow(icon: "scalemass", label: "Weight", value: prefs.weightUnit.formatted(gear.weightContribution, from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)), color: .gray)
-                }
-            }
-        }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
-        .padding(.horizontal)
-    }
-    
-    private func gearDetailRow(icon: String, label: String, value: String, color: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon).font(.caption).foregroundStyle(color).frame(width: 18)
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).font(.caption).fontWeight(.medium).foregroundStyle(.primary)
-        }
-    }
-    
     private var serviceGaugesSection: some View {
         VStack(spacing: 16) {
             // N'afficher le gauge que si un entretien est programmé
@@ -542,35 +612,6 @@ struct GearServiceView: View {
         }
     }
     
-    private var statisticsSection: some View {
-        VStack(spacing: 12) {
-            SectionHeader(title: "Usage statistics", icon: "chart.bar.fill")
-            
-            Divider()
-            
-            StatRow(
-                title: "Total submerged time",
-                value: gear.formattedTotalTime,
-                icon: "clock.fill"
-            )
-            
-            StatRow(
-                title: "Average per dive",
-                value: "\(gear.averageTimePerDive) min",
-                icon: "waveform.path.ecg"
-            )
-            
-            StatRow(
-                title: "Total dives",
-                value: "\(gear.totalDivesCount)",
-                icon: "water.waves"
-            )
-        }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.primary.opacity(0.05)))
-        .padding(.horizontal)
-    }
-    
     /// Resolves alert colour: red if due/past-due, orange if within 30 days.
     private var alertColor: Color {
         if isServiceDueOrPast {
@@ -646,14 +687,12 @@ struct GearServiceView: View {
             
             // Bouton d'action moderne
             Button {
-                serviceDate = Date()
-                scheduleNextService = false
-                showDatePicker = true
+                openAddServiceSheet()
             } label: {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Mark as Serviced")
                             .font(.subheadline)
@@ -744,12 +783,14 @@ struct GearServiceView: View {
                 value: formattedDate(lastService)
             )
             
-            ModernStatRow(
-                icon: "calendar.badge.clock",
-                iconColor: .orange,
-                title: "Days Ago",
-                value: "\(gear.daysSinceLastService) days"
-            )
+            if gear.daysSinceLastService >= 0 {
+                ModernStatRow(
+                    icon: "calendar.badge.clock",
+                    iconColor: .orange,
+                    title: "Days Ago",
+                    value: String(format: NSLocalizedString("%lld days", bundle: .forAppLanguage(), comment: "Number of days since last maintenance service"), Int64(gear.daysSinceLastService))
+                )
+            }
         } else {
             noServiceRecordedView
         }
@@ -791,38 +832,88 @@ struct GearServiceView: View {
         }
     }
     
-    @ViewBuilder
     private var serviceHistoryNotesView: some View {
-        if let history = gear.serviceHistory, !history.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "doc.text.fill")
-                        .foregroundStyle(.blue)
-                    Text("Maintenance Log")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+        let records = gear.parsedServiceRecords
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text.fill")
+                    .foregroundStyle(.blue)
+                Text("Maintenance History")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+                Button {
+                    openAddServiceSheet()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(.cyan)
+                        .font(.title3)
                 }
-                
-                Text(history)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.primary.opacity(0.03))
-                    )
+                .buttonStyle(.plain)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-                    )
-            )
+
+            if records.isEmpty {
+                Text("No service records yet. Tap + to log the first maintenance.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(records) { record in
+                        ServiceRecordRow(
+                            record: record,
+                            currency: gear.currency ?? ""
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            // For legacy records with no confirmed date, seed the picker at
+                            // today so the user doesn't have to scroll from year 0001.
+                            serviceDate = (record.isLegacy && record.date == .distantPast) ? Date() : record.date
+                            serviceDescription = record.description
+                            serviceCost = record.cost.map { formattedCost($0, grouping: false) } ?? ""
+                            scheduleNextService = false
+                            showDeleteConfirmation = false
+                            serviceSheetMode = .edit(record)
+                        }
+
+                        if record.id != records.last?.id {
+                            Divider()
+                                .padding(.horizontal, 4)
+                        }
+                    }
+                }
+
+                let costs = records.compactMap(\.cost)
+                let total = costs.reduce(0, +)
+                if !costs.isEmpty {
+                    Divider()
+                    HStack(spacing: 12) {
+                        Text("Total Cost")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Text(verbatim: formattedCost(total) + (gear.currency.flatMap { $0.isEmpty ? nil : " " + $0 } ?? ""))
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.primary)
+                        // Invisible chevron matches the layout of ServiceRecordRow so the cost columns align.
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.clear)
+                    }
+                    .padding(.top, 4)
+                }
+            }
         }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.blue.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                )
+        )
     }
     
     @ViewBuilder
@@ -903,7 +994,7 @@ struct GearServiceView: View {
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.primary)
                             
-                            Text(verbatim: formattedDate(dive.timestamp))
+                            Text(dive.timestamp, format: .dateTime.day().month().year().locale(locale))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -975,19 +1066,15 @@ struct GearServiceView: View {
                 Divider()
 
                 Button {
-                    serviceDate = Date()
-                    scheduleNextService = false
-                    showDatePicker = true
+                    openAddServiceSheet()
                 } label: {
                     Label("Mark as Serviced", systemImage: "checkmark.circle")
                 }
-                
+
                 Button(role: .destructive) {
-                    // Reset service date
-                    gear.lastServiceDate = nil
-                    try? modelContext.save()
+                    showClearAllConfirmation = true
                 } label: {
-                    Label("Reset Maintenance", systemImage: "arrow.counterclockwise")
+                    Label("Clear All Records", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -998,21 +1085,73 @@ struct GearServiceView: View {
     
     // MARK: - Actions
     
-    private func markAsServiced(on date: Date) {
-        withAnimation {
-            gear.markAsServiced(on: date)
-            try? modelContext.save()
-        }
-        // Cancel the current notification, then reschedule if a future
-        // service date is still set (e.g. recurring maintenance interval)
-        NotificationManager.shared.cancelNotification(
-            identifier: "gear-\(gear.id.uuidString)"
-        )
+    private func saveAndReschedule() {
+        try? modelContext.save()
+        NotificationManager.shared.cancelNotification(identifier: "gear-\(gear.id.uuidString)")
         gear.scheduleMaintenanceReminder()
+    }
+
+    private func openAddServiceSheet() {
+        serviceDate = Date()
+        scheduleNextService = false
+        nextServiceDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+        serviceDescription = ""
+        serviceCost = ""
+        showDeleteConfirmation = false
+        serviceSheetMode = .add
     }
 }
 
 // MARK: - Supporting Views
+
+struct ServiceRecordRow: View {
+    let record: ServiceRecord
+    let currency: String
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                if record.isLegacy {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Legacy Note")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if record.isLegacy && record.date == .distantPast {
+                    Text("—")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(record.date, format: .dateTime.day().month().year().locale(locale))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text(record.description.isEmpty ? "—" : record.description)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+
+            if let cost = record.cost {
+                Text(verbatim: cost.formatted(.number.precision(.fractionLength(2)).locale(locale)) + (currency.isEmpty ? "" : " " + currency))
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 6)
+    }
+}
 
 struct ModernInfoPill: View {
     let icon: String
@@ -1245,57 +1384,3 @@ struct ServiceGauge: View {
     }
 }
 
-struct StatRow: View {
-    let title: LocalizedStringKey
-    let value: String
-    let icon: String
-    
-    var body: some View {
-        HStack {
-            Label(title, systemImage: icon)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            
-            Spacer()
-            
-            Text(value)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-        }
-    }
-}
-
-struct SectionHeader: View {
-    let title: LocalizedStringKey
-    let icon: String
-    
-    var body: some View {
-        HStack {
-            Label(title, systemImage: icon)
-                .font(.headline)
-                .foregroundStyle(.primary)
-            Spacer()
-        }
-    }
-}
-
-struct InfoPill: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-            Text(text)
-                .font(.caption)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(Color.cyan.opacity(0.15))
-        )
-        .foregroundStyle(.cyan)
-    }
-}

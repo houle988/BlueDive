@@ -662,6 +662,7 @@ extension ContentView {
                 }
 
                 if let gear = existingGear {
+                    gear.syncServiceData(importedDate: gearItem.lastServiceDate, importedHistory: gearItem.serviceHistory)
                     equipmentToAdd.append(gear)
                 } else {
                     let newGear = Gear(
@@ -679,6 +680,7 @@ extension ContentView {
                         weightContributionUnit: gearItem.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol,
                         isInactive: gearItem.isInactive,
                         diverName: gearItem.diverName,
+                        lastServiceDate: gearItem.lastServiceDate,
                         nextServiceDue: gearItem.nextServiceDue,
                         serviceHistory: gearItem.serviceHistory,
                         gearNotes: gearItem.gearNotes
