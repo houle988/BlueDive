@@ -1829,38 +1829,7 @@ struct SettingsView: View {
     // MARK: - Surface Interval Recalculation
 
     private func recalculateSurfaceIntervals() {
-        let allDives = (try? modelContext.fetch(FetchDescriptor<Dive>())) ?? []
-        let grouped = Dictionary(grouping: allDives) { $0.diverName }
-        for (diver, diverDives) in grouped {
-            guard !diver.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-            let sorted = diverDives.sorted { $0.timestamp < $1.timestamp }
-            for (index, dive) in sorted.enumerated() {
-                if index == 0 {
-                    dive.surfaceInterval = "0h 00m"
-                    dive.isRepetitiveDive = false
-                } else {
-                    let prev = sorted[index - 1]
-                    let prevEnd = prev.timestamp.addingTimeInterval(TimeInterval(prev.duration * 60))
-                    let gap = dive.timestamp.timeIntervalSince(prevEnd)
-                    guard gap > 0 else {
-                        dive.surfaceInterval = "0h 00m"
-                        dive.isRepetitiveDive = true
-                        continue
-                    }
-                    let totalMinutes = Int(gap / 60)
-                    let days = totalMinutes / (24 * 60)
-                    let hours = (totalMinutes % (24 * 60)) / 60
-                    let minutes = totalMinutes % 60
-                    if days > 0 {
-                        dive.surfaceInterval = String(format: "%dd %dh %02dm", days, hours, minutes)
-                    } else {
-                        dive.surfaceInterval = String(format: "%dh %02dm", hours, minutes)
-                    }
-                    dive.isRepetitiveDive = totalMinutes < 1440
-                }
-            }
-        }
-        try? modelContext.save()
+        Dive.recalculateSurfaceIntervals(in: modelContext)
     }
 
 

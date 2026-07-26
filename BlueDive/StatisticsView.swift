@@ -128,7 +128,7 @@ struct StatisticsView: View {
     }
 
     private var filterTaskId: String {
-        "\(allDives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier)"
+        "\(allDives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(allDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
     }
 
     private func computeStats(_ dives: [Dive], locale: Locale) async {
