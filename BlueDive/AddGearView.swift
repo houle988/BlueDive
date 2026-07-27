@@ -117,16 +117,8 @@ struct AddGearView: View {
     
     private var headerSection: some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(categoryColor(for: selectedCategory).opacity(0.2))
-                    .frame(width: 80, height: 80)
-                
-                Image(systemName: selectedCategory.icon)
-                    .font(.system(size: 36, weight: .medium))
-                    .foregroundStyle(categoryColor(for: selectedCategory))
-            }
-            
+            GearIconView(manufacturer: manufacturerText.isEmpty ? nil : manufacturerText, category: selectedCategory, size: 80)
+
             Text("Add new equipment")
                 .font(.title2)
                 .fontWeight(.semibold)
@@ -370,67 +362,6 @@ struct AddGearView: View {
             }
         }
         .cardStyle()
-    }
-    
-    private var weightAndPurchaseSection: some View {
-        Section {
-            // Weight
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label("Associated weight", systemImage: "scalemass")
-                    Spacer()
-                    Group {
-                        if weightContribution == 0 {
-                            Text("None")
-                        } else {
-                            Text(verbatim: weightContribution.localizedString(decimals: 2) + " kg")
-                        }
-                    }
-                        .foregroundStyle(.cyan)
-                        .fontWeight(.semibold)
-                }
-                
-                if weightContribution > 0 {
-                    Slider(value: $weightContribution, in: 0...15, step: 0.5) {
-                        Text("Weight")
-                    } minimumValueLabel: {
-                        Text("0")
-                            .font(.caption2)
-                    } maximumValueLabel: {
-                        Text("15")
-                            .font(.caption2)
-                    }
-                    .tint(.cyan)
-                } else {
-                    Button {
-                        withAnimation {
-                            weightContribution = 2.0
-                        }
-                    } label: {
-                        Text("Add weight")
-                            .font(.caption)
-                            .foregroundStyle(.cyan)
-                    }
-                }
-            }
-            .padding(.vertical, 4)
-            
-            // Purchase date
-            DatePicker(
-                selection: $datePurchased,
-                in: ...Date(),
-                displayedComponents: .date
-            ) {
-                Label("Purchase date", systemImage: "calendar")
-            }
-        } header: {
-            Text("Configuration")
-        } footer: {
-            if weightContribution > 0 {
-                Text("This will be used to calculate your optimal weight.")
-                    .font(.caption)
-            }
-        }
     }
     
     private var serviceSection: some View {

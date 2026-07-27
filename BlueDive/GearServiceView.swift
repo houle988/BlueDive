@@ -320,37 +320,8 @@ struct GearServiceView: View {
     
     private var gearHeroHeader: some View {
         VStack(spacing: 0) {
-            // Grande icône avec gradient background
-            ZStack {
-                // Cercle avec gradient
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.cyan.opacity(0.3), Color.blue.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 140, height: 140)
-                    .blur(radius: 20)
-                
-                Circle()
-                    .fill(Color.primary.opacity(0.05))
-                    .frame(width: 120, height: 120)
-                
-                if let category = gear.gearCategory {
-                    Image(systemName: category.icon)
-                        .font(.system(size: 50))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.cyan, .blue],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-            }
-            .padding(.top, 20)
+            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory, size: 100)
+                .padding(.top, 20)
             
             // Nom et catégorie
             VStack(spacing: 6) {

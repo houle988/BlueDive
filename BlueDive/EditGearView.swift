@@ -153,15 +153,7 @@ struct EditGearView: View {
 
     private var headerSection: some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(categoryColor(for: selectedCategory).opacity(0.2))
-                    .frame(width: 80, height: 80)
-
-                Image(systemName: selectedCategory.icon)
-                    .font(.system(size: 36, weight: .medium))
-                    .foregroundStyle(categoryColor(for: selectedCategory))
-            }
+            GearIconView(manufacturer: manufacturerText.isEmpty ? nil : manufacturerText, category: selectedCategory, size: 80)
 
             Text("Edit Equipment")
                 .font(.title2)
