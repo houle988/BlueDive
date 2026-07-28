@@ -80,12 +80,7 @@ struct EditGearView: View {
         DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
     }
 
-    private var manufacturerSuggestions: [String] {
-        var seen = Set<String>()
-        return allGearItems.compactMap(\.manufacturer)
-            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-            .sorted()
-    }
+    @State private var manufacturerSuggestions: [String] = []
 
     private var modelSuggestions: [String] {
         var seen = Set<String>()
@@ -147,6 +142,8 @@ struct EditGearView: View {
         #if os(macOS)
         .frame(minWidth: 600, idealWidth: 650, maxWidth: 750)
         #endif
+        .task { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
+        .onChange(of: allGearItems) { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
     }
 
     // MARK: - View Components
@@ -326,7 +323,7 @@ struct EditGearView: View {
             SectionHeaderView(title: "Technical Details", icon: "doc.text")
 
             VStack(spacing: 12) {
-                GearAutocompleteField(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText, suggestions: manufacturerSuggestions, suggestionIcon: "building.2")
+                GearAutocompleteField(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText, suggestions: manufacturerSuggestions, suggestionIcon: "building.2", useManufacturerIcon: true)
 
                 GearAutocompleteField(label: "Model", icon: "tag", placeholder: "Ex: Perdix 2", text: $modelText, suggestions: modelSuggestions, suggestionIcon: "tag")
 

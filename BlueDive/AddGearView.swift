@@ -44,12 +44,7 @@ struct AddGearView: View {
         DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
     }
 
-    private var manufacturerSuggestions: [String] {
-        var seen = Set<String>()
-        return allGearItems.compactMap(\.manufacturer)
-            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-            .sorted()
-    }
+    @State private var manufacturerSuggestions: [String] = []
 
     private var modelSuggestions: [String] {
         var seen = Set<String>()
@@ -111,8 +106,10 @@ struct AddGearView: View {
         #if os(macOS)
         .frame(minWidth: 600, idealWidth: 650, maxWidth: 750)
         #endif
+        .task { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
+        .onChange(of: allGearItems) { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
     }
-    
+
     // MARK: - View Components
     
     private var headerSection: some View {
@@ -260,7 +257,7 @@ struct AddGearView: View {
             SectionHeaderView(title: "Technical Details", icon: "doc.text")
             
             VStack(spacing: 12) {
-                GearAutocompleteField(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText, suggestions: manufacturerSuggestions, suggestionIcon: "building.2")
+                GearAutocompleteField(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText, suggestions: manufacturerSuggestions, suggestionIcon: "building.2", useManufacturerIcon: true)
 
                 GearAutocompleteField(label: "Model", icon: "tag", placeholder: "Ex: Perdix 2", text: $modelText, suggestions: modelSuggestions, suggestionIcon: "tag")
 
@@ -756,16 +753,18 @@ struct GearAutocompleteField: View {
     @Binding var text: String
     let suggestions: [String]
     var suggestionIcon: String = "magnifyingglass"
+    var useManufacturerIcon: Bool = false
 
     @State private var showSuggestions = false
     @FocusState private var isFocused: Bool
 
     private var filtered: [String] {
         guard !text.isEmpty else { return [] }
+        let normalizedText = GearIconView.normalizedLookupKey(text)
         return Array(suggestions
             .filter {
-                $0.localizedCaseInsensitiveContains(text) &&
-                $0.caseInsensitiveCompare(text) != .orderedSame
+                $0.localizedCaseInsensitiveContains(normalizedText) &&
+                $0.caseInsensitiveCompare(normalizedText) != .orderedSame
             }
             .prefix(4))
     }
@@ -812,16 +811,20 @@ struct GearAutocompleteField: View {
                             showSuggestions = false
                             isFocused = false
                         } label: {
-                            HStack {
-                                Image(systemName: suggestionIcon)
-                                    .foregroundStyle(.secondary)
-                                    .font(.caption)
+                            HStack(spacing: 10) {
+                                if useManufacturerIcon {
+                                    GearIconView(manufacturer: suggestion, category: nil, size: 28, noMatchFallbackIcon: "building.2")
+                                } else {
+                                    Image(systemName: suggestionIcon)
+                                        .foregroundStyle(.secondary)
+                                        .font(.caption)
+                                }
                                 Text(suggestion)
                                     .foregroundStyle(.primary)
                                 Spacer()
                             }
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 6)
                         }
                         .buttonStyle(.plain)
 

@@ -6,7 +6,16 @@ This document describes the complete workflow for adding or updating gear manufa
 
 ## Overview
 
-Each gear item in the Gear List shows a 44pt circular icon. When the item's `manufacturer` field matches a known brand, a brand logo image is shown. Otherwise the icon falls back to the category SF Symbol (e.g. a tank cylinder for tanks, a wetsuit figure for suits). Icons are stored as 132×132px universal PNG imagesets in the Xcode asset catalog. A `UIImage(named:)` existence check ensures that placeholder imagesets (no image yet) transparently fall back to the SF Symbol rather than showing a blank circle.
+Each gear item shows a brand logo tile at multiple sizes throughout the app:
+
+| Context | Size | Shape |
+|---|---|---|
+| Gear list row | 44 pt | Rounded-square tile |
+| Manufacturer autocomplete suggestion | 28 pt | Rounded-square tile |
+| Add / Edit Gear header | 80 pt | Rounded-square tile |
+| Gear detail hero | 100 pt | Rounded-square tile |
+
+When the item's `manufacturer` field matches a known brand, a brand logo image is shown on a white tile with a subtle border. Otherwise the icon falls back to the category SF Symbol (e.g. a cylinder for tanks, a wetsuit figure for suits) on a tinted background. Icons are stored as 132×132 px universal PNG imagesets in the Xcode asset catalog. A `UIImage(named:)` existence check ensures that placeholder imagesets (no image yet) transparently fall back to the SF Symbol rather than showing a blank tile.
 
 ---
 
@@ -31,7 +40,7 @@ Asset names follow the pattern `GearIcon_<Brand>` — brand-level only, no model
 | Atomic Aquatics | `GearIcon_AtomicAquatics` |
 | Heinrichs Weikamp | `GearIcon_HeinrichsWeikamp` |
 | Light & Motion | `GearIcon_LightAndMotion` |
-| Sea&Sea | `GearIcon_SeaAndSea` |
+| Sea & Sea | `GearIcon_SeaAndSea` |
 
 General rule: remove spaces and special characters, concatenate words in PascalCase.
 
@@ -39,15 +48,37 @@ General rule: remove spaces and special characters, concatenate words in PascalC
 
 ## Icon Display in SwiftUI
 
+`GearIconView` renders a logo tile when the manufacturer matches a known brand, or a tinted SF Symbol tile otherwise:
+
 ```swift
-Image(assetName)
-    .resizable()
-    .aspectRatio(contentMode: .fill)
-    .frame(width: 44, height: 44)
-    .clipShape(Circle())
+// Logo tile (brand asset found)
+ZStack {
+    RoundedRectangle(cornerRadius: cornerRadius)
+        .fill(.white)
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(.quaternary, lineWidth: 0.5)
+        )
+    Image(assetName)
+        .resizable()
+        .aspectRatio(contentMode: .fit)
+        .padding(padding)
+}
+.frame(width: size, height: size)
+.clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+
+// SF Symbol fallback (no brand match, or placeholder imageset)
+ZStack {
+    RoundedRectangle(cornerRadius: cornerRadius)
+        .fill(iconColor.opacity(0.15))
+    Image(systemName: categoryIcon)
+        .font(.system(size: symbolSize))
+        .foregroundStyle(iconColor)
+}
+.frame(width: size, height: size)
 ```
 
-The image fills a 44×44pt circle. At 3× scale that is 132px — the target PNG size. The circle clips the edges, so the logo should be centred and fill the frame.
+The image fits inside the tile with proportional padding. At 3× scale a 44 pt tile is 132 px — the target PNG size. Logos should have a transparent background and fill most of the square frame.
 
 ---
 
@@ -82,7 +113,7 @@ The image fills a 44×44pt circle. At 3× scale that is 132px — the target PNG
 }
 ```
 
-Placeholder imagesets cause `UIImage(named:)` to return `nil`, which the `imageExists()` guard in `GearIconView` detects, keeping the category SF Symbol active until a real logo is added.
+Placeholder imagesets cause `UIImage(named:)` to return `nil`, which the `UIImage(named:) != nil` check in `GearIconView.init` detects, keeping the category SF Symbol active until a real logo is added.
 
 ---
 
@@ -126,7 +157,7 @@ cropped = img.crop(bbox)
 cw, ch = cropped.size
 ```
 
-This removes all transparent padding around the logo, ensuring it fills the circle rather than appearing small.
+This removes all transparent padding around the logo, ensuring it fills the tile rather than appearing small.
 
 ### Step 4 — Pad to square
 
@@ -138,7 +169,7 @@ padded.paste(cropped, ((side - cw) // 2, (side - ch) // 2))
 
 This preserves the aspect ratio — without this step, wide or tall logos get squished into the square frame.
 
-### Step 5 — Resize to 132×132px
+### Step 5 — Resize to 132×132 px
 
 ```python
 final = padded.resize((132, 132), Image.LANCZOS)
@@ -218,11 +249,14 @@ No code changes are needed — `GearIconView` detects the new image automaticall
    ```json
    { "images" : [], "info" : { "author" : "xcode", "version" : 1 } }
    ```
-3. Add a matching entry in `GearIconView.assetName(forManufacturer:)` in `GearIconView.swift`:
+3. Add one entry to `GearIconView.brandTable` in `GearIconView.swift`:
    ```swift
-   if lc.contains("newbrand") { return "GearIcon_NewBrand" }
+   Brand(name: "New Brand", tokens: ["newbrand"], asset: "GearIcon_NewBrand"),
    ```
-4. When the logo image is ready, install it following the steps above.
+   Tokens must be **complete lowercase strings** the user might store as manufacturer (e.g. abbreviations or alternate spellings). Entry order does not affect resolution — each lookup is an exact equality check.
+   `knownManufacturers` (autocomplete list) and `assetName(forManufacturer:)` (resolver) are both automatically derived from `brandTable` — no other Swift code changes needed.
+4. Add a row for the brand to the inventory table in `DIVE_GEAR_ICONS.md` under the appropriate category heading.
+5. When the logo image is ready, install it following the steps above.
 
 ---
 
@@ -230,132 +264,138 @@ No code changes are needed — `GearIconView` detects the new image automaticall
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Logo appears too small in circle | Source image has large transparent padding | Ensure Step 3 (crop bounding box) ran correctly |
+| Logo appears too small in tile | Source image has large transparent padding | Ensure Step 3 (crop bounding box) ran correctly |
 | Logo appears squished | Landscape/portrait source scaled to square without padding | Ensure Step 4 (pad to square) ran |
 | Light-coloured logo parts clipped | Threshold too aggressive for a pale logo | Increase `dist` threshold from 80 to 100–120 |
 | Grey/white rectangle visible on dark backgrounds | Soft-ramp or non-zeroed RGB on transparent pixels | Use hard threshold and zero out RGB of transparent pixels (see script above) |
-| Blank circle shown | Placeholder imageset in catalog, image not yet added | Install PNG and update `Contents.json` |
+| Blank tile shown | Placeholder imageset in catalog, image not yet added | Install PNG and update `Contents.json` |
 | SF Symbol shown despite image file present | `Contents.json` still has empty `images` array | Update `Contents.json` to reference the filename |
-| SF Symbol shown despite correct `Contents.json` | Asset name in code doesn't match folder name | Verify the `lc.contains(...)` entry in `GearIconView.assetName()` returns the exact folder name |
+| SF Symbol shown despite correct `Contents.json` | Asset name in `brandTable` doesn't match folder name | Verify the `asset:` field in the `brandTable` entry matches the exact imageset folder name |
 
 ---
 
-## Single-Tier Lookup Logic
+## Lookup Architecture
 
-Defined in `BlueDive/BlueDive/GearIconView.swift`:
+Defined in `BlueDive/BlueDive/GearIconView.swift`. All brand data lives in a single `private static let brandTable: [Brand]`. Both the autocomplete list and the asset resolver are derived from it automatically.
 
-1. **Brand substring match** — `gear.manufacturer` is lowercased and checked for known brand keywords in order. Returns the corresponding `GearIcon_*` asset name, or `nil` if no match.
-2. **Image existence check** — `UIImage(named:)` confirms the asset actually contains image data. Placeholder imagesets (empty `images` array) return `nil` here, causing the SF Symbol fallback to activate.
-3. **SF Symbol fallback** — the category icon from `GearCategory.icon` (e.g. `cylinder.fill` for tanks), coloured by `GearCategory.color`. Falls back to `wrench.and.screwdriver.fill` if category is unknown.
+```
+brandTable  ──►  knownManufacturers   (static let, drives manufacturer autocomplete)
+            ──►  assetName(for:)      (static func, drives logo resolution)
+```
+
+### Resolution steps at runtime
+
+1. **Exact brand match** — `gear.manufacturer` is trimmed, lowercased, and apostrophe-normalised (typographic apostrophes → ASCII `'`), then looked up in two precomputed dictionaries: one keyed by canonical name (lowercased) and one keyed by token. The first dictionary hit returns the `asset` name. For example `"DUI"` matches via the token `"dui"`; `"Diving Unlimited International"` matches via its canonical name. A string like `"Bare asdasd"` matches neither and falls back to the SF Symbol.
+2. **Image existence check** — `UIImage(named:)` confirms the asset actually contains image data. Placeholder imagesets (empty `images` array in `Contents.json`) return `nil` here, activating the SF Symbol fallback.
+3. **SF Symbol fallback** — the category icon from `GearCategory.icon` (e.g. `cylinder.fill` for tanks) on a tinted background. Falls back to `building.2` for autocomplete suggestion rows (where no category context is available) or `wrench.and.screwdriver.fill` for real gear items with an unresolvable category.
+
+### Autocomplete casing
+
+The `name:` field in each `brandTable` entry is the canonical spelling shown in the manufacturer autocomplete dropdown (e.g. `"ScubaPro"`, `"O'Three"`). A user-entered manufacturer that lowercases to the same value as a canonical name is silently shadowed by the canonical spelling in the suggestion list. No stored data is altered — only the suggestion display is affected. If you need to change how a brand appears in autocomplete, update the `name:` field.
 
 ---
 
 ## Complete Brand Inventory
 
-### Brands with logos (19) — image copied from DeviceIcons
+### Dive Computers / Multi-category
 
-| Asset name | Match strings |
-|---|---|
-| `GearIcon_Shearwater` | `shearwater` |
-| `GearIcon_Suunto` | `suunto` |
-| `GearIcon_Scubapro` | `scubapro` |
-| `GearIcon_Mares` | `mares` |
-| `GearIcon_Oceanic` | `oceanic` |
-| `GearIcon_Aqualung` | `aqualung` |
-| `GearIcon_Sherwood` | `sherwood` |
-| `GearIcon_HeinrichsWeikamp` | `heinrichs`, `weikamp`, `ostc` |
-| `GearIcon_Cressi` | `cressi` |
-| `GearIcon_Divesoft` | `divesoft` |
-| `GearIcon_DeepSix` | `deep six` |
-| `GearIcon_Deepblu` | `deepblu` |
-| `GearIcon_McLean` | `mclean` |
-| `GearIcon_Oceans` | `oceans` |
-| `GearIcon_Seac` | `seac` |
-| `GearIcon_Halcyon` | `halcyon` |
-| `GearIcon_Ratio` | `ratio` |
-| `GearIcon_DiveSystem` | `divesystem`, `idive` |
-| `GearIcon_Apeks` | `apeks` |
+| Asset name | Display name | Match tokens |
+|---|---|---|
+| `GearIcon_Shearwater` | Shearwater | `shearwater`, `shearwater research` |
+| `GearIcon_Suunto` | Suunto | `suunto` |
+| `GearIcon_Scubapro` | ScubaPro | `scubapro` |
+| `GearIcon_Mares` | Mares | `mares` |
+| `GearIcon_Oceanic` | Oceanic | `oceanic` |
+| `GearIcon_Aqualung` | Aqualung | `aqualung` |
+| `GearIcon_Sherwood` | Sherwood | `sherwood` |
+| `GearIcon_HeinrichsWeikamp` | Heinrichs Weikamp | `heinrichs`, `weikamp`, `ostc` |
+| `GearIcon_Cressi` | Cressi | `cressi` |
+| `GearIcon_Divesoft` | Divesoft | `divesoft` |
+| `GearIcon_Tusa` | Tusa | `tusa` |
+| `GearIcon_Garmin` | Garmin | `garmin` |
 
-### Brands with placeholder imagesets (45) — awaiting logo
+### Accessories / Knives / Safety
 
-#### Wetsuits / Drysuits / Thermal
+| Asset name | Display name | Match tokens |
+|---|---|---|
+| `GearIcon_DeepSix` | Deep Six | `deep six` |
+| `GearIcon_Deepblu` | Deepblu | `deepblu` |
+| `GearIcon_McLean` | McLean | `mclean` |
+| `GearIcon_Oceans` | Oceans | `oceans` |
+| `GearIcon_Seac` | Seac | `seac` |
+| `GearIcon_Halcyon` | Halcyon | `halcyon` |
+| `GearIcon_Ratio` | Ratio | `ratio` |
+| `GearIcon_DiveSystem` | DiveSystem | `divesystem`, `idive` |
+| `GearIcon_Apeks` | Apeks | `apeks` |
+| `GearIcon_Orcatorch` | Orcatorch | `orcatorch` |
+| `GearIcon_DiveRite` | Dive Rite | `dive rite` |
+| `GearIcon_SeaDog` | Sea-Dog | `sea-dog`, `sea dog` |
+| `GearIcon_XSScuba` | XS Scuba | `xs scuba` |
+| `GearIcon_Highland` | Highland | `highland` |
+| `GearIcon_Nautec` | Nautec | `nautec` |
+| `GearIcon_Storm` | Storm | `storm` |
+| `GearIcon_YRVA` | YRVA | `yrva` |
 
-| Asset name | Match strings |
-|---|---|
-| `GearIcon_FourthElement` | `fourth element` |
-| `GearIcon_Bare` | `bare` |
-| `GearIcon_DUI` | `diving unlimited`, ` dui` |
-| `GearIcon_Waterproof` | `waterproof` |
-| `GearIcon_Santi` | `santi` |
-| `GearIcon_OThree` | `o'three`, `o three`, `othree` |
-| `GearIcon_Typhoon` | `typhoon` |
-| `GearIcon_Henderson` | `henderson` |
-| `GearIcon_Whites` | `whites` |
-| `GearIcon_Camaro` | `camaro` |
-| `GearIcon_Ursuit` | `ursuit` |
+### Tanks / Cylinders
 
-#### Regulators / BCDs / Wings
+| Asset name | Display name | Match tokens |
+|---|---|---|
+| `GearIcon_Catalina` | Catalina | `catalina` |
+| `GearIcon_Faber` | Faber | `faber` |
+| `GearIcon_Luxfer` | Luxfer | `luxfer` |
+| `GearIcon_Worthington` | Worthington | `worthington` |
+| `GearIcon_Eurocylinder` | Eurocylinder | `eurocylinder` |
 
-| Asset name | Match strings |
-|---|---|
-| `GearIcon_Poseidon` | `poseidon` |
-| `GearIcon_AtomicAquatics` | `atomic` |
-| `GearIcon_Zeagle` | `zeagle` |
-| `GearIcon_Hollis` | `hollis` |
-| `GearIcon_Xdeep` | `xdeep` |
-| `GearIcon_Tecline` | `tecline` |
-| `GearIcon_DiveRite` | `dive rite` |
+### Wetsuits / Drysuits / Thermal
 
-#### Computers / Multi-category
+| Asset name | Display name | Match tokens |
+|---|---|---|
+| `GearIcon_FourthElement` | Fourth Element | `fourth element` |
+| `GearIcon_Bare` | Bare | `bare` |
+| `GearIcon_DUI` | Diving Unlimited International | `diving unlimited`, `dui` |
+| `GearIcon_Waterproof` | Waterproof | `waterproof` |
+| `GearIcon_Santi` | Santi | `santi` |
+| `GearIcon_OThree` | O'Three | `o'three`, `o three`, `othree` |
+| `GearIcon_Typhoon` | Typhoon | `typhoon` |
+| `GearIcon_Henderson` | Henderson | `henderson` |
+| `GearIcon_Whites` | Whites | `whites` |
+| `GearIcon_Camaro` | Camaro | `camaro` |
+| `GearIcon_Ursuit` | Ursuit | `ursuit` |
 
-| Asset name | Match strings |
-|---|---|
-| `GearIcon_Tusa` | `tusa` |
-| `GearIcon_Garmin` | `garmin` |
+### Regulators / BCDs / Wings
 
-#### Masks / Fins
+| Asset name | Display name | Match tokens |
+|---|---|---|
+| `GearIcon_Poseidon` | Poseidon | `poseidon` |
+| `GearIcon_AtomicAquatics` | Atomic Aquatics | `atomic` |
+| `GearIcon_Zeagle` | Zeagle | `zeagle` |
+| `GearIcon_Hollis` | Hollis | `hollis` |
+| `GearIcon_Xdeep` | xDeep | `xdeep`, `x-deep` |
+| `GearIcon_Kubi` | Kubi | `kubi` |
+| `GearIcon_Eezycut` | Eezycut | `eezycut` |
+| `GearIcon_Tecline` | Tecline | `tecline` |
 
-| Asset name | Match strings |
-|---|---|
-| `GearIcon_Beuchat` | `beuchat` |
-| `GearIcon_ISTSports` | `ist sports`, `ist pro` |
+### Masks / Fins
 
-#### Lights / Imaging
+| Asset name | Display name | Match tokens |
+|---|---|---|
+| `GearIcon_Beuchat` | Beuchat | `beuchat` |
+| `GearIcon_ISTSports` | IST Sports | `ist sports`, `ist pro`, `ists` |
 
-| Asset name | Match strings |
-|---|---|
-| `GearIcon_Bigblue` | `bigblue`, `big blue` |
-| `GearIcon_LightAndMotion` | `light & motion`, `light and motion` |
-| `GearIcon_LightMonkey` | `light monkey` |
-| `GearIcon_Orcatorch` | `orcatorch` |
-| `GearIcon_Keldan` | `keldan` |
-| `GearIcon_Ikelite` | `ikelite` |
-| `GearIcon_SeaAndSea` | `sea & sea`, `sea&sea` |
-| `GearIcon_Paralenz` | `paralenz` |
-| `GearIcon_Nauticam` | `nauticam` |
-| `GearIcon_Sola` | `sola` |
-| `GearIcon_UnderwaterKinetics` | `underwater kinetics` |
+### Lights / Imaging
 
-#### Cylinders
-
-| Asset name | Match strings |
-|---|---|
-| `GearIcon_Catalina` | `catalina` |
-| `GearIcon_Faber` | `faber` |
-| `GearIcon_Luxfer` | `luxfer` |
-| `GearIcon_Worthington` | `worthington` |
-| `GearIcon_Eurocylinder` | `eurocylinder` |
-
-#### Other
-
-| Asset name | Match strings |
-|---|---|
-| `GearIcon_Highland` | `highland` |
-| `GearIcon_YRVA` | `yrva` |
-| `GearIcon_Nautec` | `nautec` |
-| `GearIcon_SeaDog` | `sea-dog`, `sea dog` |
-| `GearIcon_XSScuba` | `xs scuba` |
-| `GearIcon_Storm` | `storm` |
+| Asset name | Display name | Match tokens |
+|---|---|---|
+| `GearIcon_Bigblue` | Bigblue | `bigblue`, `big blue` |
+| `GearIcon_LightAndMotion` | Light & Motion | `light & motion`, `light and motion` |
+| `GearIcon_LightMonkey` | Light Monkey | `light monkey` |
+| `GearIcon_UnderwaterKinetics` | Underwater Kinetics | `underwater kinetics`, `uk` |
+| `GearIcon_Keldan` | Keldan | `keldan` |
+| `GearIcon_Ikelite` | Ikelite | `ikelite` |
+| `GearIcon_SeaAndSea` | Sea & Sea | `sea & sea`, `sea&sea`, `sea and sea` |
+| `GearIcon_Paralenz` | Paralenz | `paralenz` |
+| `GearIcon_Nauticam` | Nauticam | `nauticam` |
+| `GearIcon_Sola` | Sola | `sola` |
 
 ---
 
