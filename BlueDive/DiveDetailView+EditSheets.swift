@@ -2218,7 +2218,7 @@ struct EditConditionsView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Dive.siteName) private var allDives: [Dive]
 
-    @State private var workingWaterTemp: Double
+    @State private var workingWaterTemp: Double?
     @State private var workingMinTemp: String
     @State private var workingAirTemp: String
     @State private var workingMaxTemp: String
@@ -2245,7 +2245,7 @@ struct EditConditionsView: View {
     init(dive: Dive) {
         self.dive = dive
         _workingWaterTemp  = State(initialValue: dive.waterTemperature)
-        _workingMinTemp    = State(initialValue: dive.minTemperature != 0 ? dive.minTemperature.localizedString(decimals: 1) : "")
+        _workingMinTemp    = State(initialValue: dive.minTemperature.map { $0.localizedString(decimals: 1) } ?? "")
         _workingAirTemp    = State(initialValue: dive.airTemperature.map { $0.localizedString(decimals: 1) } ?? "")
         _workingMaxTemp    = State(initialValue: dive.maxTemperature.map { $0.localizedString(decimals: 1) } ?? "")
         _workingWeather    = State(initialValue: dive.weather ?? "")
@@ -2589,7 +2589,7 @@ struct EditConditionsView: View {
 
     private func save() {
         dive.waterTemperature  = workingWaterTemp
-        dive.minTemperature    = Double(workingMinTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")) ?? 0.0
+        dive.minTemperature    = Double(workingMinTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
         dive.airTemperature    = Double(workingAirTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
         dive.maxTemperature    = Double(workingMaxTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
         let trimmedWeather     = workingWeather.trimmingCharacters(in: .whitespaces)

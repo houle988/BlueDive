@@ -119,7 +119,7 @@ enum BlueDiveXMLExporter {
         lines.append("    <!-- BlueDiveGlobalData: Temperatures (stored as-imported) -->")
         lines.append(xmlTag("tempAir",  dive.airTemperature.map(formatDouble) ?? "", indent: 4))
         lines.append(xmlTag("tempHigh", dive.maxTemperature.map(formatDouble) ?? "", indent: 4))
-        lines.append(xmlTag("tempLow",  formatDouble(dive.minTemperature),           indent: 4))
+        lines.append(xmlTag("tempLow",  dive.minTemperature.map(formatDouble) ?? "", indent: 4))
 
         // Conditions
         lines.append("    <!-- BlueDiveGlobalData: Conditions -->")

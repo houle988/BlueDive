@@ -524,8 +524,8 @@ extension ContentView {
             maxDepth: diveData.maxDepth,
             averageDepth: averageDepth,
             duration: diveData.duration / 60, // Convert seconds to minutes
-            waterTemperature: diveData.tempLow ?? 20.0,
-            minTemperature: diveData.tempLow ?? 18.0,
+            waterTemperature: diveData.tempLow,
+            minTemperature: diveData.tempLow,
             airTemperature: diveData.tempAir,
             maxTemperature: diveData.tempHigh,
             decompressionAlgorithm: diveData.decoModel,
@@ -805,7 +805,7 @@ extension ContentView {
         }
 
         // --- tempLow: min of both ---
-        earlier.minTemperature = min(earlier.minTemperature, later.minTemperature)
+        earlier.minTemperature = [earlier.minTemperature, later.minTemperature].compactMap { $0 }.min()
 
         // --- Tank pressures: start from earlier dive, end from later dive ---
         // Tanks are matched by index (tank 0 ↔ tank 0, etc.).

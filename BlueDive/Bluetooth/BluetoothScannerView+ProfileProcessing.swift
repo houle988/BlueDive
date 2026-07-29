@@ -516,8 +516,8 @@ extension BluetoothScannerView {
 
         // Extract min/max temperatures from the profile
         let profileTemperatures = diveData.profile.compactMap { $0.temperature }
-        let minTemperature: Double = diveData.minTemperature ?? profileTemperatures.min() ?? diveData.temperature
-        let maxTemperature: Double? = diveData.maxTemperature ?? profileTemperatures.max()
+        let minTemperature: Double? = diveData.minTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.min() ?? (diveData.temperature.isFinite ? diveData.temperature : nil)
+        let maxTemperature: Double? = diveData.maxTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.max()
 
         // Build tanks with inline gas data from LibDCSwift.
         // Also build gasMixToTankIndex: maps gas-mix index (as reported by DC_SAMPLE_GASMIX /
@@ -746,7 +746,7 @@ extension BluetoothScannerView {
             maxDepth: diveData.maxDepth,
             averageDepth: averageDepth,
             duration: Int(diveData.divetime / 60), // LibDCSwift uses seconds
-            waterTemperature: diveData.temperature,
+            waterTemperature: diveData.temperature.isFinite ? diveData.temperature : nil,
             minTemperature: minTemperature,
             airTemperature: diveData.surfaceTemperature,
             maxTemperature: maxTemperature,

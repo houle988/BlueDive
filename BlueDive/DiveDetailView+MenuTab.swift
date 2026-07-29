@@ -961,7 +961,7 @@ extension DiveDetailView {
 
             DetailCard(
                 title: "MIN TEMP",
-                value: dive.minTemperature != 0 ? UserPreferences.shared.temperatureUnit.formatted(dive.minTemperature, from: dive.storedTemperatureUnit) : "—",
+                value: dive.minTemperature.map { UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit) } ?? "—",
                 icon: "thermometer.low",
                 color: .orange
             )

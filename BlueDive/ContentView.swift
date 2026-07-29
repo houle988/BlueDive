@@ -1397,8 +1397,6 @@ struct ContentView: View {
             maxDepth: 0,
             averageDepth: 0,
             duration: 0,
-            waterTemperature: 0,
-            minTemperature: 0,
             importDistanceUnit: prefs.depthUnit.rawValue,
             importTemperatureUnit: tempFormat,
             importPressureUnit: prefs.pressureUnit.rawValue,
