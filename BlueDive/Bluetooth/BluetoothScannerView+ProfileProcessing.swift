@@ -748,7 +748,7 @@ extension BluetoothScannerView {
             duration: Int(diveData.divetime / 60), // LibDCSwift uses seconds
             waterTemperature: diveData.temperature.isFinite ? diveData.temperature : nil,
             minTemperature: minTemperature,
-            airTemperature: diveData.surfaceTemperature,
+            airTemperature: diveData.surfaceTemperature.flatMap { $0.isFinite ? $0 : nil },
             maxTemperature: maxTemperature,
             decompressionAlgorithm: decompressionAlgorithm,
             cnsPercentage: cnsValue,

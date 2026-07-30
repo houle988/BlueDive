@@ -369,7 +369,7 @@ extension BluetoothScannerView {
         dive.waterTemperature = diveData.temperature.isFinite ? diveData.temperature : nil
         dive.minTemperature = diveData.minTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.min() ?? (diveData.temperature.isFinite ? diveData.temperature : nil)
         dive.maxTemperature = diveData.maxTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.max()
-        if let surfaceTemp = diveData.surfaceTemperature {
+        if let surfaceTemp = diveData.surfaceTemperature, surfaceTemp.isFinite {
             dive.airTemperature = surfaceTemp
         }
 
