@@ -357,7 +357,12 @@ extension BluetoothScannerView {
                 bleManager.close(clearDevicePtr: true)
                 dismiss()
             }
-            .disabled(syncState.isActive && syncState != .scanning)
+            .disabled({
+                switch syncState {
+                case .connecting, .importing: return true
+                default: return false
+                }
+            }())
         }
 
         if !(syncState.isActive && syncState != .scanning) {

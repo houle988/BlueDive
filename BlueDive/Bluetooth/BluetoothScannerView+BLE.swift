@@ -318,6 +318,7 @@ extension BluetoothScannerView {
             viewModel: viewModel,
             bluetoothManager: bleManager,
             syncClock: syncDeviceClock,
+            useFingerprint: !downloadAllDives,
             onProgress: { current, total in
                 DispatchQueue.main.async {
                     // current/total are libdivecomputer transfer bytes — used for the progress bar.
