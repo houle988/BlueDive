@@ -105,30 +105,38 @@ struct DiverProfileView: View {
     }
 
     private var goals: [DiveGoal] {
+        var increment: Int = 500
+        
+        if(totalDives < 100) {
+            increment = 25
+        }
+        else if(totalDives < 500) {
+            increment = 100
+        }
+        else if(totalDives < 1000) {
+            increment = 250
+        }
+        
+        let nextGoal = Int(ceil(Double(totalDives) / Double(increment)) * Double(increment))
+        let maxGoal = (nextGoal + (3 * increment));
+        
+        // Dive goals
+        var nextGoals = Array(stride(from: nextGoal, through: maxGoal, by: increment)).map {
+            DiveGoal(type: GoalType.dives, current: totalDives, target: $0)
+        }
+        
+        nextGoals +=
         [
-            // Dive count goals
-            DiveGoal(title: "25 dives",    icon: "figure.open.water.swim", current: totalDives, target: 25),
-            DiveGoal(title: "50 dives",    icon: "figure.open.water.swim", current: totalDives, target: 50),
-            DiveGoal(title: "75 dives",    icon: "figure.open.water.swim", current: totalDives, target: 75),
-            DiveGoal(title: "100 dives",   icon: "figure.open.water.swim", current: totalDives, target: 100),
-            DiveGoal(title: "200 dives",   icon: "figure.open.water.swim", current: totalDives, target: 200),
-            DiveGoal(title: "300 dives",   icon: "figure.open.water.swim", current: totalDives, target: 300),
-            DiveGoal(title: "400 dives",   icon: "figure.open.water.swim", current: totalDives, target: 400),
-            DiveGoal(title: "500 dives",   icon: "figure.open.water.swim", current: totalDives, target: 500),
-            DiveGoal(title: "750 dives",   icon: "figure.open.water.swim", current: totalDives, target: 750),
-            DiveGoal(title: "1,000 dives", icon: "figure.open.water.swim", current: totalDives, target: 1000),
-            DiveGoal(title: "1,500 dives", icon: "figure.open.water.swim", current: totalDives, target: 1500),
-            DiveGoal(title: "2,000 dives", icon: "figure.open.water.swim", current: totalDives, target: 2000),
-            DiveGoal(title: "2,500 dives", icon: "figure.open.water.swim", current: totalDives, target: 2500),
             // Other goals
-            DiveGoal(title: "5 countries visited",  icon: "globe",     current: countriesVisited, target: 5),
-            DiveGoal(title: "10 countries visited", icon: "globe",     current: countriesVisited, target: 10),
-            DiveGoal(title: "25 species",           icon: "fish.fill", current: totalCreatures,   target: 25),
-            DiveGoal(title: "50 species",           icon: "fish.fill", current: totalCreatures,   target: 50),
+            DiveGoal(type: GoalType.countries, current: countriesVisited, target: 5),
+            DiveGoal(type: GoalType.countries, current: countriesVisited, target: 10),
+            DiveGoal(type: GoalType.countries, current: countriesVisited, target: 30),
+            DiveGoal(type: GoalType.species,   current: totalCreatures,   target: 25),
+            DiveGoal(type: GoalType.species,   current: totalCreatures,   target: 50),
+            DiveGoal(type: GoalType.species,   current: totalCreatures,   target: 100),
         ]
-        .filter { !$0.isCompleted }
-        .prefix(10)
-        .map { $0 }
+    
+        return nextGoals.filter { !$0.isCompleted }
     }
 
     // MARK: - Body
@@ -891,10 +899,10 @@ struct DiveGoal: Identifiable {
     let target: Int
     let progress: Double
 
-    init(title: String, icon: String, current: Int, target: Int) {
-        self._rawTitle = title
-        self.title = LocalizedStringKey(title)
-        self.icon = icon
+    init(type: GoalType, current: Int, target: Int) {
+        self._rawTitle = "\(target) \(type.title)"
+        self.title = LocalizedStringKey(_rawTitle)
+        self.icon = type.icon
         self.progress = min(Double(current) / Double(target), 1.0)
         self.color = Color.red.interpolate(percentage: progress)
         self.current = current
@@ -902,6 +910,28 @@ struct DiveGoal: Identifiable {
     }
 
     var isCompleted: Bool { current >= target }
+}
+
+enum GoalType {
+    case dives
+    case species
+    case countries
+    
+    var title: String {
+        switch self {
+        case .dives: return "dives"
+        case .species: return "species"
+        case .countries: return "countries visited"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .dives: return "figure.open.water.swim"
+        case .species: return "fish.fill"
+        case .countries: return "globe"
+        }
+    }
 }
 
 // MARK: - Edit Profile Sheet
