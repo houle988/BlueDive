@@ -94,6 +94,7 @@ struct BlueDiveApp: App {
     }
     
     @State private var prefs = UserPreferences.shared
+    @State private var syncMonitor = CloudKitSyncMonitor()
     #if os(macOS)
     @State private var showingAbout = false
     #endif
@@ -105,6 +106,7 @@ struct BlueDiveApp: App {
             }
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
+            .environment(syncMonitor)
             .onOpenURL { url in
                 // Widget deep-links: bluedive://add/manual | bluedive://add/bluetooth
                 guard let action = AddDiveDeepLink.action(for: url) else { return }
@@ -240,7 +242,7 @@ struct BlueDiveApp: App {
         // Read iCloud sync preference
         let iCloudEnabled = UserDefaults.standard.bool(forKey: iCloudSyncEnabledKey)
         let cloudKitDB: ModelConfiguration.CloudKitDatabase = iCloudEnabled
-            ? .private("iCloud.app.bluedive.universal")
+            ? .private(CloudKitSyncMonitor.cloudKitContainerID)
             : .none
         
         let modelConfiguration = ModelConfiguration(
