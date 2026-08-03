@@ -161,7 +161,10 @@ extension BluetoothScannerView {
             Section {
                 Toggle("Download All Dives", isOn: $downloadAllDives)
             } footer: {
-                Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Matched dives are merged — computer data is refreshed while your personal notes and entries are kept.")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Matched dives are merged — computer data is refreshed while your personal notes and entries are kept.")
+                    Text("To re-download only a subset of dives, override the fingerprint in **Settings → Bluetooth Import → Sync Fingerprints** instead. [More info & instructions](https://github.com/houle988/BlueDive/wiki/Dive-Computer-Sync-Fingerprints#overriding-a-fingerprint)")
+                }
             }
 
             Section {
