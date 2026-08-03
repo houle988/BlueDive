@@ -102,7 +102,7 @@ struct ContentView: View {
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
     @State private var collapsedDiverSections: Set<String> = []
     @State private var diveIndexLookup: [Dive.ID: Int] = [:]
-    @State private var uniqueDivers: [String] = []
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: dives) }
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
         case dateDesc       = "dateDesc"
@@ -780,7 +780,6 @@ struct ContentView: View {
             dives.enumerated().map { ($1.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        uniqueDivers = DiverFilter.uniqueDivers(in: dives)
     }
 
     // MARK: - View Components
