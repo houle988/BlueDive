@@ -2,6 +2,38 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 
+// MARK: - Color percentage interpolation from red to green
+
+extension Color {
+    func interpolate(percentage: Double) -> Color {
+        // Clamp percentage between 0.0 and 1.0
+        let percent = max(0.0, min(1.0, percentage))
+        
+        // Extract RGBA components for both colors
+        let startComponents = UIColor(self).cgColor.components ?? [0, 0, 0, 1]
+        let endComponents = UIColor(Color.green).cgColor.components ?? [0, 0, 0, 1]
+        
+        // Handle fallback if components are missing
+        let r1 = startComponents[0]
+        let g1 = startComponents[1]
+        let b1 = startComponents[2]
+        let a1 = startComponents.count > 3 ? startComponents[3] : 1.0
+        
+        let r2 = endComponents[0]
+        let g2 = endComponents[1]
+        let b2 = endComponents[2]
+        let a2 = endComponents.count > 3 ? endComponents[3] : 1.0
+        
+        // Perform linear interpolation
+        let r = r1 + (r2 - r1) * percent
+        let g = g1 + (g2 - g1) * percent
+        let b = b1 + (b2 - b1) * percent
+        let a = a1 + (a2 - a1) * percent
+        
+        return Color(red: r, green: g, blue: b, opacity: a)
+    }
+}
+
 // MARK: - Diver Profile View
 
 struct DiverProfileView: View {
@@ -73,25 +105,38 @@ struct DiverProfileView: View {
     }
 
     private var goals: [DiveGoal] {
+        var increment: Int = 500
+        
+        if(totalDives < 100) {
+            increment = 25
+        }
+        else if(totalDives < 500) {
+            increment = 100
+        }
+        else if(totalDives < 1000) {
+            increment = 250
+        }
+        
+        let nextGoal = Int(ceil(Double(totalDives) / Double(increment)) * Double(increment))
+        let maxGoal = (nextGoal + (3 * increment));
+        
+        // Dive goals
+        var nextGoals = Array(stride(from: nextGoal, through: maxGoal, by: increment)).map {
+            DiveGoal(type: GoalType.dives, current: totalDives, target: $0)
+        }
+        
+        nextGoals +=
         [
-            // Dive count goals
-            DiveGoal(title: "100 dives",   icon: "figure.open.water.swim", color: .cyan,   current: totalDives, target: 100),
-            DiveGoal(title: "250 dives",   icon: "figure.open.water.swim", color: .blue,   current: totalDives, target: 250),
-            DiveGoal(title: "500 dives",   icon: "figure.open.water.swim", color: .purple, current: totalDives, target: 500),
-            DiveGoal(title: "750 dives",   icon: "figure.open.water.swim", color: .indigo, current: totalDives, target: 750),
-            DiveGoal(title: "1,000 dives", icon: "figure.open.water.swim", color: .teal,   current: totalDives, target: 1000),
-            DiveGoal(title: "1,500 dives", icon: "figure.open.water.swim", color: .mint,   current: totalDives, target: 1500),
-            DiveGoal(title: "2,000 dives", icon: "figure.open.water.swim", color: .green,  current: totalDives, target: 2000),
-            DiveGoal(title: "2,500 dives", icon: "figure.open.water.swim", color: .yellow, current: totalDives, target: 2500),
             // Other goals
-            DiveGoal(title: "5 countries visited",  icon: "globe",     color: .green,  current: countriesVisited, target: 5),
-            DiveGoal(title: "10 countries visited", icon: "globe",     color: .mint,   current: countriesVisited, target: 10),
-            DiveGoal(title: "25 species",           icon: "fish.fill", color: .orange, current: totalCreatures,   target: 25),
-            DiveGoal(title: "50 species",           icon: "fish.fill", color: .yellow, current: totalCreatures,   target: 50),
+            DiveGoal(type: GoalType.countries, current: countriesVisited, target: 5),
+            DiveGoal(type: GoalType.countries, current: countriesVisited, target: 10),
+            DiveGoal(type: GoalType.countries, current: countriesVisited, target: 30),
+            DiveGoal(type: GoalType.species,   current: totalCreatures,   target: 25),
+            DiveGoal(type: GoalType.species,   current: totalCreatures,   target: 50),
+            DiveGoal(type: GoalType.species,   current: totalCreatures,   target: 100),
         ]
-        .filter { !$0.isCompleted }
-        .prefix(4)
-        .map { $0 }
+    
+        return nextGoals.filter { !$0.isCompleted }
     }
 
     // MARK: - Body
@@ -814,9 +859,9 @@ private struct GoalRow: View {
 
                 Spacer()
 
-                Text("\(goal.current) / \(goal.target)")
+                Text("\(goal.target-goal.current)")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(goal.color)
                     .monospacedDigit()
             }
 
@@ -847,23 +892,50 @@ private struct GoalRow: View {
 struct DiveGoal: Identifiable {
     var id: String { _rawTitle }
     private let _rawTitle: String
-    let title: LocalizedStringKey
+    let title: String
     let icon: String
     let color: Color
     let current: Int
     let target: Int
+    let progress: Double
 
-    init(title: String, icon: String, color: Color, current: Int, target: Int) {
-        self._rawTitle = title
-        self.title = LocalizedStringKey(title)
-        self.icon = icon
-        self.color = color
+    init(type: GoalType, current: Int, target: Int) {
+        self._rawTitle = "\(target)-\(type)"
+        let progress = min(Double(current) / Double(target), 1.0)
+        self.title = type.localizedTitle(count: target)
+        self.icon = type.icon
+        self.progress = progress
+        self.color = Color.red.interpolate(percentage: progress)
         self.current = current
         self.target = target
     }
 
-    var progress: Double { min(Double(current) / Double(target), 1.0) }
     var isCompleted: Bool { current >= target }
+}
+
+enum GoalType {
+    case dives
+    case species
+    case countries
+    
+    func localizedTitle(count: Int) -> String {
+        switch self {
+        case .dives:
+            return String(format: NSLocalizedString("%lld dives", bundle: .forAppLanguage(), comment: "Dive count goal label"), count)
+        case .species:
+            return String(format: NSLocalizedString("%lld species", bundle: .forAppLanguage(), comment: "Species count goal label"), count)
+        case .countries:
+            return String(format: NSLocalizedString("%lld countries visited", bundle: .forAppLanguage(), comment: "Countries visited goal label"), count)
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .dives: return "figure.open.water.swim"
+        case .species: return "fish.fill"
+        case .countries: return "globe"
+        }
+    }
 }
 
 // MARK: - Edit Profile Sheet
