@@ -14,6 +14,7 @@ import UIKit
 final class CloudKitSyncMonitor {
 
     static let cloudKitContainerID = "iCloud.app.bluedive.universal"
+    static let backgroundSyncTaskID = "app.bluedive.universal.cloudkit-sync"
 
     struct SyncState {
         enum Result {
@@ -72,8 +73,9 @@ final class CloudKitSyncMonitor {
 
     // iCloud account info — fetched async on init, used in sheet and exportLog()
     private(set) var ckAccountStatus: CKAccountStatus = .couldNotDetermine
-    private(set) var ckAccountRecordName: String = "Fetching…"
+    private(set) var ckAccountRecordName: String = NSLocalizedString("Fetching…", bundle: Bundle.forAppLanguage(), comment: "Placeholder shown in the iCloud sync log while the account record name is being fetched")
     private(set) var ckAccountStatusFetched: Bool = false
+    private(set) var isLowPowerMode: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     var ckAccountStatusLabel: String {
         switch ckAccountStatus {
@@ -116,6 +118,12 @@ final class CloudKitSyncMonitor {
     // captures self weakly, so the registration is harmless if it outlives the instance.
     @ObservationIgnored
     private var observation: NSObjectProtocol?
+    @ObservationIgnored
+    private var powerStateObservation: NSObjectProtocol?
+    @ObservationIgnored
+    private var accountChangedObservation: NSObjectProtocol?
+    @ObservationIgnored
+    private var accountFetchGeneration: Int = 0
 
     init() {
         fetchAccountInfo()
@@ -129,6 +137,24 @@ final class CloudKitSyncMonitor {
             ] as? NSPersistentCloudKitContainer.Event else { return }
             Task { @MainActor [weak self] in
                 self?.handle(event: event)
+            }
+        }
+        powerStateObservation = NotificationCenter.default.addObserver(
+            forName: .NSProcessInfoPowerStateDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+            }
+        }
+        accountChangedObservation = NotificationCenter.default.addObserver(
+            forName: .CKAccountChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.fetchAccountInfo()
             }
         }
     }
@@ -222,20 +248,25 @@ final class CloudKitSyncMonitor {
     }
 
     private func fetchAccountInfo() {
+        accountFetchGeneration += 1
+        let generation = accountFetchGeneration
         let container = CKContainer(identifier: Self.cloudKitContainerID)
         container.accountStatus { [weak self] status, _ in
             Task { @MainActor [weak self] in
-                self?.ckAccountStatus = status
-                self?.ckAccountStatusFetched = true
+                guard let self, self.accountFetchGeneration == generation else { return }
+                self.ckAccountStatus = status
+                self.ckAccountStatusFetched = true
             }
         }
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let self, self.accountFetchGeneration == generation else { return }
             do {
                 let recordID = try await container.userRecordID()
+                guard self.accountFetchGeneration == generation else { return }
                 self.ckAccountRecordName = recordID.recordName
             } catch {
-                self.ckAccountRecordName = "Unavailable"
+                guard self.accountFetchGeneration == generation else { return }
+                self.ckAccountRecordName = NSLocalizedString("Unavailable", bundle: Bundle.forAppLanguage(), comment: "Shown in the iCloud sync log when the CloudKit account record name cannot be retrieved")
             }
         }
     }
@@ -548,6 +579,12 @@ struct CloudKitSyncStatusView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
 
+                    if monitor.isLowPowerMode {
+                        lowPowerCard
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                    }
+
                     accountStatusRow
                         .padding(.horizontal, 20)
                         .padding(.bottom, 16)
@@ -693,6 +730,41 @@ struct CloudKitSyncStatusView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private var lowPowerCard: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color.yellow.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "battery.25")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.yellow)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Low Power Mode")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("Low Power Mode is on — iCloud sync may be slower. Turn it off in Settings > Battery.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.yellow.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.yellow.opacity(0.25), lineWidth: 1)
                 )
         )
     }
