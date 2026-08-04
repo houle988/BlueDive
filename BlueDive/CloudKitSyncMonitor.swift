@@ -60,6 +60,21 @@ final class CloudKitSyncMonitor {
     // MARK: - Event History (rolling 15-minute log)
 
     struct SyncLogEntry {
+        struct PartialErrorGroup {
+            let domain: String
+            let code: Int
+            /// CKError code name (e.g. "quotaExceeded", "batchRequestFailed"). nil for non-CK domains.
+            let codeName: String?
+            let count: Int
+            let description: String?
+            /// True for CKErrorDomain/22 (batchRequestFailed) — cascade noise injected by CloudKit
+            /// into every sibling record when one record in the same batch fails. Not the root cause.
+            let isBatchCascade: Bool
+            /// Up to 3 CKRecord.ID.recordName values for cross-referencing ANSCKRECORDMETADATA.ZCKRECORDNAME.
+            /// Empty for cascade entries.
+            let sampleRecordNames: [String]
+        }
+
         let timestamp: Date
         let typeName: String
         let succeeded: Bool
@@ -67,6 +82,18 @@ final class CloudKitSyncMonitor {
         let errorDescription: String?
         let errorCode: Int?
         let errorDomain: String?
+        /// Human-readable CKError code name. Prefers .partialFailure when present in the error chain;
+        /// falls back to the first CKError found. nil when no CKError is present (e.g. pure NSError from NSPCKC internals).
+        let ckErrorCodeName: String?
+        /// Retry-after interval from CKErrorRetryAfterKey if the server requested a backoff.
+        let ckRetryAfterSeconds: Double?
+        /// Per-record error groups from CKPartialErrorsByItemIDKey.
+        /// Sorted: root-cause entries first (descending count), batchRequestFailed cascade entries last.
+        /// Empty when no partialFailure was found or partialErrorsByItemID was absent.
+        let partialErrorGroups: [PartialErrorGroup]
+        /// True when the outer CKError is .partialFailure but partialErrorsByItemID was nil or empty.
+        /// Indicates a zone-level failure (ADP key, quota, rate limit) rather than per-record rejections.
+        let partialErrorsAbsent: Bool
     }
 
     private(set) var recentEvents: [SyncLogEntry] = []
@@ -271,6 +298,51 @@ final class CloudKitSyncMonitor {
         }
     }
 
+    /// Maps a CKError integer code to its enum case name for human-readable log output.
+    /// Returns nil when `domain` is not CKError.errorDomain.
+    private static func ckCodeName(code: Int, domain: String) -> String? {
+        guard domain == CKError.errorDomain,
+              let ckCode = CKError.Code(rawValue: code) else { return nil }
+        switch ckCode {
+        case .internalError:                        return "internalError"
+        case .partialFailure:                       return "partialFailure"
+        case .networkUnavailable:                   return "networkUnavailable"
+        case .networkFailure:                       return "networkFailure"
+        case .badContainer:                         return "badContainer"
+        case .serviceUnavailable:                   return "serviceUnavailable"
+        case .requestRateLimited:                   return "requestRateLimited"
+        case .missingEntitlement:                   return "missingEntitlement"
+        case .notAuthenticated:                     return "notAuthenticated"
+        case .permissionFailure:                    return "permissionFailure"
+        case .unknownItem:                          return "unknownItem"
+        case .invalidArguments:                     return "invalidArguments"
+        case .resultsTruncated:                     return "resultsTruncated"
+        case .serverRecordChanged:                  return "serverRecordChanged"
+        case .serverRejectedRequest:                return "serverRejectedRequest"
+        case .assetFileNotFound:                    return "assetFileNotFound"
+        case .incompatibleVersion:                  return "incompatibleVersion"
+        case .constraintViolation:                  return "constraintViolation"
+        case .operationCancelled:                   return "operationCancelled"
+        case .changeTokenExpired:                   return "changeTokenExpired"
+        case .batchRequestFailed:                   return "batchRequestFailed"
+        case .zoneBusy:                             return "zoneBusy"
+        case .badDatabase:                          return "badDatabase"
+        case .quotaExceeded:                        return "quotaExceeded"
+        case .zoneNotFound:                         return "zoneNotFound"
+        case .limitExceeded:                        return "limitExceeded"
+        case .userDeletedZone:                      return "userDeletedZone"
+        case .tooManyParticipants:                  return "tooManyParticipants"
+        case .alreadyShared:                        return "alreadyShared"
+        case .referenceViolation:                   return "referenceViolation"
+        case .managedAccountRestricted:             return "managedAccountRestricted"
+        case .participantMayNeedVerification:       return "participantMayNeedVerification"
+        case .serverResponseLost:                   return "serverResponseLost"
+        case .assetNotAvailable:                    return "assetNotAvailable"
+        case .accountTemporarilyUnavailable:        return "accountTemporarilyUnavailable"
+        default:                                    return "unknown(\(code))"
+        }
+    }
+
     private func recordLogEntry(from event: NSPersistentCloudKitContainer.Event) {
         let typeName: String
         switch event.type {
@@ -288,11 +360,142 @@ final class CloudKitSyncMonitor {
         var errorDescription: String? = nil
         var errorCode: Int? = nil
         var errorDomain: String? = nil
+        var ckErrorCodeName: String? = nil
+        var ckRetryAfterSeconds: Double? = nil
+        var partialErrorGroups: [SyncLogEntry.PartialErrorGroup] = []
+        var partialErrorsAbsent: Bool = false
+
         if let error = event.error {
             errorDescription = error.localizedDescription
             let nsError = error as NSError
             errorCode = nsError.code
             errorDomain = nsError.domain
+
+            // BFS over the full error chain to find the first CKError.partialFailure (preferred)
+            // or any CKError (fallback). NSPCKC wraps errors under NSUnderlyingErrorKey,
+            // NSMultipleUnderlyingErrorsKey, and NSDetailedErrorsKey — walk all three.
+            struct GroupKey: Hashable { let domain: String; let code: Int }
+            var worklist: [Error] = [error]
+            var visited = Set<ObjectIdentifier>()
+            var firstCKError: CKError? = nil
+            var firstRetryAfterCKError: CKError? = nil
+            var partialCKError: CKError? = nil
+            var detailedChildErrors: [Error] = []
+
+            // visited.count < 256: guards against cyclic chains from value-typed Swift errors
+            // whose `as NSError` bridge produces a fresh wrapper on every cast, making
+            // ObjectIdentifier an unreliable dedup key and the guard ineffective.
+            while !worklist.isEmpty && partialCKError == nil && visited.count < 256 {
+                let current = worklist.removeFirst()
+                let ns = current as NSError
+                let id = ObjectIdentifier(ns)
+                guard !visited.contains(id) else { continue }
+                visited.insert(id)
+
+                if let ck = current as? CKError {
+                    if firstCKError == nil { firstCKError = ck }
+                    if firstRetryAfterCKError == nil && ck.retryAfterSeconds != nil { firstRetryAfterCKError = ck }
+                    if ck.code == .partialFailure { partialCKError = ck; break }
+                }
+                if let u = ns.userInfo[NSUnderlyingErrorKey] as? Error {
+                    worklist.append(u)
+                }
+                if let ms = ns.userInfo[NSMultipleUnderlyingErrorsKey] as? [Error] {
+                    worklist.append(contentsOf: ms)
+                }
+                if let ds = ns.userInfo[NSDetailedErrorsKey] as? [Error] {
+                    worklist.append(contentsOf: ds)
+                    detailedChildErrors.append(contentsOf: ds)
+                }
+            }
+
+            let targetCKError = partialCKError ?? firstCKError
+            if let ck = targetCKError {
+                ckErrorCodeName = Self.ckCodeName(code: ck.code.rawValue, domain: CKError.errorDomain)
+            }
+            // Read retry-after from the first error that carries it — typically the outer wrapper
+            // (e.g. requestRateLimited), not the inner partialFailure which rarely has it.
+            ckRetryAfterSeconds = firstRetryAfterCKError?.retryAfterSeconds
+
+            if let ck = partialCKError {
+                if let partials = ck.partialErrorsByItemID, !partials.isEmpty {
+                    var freq: [GroupKey: (count: Int, description: String?, sampleIDs: [String])] = [:]
+                    let cascadeCode = CKError.Code.batchRequestFailed.rawValue
+
+                    for (itemID, itemError) in partials {
+                        let nsErr = itemError as NSError
+                        let key = GroupKey(domain: nsErr.domain, code: nsErr.code)
+                        let isCascade = nsErr.domain == CKError.errorDomain && nsErr.code == cascadeCode
+                        var existing = freq[key] ?? (count: 0, description: nil, sampleIDs: [])
+                        existing.count += 1
+                        if existing.description == nil { existing.description = nsErr.localizedDescription }
+                        // Collect up to 3 sample IDs per error group; skip cascade entries (they are not
+                        // the failing records — they are innocent bystanders in the same batch).
+                        if !isCascade && existing.sampleIDs.count < 3,
+                           let recordID = itemID as? CKRecord.ID {
+                            existing.sampleIDs.append(recordID.recordName)
+                        }
+                        freq[key] = existing
+                    }
+
+                    partialErrorGroups = freq
+                        .map { key, val in
+                            SyncLogEntry.PartialErrorGroup(
+                                domain: key.domain,
+                                code: key.code,
+                                codeName: Self.ckCodeName(code: key.code, domain: key.domain),
+                                count: val.count,
+                                description: val.description,
+                                isBatchCascade: key.domain == CKError.errorDomain && key.code == cascadeCode,
+                                sampleRecordNames: val.sampleIDs
+                            )
+                        }
+                        // Root-cause entries first (descending count), cascade entries last.
+                        .sorted {
+                            if $0.isBatchCascade != $1.isBatchCascade { return !$0.isBatchCascade }
+                            return $0.count > $1.count
+                        }
+                } else {
+                    // partialErrorsByItemID is nil/empty. NSPCKC occasionally surfaces
+                    // per-record errors via NSDetailedErrorsKey on an outer node instead.
+                    // Try to harvest those before concluding it is a zone-level failure.
+                    let perRecordCandidates = detailedChildErrors
+                        .compactMap { $0 as? CKError }
+                        .filter { $0.code != .partialFailure }
+                    if !perRecordCandidates.isEmpty {
+                        let cascadeCode = CKError.Code.batchRequestFailed.rawValue
+                        var freq: [GroupKey: (count: Int, description: String?)] = [:]
+                        for itemError in perRecordCandidates {
+                            let nsErr = itemError as NSError
+                            let key = GroupKey(domain: nsErr.domain, code: nsErr.code)
+                            var existing = freq[key] ?? (count: 0, description: nil)
+                            existing.count += 1
+                            if existing.description == nil { existing.description = nsErr.localizedDescription }
+                            freq[key] = existing
+                        }
+                        partialErrorGroups = freq
+                            .map { key, val in
+                                SyncLogEntry.PartialErrorGroup(
+                                    domain: key.domain,
+                                    code: key.code,
+                                    codeName: Self.ckCodeName(code: key.code, domain: key.domain),
+                                    count: val.count,
+                                    description: val.description,
+                                    isBatchCascade: key.domain == CKError.errorDomain && key.code == cascadeCode,
+                                    sampleRecordNames: []
+                                )
+                            }
+                            .sorted {
+                                if $0.isBatchCascade != $1.isBatchCascade { return !$0.isBatchCascade }
+                                return $0.count > $1.count
+                            }
+                    } else {
+                        // No per-record details found anywhere: zone-level failure
+                        // (ADP key unavailable, quota exceeded at zone level, rate limit, etc.)
+                        partialErrorsAbsent = true
+                    }
+                }
+            }
         }
 
         let entry = SyncLogEntry(
@@ -302,7 +505,11 @@ final class CloudKitSyncMonitor {
             durationSeconds: duration,
             errorDescription: errorDescription,
             errorCode: errorCode,
-            errorDomain: errorDomain
+            errorDomain: errorDomain,
+            ckErrorCodeName: ckErrorCodeName,
+            ckRetryAfterSeconds: ckRetryAfterSeconds,
+            partialErrorGroups: partialErrorGroups,
+            partialErrorsAbsent: partialErrorsAbsent
         )
 
         let cutoff = Date().addingTimeInterval(-900)
@@ -487,6 +694,32 @@ final class CloudKitSyncMonitor {
                     }
                 }
                 lines.append(line)
+                // CKError outer context — always present when any CKError is in the chain
+                if !entry.succeeded, let codeName = entry.ckErrorCodeName {
+                    var ckLine = "           CKError: \(codeName)"
+                    if let retry = entry.ckRetryAfterSeconds {
+                        ckLine += "  retry-after: \(String(format: "%.0f", retry))s"
+                    }
+                    if entry.partialErrorsAbsent {
+                        ckLine += "  — no per-record errors (zone/ADP/quota/rate-limit level)"
+                    }
+                    lines.append(ckLine)
+                }
+                // Per-record error breakdown (root-cause groups first, batchRequestFailed cascade last)
+                for group in entry.partialErrorGroups {
+                    let shortDomain = group.domain.components(separatedBy: ".").last ?? group.domain
+                    let codeLabel = group.codeName.map { "\(shortDomain)/\(group.code) (\($0))" }
+                        ?? "\(shortDomain)/\(group.code)"
+                    let tag = group.isBatchCascade ? "[cascade]" : "[root]   "
+                    var groupLine = "           Per-record \(tag): \(codeLabel) ×\(group.count)"
+                    if let desc = group.description, !group.isBatchCascade {
+                        groupLine += "  \"\(desc)\""
+                    }
+                    if !group.sampleRecordNames.isEmpty {
+                        groupLine += "  samples: \(group.sampleRecordNames.joined(separator: ", "))"
+                    }
+                    lines.append(groupLine)
+                }
             }
         }
 
