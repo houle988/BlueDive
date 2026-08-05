@@ -43,10 +43,17 @@ struct DiveRowView: View {
                     .font(.system(size: 24))
             }
 
-            if !(dive.seenFish?.isEmpty ?? true) {
-                Image(systemName: "fish.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.teal)
+            HStack(spacing: 4) {
+                if !(dive.seenFish?.isEmpty ?? true) {
+                    Image(systemName: "fish.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.teal)
+                }
+                if !(dive.photosData?.isEmpty ?? true) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                }
             }
         }
     }

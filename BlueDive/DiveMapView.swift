@@ -698,6 +698,12 @@ struct DiveMapCard: View {
                         .foregroundStyle(.teal)
                 }
 
+                if !(dive.photosData?.isEmpty ?? true) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.red)
+                }
+
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title2)
