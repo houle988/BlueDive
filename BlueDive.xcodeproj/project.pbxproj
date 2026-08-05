@@ -71,6 +71,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		0C797A863023C07300862404 /* tools */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = tools;
+			sourceTree = "<group>";
+		};
 		0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -122,6 +127,7 @@
 		57EA9D412F42108A00486B7A = {
 			isa = PBXGroup;
 			children = (
+				0C797A863023C07300862404 /* tools */,
 				0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */,
 				0C63B1752F8AC307005F2A89 /* README.md */,
 				0C60FC712F89C6DC00C1F9A2 /* LICENSE */,
@@ -189,6 +195,7 @@
 				0CF0DA802FB24469008E0330 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				0C797A863023C07300862404 /* tools */,
 				57EA9D4C2F42108A00486B7A /* BlueDive */,
 			);
 			name = BlueDive;
