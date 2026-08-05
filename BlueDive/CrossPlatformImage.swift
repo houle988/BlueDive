@@ -32,6 +32,12 @@ extension Data {
     var platformImage: PlatformImage? {
         PlatformImage(data: self)
     }
+
+    /// Content-keyed id for SwiftUI `.task(id:)` on photo data.
+    /// XOR of a prefix hash and count is O(1), collision-resistant for same-size
+    /// photos, and stronger than count alone: a deletion that shifts a different
+    /// photo into the same ForEach/index slot changes the id and triggers a re-run.
+    var photoTaskID: Int { prefix(64).hashValue ^ count }
 }
 
 // MARK: - Cross-platform semantic colors

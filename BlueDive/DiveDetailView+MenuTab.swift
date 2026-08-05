@@ -532,6 +532,9 @@ extension DiveDetailView {
                     .padding(.vertical, 4)
                 }
             }
+            Text("BlueDive is not a photo album — keep photos to the most relevant shots. Up to 10 can be selected per import. Large collections may slow down iCloud sync.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .padding()
         .detailCardBackground()
@@ -559,13 +562,19 @@ extension DiveDetailView {
             Text("Remove this photo from the dive?")
         }
         .sheet(item: $selectedPhotoForPreview) { item in
-            PhotoPreviewSheet(photoData: item.data, onDelete: {
-                deletePhoto(at: item.index)
-                selectedPhotoForPreview = nil
-                if (dive.photosData?.isEmpty ?? true) {
-                    isEditingPhotos = false
+            PhotoPreviewSheet(
+                photos: Binding(
+                    get: { dive.photosData ?? [] },
+                    set: { dive.photosData = $0; try? modelContext.save() } // Safety net; in-app deletes go through deletePhoto(at:)
+                ),
+                initialIndex: item.index,
+                onDelete: { index in
+                    deletePhoto(at: index)
+                    if dive.photosData?.isEmpty ?? true {
+                        isEditingPhotos = false
+                    }
                 }
-            })
+            )
             .presentationSizing(.page)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -658,6 +667,7 @@ extension DiveDetailView {
 
     @MainActor
     func deletePhoto(at index: Int) {
+        guard dive.photosData?.indices.contains(index) == true else { return }
         dive.photosData?.remove(at: index)
         try? modelContext.save()
     }
