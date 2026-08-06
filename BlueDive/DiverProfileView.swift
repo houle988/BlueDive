@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import PhotosUI
 
 // MARK: - Color percentage interpolation from red to green
 
@@ -40,61 +39,73 @@ struct DiverProfileView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     @Query private var insurances: [DivingInsurance]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
 
-    @AppStorage("userName") private var userName: String = ""
-    @AppStorage("diverBio") private var diverBio: String = ""
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     @Environment(\.dismiss) private var dismiss
 
     @State private var prefs = UserPreferences.shared
 
-    @State private var avatarImage: PlatformImage? = DiverProfileView.loadAvatar()
-    @State private var photoPickerItem: PhotosPickerItem? = nil
-
-    @State private var showingEditProfile = false
     @State private var showingCertifications = false
     @State private var showingAddCertification = false
     @State private var showingInsurances = false
     @State private var showingAddInsurance = false
     @State private var profileAppeared = false
 
+    // MARK: - Diver Filter
+
+    private var uniqueDivers: [String] {
+        DiverFilter.uniqueDivers(in: dives, gear: allGear, certifications: certifications)
+    }
+
+    private var filteredDives: [Dive] {
+        DiverFilter.apply(selectedDiver, to: dives)
+    }
+
+    private var filteredCertifications: [Certification] {
+        selectedDiver.isEmpty
+            ? certifications
+            : certifications.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
+    }
+
     // MARK: - Computed Stats
 
-    private var totalDives: Int { dives.count }
+    private var totalDives: Int { filteredDives.count }
 
     private var totalBottomTime: String {
-        let total = dives.reduce(0) { $0 + $1.duration }
+        let total = filteredDives.reduce(0) { $0 + $1.duration }
         let h = total / 60
         let m = total % 60
         return h > 0 ? "\(h)h \(m)m" : "\(m)m"
     }
 
     private var maxDepth: Double {
-        dives.map { $0.displayMaxDepth }.max() ?? 0
+        filteredDives.map { $0.displayMaxDepth }.max() ?? 0
     }
 
     private var countriesVisited: Int {
-        Set(dives.compactMap { $0.siteCountry }.filter { !$0.isEmpty }).count
+        Set(filteredDives.compactMap { $0.siteCountry }.filter { !$0.isEmpty }).count
     }
 
     private var uniqueSites: Int {
-        Set(dives.map { $0.siteName }).count
+        Set(filteredDives.map { $0.siteName }).count
     }
 
     private var totalCreatures: Int {
         Set(
-            dives.flatMap { ($0.seenFish ?? []).map { $0.name } }
+            filteredDives.flatMap { ($0.seenFish ?? []).map { $0.name } }
         ).count
     }
 
     private var yearsActive: Int {
-        guard let first = dives.last?.timestamp else { return 0 }
+        guard let first = filteredDives.map(\.timestamp).min() else { return 0 }
         return Calendar.current.dateComponents([.year], from: first, to: Date()).year ?? 0
     }
 
     private var topCreatures: [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
-        for dive in dives {
+        for dive in filteredDives {
             for f in dive.seenFish ?? [] { counts[f.name, default: 0] += 1 }
         }
         return counts
@@ -154,9 +165,11 @@ struct DiverProfileView: View {
                         certificationsSection
                             .opacity(profileAppeared ? 1.0 : 0.0)
                             .offset(y: profileAppeared ? 0 : 15)
-                        insuranceSection
-                            .opacity(profileAppeared ? 1.0 : 0.0)
-                            .offset(y: profileAppeared ? 0 : 15)
+                        if selectedDiver.isEmpty {
+                            insuranceSection
+                                .opacity(profileAppeared ? 1.0 : 0.0)
+                                .offset(y: profileAppeared ? 0 : 15)
+                        }
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 40)
@@ -168,6 +181,7 @@ struct DiverProfileView: View {
                 }
             }
             .background(Color.platformBackground.ignoresSafeArea())
+            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -177,43 +191,13 @@ struct DiverProfileView: View {
             #endif
 
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Close") {
                         dismiss()
-                    } label: {
-                        #if os(macOS)
-                        Label("Close", systemImage: "xmark.circle.fill")
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
-                        #else
-                        Image(systemName: "xmark.circle.fill")
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
-                            .font(.title3)
-                        #endif
                     }
                 }
 
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingEditProfile = true
-                    } label: {
-                        Text("Edit")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.cyan)
-                    }
-                }
-            }
-            .sheet(isPresented: $showingEditProfile) {
-                EditProfileView(
-                    userName: $userName,
-                    diverBio: $diverBio,
-                    avatarImage: $avatarImage
-                )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
             .sheet(isPresented: $showingCertifications) {
                 CertificationsView(onClose: { showingCertifications = false })
@@ -256,79 +240,35 @@ struct DiverProfileView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 320)
+            .frame(height: 200)
 
             // Decorative circles
             Circle()
                 .fill(Color.cyan.opacity(0.08))
                 .frame(width: 300)
-                .offset(x: -60, y: -80)
+                .offset(x: -60, y: -20)
 
             Circle()
                 .fill(Color.blue.opacity(0.1))
                 .frame(width: 200)
-                .offset(x: 120, y: -40)
+                .offset(x: 120, y: -10)
 
             // Content
             VStack(spacing: 14) {
                 Spacer()
 
-                // Profile photo
-                ZStack(alignment: .bottomTrailing) {
-                    Group {
-                        if let avatar = avatarImage {
-                            Image(platformImage: avatar)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            ZStack {
-                                LinearGradient(
-                                    colors: [.cyan.opacity(0.5), .blue.opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 52))
-                                    .foregroundStyle(.white.opacity(0.7))
-                            }
-                        }
-                    }
-                    .frame(width: 110, height: 110)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.cyan, .blue],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 3
-                            )
-                    )
-                    .shadow(color: .cyan.opacity(0.4), radius: 12, x: 0, y: 4)
-                }
-
-                // Name & bio
+                // Name
                 VStack(spacing: 6) {
                     Group {
-                        if userName.isEmpty {
-                            Text("Diver")
+                        if selectedDiver.isEmpty {
+                            Text("All Divers")
                         } else {
-                            Text(userName)
+                            Text(verbatim: selectedDiver)
                         }
                     }
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundStyle(.primary)
-
-                    if !diverBio.isEmpty {
-                        Text(diverBio)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.65))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-                    }
 
                     if yearsActive > 0 {
                         HStack(spacing: 5) {
@@ -337,7 +277,7 @@ struct DiverProfileView: View {
                             Text("Diver for \(yearsActive) year\(yearsActive > 1 ? "s" : "")")
                                 .font(.caption)
                         }
-                        .foregroundStyle(.cyan.opacity(0.85))
+                        .foregroundStyle(.white.opacity(0.75))
                         .padding(.top, 2)
                     }
                 }
@@ -345,7 +285,7 @@ struct DiverProfileView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .frame(height: 320)
+        .frame(height: 200)
         .clipped()
     }
 
@@ -452,17 +392,17 @@ struct DiverProfileView: View {
     private static let certificationPreviewLimit = 5
 
     private var previewCertifications: [Certification] {
-        Array(certifications.prefix(DiverProfileView.certificationPreviewLimit))
+        Array(filteredCertifications.prefix(DiverProfileView.certificationPreviewLimit))
     }
 
     private var remainingCertificationsCount: Int {
-        max(0, certifications.count - DiverProfileView.certificationPreviewLimit)
+        max(0, filteredCertifications.count - DiverProfileView.certificationPreviewLimit)
     }
 
     private var certificationsSection: some View {
         ProfileCard(title: "Certifications", icon: "graduationcap.fill") {
             VStack(spacing: 0) {
-                if certifications.isEmpty {
+                if filteredCertifications.isEmpty {
                     // Empty state
                     VStack(spacing: 10) {
                         Image(systemName: "graduationcap")
@@ -559,7 +499,7 @@ struct DiverProfileView: View {
 
                     Spacer()
 
-                    if !certifications.isEmpty {
+                    if !filteredCertifications.isEmpty {
                         HStack(spacing: 6) {
                             if remainingCertificationsCount > 0 {
                                 Text(verbatim: NSLocalizedString("+%lld more", bundle: Bundle.forAppLanguage(), comment: "A small label next to the 'View All' button indicating how many additional certifications are not shown in the preview list.")
@@ -702,24 +642,6 @@ struct DiverProfileView: View {
     }
 
     // MARK: - Actions
-
-    // MARK: - Avatar Persistence
-
-    static func loadAvatar() -> PlatformImage? {
-        guard let data = UserDefaults.standard.data(forKey: "diverAvatarData") else { return nil }
-        return PlatformImage(data: data)
-    }
-
-    static func saveAvatar(_ image: PlatformImage) {
-        #if os(iOS)
-        let data = image.jpegData(compressionQuality: 0.8)
-        #elseif os(macOS)
-        let data = image.tiffRepresentation
-            .flatMap { NSBitmapImageRep(data: $0) }
-            .flatMap { $0.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) }
-        #endif
-        UserDefaults.standard.set(data, forKey: "diverAvatarData")
-    }
 }
 
 // MARK: - Profile Card Container
@@ -927,218 +849,6 @@ enum GoalType {
     }
 }
 
-// MARK: - Edit Profile Sheet
-
-struct EditProfileView: View {
-    @Binding var userName: String
-    @Binding var diverBio: String
-    @Binding var avatarImage: PlatformImage?
-
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var editedName: String = ""
-    @State private var editedBio: String = ""
-    @State private var photoPickerItem: PhotosPickerItem? = nil
-    @State private var pendingImage: PlatformImage? = nil
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 28) {
-                    #if os(macOS)
-                    HStack {
-                        Button("Cancel") { dismiss() }
-                            .foregroundStyle(.secondary)
-                            .buttonStyle(.plain)
-                            .keyboardShortcut(.escape, modifiers: [])
-                        Spacer()
-                        Button(action: saveAndDismiss) {
-                            Text("Save")
-                                .fontWeight(.bold)
-                                .foregroundStyle(.cyan)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal)
-                    .padding(.top)
-                    #endif
-
-                    // Profile photo area
-                    avatarPicker
-
-                    // Text fields
-                    VStack(spacing: 0) {
-                        Group {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("Name", systemImage: "person.fill")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.secondary)
-                                    .textCase(.uppercase)
-
-                                HStack {
-                                    TextField("Your first name or username (optional)", text: $editedName)
-                                        .font(.body)
-                                        .foregroundStyle(.primary)
-                                    if !editedName.isEmpty {
-                                        Button {
-                                            editedName = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                                .padding(14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.primary.opacity(0.07))
-                                )
-                            }
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("About", systemImage: "text.quote")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.secondary)
-                                    .textCase(.uppercase)
-
-                                TextEditor(text: $editedBio)
-                                    .font(.body)
-                                    .foregroundStyle(.primary)
-                                    .scrollContentBackground(.hidden)
-                                    .frame(minHeight: 90)
-                                    .padding(14)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.primary.opacity(0.07))
-                                    )
-                                    .overlay(alignment: .topLeading) {
-                                        if editedBio.isEmpty {
-                                            Text("About yourself (optional)")
-                                                #if os(iOS)
-                                                .foregroundColor(Color(uiColor: .placeholderText))
-                                                #else
-                                                .foregroundColor(Color(nsColor: .placeholderTextColor))
-                                                #endif
-                                                .padding(.top, 22)
-                                                .padding(.leading, 19)
-                                                .allowsHitTesting(false)
-                                        }
-                                    }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-                }
-                .padding(.top, 24)
-                .padding(.bottom, 40)
-            }
-            .background(Color.platformBackground.ignoresSafeArea())
-
-            .navigationTitle("Edit Profile")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #if os(macOS)
-            .frame(minWidth: 550, idealWidth: 650, maxWidth: 850, minHeight: 500, idealHeight: 650, maxHeight: 900)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(.secondary)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveAndDismiss()
-                    }
-                    .fontWeight(.bold)
-                    .foregroundStyle(.cyan)
-                }
-            }
-            .onAppear {
-                editedName = userName
-                editedBio = diverBio
-                pendingImage = avatarImage
-            }
-            // Chargement de la photo sélectionnée
-            .onChange(of: photoPickerItem) {
-                guard let newItem = photoPickerItem else { return }
-                Task {
-                    if let data = try? await newItem.loadTransferable(type: Data.self),
-                       let image = PlatformImage(data: data) {
-                        pendingImage = image
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Actions
-
-    private func saveAndDismiss() {
-        userName = editedName.trimmingCharacters(in: .whitespaces)
-        diverBio = editedBio.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let img = pendingImage {
-            avatarImage = img
-            DiverProfileView.saveAvatar(img)
-        }
-        dismiss()
-    }
-
-    // MARK: - Avatar Picker
-
-    private var avatarPicker: some View {
-        VStack(spacing: 14) {
-            PhotosPicker(selection: $photoPickerItem, matching: .images) {
-                ZStack(alignment: .bottomTrailing) {
-                    // Photo
-                    Group {
-                        if let img = pendingImage {
-                            Image(platformImage: img)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            ZStack {
-                                LinearGradient(
-                                    colors: [.cyan.opacity(0.4), .blue.opacity(0.6)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 52))
-                                    .foregroundStyle(.white.opacity(0.6))
-                            }
-                        }
-                    }
-                    .frame(width: 110, height: 110)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.cyan.opacity(0.5), lineWidth: 2)
-                    )
-
-                    // Bouton caméra
-                    ZStack {
-                        Circle()
-                            .fill(Color.cyan)
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.black)
-                    }
-                    .offset(x: 4, y: 4)
-                }
-            }
-
-            Text("Tap to change photo")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
 // MARK: - Insurances View
 
 struct InsurancesView: View {
@@ -1299,20 +1009,9 @@ struct InsurancesView: View {
 
             .toolbar {
                 if let onClose {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Close") {
                             onClose()
-                        } label: {
-                            #if os(macOS)
-                            Label("Close", systemImage: "xmark.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.secondary)
-                            #else
-                            Image(systemName: "xmark.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.secondary)
-                                .font(.title3)
-                            #endif
                         }
                     }
                 }
