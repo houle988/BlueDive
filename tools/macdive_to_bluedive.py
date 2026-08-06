@@ -64,6 +64,7 @@ import re
 import sqlite3
 import sys
 import textwrap
+import unicodedata
 import uuid as _uuid_mod
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
@@ -793,70 +794,222 @@ def parse_macdive_xml_samples(xml_path):
     return xml_units, result
 
 
-def match_samples_to_dives(xml_dives, sqlite_utc_index):
+def _norm_name(n):
+    """Casefold, strip accents, collapse whitespace for fuzzy diver-name comparison."""
+    n = unicodedata.normalize("NFKD", n or "").encode("ascii", "ignore").decode()
+    return " ".join(n.casefold().split())
+
+
+def _detect_consensus_offset(xml_dives, sqlite_utc_index):
+    """
+    Return the UTC hour offset that converts the XML's naive local-time dates to UTC.
+
+    Tries every integer offset -12..+12 and picks the one with the most unambiguous
+    single-PK hits against the SQLite index.
+    """
+    best_off, best_hits = 0, -1
+    for off in range(-12, 13):
+        hits = 0
+        for xd in xml_dives:
+            try:
+                naive = datetime.strptime(xd["date_str"], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                continue
+            key = (naive - timedelta(hours=off)).strftime("%Y-%m-%d %H:%M:%S")
+            if len({c[0] for c in sqlite_utc_index.get(key, [])}) == 1:
+                hits += 1
+        if hits > best_hits:
+            best_hits, best_off = hits, off
+    return best_off, best_hits
+
+
+def match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=False):
     """
     Match XML dives to SQLite PKs and return {pk: samples}.
 
-    sqlite_utc_index: {utc_str: [(pk, diver_name, duration_secs)]}
+    sqlite_utc_index: {utc_str: [(pk, diver_name, duration_secs, max_depth_metres)]}
 
-    Strategy (three-tier, in order):
-      1. UTC match — try all integer offsets -12..+12 to find SQLite rows whose
-         CoreData UTC equals the XML date at that offset. This handles any timezone
-         difference between the Mac that ran MacDive and the Mac running this script.
-      2. Diver-name filter — prefer entries whose diver name matches the XML <diver>
-         element (resolves family group dives that share the same start time).
-      3. Duration tiebreak — if still >1 PK, keep entries within ±60 s of the XML
-         <duration> value (resolves same-diver same-minute collisions where only the
-         dive length differs).
-
-    A first-assigned-wins rule prevents the same PK from receiving two sample sets
-    when multiple XML dives both resolve to the same SQLite row.
+    Improvements:
+      P1 — Consensus UTC offset: detect the single hour offset shared by all dives in
+           the XML file and query only that offset ±1 h (for DST/travel), instead of
+           the full -12..+12 sweep that creates false-positive ghost candidates.
+      P2 — Best-match assignment: collect all resolved (xml_idx, pk, score) tuples and
+           assign greedily by ascending score (duration delta then depth delta) so the
+           best-matching XML dive wins a contested PK, not the first one in file order.
+      P3 — Depth tiebreak + tighter duration: add a max-depth tiebreak (XML sample
+           max depth vs SQLite ZMAXDEPTH) before the duration tiebreak; tighten
+           duration tolerance to ±30 s and auto-select the closest when it is clearly
+           better than the runner-up (gap > 15 s).
+      P4 — Normalised diver names: casefold, strip accents, collapse whitespace before
+           comparing; relaxed token-containment fallback before falling back to the
+           unfiltered pool; warn when the fallback fires.
+      P5 — Plausibility gate: verify that the XML profile's max depth and total span
+           agree with the SQLite dive within tolerances (5 m depth, 2 min span) before
+           committing an assignment; reject and warn on gross mismatch.
+      N4 — UTC+0 fallback: if the consensus window finds no candidates, try offset 0
+           (XML local time == UTC).  Covers dives recorded while in a UTC+0 timezone or
+           on a device left in UTC.  All P4/P3/P5 guards still apply.
     """
-    pk_to_samples: dict = {}
-    skipped = 0
+    if not xml_dives:
+        return {}
 
-    for xml_dive in xml_dives:
-        xml_diver = xml_dive["diver"]
-        xml_dur   = xml_dive["duration"]
+    # P1 — resolve the timezone offset once for the whole file
+    consensus_off, consensus_hits = _detect_consensus_offset(xml_dives, sqlite_utc_index)
+    offsets_to_try = sorted({consensus_off - 1, consensus_off, consensus_off + 1})
+    print(f"  Consensus UTC offset : {consensus_off:+d}h  ({consensus_hits} unambiguous hits)"
+          f"  (trying offsets {offsets_to_try})")
+
+    # Convert XML sample depths to metres for comparison against SQLite (always metres).
+    depth_factor = 0.3048 if xml_depth_in_feet else 1.0
+
+    # First pass: resolve each XML dive to a single PK and score the match.
+    # Each entry: (xml_idx, pk, dur_delta, depth_delta, samples)
+    candidates_resolved = []
+    unresolved = []  # (xml_idx, reason, date_str)
+
+    for xi, xml_dive in enumerate(xml_dives):
+        xml_diver   = xml_dive["diver"]
+        xml_dur     = xml_dive["duration"]
+        xml_samples = xml_dive["samples"]
 
         try:
             naive = datetime.strptime(xml_dive["date_str"], "%Y-%m-%d %H:%M:%S")
         except ValueError:
-            skipped += 1
+            unresolved.append((xi, "bad_date", xml_dive["date_str"]))
             continue
 
-        # Collect candidates across all UTC offsets
-        candidates = []
-        for offset_h in range(-12, 13):
-            utc_str = (naive - timedelta(hours=offset_h)).strftime("%Y-%m-%d %H:%M:%S")
-            candidates.extend(sqlite_utc_index.get(utc_str, []))
+        # P1 — query only the consensus offset ±1; ±2 s tolerance for clock drift / rounding
+        pool_all = []
+        for off in offsets_to_try:
+            base_dt = naive - timedelta(hours=off)
+            for sec_adj in (-2, -1, 0, 1, 2):
+                utc_str = (base_dt + timedelta(seconds=sec_adj)).strftime("%Y-%m-%d %H:%M:%S")
+                pool_all.extend(sqlite_utc_index.get(utc_str, []))
 
-        if not candidates:
-            skipped += 1
+        # Dedup by pk: the ±2 s window can insert the same SQLite candidate multiple times,
+        # which corrupts the positional dur_pool[0]/[1] auto-select comparison.
+        seen_pk: set = set()
+        deduped = []
+        for c in pool_all:
+            if c[0] not in seen_pk:
+                seen_pk.add(c[0])
+                deduped.append(c)
+        pool_all = deduped
+
+        if not pool_all and 0 not in offsets_to_try:
+            # N4 — UTC+0 fallback: some dives have ZRAWDATE == XML local time (device
+            #      left in UTC, or dive made while in a UTC+0 timezone).  Try offset 0
+            #      before giving up; all P4/P3/P5 guards still apply downstream.
+            for sec_adj in (-2, -1, 0, 1, 2):
+                utc_str = (naive + timedelta(seconds=sec_adj)).strftime("%Y-%m-%d %H:%M:%S")
+                pool_all.extend(sqlite_utc_index.get(utc_str, []))
+            if pool_all:
+                seen_utc0: set = set()
+                deduped_fb: list = []
+                for c in pool_all:
+                    if c[0] not in seen_utc0:
+                        seen_utc0.add(c[0])
+                        deduped_fb.append(c)
+                pool_all = deduped_fb
+                print(f"  Note: UTC+0 fallback for {xml_dive['date_str']} ({xml_diver})",
+                      file=sys.stderr)
+
+        if not pool_all:
+            unresolved.append((xi, "no_match", xml_dive["date_str"]))
             continue
 
-        # Prefer diver-name match
-        pool = [c for c in candidates if c[1] == xml_diver] or candidates
+        # P4 — normalised diver filter with relaxed fallback
+        norm_xml = _norm_name(xml_diver)
+        exact    = [c for c in pool_all if _norm_name(c[1]) == norm_xml]
+        relaxed  = exact or [c for c in pool_all
+                             if norm_xml and norm_xml in _norm_name(c[1])]
+        if not relaxed and xml_diver:
+            print(f"  Warning: diver '{xml_diver}' not matched in candidates for "
+                  f"{xml_dive['date_str']} — using all {len(pool_all)} candidate(s)",
+                  file=sys.stderr)
+        pool = exact or relaxed or pool_all
 
-        # Tiebreak by duration (±60 s) when still ambiguous
         unique_pks = {c[0] for c in pool}
-        if len(unique_pks) > 1 and xml_dur is not None:
-            dur_pool = [c for c in pool
-                        if c[2] is not None and abs(c[2] - xml_dur) < 60]
-            if dur_pool:
-                pool      = dur_pool
+
+        # P3 — depth tiebreak (convert XML max depth to metres)
+        if len(unique_pks) > 1 and xml_samples:
+            xml_max_m  = max(s["depth"] for s in xml_samples) * depth_factor
+            depth_pool = [c for c in pool
+                          if c[3] is not None and abs(c[3] - xml_max_m) <= 2.0]
+            if depth_pool:
+                pool       = depth_pool
                 unique_pks = {c[0] for c in pool}
 
-        if len(unique_pks) == 1:
-            pk = next(iter(unique_pks))
-            if pk not in pk_to_samples:  # first-assigned-wins
-                pk_to_samples[pk] = xml_dive["samples"]
-        else:
-            skipped += 1
+        # P3 — duration tiebreak: pick closest within ±30 s; auto-select clear winner
+        if len(unique_pks) > 1 and xml_dur is not None:
+            dur_pool = [c for c in pool
+                        if c[2] is not None and abs(c[2] - xml_dur) <= 30]
+            if dur_pool:
+                dur_pool.sort(key=lambda c: abs(c[2] - xml_dur))
+                best_delta   = abs(dur_pool[0][2] - xml_dur)
+                second_delta = abs(dur_pool[1][2] - xml_dur) if len(dur_pool) > 1 else 9999
+                if second_delta - best_delta > 15:
+                    pool = [dur_pool[0]]
+                else:
+                    pool = dur_pool
+                unique_pks = {c[0] for c in pool}
 
-    total = len(xml_dives)
-    print(f"  Samples matched : {len(pk_to_samples)}/{total} dives"
-          f"  ({skipped} skipped — ambiguous or unmatched)")
+        if len(unique_pks) != 1:
+            unresolved.append((xi, "ambiguous", xml_dive["date_str"]))
+            continue
+
+        pk = next(iter(unique_pks))
+        c  = next(c for c in pool if c[0] == pk)
+
+        # P5 — plausibility gate: depth and sample span must agree with SQLite values
+        if xml_samples and c[3] is not None:
+            xml_max_m = max(s["depth"] for s in xml_samples) * depth_factor
+            if abs(xml_max_m - c[3]) > 5.0:
+                print(f"  Warning: depth mismatch for {xml_dive['date_str']} "
+                      f"(xml_max={xml_max_m:.1f} m  sqlite={c[3]:.1f} m) — rejected",
+                      file=sys.stderr)
+                unresolved.append((xi, "depth_mismatch", xml_dive["date_str"]))
+                continue
+        if xml_samples and c[2] is not None:
+            xml_span = max(s["time"] for s in xml_samples)
+            if abs(xml_span - c[2]) > 120:
+                print(f"  Warning: span mismatch for {xml_dive['date_str']} "
+                      f"(xml_span={xml_span:.0f} s  sqlite_dur={c[2]:.0f} s) — rejected",
+                      file=sys.stderr)
+                unresolved.append((xi, "span_mismatch", xml_dive["date_str"]))
+                continue
+
+        # Score: (duration_delta, depth_delta) — lower is better.
+        # Both c[2] (SQLite ZTOTALDURATION) and xml_dur (XML <duration>) are in seconds.
+        dur_delta   = (abs(c[2] - xml_dur)
+                       if c[2] is not None and xml_dur is not None else 9999.0)
+        depth_delta = (abs(max(s["depth"] for s in xml_samples) * depth_factor - c[3])
+                       if xml_samples and c[3] is not None else 9999.0)
+        candidates_resolved.append((xi, pk, dur_delta, depth_delta, xml_samples))
+
+    # P2 — greedy best-match assignment: sort by (dur_delta, depth_delta) ascending
+    candidates_resolved.sort(key=lambda a: (a[2], a[3]))
+    pk_to_samples: dict = {}
+    for xi, pk, dur_delta, depth_delta, samples in candidates_resolved:
+        if pk in pk_to_samples:
+            unresolved.append((xi, "outscored", xml_dives[xi]["date_str"]))
+            continue
+        pk_to_samples[pk] = samples
+
+    total   = len(xml_dives)
+    matched = len(pk_to_samples)
+    skipped = len(unresolved)
+    print(f"  Samples matched : {matched}/{total} dives  ({skipped} skipped)")
+    if unresolved:
+        reason_counts: dict = {}
+        for _, reason, _ in unresolved:
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        print("  Skip breakdown  : "
+              + "  ".join(f"{k}={v}" for k, v in sorted(reason_counts.items())))
+        for xi, reason, date_str in unresolved:
+            diver = xml_dives[xi]["diver"]
+            print(f"    {reason:<16}  {date_str}  ({diver})", file=sys.stderr)
+
     return pk_to_samples
 
 
@@ -974,32 +1127,35 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     raw_col  = col_or_null(dc, "ZRAWDATA")
     pt_col   = col_or_null(dc, "ZPARSERTYPE")
 
-    # Build SQLite UTC index for sample matching: {utc_str: [(pk, diver_name, duration_secs)]}
+    # Build SQLite UTC index for sample matching: {utc_str: [(pk, diver_name, duration_secs, max_depth_metres)]}
     sqlite_utc_index: dict = {}
     if ts_col != "NULL":
         has_diver_tbl = table_exists(cur, "ZDIVER")
-        diver_join = "LEFT JOIN ZDIVER dv ON dv.Z_PK = d.ZRELATIONSHIPDIVER" if has_diver_tbl else ""
-        diver_expr = "TRIM(COALESCE(dv.ZFIRSTNAME,'') || ' ' || COALESCE(dv.ZLASTNAME,''))" \
-                     if has_diver_tbl else "''"
-        dur_expr   = f"d.{dur_col}" if dur_col != "NULL" else "NULL"
+        diver_join  = "LEFT JOIN ZDIVER dv ON dv.Z_PK = d.ZRELATIONSHIPDIVER" if has_diver_tbl else ""
+        diver_expr  = "TRIM(COALESCE(dv.ZFIRSTNAME,'') || ' ' || COALESCE(dv.ZLASTNAME,''))" \
+                      if has_diver_tbl else "''"
+        dur_expr    = f"d.{dur_col}" if dur_col != "NULL" else "NULL"
+        depth_col_m = col_or_null(dc, "ZMAXDEPTH")
+        depth_expr  = f"d.{depth_col_m}" if depth_col_m != "NULL" else "NULL"
         try:
             cur.execute(f"""
-                SELECT d.Z_PK, d.{ts_col}, {dur_expr}, {diver_expr}
+                SELECT d.Z_PK, d.{ts_col}, {dur_expr}, {diver_expr}, {depth_expr}
                 FROM ZDIVE d {diver_join}
                 WHERE d.{ts_col} IS NOT NULL
             """)
-            for pk_i, ts_i, dur_i, diver_i in cur.fetchall():
+            for pk_i, ts_i, dur_i, diver_i, depth_i in cur.fetchall():
                 utc_dt  = COREDATA_EPOCH + timedelta(seconds=float(ts_i))
                 utc_str = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
                 sqlite_utc_index.setdefault(utc_str, []).append(
                     (pk_i, (diver_i or "").strip(),
-                     float(dur_i) if dur_i is not None else None)
+                     float(dur_i)   if dur_i   is not None else None,
+                     float(depth_i) if depth_i is not None else None)
                 )
         except Exception as exc:
             print(f"Warning: could not build UTC index for sample matching: {exc}",
                   file=sys.stderr)
 
-    pk_to_samples = match_samples_to_dives(xml_dives, sqlite_utc_index) if xml_dives else {}
+    pk_to_samples = match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=xml_depth_in_feet) if xml_dives else {}
 
     order_expr = f'"{ts_col}"' if ts_col != "NULL" else "ROWID"
 
