@@ -186,19 +186,8 @@ struct CertificationsView: View {
             .toolbar {
                 if let onClose {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button {
+                        Button("Close") {
                             onClose()
-                        } label: {
-                            #if os(macOS)
-                            Label("Close", systemImage: "xmark.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.secondary)
-                            #else
-                            Image(systemName: "xmark.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.secondary)
-                                .font(.title3)
-                            #endif
                         }
                     }
                 }
