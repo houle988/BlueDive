@@ -105,20 +105,9 @@ struct DiverProfileView: View {
     }
 
     private var goals: [DiveGoal] {
-        var increment: Int = 500
-        
-        if(totalDives < 100) {
-            increment = 25
-        }
-        else if(totalDives < 500) {
-            increment = 100
-        }
-        else if(totalDives < 1000) {
-            increment = 250
-        }
-        
+        let increment = diveGoalIncrement(for: totalDives)
         let nextGoal = Int(ceil(Double(totalDives) / Double(increment)) * Double(increment))
-        let maxGoal = (nextGoal + (3 * increment));
+        let maxGoal = nextGoal + (3 * increment)
         
         // Dive goals
         var nextGoals = Array(stride(from: nextGoal, through: maxGoal, by: increment)).map {
