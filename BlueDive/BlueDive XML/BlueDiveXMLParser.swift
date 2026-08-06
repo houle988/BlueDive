@@ -89,6 +89,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private var isInMarineLifeSeen = false
     private var isInMarineLife = false
     private var isInDecoStops = false
+    private var isInServiceRecords = false
+    private var isInServiceRecord = false
 
     // MARK: - Temporary Site State
 
@@ -146,11 +148,17 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private var tempGearPurchasedFrom: String?
     private var tempGearWeightContribution: Double?
     private var tempGearWeightContributionUnit: String?
+    private var tempGearLastServiceDate: Date?
     private var tempGearNextServiceDue: Date?
     private var tempGearServiceHistory: String?
+    private var tempGearStructuredServiceHistory: String?
     private var tempGearNotes: String?
     private var tempGearIsInactive: Bool = false
     private var tempGearDiverName: String = ""
+
+    // MARK: - Temporary Service Record State
+
+    private var serviceRecordAccumulator = ServiceRecordXMLAccumulator()
 
     // MARK: - Temporary Marine Life State
 
@@ -238,6 +246,16 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
                let timeStr  = attributeDict["time"],  let time  = Double(timeStr),
                let typeStr  = attributeDict["type"],  let type  = Int(typeStr) {
                 currentDecoStops.append(DecoStop(depth: depth, time: TimeInterval(time), type: type))
+            }
+        case "serviceRecords":
+            if isInGearItem {
+                isInServiceRecords = true
+                serviceRecordAccumulator = ServiceRecordXMLAccumulator()
+            }
+        case "serviceRecord":
+            if isInServiceRecords {
+                isInServiceRecord = true
+                serviceRecordAccumulator.reset()
             }
         default:
             break
@@ -401,7 +419,26 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     }
 
     private func parseGearElement(_ elementName: String, text: String) {
+        if isInServiceRecord {
+            if elementName == "serviceRecords" {
+                // Malformed XML: </serviceRecords> arrived while a <serviceRecord> was still
+                // open (no closing </serviceRecord> tag). Discard the incomplete in-progress
+                // record and close both contexts so the valid records already accumulated
+                // are still saved.
+                serviceRecordAccumulator.reset()
+                tempGearStructuredServiceHistory = serviceRecordAccumulator.encodedJSON()
+                isInServiceRecords = false
+                isInServiceRecord = false
+                return
+            }
+            parseServiceRecordChildElement(elementName, text: text)
+            return
+        }
         switch elementName {
+        case "serviceRecords":
+            tempGearStructuredServiceHistory = serviceRecordAccumulator.encodedJSON()
+            isInServiceRecords = false
+            isInServiceRecord = false
         case "id":                 tempGearID = text.nilIfEmpty
         case "type":               tempGearType = text.nilIfEmpty
         case "manufacturer":       tempGearManufacturer = text.nilIfEmpty
@@ -414,6 +451,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         case "purchasedFrom":      tempGearPurchasedFrom = text.nilIfEmpty
         case "weightContribution":     tempGearWeightContribution = Double(text)
         case "weightContributionUnit": tempGearWeightContributionUnit = text.nilIfEmpty
+        case "lastServiceDate":    tempGearLastServiceDate = dateFormatter.date(from: text)
         case "nextServiceDue":          tempGearNextServiceDue = dateFormatter.date(from: text)
         case "serviceHistory":     tempGearServiceHistory = text.nilIfEmpty
         case "gearNotes":          tempGearNotes = text.nilIfEmpty
@@ -434,8 +472,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
                     purchasedFrom: tempGearPurchasedFrom,
                     weightContribution: tempGearWeightContribution,
                     weightContributionUnit: tempGearWeightContributionUnit,
+                    lastServiceDate: tempGearLastServiceDate,
                     nextServiceDue: tempGearNextServiceDue,
-                    serviceHistory: tempGearServiceHistory,
+                    serviceHistory: tempGearStructuredServiceHistory ?? tempGearServiceHistory,
                     gearNotes: tempGearNotes,
                     isInactive: tempGearIsInactive,
                     diverName: tempGearDiverName
@@ -443,6 +482,14 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             }
             isInGearItem = false
         default: break
+        }
+    }
+
+    // MARK: - Service Record Child Element Parsing
+
+    private func parseServiceRecordChildElement(_ elementName: String, text: String) {
+        if serviceRecordAccumulator.consume(elementName, text: text, dateFormatter: dateFormatter) {
+            isInServiceRecord = false
         }
     }
 
@@ -758,11 +805,16 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         tempGearPurchasedFrom = nil
         tempGearWeightContribution = nil
         tempGearWeightContributionUnit = nil
+        tempGearLastServiceDate = nil
         tempGearNextServiceDue = nil
         tempGearServiceHistory = nil
+        tempGearStructuredServiceHistory = nil
         tempGearNotes = nil
         tempGearIsInactive = false
         tempGearDiverName = ""
+        serviceRecordAccumulator = ServiceRecordXMLAccumulator()
+        isInServiceRecords = false
+        isInServiceRecord = false
     }
 
     private func resetTempMarineLife() {

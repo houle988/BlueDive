@@ -624,13 +624,17 @@ struct GearListView: View {
         var count = 0
         for item in items {
             // Primary dedup: by UUID (same source device, same export).
-            if gearByID[item.id] != nil { continue }
+            if let existing = gearByID[item.id] {
+                existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory)
+                continue
+            }
             // Secondary dedup: by name + category + diverName + serial — catches gear previously
             // imported via a dive XML, which assigned a fresh UUID instead of the canonical one,
             // and also handles CSV imports that always assign a fresh UUID.
             if let existing = gearByID.values.first(where: {
                 $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
             }) {
+                existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory)
                 gearByID[item.id] = existing
                 continue
             }
@@ -669,8 +673,7 @@ struct GearRow: View {
     
     var body: some View {
         HStack(spacing: 15) {
-            // Icône de catégorie
-            categoryIcon
+            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory)
             
             // Informations
             VStack(alignment: .leading, spacing: 4) {
@@ -704,18 +707,6 @@ struct GearRow: View {
             }
         }
         .padding(.vertical, 8)
-    }
-    
-    private var categoryIcon: some View {
-        ZStack {
-            Circle()
-                .fill(iconColor.opacity(0.15))
-                .frame(width: 44, height: 44)
-            
-            Image(systemName: iconName)
-                .font(.system(size: 18))
-                .foregroundStyle(iconColor)
-        }
     }
     
     @ViewBuilder
@@ -753,26 +744,6 @@ struct GearRow: View {
         return nil
     }
     
-    // Helpers
-    private var iconName: String {
-        gear.gearCategory?.icon ?? "wrench.and.screwdriver.fill"
-    }
-    
-    private var iconColor: Color {
-        guard let colorName = gear.gearCategory?.color else { return .cyan }
-        
-        switch colorName {
-        case "purple": return .purple
-        case "blue": return .blue
-        case "green": return .green
-        case "orange": return .orange
-        case "gray": return .gray
-        case "cyan": return .cyan
-        case "pink": return .pink
-        case "indigo": return .indigo
-        default: return .brown
-        }
-    }
 }
 
 // MARK: - Category Filter Chip

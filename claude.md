@@ -54,6 +54,10 @@ BlueDive supports running as an iPad app on Apple Silicon Macs via "Designed for
 
 BlueDive shares data with the widget extension via an App Group. When a change affects data that the widget reads, update the App Group store as well — do not only update the main app's local storage. Only touch App Group storage when the change is directly relevant to widget-displayed data; do not write to the App Group for data the widget does not consume.
 
+## XML Import / Export Date Formatting
+
+All `DateFormatter` instances in XML parsers and exporters must use `TimeZone.current` (device local time) so that exported files round-trip correctly on re-import regardless of the user's timezone. Never use `TimeZone(identifier: "UTC")` or any fixed timezone in parser or exporter date formatters — doing so shifts timestamps for users not in UTC and breaks backward compatibility with previously exported files. Set `formatter.timeZone = TimeZone.current` explicitly on every parser formatter, even though it is the default, so the intent is visible.
+
 ## Date and Time Formatting
 
 All date and time values displayed in SwiftUI views must respect both the system language and the in-app language override. Always obtain the locale from SwiftUI's environment and apply it to every date format:

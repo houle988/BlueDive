@@ -161,7 +161,7 @@ extension BluetoothScannerView {
             Section {
                 Toggle("Download All Dives", isOn: $downloadAllDives)
             } footer: {
-                Text("Enable this option to ignore the fingerprint and re-download all dives from the computer. Matched dives are merged — computer data is refreshed while your personal notes and entries are kept.")
+                Text("Re-downloads all dives and merges matched ones. Tap ⓘ at the top right for details.")
             }
 
             Section {
@@ -357,7 +357,12 @@ extension BluetoothScannerView {
                 bleManager.close(clearDevicePtr: true)
                 dismiss()
             }
-            .disabled(syncState.isActive && syncState != .scanning)
+            .disabled({
+                switch syncState {
+                case .connecting, .importing: return true
+                default: return false
+                }
+            }())
         }
 
         if !(syncState.isActive && syncState != .scanning) {
@@ -402,7 +407,7 @@ extension BluetoothScannerView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Label("Sync Computer Clock", systemImage: "clock.arrow.2.circlepath")
                             .font(.headline)
                             .foregroundStyle(.blue)
@@ -414,36 +419,46 @@ extension BluetoothScannerView {
 
                     Divider()
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Label("Download All Dives", systemImage: "arrow.down.circle.fill")
                             .font(.headline)
                             .foregroundStyle(.orange)
 
                         Text("Normally, only dives newer than your last sync are fetched. Enabling this toggle clears the sync bookmark so the computer re-sends every dive from the beginning.")
 
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text("Duplicate handling")
                                 .font(.subheadline.weight(.semibold))
                             Text("Dives already in your logbook are normally skipped. In Download All Dives mode, matched dives are merged instead — the computer refreshes its recorded data while your personal entries stay untouched.")
                         }
 
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text("Refreshed from the computer")
                                 .font(.subheadline.weight(.semibold))
                             Text("Depth, duration, temperatures, gas mixes, tank pressures, decompression data, dive profile, computer name, raw data, water type, and GPS coordinates.")
                         }
 
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text("Kept from your logbook")
                                 .font(.subheadline.weight(.semibold))
                             Text("Notes, buddy, divemaster, rating, dive type, conditions, site name and details, dive number, and surface interval. Tank volume, working pressure, material, and type are also kept unless the computer explicitly reports them.")
                         }
 
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text("Fingerprint scope")
                                 .font(.subheadline.weight(.semibold))
                             Text("Only the fingerprint for this specific dive computer is cleared. If no serial number is available yet, no fingerprint is cleared — a first sync has no bookmark to reset anyway.")
                         }
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Label("Partial re-download", systemImage: "arrow.down.circle.dotted")
+                            .font(.headline)
+                            .foregroundStyle(.orange)
+
+                        Text("To re-download only dives newer than a specific point, override the sync fingerprint in **Settings → Bluetooth Import → Sync Fingerprints**. [Instructions & details](https://github.com/houle988/BlueDive/wiki/Dive-Computer-Sync-Fingerprints#overriding-a-fingerprint)")
                     }
 
                 }

@@ -119,7 +119,7 @@ enum BlueDiveXMLExporter {
         lines.append("    <!-- BlueDiveGlobalData: Temperatures (stored as-imported) -->")
         lines.append(xmlTag("tempAir",  dive.airTemperature.map(formatDouble) ?? "", indent: 4))
         lines.append(xmlTag("tempHigh", dive.maxTemperature.map(formatDouble) ?? "", indent: 4))
-        lines.append(xmlTag("tempLow",  formatDouble(dive.minTemperature),           indent: 4))
+        lines.append(xmlTag("tempLow",  dive.minTemperature.map(formatDouble) ?? "", indent: 4))
 
         // Conditions
         lines.append("    <!-- BlueDiveGlobalData: Conditions -->")
@@ -234,8 +234,9 @@ enum BlueDiveXMLExporter {
                 lines.append(xmlTag("purchasedFrom",      item.purchasedFrom ?? "",                                    indent: 8))
                 lines.append(xmlTag("weightContribution",     formatDouble(item.weightContribution),                       indent: 8))
                 lines.append(xmlTag("weightContributionUnit", item.weightContributionUnit ?? "",                             indent: 8))
-                lines.append(xmlTag("nextServiceDue",         item.nextServiceDue.map { formatDate($0) } ?? "",            indent: 8))
-                lines.append(xmlTag("serviceHistory",     item.serviceHistory ?? "",                                   indent: 8))
+                lines.append(xmlTag("lastServiceDate",    item.lastServiceDate.map { formatDate($0) } ?? "",           indent: 8))
+                lines.append(xmlTag("nextServiceDue",     item.nextServiceDue.map { formatDate($0) } ?? "",             indent: 8))
+                lines.append(contentsOf: GearXMLExporter.serviceHistoryXMLLines(for: item, indent: 8))
                 lines.append(xmlTag("gearNotes",          item.gearNotes ?? "",                                        indent: 8))
                 lines.append(xmlTag("isInactive",         item.isInactive ? "true" : "false",                          indent: 8))
                 lines.append(xmlTag("diverName",          item.diverName,                                              indent: 8))

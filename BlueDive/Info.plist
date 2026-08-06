@@ -47,7 +47,11 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
-		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>app.bluedive.universal.cloudkit-sync</string>
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>

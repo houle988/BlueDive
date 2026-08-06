@@ -78,6 +78,10 @@ struct DiveDetailView: View {
     @State var isEditingPhotos = false
     @State var photoIndexToDelete: Int?
     @State var showDeletePhotoAlert = false
+    @State var showPhotosPicker = false
+    @State var showFileImporter = false
+    @State var showFileImportError = false
+    @State var showFileTruncationAlert = false
     @State var isEditingMarineLife = false
     @State var fishToDelete: MarineSight?
     @State var showDeleteFishAlert = false
@@ -451,6 +455,10 @@ struct DiveDetailView: View {
             showAddFish = false
             showAddGear = false
             selectedPhotos = []
+            showPhotosPicker = false
+            showFileImporter = false
+            showFileImportError = false
+            showFileTruncationAlert = false
             isEditingEquipment = false
             isEditingPhotos = false
             isEditingMarineLife = false

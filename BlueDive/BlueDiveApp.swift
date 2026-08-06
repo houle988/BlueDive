@@ -3,6 +3,10 @@ import SwiftData
 import UserNotifications
 import os.log
 import LibDCSwift
+import BackgroundTasks
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - App Language Bundle Lookup
 
@@ -87,13 +91,20 @@ struct BlueDiveApp: App {
         // LibDCSwift.Logger.shared.enableDebugMode()
 
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
+        #if os(iOS)
+        if !ProcessInfo.processInfo.isiOSAppOnMac {
+            BackgroundSyncTask.register()
+        }
+        #endif
         #if DEBUG
         // listPendingNotifications()
         // scheduleDebugNotification()
         #endif
     }
     
+    @Environment(\.scenePhase) private var scenePhase
     @State private var prefs = UserPreferences.shared
+    @State private var syncMonitor = CloudKitSyncMonitor()
     #if os(macOS)
     @State private var showingAbout = false
     #endif
@@ -105,6 +116,17 @@ struct BlueDiveApp: App {
             }
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
+            .environment(syncMonitor)
+            .onChange(of: scenePhase) { _, newPhase in
+                #if os(iOS)
+                if newPhase == .background, !ProcessInfo.processInfo.isiOSAppOnMac {
+                    BackgroundSyncTask.schedule()
+                    if UserDefaults.standard.bool(forKey: BlueDiveApp.iCloudSyncEnabledKey) {
+                        Self.beginSyncBackgroundTask()
+                    }
+                }
+                #endif
+            }
             .onOpenURL { url in
                 // Widget deep-links: bluedive://add/manual | bluedive://add/bluetooth
                 guard let action = AddDiveDeepLink.action(for: url) else { return }
@@ -219,6 +241,29 @@ struct BlueDiveApp: App {
         })
     }
     
+    // MARK: - Background Task Helpers
+
+#if os(iOS)
+    /// Requests ~30 s of continued background execution so the in-flight
+    /// CloudKit fetch batch can commit its change token before iOS suspends
+    /// the process. Only called when a download is already active.
+    @MainActor
+    private static func beginSyncBackgroundTask() {
+        final class TaskBox: @unchecked Sendable { var id = UIBackgroundTaskIdentifier.invalid }
+        let box = TaskBox()
+        box.id = UIApplication.shared.beginBackgroundTask(withName: "CloudKit sync") {
+            UIApplication.shared.endBackgroundTask(box.id)
+            box.id = .invalid
+        }
+        guard box.id != .invalid else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(25))
+            UIApplication.shared.endBackgroundTask(box.id)
+            box.id = .invalid
+        }
+    }
+#endif
+
     // MARK: - Model Container Setup
 
     /// UserDefaults key for iCloud sync preference.
@@ -240,7 +285,7 @@ struct BlueDiveApp: App {
         // Read iCloud sync preference
         let iCloudEnabled = UserDefaults.standard.bool(forKey: iCloudSyncEnabledKey)
         let cloudKitDB: ModelConfiguration.CloudKitDatabase = iCloudEnabled
-            ? .private("iCloud.app.bluedive.universal")
+            ? .private(CloudKitSyncMonitor.cloudKitContainerID)
             : .none
         
         let modelConfiguration = ModelConfiguration(

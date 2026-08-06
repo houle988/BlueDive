@@ -464,7 +464,7 @@ enum BlueDiveUDDFExporter {
             }
             lines.append("          <diveduration>\(dive.durationSeconds)</diveduration>")
 
-            if let lowTemp = dive.minTemperature as Double?, lowTemp != 0 {
+            if let lowTemp = dive.minTemperature {
                 lines.append("          <lowesttemperature>\(formatDouble(celsiusToKelvin(lowTemp)))</lowesttemperature>")
             }
 

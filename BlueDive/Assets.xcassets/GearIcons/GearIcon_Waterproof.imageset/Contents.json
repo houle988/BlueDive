@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "Waterproof.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

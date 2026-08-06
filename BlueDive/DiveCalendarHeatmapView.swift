@@ -167,7 +167,7 @@ struct DiveCalendarHeatmapView: View {
                 }
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
-            .task(id: "\(allDives.count):\(selectedDiver)") {
+            .task(id: "\(allDives.count):\(selectedDiver):\(allDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
                 recomputeAllStats(filteredDives)
             }
             .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)

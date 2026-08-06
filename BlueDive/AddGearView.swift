@@ -23,7 +23,6 @@ struct AddGearView: View {
     @State private var purchasedFrom = ""
     @State private var nextServiceDue: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var showNextServiceDue = false
-    @State private var serviceHistory = ""
     @State private var gearNotes = ""
 
     @State private var diverName = ""
@@ -45,12 +44,7 @@ struct AddGearView: View {
         DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
     }
 
-    private var manufacturerSuggestions: [String] {
-        var seen = Set<String>()
-        return allGearItems.compactMap(\.manufacturer)
-            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-            .sorted()
-    }
+    @State private var manufacturerSuggestions: [String] = []
 
     private var modelSuggestions: [String] {
         var seen = Set<String>()
@@ -112,22 +106,16 @@ struct AddGearView: View {
         #if os(macOS)
         .frame(minWidth: 600, idealWidth: 650, maxWidth: 750)
         #endif
+        .task { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
+        .onChange(of: allGearItems) { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
     }
-    
+
     // MARK: - View Components
     
     private var headerSection: some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(categoryColor(for: selectedCategory).opacity(0.2))
-                    .frame(width: 80, height: 80)
-                
-                Image(systemName: selectedCategory.icon)
-                    .font(.system(size: 36, weight: .medium))
-                    .foregroundStyle(categoryColor(for: selectedCategory))
-            }
-            
+            GearIconView(manufacturer: manufacturerText.isEmpty ? nil : manufacturerText, category: selectedCategory, size: 80)
+
             Text("Add new equipment")
                 .font(.title2)
                 .fontWeight(.semibold)
@@ -269,7 +257,7 @@ struct AddGearView: View {
             SectionHeaderView(title: "Technical Details", icon: "doc.text")
             
             VStack(spacing: 12) {
-                GearAutocompleteField(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText, suggestions: manufacturerSuggestions, suggestionIcon: "building.2")
+                GearAutocompleteField(label: "Manufacturer", icon: "building.2", placeholder: "Ex: Shearwater", text: $manufacturerText, suggestions: manufacturerSuggestions, suggestionIcon: "building.2", useManufacturerIcon: true)
 
                 GearAutocompleteField(label: "Model", icon: "tag", placeholder: "Ex: Perdix 2", text: $modelText, suggestions: modelSuggestions, suggestionIcon: "tag")
 
@@ -373,67 +361,6 @@ struct AddGearView: View {
         .cardStyle()
     }
     
-    private var weightAndPurchaseSection: some View {
-        Section {
-            // Weight
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label("Associated weight", systemImage: "scalemass")
-                    Spacer()
-                    Group {
-                        if weightContribution == 0 {
-                            Text("None")
-                        } else {
-                            Text(verbatim: weightContribution.localizedString(decimals: 2) + " kg")
-                        }
-                    }
-                        .foregroundStyle(.cyan)
-                        .fontWeight(.semibold)
-                }
-                
-                if weightContribution > 0 {
-                    Slider(value: $weightContribution, in: 0...15, step: 0.5) {
-                        Text("Weight")
-                    } minimumValueLabel: {
-                        Text("0")
-                            .font(.caption2)
-                    } maximumValueLabel: {
-                        Text("15")
-                            .font(.caption2)
-                    }
-                    .tint(.cyan)
-                } else {
-                    Button {
-                        withAnimation {
-                            weightContribution = 2.0
-                        }
-                    } label: {
-                        Text("Add weight")
-                            .font(.caption)
-                            .foregroundStyle(.cyan)
-                    }
-                }
-            }
-            .padding(.vertical, 4)
-            
-            // Purchase date
-            DatePicker(
-                selection: $datePurchased,
-                in: ...Date(),
-                displayedComponents: .date
-            ) {
-                Label("Purchase date", systemImage: "calendar")
-            }
-        } header: {
-            Text("Configuration")
-        } footer: {
-            if weightContribution > 0 {
-                Text("This will be used to calculate your optimal weight.")
-                    .font(.caption)
-            }
-        }
-    }
-    
     private var serviceSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             SectionHeaderView(title: "Maintenance", icon: "wrench.and.screwdriver")
@@ -473,20 +400,6 @@ struct AddGearView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
                 
-                // Service history
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Service history", systemImage: "list.bullet.clipboard")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    TextField("Service notes...", text: $serviceHistory, axis: .vertical)
-                        .lineLimit(3...6)
-                        .textFieldStyle(.plain)
-                        .autocorrectionDisabled()
-                        .padding()
-                        .background(Color.platformSecondaryBackground)
-                        .cornerRadius(10)
-                }
             }
         }
         .cardStyle()
@@ -679,7 +592,6 @@ struct AddGearView: View {
             weightContributionUnit: weightContributionUnit,
             diverName: diverName.trimmingCharacters(in: .whitespaces),
             nextServiceDue: showNextServiceDue ? nextServiceDue : nil,
-            serviceHistory: serviceHistory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : serviceHistory.trimmingCharacters(in: .whitespacesAndNewlines),
             gearNotes: gearNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : gearNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         
@@ -841,16 +753,18 @@ struct GearAutocompleteField: View {
     @Binding var text: String
     let suggestions: [String]
     var suggestionIcon: String = "magnifyingglass"
+    var useManufacturerIcon: Bool = false
 
     @State private var showSuggestions = false
     @FocusState private var isFocused: Bool
 
     private var filtered: [String] {
         guard !text.isEmpty else { return [] }
+        let normalizedText = GearIconView.normalizedLookupKey(text)
         return Array(suggestions
             .filter {
-                $0.localizedCaseInsensitiveContains(text) &&
-                $0.caseInsensitiveCompare(text) != .orderedSame
+                $0.localizedCaseInsensitiveContains(normalizedText) &&
+                $0.caseInsensitiveCompare(normalizedText) != .orderedSame
             }
             .prefix(4))
     }
@@ -897,16 +811,20 @@ struct GearAutocompleteField: View {
                             showSuggestions = false
                             isFocused = false
                         } label: {
-                            HStack {
-                                Image(systemName: suggestionIcon)
-                                    .foregroundStyle(.secondary)
-                                    .font(.caption)
+                            HStack(spacing: 10) {
+                                if useManufacturerIcon {
+                                    GearIconView(manufacturer: suggestion, category: nil, size: 28, noMatchFallbackIcon: "building.2")
+                                } else {
+                                    Image(systemName: suggestionIcon)
+                                        .foregroundStyle(.secondary)
+                                        .font(.caption)
+                                }
                                 Text(suggestion)
                                     .foregroundStyle(.primary)
                                 Spacer()
                             }
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 6)
                         }
                         .buttonStyle(.plain)
 

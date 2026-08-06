@@ -421,6 +421,8 @@ class UserPreferences {
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(CloudKitSyncMonitor.self) private var syncMonitor
+    @Environment(\.locale) private var locale
     @AppStorage("notificationsEnabled")     private var notificationsEnabled = false
     @AppStorage("gearMaintenanceReminders") private var gearReminders  = true
     @AppStorage("certificationReminders")   private var certReminders  = true
@@ -449,13 +451,15 @@ struct SettingsView: View {
     @State private var showWelcomeWizard = false
     @State private var showDisclaimer = false
     @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
-    @State private var iCloudAccountStatus: CKAccountStatus = .couldNotDetermine
-    @State private var iCloudStatusChecked = false
     @State private var backupError: String?
     #if os(iOS)
     @State private var showBackupExporter = false
     @State private var backupDocument: ExportableFileDocument?
     @State private var backupFileName: String = ""
+    @State private var showSyncLogExporter = false
+    @State private var syncLogDocument: ExportableFileDocument?
+    @State private var syncLogFileName: String = ""
+    @State private var isPreparingSyncLog = false
     #endif
     @State private var showFingerprintDebug = false
     @State private var showingRecalculateSurfaceAlert = false
@@ -539,7 +543,6 @@ struct SettingsView: View {
                     await rescheduleAllNotifications()
                     #endif
                 }
-                await checkiCloudAccountStatus()
             }
             .alert("Reset preferences?", isPresented: $showingResetAlert) {
                 Button("Cancel", role: .cancel) { }
@@ -565,6 +568,14 @@ struct SettingsView: View {
                 defaultFilename: backupFileName
             ) { result in
                 backupDocument = nil
+            }
+            .fileExporter(
+                isPresented: $showSyncLogExporter,
+                document: syncLogDocument,
+                contentType: .plainText,
+                defaultFilename: syncLogFileName
+            ) { result in
+                syncLogDocument = nil
             }
             #endif
             .alert(
@@ -1197,28 +1208,28 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
-                            .fill(iCloudStatusColor.opacity(0.15))
+                            .fill(syncMonitor.ckAccountStatusColor.opacity(0.15))
                             .frame(width: 40, height: 40)
-                        
-                        Image(systemName: iCloudStatusIcon)
+
+                        Image(systemName: syncMonitor.ckAccountStatusIcon)
                             .font(.body)
-                            .foregroundStyle(iCloudStatusColor)
+                            .foregroundStyle(syncMonitor.ckAccountStatusColor)
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text("iCloud account")
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundStyle(.primary)
-                        
-                        Text(iCloudStatusMessage)
+
+                        Text(verbatim: syncMonitor.ckAccountStatusLabel)
                             .font(.caption)
-                            .foregroundStyle(iCloudStatusColor)
+                            .foregroundStyle(syncMonitor.ckAccountStatusColor)
                     }
-                    
+
                     Spacer()
-                    
-                    if !iCloudStatusChecked {
+
+                    if !syncMonitor.ckAccountStatusFetched {
                         ProgressView()
                             .scaleEffect(0.8)
                     }
@@ -1264,6 +1275,68 @@ struct SettingsView: View {
                         .fill(Color.primary.opacity(0.03))
                 )
                 
+                // Sync activity (upload / download status)
+                if iCloudSyncEnabled {
+                    Button {
+                        #if os(iOS)
+                        guard !isPreparingSyncLog else { return }
+                        isPreparingSyncLog = true
+                        Task {
+                            let log = await syncMonitor.exportLog()
+                            let df = DateFormatter()
+                            df.dateFormat = "yyyy-MM-dd"
+                            df.timeZone = TimeZone.current
+                            syncLogDocument = ExportableFileDocument(data: Data(log.utf8))
+                            syncLogFileName = "bluedive-sync-log-\(df.string(from: Date())).txt"
+                            showSyncLogExporter = true
+                            isPreparingSyncLog = false
+                        }
+                        #endif
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.cyan.opacity(0.15))
+                                    .frame(width: 40, height: 40)
+                                #if os(iOS)
+                                if isPreparingSyncLog {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                        .tint(.cyan)
+                                } else {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.body)
+                                        .foregroundStyle(.cyan)
+                                }
+                                #else
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.body)
+                                    .foregroundStyle(.cyan)
+                                #endif
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Export Sync Log")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.primary)
+                                Text("Last 15 minutes of sync activity")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.primary.opacity(0.03))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 // Restart notice
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle.fill")
@@ -1275,7 +1348,7 @@ struct SettingsView: View {
                 .padding(.horizontal)
                 
                 // Warning when no account but sync enabled
-                if iCloudStatusChecked && iCloudAccountStatus != .available && iCloudSyncEnabled {
+                if syncMonitor.ckAccountStatusFetched && syncMonitor.ckAccountStatus != .available && iCloudSyncEnabled {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
@@ -1300,55 +1373,6 @@ struct SettingsView: View {
                     )
             )
             .padding(.horizontal)
-        }
-    }
-    
-    private var iCloudStatusMessage: LocalizedStringKey {
-        guard iCloudStatusChecked else { return "Checking..." }
-        switch iCloudAccountStatus {
-        case .available:            return "Signed in"
-        case .noAccount:            return "No account"
-        case .restricted:           return "Restricted"
-        case .couldNotDetermine:    return "Could not determine"
-        case .temporarilyUnavailable: return "Temporarily unavailable"
-        @unknown default:           return "Unknown"
-        }
-    }
-    
-    private var iCloudStatusIcon: String {
-        guard iCloudStatusChecked else { return "icloud" }
-        switch iCloudAccountStatus {
-        case .available:            return "checkmark.icloud.fill"
-        case .noAccount:            return "xmark.icloud.fill"
-        case .restricted:           return "lock.icloud.fill"
-        case .temporarilyUnavailable: return "exclamationmark.icloud.fill"
-        default:                    return "questionmark.icloud.fill"
-        }
-    }
-    
-    private var iCloudStatusColor: Color {
-        guard iCloudStatusChecked else { return .secondary }
-        switch iCloudAccountStatus {
-        case .available:            return .green
-        case .noAccount:            return .orange
-        case .restricted:           return .red
-        case .temporarilyUnavailable: return .yellow
-        default:                    return .secondary
-        }
-    }
-    
-    private func checkiCloudAccountStatus() async {
-        do {
-            let status = try await CKContainer(identifier: "iCloud.app.bluedive.universal").accountStatus()
-            await MainActor.run {
-                iCloudAccountStatus = status
-                iCloudStatusChecked = true
-            }
-        } catch {
-            await MainActor.run {
-                iCloudAccountStatus = .couldNotDetermine
-                iCloudStatusChecked = true
-            }
         }
     }
     
@@ -1829,38 +1853,7 @@ struct SettingsView: View {
     // MARK: - Surface Interval Recalculation
 
     private func recalculateSurfaceIntervals() {
-        let allDives = (try? modelContext.fetch(FetchDescriptor<Dive>())) ?? []
-        let grouped = Dictionary(grouping: allDives) { $0.diverName }
-        for (diver, diverDives) in grouped {
-            guard !diver.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-            let sorted = diverDives.sorted { $0.timestamp < $1.timestamp }
-            for (index, dive) in sorted.enumerated() {
-                if index == 0 {
-                    dive.surfaceInterval = "0h 00m"
-                    dive.isRepetitiveDive = false
-                } else {
-                    let prev = sorted[index - 1]
-                    let prevEnd = prev.timestamp.addingTimeInterval(TimeInterval(prev.duration * 60))
-                    let gap = dive.timestamp.timeIntervalSince(prevEnd)
-                    guard gap > 0 else {
-                        dive.surfaceInterval = "0h 00m"
-                        dive.isRepetitiveDive = true
-                        continue
-                    }
-                    let totalMinutes = Int(gap / 60)
-                    let days = totalMinutes / (24 * 60)
-                    let hours = (totalMinutes % (24 * 60)) / 60
-                    let minutes = totalMinutes % 60
-                    if days > 0 {
-                        dive.surfaceInterval = String(format: "%dd %dh %02dm", days, hours, minutes)
-                    } else {
-                        dive.surfaceInterval = String(format: "%dh %02dm", hours, minutes)
-                    }
-                    dive.isRepetitiveDive = totalMinutes < 1440
-                }
-            }
-        }
-        try? modelContext.save()
+        Dive.recalculateSurfaceIntervals(in: modelContext)
     }
 
 
@@ -2204,7 +2197,7 @@ enum PlatformTextInputAutocapitalizationType {
 /// Works on both iOS and macOS. The content type is specified at the call site.
 struct ExportableFileDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.data] }
-    static var writableContentTypes: [UTType] { [.zip, .data, .xml, .uddf, .pdf] }
+    static var writableContentTypes: [UTType] { [.zip, .data, .xml, .uddf, .pdf, .plainText] }
 
     let data: Data
 

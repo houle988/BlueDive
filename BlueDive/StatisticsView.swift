@@ -128,7 +128,7 @@ struct StatisticsView: View {
     }
 
     private var filterTaskId: String {
-        "\(allDives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier)"
+        "\(allDives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(allDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
     }
 
     private func computeStats(_ dives: [Dive], locale: Locale) async {
@@ -205,23 +205,23 @@ struct StatisticsView: View {
 
         // --- Temperature extremes ---
         let tempSymbol = prefs.temperatureUnit.symbol
-        let warmDives = dives.filter { $0.waterTemperature != 0 }
+        let warmDives = dives.filter { $0.waterTemperature != nil }
         let maxTempStr: String
-        if let maxTemp = warmDives.map({ $0.displayWaterTemperature }).max() {
+        if let maxTemp = warmDives.compactMap({ $0.displayWaterTemperature }).max() {
             maxTempStr = "\(Int(maxTemp.rounded()))\(tempSymbol)"
         } else {
             maxTempStr = "—"
         }
-        let coldDives = dives.filter { $0.minTemperature != 0 }
+        let coldDives = dives.filter { $0.minTemperature != nil }
         let minTempStr: String
-        if let minTemp = coldDives.map({ $0.displayMinTemperature }).min() {
+        if let minTemp = coldDives.compactMap({ $0.displayMinTemperature }).min() {
             minTempStr = "\(Int(minTemp.rounded()))\(tempSymbol)"
         } else {
             minTempStr = "—"
         }
         let deepestDive = dives.max(by: { $0.displayMaxDepth < $1.displayMaxDepth })
-        let warmestDive = warmDives.max(by: { $0.displayWaterTemperature < $1.displayWaterTemperature })
-        let coldestDive = coldDives.min(by: { $0.displayMinTemperature < $1.displayMinTemperature })
+        let warmestDive = warmDives.max(by: { ($0.displayWaterTemperature ?? -.infinity) < ($1.displayWaterTemperature ?? -.infinity) })
+        let coldestDive = coldDives.min(by: { ($0.displayMinTemperature ?? .infinity) < ($1.displayMinTemperature ?? .infinity) })
 
         // --- Average / longest / shortest duration ---
         let avgDuration = dives.isEmpty ? 0 : totalMin / dives.count
@@ -277,7 +277,8 @@ struct StatisticsView: View {
         let shallowestDive = dives.min(by: { $0.displayMaxDepth < $1.displayMaxDepth })
 
         // --- Average temperature ---
-        let avgTempValue = warmDives.isEmpty ? 0.0 : warmDives.map { $0.displayWaterTemperature }.reduce(0, +) / Double(warmDives.count)
+        let warmTemps = warmDives.compactMap { $0.displayWaterTemperature }
+        let avgTempValue = warmTemps.isEmpty ? 0.0 : warmTemps.reduce(0, +) / Double(warmTemps.count)
         let avgTempStr = warmDives.isEmpty ? "—" : "\(Int(avgTempValue.rounded()))\(tempSymbol)"
 
         // --- RMV stats ---

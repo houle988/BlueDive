@@ -2,6 +2,7 @@ import SwiftUI
 import Charts
 import SwiftData
 import PhotosUI
+import UniformTypeIdentifiers
 
 // MARK: - Menu Tab (chart + twin tank checkbox + stats + info)
 
@@ -463,11 +464,23 @@ extension DiveDetailView {
                     }
                     .buttonStyle(.plain)
                 }
-                PhotosPicker(selection: $selectedPhotos, maxSelectionCount: 10, matching: .images) {
+                Menu {
+                    Button {
+                        showPhotosPicker = true
+                    } label: {
+                        Label("Apple Photos", systemImage: "photo.on.rectangle")
+                    }
+                    Button {
+                        showFileImporter = true
+                    } label: {
+                        Label("Import from Files", systemImage: "folder")
+                    }
+                } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
                         .foregroundStyle(.pink)
                 }
+                .buttonStyle(.plain)
             }
 
             if dive.photosData?.isEmpty ?? true {
@@ -557,16 +570,39 @@ extension DiveDetailView {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
         .onChange(of: selectedPhotos) {
             Task {
                 await loadPhotos()
             }
         }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: true
+        ) { result in
+            Task {
+                await importPhotosFromFiles(result: result)
+            }
+        }
+        .alert("Photo Import Failed", isPresented: $showFileImportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("The selected photos could not be imported.")
+        }
+        .alert("Import Limit Reached", isPresented: $showFileTruncationAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Only the first 10 photos were imported. Open the menu again to add more.")
+        }
     }
 
     @MainActor
     func loadPhotos() async {
+        guard !selectedPhotos.isEmpty else { return }
+        let targetDiveID = dive.persistentModelID
         for item in selectedPhotos {
+            guard dive.persistentModelID == targetDiveID else { break }
             if let data = try? await item.loadTransferable(type: Data.self) {
                 if dive.photosData == nil {
                     dive.photosData = []
@@ -576,6 +612,48 @@ extension DiveDetailView {
         }
         selectedPhotos.removeAll()
         try? modelContext.save()
+    }
+
+    @MainActor
+    func importPhotosFromFiles(result: Result<[URL], Error>) async {
+        guard case .success(let urls) = result else {
+            showFileImportError = true
+            return
+        }
+        let capped = Array(urls.prefix(10))
+        let wasTruncated = urls.count > 10
+        // Capture the target dive before suspension so we can abort if the user
+        // navigates away while file I/O is in progress.
+        let targetDiveID = dive.persistentModelID
+        // Read files off the main thread to avoid blocking the UI
+        let datas: [Data] = await Task.detached(priority: .userInitiated) {
+            var results: [Data] = []
+            for url in capped {
+                guard url.startAccessingSecurityScopedResource() else { continue }
+                defer { url.stopAccessingSecurityScopedResource() }
+                if let data = try? Data(contentsOf: url) {
+                    results.append(data)
+                }
+            }
+            return results
+        }.value
+        // Abort if the user navigated to a different dive during the file read
+        guard dive.persistentModelID == targetDiveID else { return }
+        for data in datas {
+            if dive.photosData == nil {
+                dive.photosData = []
+            }
+            dive.photosData?.append(data)
+        }
+        // Surface an error if the picker succeeded but every file failed to read
+        if datas.isEmpty && !capped.isEmpty {
+            showFileImportError = true
+            return
+        }
+        try? modelContext.save()
+        if wasTruncated {
+            showFileTruncationAlert = true
+        }
     }
 
     @MainActor
@@ -961,7 +1039,7 @@ extension DiveDetailView {
 
             DetailCard(
                 title: "MIN TEMP",
-                value: dive.minTemperature != 0 ? UserPreferences.shared.temperatureUnit.formatted(dive.minTemperature, from: dive.storedTemperatureUnit) : "—",
+                value: dive.minTemperature.map { UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit) } ?? "—",
                 icon: "thermometer.low",
                 color: .orange
             )

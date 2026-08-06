@@ -332,8 +332,8 @@ final class Dive {
     
     // MARK: Temperatures
     
-    var waterTemperature: Double = 0.0
-    var minTemperature: Double = 0.0
+    var waterTemperature: Double?
+    var minTemperature: Double?
     var airTemperature: Double? // Air temperature
     var maxTemperature: Double? // Maximum water temperature
     
@@ -614,10 +614,10 @@ final class Dive {
     // MARK: Convenience display properties for common temperature fields
 
     /// Surface / water temperature converted to the user's display unit.
-    var displayWaterTemperature: Double     { displayTemperature(waterTemperature) }
+    var displayWaterTemperature: Double?     { waterTemperature.map { displayTemperature($0) } }
 
     /// Minimum (bottom) temperature converted to the user's display unit.
-    var displayMinTemperature: Double       { displayTemperature(minTemperature) }
+    var displayMinTemperature: Double?       { minTemperature.map { displayTemperature($0) } }
 
     /// Air temperature converted to the user's display unit (nil if not recorded).
     var displayAirTemperature: Double?      { airTemperature.map { displayTemperature($0) } }
@@ -1318,8 +1318,8 @@ final class Dive {
         maxDepth: Double = 0.0,
         averageDepth: Double = 0.0,
         duration: Int = 0,
-        waterTemperature: Double = 20.0,
-        minTemperature: Double = 18.0,
+        waterTemperature: Double? = nil,
+        minTemperature: Double? = nil,
         airTemperature: Double? = nil,
         maxTemperature: Double? = nil,
         decompressionAlgorithm: String? = nil,
@@ -1457,5 +1457,41 @@ extension Dive {
             totalLiters += consumedBar * volumeLiters * tankMultiplier
         }
         return totalLiters
+    }
+
+    static func recalculateSurfaceIntervals(in context: ModelContext, diverName diverFilter: String? = nil) {
+        let allDives = (try? context.fetch(FetchDescriptor<Dive>())) ?? []
+        let grouped = Dictionary(grouping: allDives) { $0.diverName }
+        for (diver, diverDives) in grouped {
+            if let diverFilter, diver != diverFilter { continue }
+            guard !diver.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            let sorted = diverDives.sorted { $0.timestamp < $1.timestamp }
+            for (index, dive) in sorted.enumerated() {
+                if index == 0 {
+                    dive.surfaceInterval = "0h 00m"
+                    dive.isRepetitiveDive = false
+                } else {
+                    let prev = sorted[index - 1]
+                    let prevEnd = prev.timestamp.addingTimeInterval(TimeInterval(prev.duration * 60))
+                    let gap = dive.timestamp.timeIntervalSince(prevEnd)
+                    guard gap > 0 else {
+                        dive.surfaceInterval = "0h 00m"
+                        dive.isRepetitiveDive = true
+                        continue
+                    }
+                    let totalMinutes = Int(gap / 60)
+                    let days = totalMinutes / (24 * 60)
+                    let hours = (totalMinutes % (24 * 60)) / 60
+                    let minutes = totalMinutes % 60
+                    if days > 0 {
+                        dive.surfaceInterval = String(format: "%dd %dh %02dm", days, hours, minutes)
+                    } else {
+                        dive.surfaceInterval = String(format: "%dh %02dm", hours, minutes)
+                    }
+                    dive.isRepetitiveDive = totalMinutes < 1440
+                }
+            }
+        }
+        try? context.save()
     }
 }

@@ -194,7 +194,7 @@ struct DiveTripsView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .task(id: "\(allDives.count):\(selectedDiver)") {
+            .task(id: "\(allDives.count):\(selectedDiver):\(allDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
                 tripsAppeared = false
                 cachedTrips = TripBuilder.buildTrips(from: Array(filteredDives))
                 tripsReady = true

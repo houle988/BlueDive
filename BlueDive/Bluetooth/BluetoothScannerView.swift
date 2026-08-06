@@ -98,7 +98,6 @@ struct BluetoothScannerView: View {
                 // Main content
                 mainContent
             }
-            .navigationTitle("Sync")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

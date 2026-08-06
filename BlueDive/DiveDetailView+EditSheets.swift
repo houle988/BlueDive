@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 struct EditMenuStatsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Dive.siteName) private var allDives: [Dive]
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
@@ -37,6 +38,7 @@ struct EditMenuStatsView: View {
     @State private var workingDurationText: String
     @State private var workingComputerName: String
     @State private var workingSerialNumber: String
+    @State private var workingTimestamp: Date
 
     init(dive: Dive) {
         self.dive = dive
@@ -62,6 +64,7 @@ struct EditMenuStatsView: View {
         _workingDurationText  = State(initialValue: dive.duration > 0 ? String(dive.duration) : "")
         _workingComputerName  = State(initialValue: dive.computerName)
         _workingSerialNumber  = State(initialValue: dive.computerSerialNumber ?? "")
+        _workingTimestamp     = State(initialValue: dive.timestamp)
     }
 
     /// Parses a string to Double, accepting both '.' and ',' as decimal separators.
@@ -275,6 +278,17 @@ struct EditMenuStatsView: View {
                                         .padding(.trailing, 6)
                                     }
                                 }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    macOSModernGroupBox("Date & Time", icon: "calendar", color: .indigo) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "calendar")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            DatePicker("", selection: $workingTimestamp, displayedComponents: [.date, .hourMinuteAndSecond])
+                                .labelsHidden()
                         }
                         .padding(.vertical, 4)
                     }
@@ -973,6 +987,13 @@ struct EditMenuStatsView: View {
                     }
 
                     Section {
+                        DatePicker("Date & Time", selection: $workingTimestamp, displayedComponents: [.date, .hourAndMinute])
+                            .adaptiveDatePickerStyle()
+                    } header: {
+                        MenuSectionHeader(title: "Date & Time", icon: "calendar", color: .indigo)
+                    }
+
+                    Section {
                         AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2.fill", color: .blue, suggestions: uniqueOptionalValues(for: \.diveOperator))
                         AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark.fill", color: .teal, suggestions: uniqueOptionalValues(for: \.diveMaster))
                         AutocompleteMenuTextField(label: "Captain", text: $workingSkipper, icon: "person.fill.turn.right", color: .indigo, suggestions: uniqueOptionalValues(for: \.skipper))
@@ -1309,6 +1330,7 @@ struct EditMenuStatsView: View {
         dive.averageDepth = Self.parseFlexibleDouble(workingAvgDepthText) ?? workingAvgDepth
         dive.duration     = Self.parseFlexibleDouble(workingDurationText).map(Int.init) ?? workingDuration
         dive.weights      = workingWeights
+        let originalDiverName = dive.diverName
         dive.diverName    = workingDiverName.trimmingCharacters(in: .whitespaces)
         dive.buddies      = workingBuddies.trimmingCharacters(in: .whitespaces)
 
@@ -1335,6 +1357,38 @@ struct EditMenuStatsView: View {
         dive.computerName = trimmedComputerName
         let trimmedSerial = workingSerialNumber.trimmingCharacters(in: .whitespaces)
         dive.computerSerialNumber = trimmedSerial.isEmpty ? nil : trimmedSerial
+        // Seconds must always be written back exactly as they were recorded by the dive computer.
+        // The picker never exposes seconds to the user, so discarding them would silently destroy
+        // sub-minute precision that the dive computer captured (e.g. surface-interval calculations).
+        var timestampDidChange = false
+#if os(macOS)
+        // macOS: .hourMinuteAndSecond — workingTimestamp already carries the user-selected seconds
+        let origFloor = floor(dive.timestamp.timeIntervalSinceReferenceDate)
+        let newFloor = floor(workingTimestamp.timeIntervalSinceReferenceDate)
+        if origFloor != newFloor {
+            dive.timestamp = workingTimestamp
+            timestampDidChange = true
+        }
+#else
+        // iOS: .hourAndMinute only — graft the original seconds back so they are never lost
+        let cal = Calendar.current
+        var newComponents = cal.dateComponents([.year, .month, .day, .hour, .minute], from: workingTimestamp)
+        newComponents.second = cal.component(.second, from: dive.timestamp)
+        if let rebuilt = cal.date(from: newComponents) {
+            let origFloor = floor(dive.timestamp.timeIntervalSinceReferenceDate)
+            let newFloor = floor(rebuilt.timeIntervalSinceReferenceDate)
+            if origFloor != newFloor {
+                dive.timestamp = rebuilt
+                timestampDidChange = true
+            }
+        }
+#endif
+        if timestampDidChange {
+            Dive.recalculateSurfaceIntervals(in: modelContext, diverName: dive.diverName)
+            if dive.diverName != originalDiverName {
+                Dive.recalculateSurfaceIntervals(in: modelContext, diverName: originalDiverName)
+            }
+        }
         dismiss()
     }
 }
@@ -2164,7 +2218,7 @@ struct EditConditionsView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Dive.siteName) private var allDives: [Dive]
 
-    @State private var workingWaterTemp: Double
+    @State private var workingWaterTemp: Double?
     @State private var workingMinTemp: String
     @State private var workingAirTemp: String
     @State private var workingMaxTemp: String
@@ -2191,7 +2245,7 @@ struct EditConditionsView: View {
     init(dive: Dive) {
         self.dive = dive
         _workingWaterTemp  = State(initialValue: dive.waterTemperature)
-        _workingMinTemp    = State(initialValue: dive.minTemperature != 0 ? dive.minTemperature.localizedString(decimals: 1) : "")
+        _workingMinTemp    = State(initialValue: dive.minTemperature.map { $0.localizedString(decimals: 1) } ?? "")
         _workingAirTemp    = State(initialValue: dive.airTemperature.map { $0.localizedString(decimals: 1) } ?? "")
         _workingMaxTemp    = State(initialValue: dive.maxTemperature.map { $0.localizedString(decimals: 1) } ?? "")
         _workingWeather    = State(initialValue: dive.weather ?? "")
@@ -2535,7 +2589,7 @@ struct EditConditionsView: View {
 
     private func save() {
         dive.waterTemperature  = workingWaterTemp
-        dive.minTemperature    = Double(workingMinTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")) ?? 0.0
+        dive.minTemperature    = Double(workingMinTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
         dive.airTemperature    = Double(workingAirTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
         dive.maxTemperature    = Double(workingMaxTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
         let trimmedWeather     = workingWeather.trimmingCharacters(in: .whitespaces)

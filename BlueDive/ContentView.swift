@@ -33,7 +33,6 @@ struct ContentView: View {
     @State private var diveToDeleteDirectly: Dive?
     @State private var showDeleteSingleConfirmation = false
     @State private var showDeleteSheet = false
-    @State private var showToolsPopover = false
     @State var isImporting = false
     @State private var showExportMenu = false
     @State var exportDocument: ExportableFileDocument?
@@ -100,9 +99,12 @@ struct ContentView: View {
     @State private var sortOrder: DiveSortOrder = .dateDesc
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
+    @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
+    @Environment(CloudKitSyncMonitor.self) private var syncMonitor
+    @State private var showSyncStatusPopover = false
     @State private var collapsedDiverSections: Set<String> = []
     @State private var diveIndexLookup: [Dive.ID: Int] = [:]
-    @State private var uniqueDivers: [String] = []
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: dives) }
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
         case dateDesc       = "dateDesc"
@@ -650,6 +652,12 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isImporting)
+        .sheet(isPresented: $showSyncStatusPopover) {
+            CloudKitSyncStatusView()
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .onAppear {
             rebuildDerivedDiveState()
         }
@@ -780,7 +788,6 @@ struct ContentView: View {
             dives.enumerated().map { ($1.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        uniqueDivers = DiverFilter.uniqueDivers(in: dives)
     }
 
     // MARK: - View Components
@@ -970,7 +977,35 @@ struct ContentView: View {
     }
     
     // MARK: - Toolbar
-    
+
+    @ViewBuilder
+    private var cloudSyncToolbarItem: some View {
+        Button { showSyncStatusPopover = true } label: { cloudSyncIcon }
+            .help("iCloud Sync Status")
+    }
+
+    @ViewBuilder
+    private var cloudSyncIcon: some View {
+        if !iCloudSyncEnabled {
+            Image(systemName: "icloud.slash.fill")
+                .foregroundStyle(.secondary)
+        } else if syncMonitor.isSyncing {
+            ProgressView()
+                .scaleEffect(0.75)
+                .frame(width: 20, height: 20)
+        } else if syncMonitor.hasError {
+            Image(systemName: "exclamationmark.icloud.fill")
+                .foregroundStyle(.orange)
+        } else if let d = syncMonitor.lastSyncDate, Date().timeIntervalSince(d) < 300 {
+            Image(systemName: "checkmark.icloud.fill")
+                .foregroundStyle(.cyan)
+        } else {
+            Image(systemName: "icloud.fill")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
@@ -983,15 +1018,14 @@ struct ContentView: View {
             }
             .help("Settings")
         }
+        ToolbarItem(placement: .navigation) {
+            cloudSyncToolbarItem
+        }
         if showCalculatorsMenu {
             ToolbarItem(placement: .navigation) {
                 calculatorsMenu
             }
         }
-        ToolbarItem(placement: .navigation) {
-            toolsMenu
-        }
-
         // ── Right ───────────────────────────────────────────────────────────
 
         #if os(macOS)
@@ -1096,6 +1130,19 @@ struct ContentView: View {
                     Button(action: { showProfile = true }) {
                         Label("Profile", systemImage: "person.circle.fill")
                     }
+                    Divider()
+                    Button(action: { showDashboard = true }) {
+                        Label("Stats", systemImage: "chart.bar.fill")
+                    }
+                    Button(action: { showDiveTrips = true }) {
+                        Label("My Trips", systemImage: "map.fill")
+                    }
+                    Button(action: { showCalendarHeatmap = true }) {
+                        Label("Calendar", systemImage: "calendar")
+                    }
+                    Button(action: { showMarineLife = true }) {
+                        Label("Marine Life", systemImage: "fish.fill")
+                    }
                     if !dives.isEmpty {
                         Divider()
                         Button(action: exportAllDivesToXML) {
@@ -1122,60 +1169,6 @@ struct ContentView: View {
 
     // Tools menu extracted to a property to avoid
     // @State capture issues in toolbar closures on macOS.
-    private var toolsMenu: some View {
-        #if os(macOS)
-        Button(action: { showToolsPopover = true }) {
-            Image(systemName: "square.grid.2x2.fill")
-                .foregroundStyle(.cyan)
-        }
-        .help("Tools")
-        .popover(isPresented: $showToolsPopover, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 0) {
-                toolsPopoverButton("Stats", icon: "chart.bar.fill") {
-                    showToolsPopover = false
-                    showDashboard = true
-                }
-                Divider()
-                toolsPopoverButton("My Trips", icon: "map.fill") {
-                    showToolsPopover = false
-                    showDiveTrips = true
-                }
-                Divider()
-                toolsPopoverButton("Calendar", icon: "calendar") {
-                    showToolsPopover = false
-                    showCalendarHeatmap = true
-                }
-                Divider()
-                toolsPopoverButton("Marine Life", icon: "fish.fill") {
-                    showToolsPopover = false
-                    showMarineLife = true
-                }
-            }
-            .frame(width: 220)
-            .padding(.vertical, 4)
-        }
-        #else
-        Menu {
-            Button(action: { showDashboard = true }) {
-                Label("Stats", systemImage: "chart.bar.fill")
-            }
-            Button(action: { showDiveTrips = true }) {
-                Label("My Trips", systemImage: "map.fill")
-            }
-            Button(action: { showCalendarHeatmap = true }) {
-                Label("Calendar", systemImage: "calendar")
-            }
-            Divider()
-            Button(action: { showMarineLife = true }) {
-                Label("Marine Life", systemImage: "fish.fill")
-            }
-        } label: {
-            Image(systemName: "square.grid.2x2.fill")
-                .foregroundStyle(.cyan)
-        }
-        #endif
-    }
-
     private var calculatorsMenu: some View {
         #if os(macOS)
         Button(action: { showCalculatorsPopover = true }) {
@@ -1397,8 +1390,6 @@ struct ContentView: View {
             maxDepth: 0,
             averageDepth: 0,
             duration: 0,
-            waterTemperature: 0,
-            minTemperature: 0,
             importDistanceUnit: prefs.depthUnit.rawValue,
             importTemperatureUnit: tempFormat,
             importPressureUnit: prefs.pressureUnit.rawValue,
