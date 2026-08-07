@@ -292,14 +292,14 @@ struct DiveMapView: View {
                             .tag(dive)
                         } else {
                             Annotation(
-                                "\(cluster.dives.count) dives",
+                                String(format: NSLocalizedString("%lld dives", bundle: .forAppLanguage(), comment: "Number of dives in a cluster annotation"), Int64(cluster.dives.count)),
                                 coordinate: cluster.coordinate
                             ) {
                                 DiveMapClusterPin(count: cluster.dives.count)
                                     .onTapGesture {
                                         handleClusterTap(cluster)
                                     }
-                                    .accessibilityLabel(Text("\(cluster.dives.count) dives at this location"))
+                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%lld dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), Int64(cluster.dives.count))))
                                     .accessibilityAddTraits(.isButton)
                             }
                         }

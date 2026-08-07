@@ -442,7 +442,7 @@
       }
     },
     "%lld dives" : {
-      "comment" : "Dive count goal label\nMultiple dives count\nMultiple dives count in calendar heatmap month header",
+      "comment" : "Dive count goal label\nMultiple dives count\nMultiple dives count in calendar heatmap month header\nNumber of dives in a cluster annotation",
       "localizations" : {
         "en" : {
           "variations" : {
