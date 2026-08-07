@@ -12,6 +12,7 @@ struct EditMenuStatsView: View {
     @Query(sort: \Dive.siteName) private var allDives: [Dive]
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
 
     @State private var workingMaxDepth: Double
     @State private var workingAvgDepth: Double
@@ -169,7 +170,7 @@ struct EditMenuStatsView: View {
     }
 
     private var uniqueDiverNames: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications)
+        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     private var uniqueBuddyNames: [String] {

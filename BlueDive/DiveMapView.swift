@@ -9,6 +9,9 @@ private enum MapCoordinateMode: CaseIterable {
 
 struct DiveMapView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var selectedDive: Dive?
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
@@ -98,7 +101,7 @@ struct DiveMapView: View {
     }
 
     private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: dives)
+        DiverFilter.uniqueDivers(in: dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     private var availableMarineLife: [String] {

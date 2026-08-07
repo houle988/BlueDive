@@ -11,6 +11,7 @@ struct GearListView: View {
     @Query(sort: \TankTemplate.name) private var allTankTemplates: [TankTemplate]
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesForFilter: [Dive]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertificationsForFilter: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
     @Environment(\.modelContext) private var modelContext
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
@@ -43,7 +44,7 @@ struct GearListView: View {
     // MARK: - Computed Properties
 
     private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: allDivesForFilter, gear: allGear, certifications: allCertificationsForFilter)
+        DiverFilter.uniqueDivers(in: allDivesForFilter, gear: allGear, certifications: allCertificationsForFilter, insurances: allInsurances)
     }
 
     /// Équipement filtré par recherche et catégorie

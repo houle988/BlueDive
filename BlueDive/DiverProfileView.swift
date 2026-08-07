@@ -1,5 +1,9 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
+#if canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - Color percentage interpolation from red to green
 
@@ -38,25 +42,27 @@ extension Color {
 struct DiverProfileView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
-    @Query private var insurances: [DivingInsurance]
+    @Query(sort: \DivingInsurance.endDate, order: .reverse) private var insurances: [DivingInsurance]
     @Query(sort: \Gear.name) private var allGear: [Gear]
 
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     @State private var prefs = UserPreferences.shared
 
-    @State private var showingCertifications = false
+    @State private var showingDocuments = false
     @State private var showingAddCertification = false
-    @State private var showingInsurances = false
     @State private var showingAddInsurance = false
     @State private var profileAppeared = false
+    @State private var selectedCertification: Certification?
+    @State private var selectedInsurance: DivingInsurance?
 
     // MARK: - Diver Filter
 
     private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: dives, gear: allGear, certifications: certifications)
+        DiverFilter.uniqueDivers(in: dives, gear: allGear, certifications: certifications, insurances: insurances)
     }
 
     private var filteredDives: [Dive] {
@@ -64,9 +70,11 @@ struct DiverProfileView: View {
     }
 
     private var filteredCertifications: [Certification] {
-        selectedDiver.isEmpty
-            ? certifications
-            : certifications.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
+        DiverFilter.apply(selectedDiver, to: certifications)
+    }
+
+    private var filteredInsurances: [DivingInsurance] {
+        DiverFilter.apply(selectedDiver, to: insurances)
     }
 
     // MARK: - Computed Stats
@@ -165,11 +173,9 @@ struct DiverProfileView: View {
                         certificationsSection
                             .opacity(profileAppeared ? 1.0 : 0.0)
                             .offset(y: profileAppeared ? 0 : 15)
-                        if selectedDiver.isEmpty {
-                            insuranceSection
-                                .opacity(profileAppeared ? 1.0 : 0.0)
-                                .offset(y: profileAppeared ? 0 : 15)
-                        }
+                        insuranceSection
+                            .opacity(profileAppeared ? 1.0 : 0.0)
+                            .offset(y: profileAppeared ? 0 : 15)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 40)
@@ -191,34 +197,40 @@ struct DiverProfileView: View {
             #endif
 
             .toolbar {
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Close") {
                         dismiss()
                     }
                 }
-
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
-            .sheet(isPresented: $showingCertifications) {
-                CertificationsView(onClose: { showingCertifications = false })
+            .sheet(isPresented: $showingDocuments) {
+                DocumentsView(onClose: { showingDocuments = false })
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingAddCertification) {
-                AddCertificationView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(isPresented: $showingInsurances) {
-                InsurancesView(onClose: { showingInsurances = false })
+                AddCertificationView(prefilledDiverName: selectedDiver)
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingAddInsurance) {
-                AddInsuranceView()
+                AddInsuranceView(prefilledDiverName: selectedDiver)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $selectedCertification) { cert in
+                CertificationDetailView(certification: cert, selectedCertification: $selectedCertification)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $selectedInsurance) { insurance in
+                InsuranceDetailView(insurance: insurance, selectedInsurance: $selectedInsurance)
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -389,21 +401,29 @@ struct DiverProfileView: View {
 
     // MARK: - Certifications Section
 
-    private static let certificationPreviewLimit = 5
+    private static let previewLimit = 5
 
     private var previewCertifications: [Certification] {
-        Array(filteredCertifications.prefix(DiverProfileView.certificationPreviewLimit))
+        Array(filteredCertifications.prefix(DiverProfileView.previewLimit))
     }
 
     private var remainingCertificationsCount: Int {
-        max(0, filteredCertifications.count - DiverProfileView.certificationPreviewLimit)
+        max(0, filteredCertifications.count - DiverProfileView.previewLimit)
+    }
+
+    private var previewInsurances: [DivingInsurance] {
+        Array(filteredInsurances.prefix(DiverProfileView.previewLimit))
+    }
+
+    private var remainingInsurancesCount: Int {
+        max(0, filteredInsurances.count - DiverProfileView.previewLimit)
     }
 
     private var certificationsSection: some View {
         ProfileCard(title: "Certifications", icon: "graduationcap.fill") {
             VStack(spacing: 0) {
-                if filteredCertifications.isEmpty {
-                    // Empty state
+                if certifications.isEmpty {
+                    // Truly empty — no certifications on record at all
                     VStack(spacing: 10) {
                         Image(systemName: "graduationcap")
                             .font(.title2)
@@ -414,10 +434,22 @@ struct DiverProfileView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
+                } else if filteredCertifications.isEmpty {
+                    // Filter active — no certifications for the selected diver
+                    VStack(spacing: 10) {
+                        Image(systemName: "person.slash")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                        Text("No Certifications for Diver")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
                 } else {
                     ForEach(previewCertifications) { cert in
                         Button {
-                            showingCertifications = true
+                            selectedCertification = cert
                         } label: {
                             HStack(spacing: 14) {
                                 ZStack {
@@ -461,7 +493,7 @@ struct DiverProfileView: View {
                                             .foregroundStyle(.orange)
                                             .clipShape(Capsule())
                                     } else {
-                                        Text(cert.issueDate.formatted(.dateTime.year()))
+                                        Text(cert.issueDate.formatted(.dateTime.year().locale(locale)))
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -502,13 +534,12 @@ struct DiverProfileView: View {
                     if !filteredCertifications.isEmpty {
                         HStack(spacing: 6) {
                             if remainingCertificationsCount > 0 {
-                                Text(verbatim: NSLocalizedString("+%lld more", bundle: Bundle.forAppLanguage(), comment: "A small label next to the 'View All' button indicating how many additional certifications are not shown in the preview list.")
-                                    .replacingOccurrences(of: "%lld", with: "\(remainingCertificationsCount)"))
+                                Text(verbatim: String(format: NSLocalizedString("+%lld more", bundle: Bundle.forAppLanguage(), comment: "Label showing how many additional items are not shown in the preview list."), remainingCertificationsCount))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Button {
-                                showingCertifications = true
+                                showingDocuments = true
                             } label: {
                                 Text("View All")
                                     .font(.subheadline)
@@ -528,7 +559,7 @@ struct DiverProfileView: View {
         ProfileCard(title: "Insurance", icon: "shield.fill") {
             VStack(spacing: 0) {
                 if insurances.isEmpty {
-                    // Empty state
+                    // Truly empty — no insurance on record at all
                     VStack(spacing: 10) {
                         Image(systemName: "shield")
                             .font(.title2)
@@ -539,10 +570,22 @@ struct DiverProfileView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
+                } else if filteredInsurances.isEmpty {
+                    // Filter active — no insurance for the selected diver
+                    VStack(spacing: 10) {
+                        Image(systemName: "person.slash")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                        Text("No Insurance for Diver")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
                 } else {
-                    ForEach(insurances) { insurance in
+                    ForEach(previewInsurances) { insurance in
                         Button {
-                            showingInsurances = true
+                            selectedInsurance = insurance
                         } label: {
                             HStack(spacing: 14) {
                                 ZStack {
@@ -559,9 +602,11 @@ struct DiverProfileView: View {
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.primary)
-                                    Text(insurance.coverageType)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    if !insurance.coverageType.isEmpty {
+                                        Text(insurance.coverageType)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
 
                                 Spacer()
@@ -577,18 +622,22 @@ struct DiverProfileView: View {
                                             .foregroundStyle(.red)
                                             .clipShape(Capsule())
                                     } else if insurance.isExpiringSoon {
-                                        if let days = insurance.daysUntilExpiration {
-                                            Text("\(days)d remaining")
-                                                .font(.caption2)
-                                                .fontWeight(.semibold)
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 3)
-                                                .background(Color.orange.opacity(0.2))
-                                                .foregroundStyle(.orange)
-                                                .clipShape(Capsule())
+                                        Group {
+                                            if let days = insurance.daysUntilExpiration {
+                                                Text(verbatim: String(format: NSLocalizedString("%lldd remaining", bundle: Bundle.forAppLanguage(), comment: "Badge showing days remaining on expiring insurance in profile card."), days))
+                                            } else {
+                                                Text("Expires Soon")
+                                            }
                                         }
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Color.orange.opacity(0.2))
+                                        .foregroundStyle(.orange)
+                                        .clipShape(Capsule())
                                     } else {
-                                        Text(insurance.endDate.formatted(.dateTime.year()))
+                                        Text(insurance.endDate.formatted(.dateTime.year().locale(locale)))
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -602,7 +651,7 @@ struct DiverProfileView: View {
                         }
                         .buttonStyle(.plain)
 
-                        if insurance.id != insurances.last?.id {
+                        if insurance.id != previewInsurances.last?.id {
                             Divider()
                                 .background(Color.primary.opacity(0.07))
                         }
@@ -626,13 +675,20 @@ struct DiverProfileView: View {
 
                     Spacer()
 
-                    if !insurances.isEmpty {
-                        Button {
-                            showingInsurances = true
-                        } label: {
-                            Text("View All")
-                                .font(.subheadline)
-                                .foregroundStyle(.blue.opacity(0.7))
+                    if !filteredInsurances.isEmpty {
+                        HStack(spacing: 6) {
+                            if remainingInsurancesCount > 0 {
+                                Text(verbatim: String(format: NSLocalizedString("+%lld more", bundle: Bundle.forAppLanguage(), comment: "Label showing how many additional items are not shown in the preview list."), remainingInsurancesCount))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Button {
+                                showingDocuments = true
+                            } label: {
+                                Text("View All")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.blue.opacity(0.7))
+                            }
                         }
                     }
                 }
@@ -849,316 +905,31 @@ enum GoalType {
     }
 }
 
-// MARK: - Insurances View
-
-struct InsurancesView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var insurances: [DivingInsurance]
-    var onClose: (() -> Void)? = nil
-    @State private var showAddInsurance = false
-    @State private var appeared = false
-    @State private var selectedInsurance: DivingInsurance?
-    @State private var insuranceToDelete: DivingInsurance?
-    @State private var showDeleteConfirmation = false
-    @State private var showEditInsuranceFor: DivingInsurance?
-
-    private var activeInsurances: [DivingInsurance] {
-        insurances.filter { !$0.isExpired }
-    }
-
-    private var expiredInsurances: [DivingInsurance] {
-        insurances.filter { $0.isExpired }
-    }
-
-    private var expiringSoon: [DivingInsurance] {
-        insurances.filter { $0.isExpiringSoon }
-    }
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if insurances.isEmpty {
-                    ScrollView {
-                        emptyState
-                    }
-                } else {
-                    List {
-                        // Alert for insurances expiring soon
-                        if !expiringSoon.isEmpty {
-                            Section {
-                                alertSection
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-                            }
-                            .listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                            .listRowSeparator(.hidden)
-                        }
-
-                        // Active insurances
-                        if !activeInsurances.isEmpty {
-                            Section {
-                                ForEach(activeInsurances) { insurance in
-                                    Button {
-                                        selectedInsurance = insurance
-                                    } label: {
-                                        InsuranceCard(insurance: insurance, showExpired: false)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            insuranceToDelete = insurance
-                                            showDeleteConfirmation = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                    .contextMenu {
-                                        Button {
-                                            selectedInsurance = insurance
-                                        } label: {
-                                            Label("View Details", systemImage: "eye")
-                                        }
-                                        Button {
-                                            showEditInsuranceFor = insurance
-                                        } label: {
-                                            Label("Edit", systemImage: "pencil")
-                                        }
-                                        Divider()
-                                        Button(role: .destructive) {
-                                            insuranceToDelete = insurance
-                                            showDeleteConfirmation = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                    .listRowBackground(Color.clear)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .listRowSeparator(.hidden)
-                                }
-                            } header: {
-                                Text("Active Insurance")
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
-                            }
-                        }
-
-                        // Expired insurances
-                        if !expiredInsurances.isEmpty {
-                            Section {
-                                ForEach(expiredInsurances) { insurance in
-                                    Button {
-                                        selectedInsurance = insurance
-                                    } label: {
-                                        InsuranceCard(insurance: insurance, showExpired: true)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            insuranceToDelete = insurance
-                                            showDeleteConfirmation = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                    .contextMenu {
-                                        Button {
-                                            selectedInsurance = insurance
-                                        } label: {
-                                            Label("View Details", systemImage: "eye")
-                                        }
-                                        Button {
-                                            showEditInsuranceFor = insurance
-                                        } label: {
-                                            Label("Edit", systemImage: "pencil")
-                                        }
-                                        Divider()
-                                        Button(role: .destructive) {
-                                            insuranceToDelete = insurance
-                                            showDeleteConfirmation = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                    .listRowBackground(Color.clear)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .listRowSeparator(.hidden)
-                                }
-                            } header: {
-                                Text("Expired Insurance")
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
-                            }
-                        }
-                    }
-                    .listStyle(.plain)
-                }
-            }
-            .opacity(appeared ? 1.0 : 0.0)
-            .offset(y: appeared ? 0 : 15)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.4)) {
-                    appeared = true
-                }
-            }
-            .navigationTitle("Insurance")
-            .background(Color.platformBackground.ignoresSafeArea())
-            .scrollContentBackground(.hidden)
-            #if os(macOS)
-            .frame(minWidth: 550, idealWidth: 650, maxWidth: 850, minHeight: 500, idealHeight: 650, maxHeight: 900)
-            #endif
-
-            .toolbar {
-                if let onClose {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Close") {
-                            onClose()
-                        }
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showAddInsurance = true } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.blue)
-                    }
-                }
-            }
-            .sheet(isPresented: $showAddInsurance) {
-                AddInsuranceView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(item: $selectedInsurance) { insurance in
-                InsuranceDetailView(insurance: insurance)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .alert("Delete insurance?", isPresented: $showDeleteConfirmation) {
-                Button("Cancel", role: .cancel) {
-                    insuranceToDelete = nil
-                }
-                Button("Delete", role: .destructive) {
-                    if let insurance = insuranceToDelete {
-                        modelContext.delete(insurance)
-                        insuranceToDelete = nil
-                    }
-                }
-            } message: {
-                if let insurance = insuranceToDelete {
-                    Text("Are you sure you want to delete \"\(insurance.insurerName)\"? This action cannot be undone.")
-                }
-            }
-            .sheet(item: $showEditInsuranceFor) { insurance in
-                AddInsuranceView(insuranceToEdit: insurance)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
-    }
-
-    // MARK: - View Components
-
-    private var alertSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                Text("Expiring Soon")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-            }
-
-            ForEach(expiringSoon) { insurance in
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(insurance.insurerName)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-
-                        if let days = insurance.daysUntilExpiration {
-                            Text("Expires in \(days) days")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.orange.opacity(0.15))
-                )
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-        )
-        .padding(.horizontal)
-    }
-
-    @State private var emptyAppeared = false
-
-    private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "shield.slash")
-                .font(.system(size: 60))
-                .foregroundStyle(.blue.opacity(0.4))
-                .scaleEffect(emptyAppeared ? 1.0 : 0.5)
-                .opacity(emptyAppeared ? 1.0 : 0.0)
-
-            Text("No Insurance")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundStyle(.primary)
-                .opacity(emptyAppeared ? 1.0 : 0.0)
-                .offset(y: emptyAppeared ? 0 : 10)
-
-            Text("Add your diving insurance to easily track it")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-                .opacity(emptyAppeared ? 1.0 : 0.0)
-                .offset(y: emptyAppeared ? 0 : 10)
-
-            Button { showAddInsurance = true } label: {
-                Label("Add Insurance", systemImage: "plus.circle.fill")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue))
-            }
-            .scaleEffect(emptyAppeared ? 1.0 : 0.8)
-            .opacity(emptyAppeared ? 1.0 : 0.0)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 100)
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.5)) {
-                emptyAppeared = true
-            }
-        }
-    }
-}
 
 // MARK: - Insurance Card
+
+fileprivate extension DivingInsurance {
+    var statusColor: Color {
+        if isExpired      { return .red    }
+        if isExpiringSoon { return .orange }
+        return .blue
+    }
+}
 
 struct InsuranceCard: View {
     let insurance: DivingInsurance
     let showExpired: Bool
+    @Environment(\.locale) private var locale
 
-    private var statusColor: Color {
-        if insurance.isExpired        { return .red    }
-        if insurance.isExpiringSoon   { return .orange }
-        return .blue
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
+
+    private var statusColor: Color { insurance.statusColor }
 
     var body: some View {
         HStack(spacing: 16) {
@@ -1166,47 +937,61 @@ struct InsuranceCard: View {
                 Circle()
                     .fill(statusColor.opacity(0.2))
                     .frame(width: 60, height: 60)
-                Image(systemName: insurance.isExpired ? "exclamationmark.shield.fill" : "shield.fill")
-                    .font(.title3)
+                Text(insurance.insurerName.isEmpty ? "?" : String(insurance.insurerName.prefix(4)))
+                    .font(.caption)
+                    .fontWeight(.bold)
                     .foregroundStyle(statusColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(4)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(insurance.insurerName)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(insurance.coverageType)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 8) {
+
+                if !insurance.diverName.isEmpty {
+                    Text(insurance.diverName)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .fontWeight(.medium)
+                }
+
+                if !insurance.coverageType.isEmpty {
+                    Text(insurance.coverageType)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !insurance.policyNumber.isEmpty {
                     Label(insurance.policyNumber, systemImage: "number")
                         .font(.caption)
+                        .foregroundStyle(.primary)
+                }
+
+                HStack(spacing: 8) {
+                    Label(formattedDate(insurance.startDate), systemImage: "calendar")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                    if let phone = insurance.contactPhone, !phone.isEmpty {
-                        Divider().frame(height: 12)
-                        Label(phone, systemImage: "phone.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+
+                    Divider().frame(height: 12)
+
+                    Label(formattedDate(insurance.endDate), systemImage: "clock")
+                        .font(.caption)
+                        .foregroundStyle(showExpired ? .red : (insurance.isExpiringSoon ? .orange : .secondary))
                 }
             }
 
             Spacer()
 
-            // Status indicator
             Circle()
                 .fill(showExpired ? Color.red : (insurance.isExpiringSoon ? Color.orange : Color.blue))
                 .frame(width: 12, height: 12)
         }
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 15)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 15)
-                .stroke(statusColor.opacity(0.3), lineWidth: 1)
-        )
+        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 15).stroke(statusColor.opacity(0.3), lineWidth: 1))
     }
 }
 
@@ -1214,16 +999,22 @@ struct InsuranceCard: View {
 
 struct InsuranceDetailView: View {
     @Bindable var insurance: DivingInsurance
+    @Binding var selectedInsurance: DivingInsurance?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @State private var showDeleteConfirmation = false
+    @Environment(\.locale) private var locale
     @State private var showEditInsurance = false
+    @State private var showDeleteConfirmation = false
 
-    private var statusColor: Color {
-        if insurance.isExpired        { return .red    }
-        if insurance.isExpiringSoon   { return .orange }
-        return .blue
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
+
+    private var statusColor: Color { insurance.statusColor }
 
     var body: some View {
         NavigationStack {
@@ -1269,15 +1060,20 @@ struct InsuranceDetailView: View {
 
                         // Details
                         VStack(spacing: 16) {
+                            if !insurance.diverName.isEmpty {
+                                DetailRow(icon: "person.fill", title: "Diver Name", value: insurance.diverName)
+                            }
                             DetailRow(icon: "building.2.fill", title: "Insurer", value: insurance.insurerName)
-                            DetailRow(icon: "number", title: "Policy Number", value: insurance.policyNumber)
+                            if !insurance.policyNumber.isEmpty {
+                                DetailRow(icon: "number", title: "Policy Number", value: insurance.policyNumber)
+                            }
 
                             if !insurance.coverageType.isEmpty {
                                 DetailRow(icon: "shield.fill", title: "Coverage Type", value: insurance.coverageType)
                             }
 
-                            DetailRow(icon: "calendar", title: "Start Date", value: insurance.startDate.formatted(date: .long, time: .omitted))
-                            DetailRow(icon: "clock", title: "End Date", value: insurance.endDate.formatted(date: .long, time: .omitted))
+                            DetailRow(icon: "calendar", title: "Start Date", value: formattedDate(insurance.startDate))
+                            DetailRow(icon: "clock", title: "End Date", value: formattedDate(insurance.endDate))
 
                             if let phone = insurance.contactPhone, !phone.isEmpty {
                                 DetailRow(icon: "phone.fill", title: "Emergency Phone", value: phone)
@@ -1308,64 +1104,55 @@ struct InsuranceDetailView: View {
                     }
                     .padding(.bottom, 16)
                 }
-
-                Divider().overlay(Color.primary.opacity(0.08))
-
-                // Bottom buttons
-                HStack {
+            }
+            .background(Color.platformBackground.ignoresSafeArea())
+            .navigationTitle(insurance.insurerName.isEmpty
+                ? NSLocalizedString("Insurance", bundle: Bundle.forAppLanguage(), comment: "Fallback navigation title for an insurance record with no insurer name.")
+                : insurance.insurerName)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
-
-                    Spacer()
-
+                }
+                ToolbarItem(placement: .confirmationAction) {
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
                     } label: {
-                        Label("Delete", systemImage: "trash")
-                            .foregroundStyle(.red)
+                        Image(systemName: "trash")
                     }
-                    .buttonStyle(.plain)
-
+                }
+                ToolbarItem(placement: .confirmationAction) {
                     Button {
                         showEditInsurance = true
                     } label: {
-                        Text("Edit")
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(.blue)
-                            )
-                            .foregroundStyle(.primary)
+                        Text("Edit").fontWeight(.semibold)
                     }
-                    .buttonStyle(.plain)
+                    #if os(iOS)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                    #endif
                 }
-                .padding()
             }
-            .background(Color.platformBackground.ignoresSafeArea())
-            .navigationTitle(insurance.insurerName)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             #if os(macOS)
             .frame(minWidth: 500, idealWidth: 560, maxWidth: 700, minHeight: 550, idealHeight: 650, maxHeight: 800)
             #endif
-
-            .alert("Delete insurance?", isPresented: $showDeleteConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    modelContext.delete(insurance)
-                    dismiss()
-                }
-            } message: {
-                Text("Are you sure you want to delete \"\(insurance.insurerName)\"? This action cannot be undone.")
-            }
             .sheet(isPresented: $showEditInsurance) {
                 AddInsuranceView(insuranceToEdit: insurance)
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+            }
+            .alert("Delete insurance?", isPresented: $showDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    selectedInsurance = nil
+                    modelContext.delete(insurance)
+                }
+            } message: {
+                Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), comment: "Delete confirmation alert message."), insurance.insurerName))
             }
         }
     }
@@ -1377,10 +1164,21 @@ struct AddInsuranceView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
+    @Query(sort: \Dive.timestamp) private var allDives: [Dive]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
+
     var insuranceToEdit: DivingInsurance?
+    var prefilledDiverName: String = ""
 
     private var isEditing: Bool { insuranceToEdit != nil }
 
+    private var diverNameSuggestions: [String] {
+        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
+    }
+
+    @State private var diverName = ""
     @State private var insurerName = ""
     @State private var policyNumber = ""
     @State private var coverageType = ""
@@ -1414,8 +1212,16 @@ struct AddInsuranceView: View {
                         .padding(.top, 20)
 
                         // Insurer
-                        insuranceSectionCard(title: "Insurer", icon: "building.2.fill", color: .cyan) {
+                        insuranceSectionCard(title: "Insurer", icon: "building.2.fill", color: .blue) {
                             VStack(spacing: 14) {
+                                DiverAutocompleteField(
+                                    label: "Diver Name",
+                                    placeholder: "Diver Name (optional)",
+                                    text: $diverName,
+                                    suggestions: diverNameSuggestions,
+                                    suggestionColor: .blue
+                                )
+
                                 insuranceTextField("Insurer Name", placeholder: "e.g., DAN", text: $insurerName)
 
                                 insuranceTextField("Policy Number", placeholder: "Policy number", text: $policyNumber)
@@ -1488,36 +1294,31 @@ struct AddInsuranceView: View {
                     }
                     .padding(.bottom, 16)
                 }
-
-                Divider().overlay(Color.primary.opacity(0.08))
-
-                // Bottom buttons
-                HStack {
+            }
+            .background(Color.platformBackground.ignoresSafeArea())
+            .navigationTitle(isEditing ? LocalizedStringKey("Edit Insurance") : LocalizedStringKey("New Insurance"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
-
-                    Spacer()
-
+                }
+                ToolbarItem(placement: .confirmationAction) {
                     Button {
                         save()
                     } label: {
-                        Text(isEditing ? "Save" : "Add")
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(isValid ? .blue : .blue.opacity(0.3))
-                            )
-                            .foregroundStyle(isValid ? .primary : .secondary)
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text(isEditing ? LocalizedStringKey("Save") : LocalizedStringKey("Add"))
+                        }
+                        .fontWeight(.semibold)
                     }
-                    .buttonStyle(.plain)
                     .disabled(!isValid)
+                    #if os(iOS)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                    #endif
                 }
-                .padding()
             }
-            .background(Color.platformBackground.ignoresSafeArea())
-            .navigationTitle(isEditing ? "Edit Insurance" : "New Insurance")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -1527,6 +1328,7 @@ struct AddInsuranceView: View {
 
             .onAppear {
                 if let insurance = insuranceToEdit {
+                    diverName = insurance.diverName
                     insurerName = insurance.insurerName
                     policyNumber = insurance.policyNumber
                     coverageType = insurance.coverageType
@@ -1535,6 +1337,8 @@ struct AddInsuranceView: View {
                     contactPhone = insurance.contactPhone ?? ""
                     contactEmail = insurance.contactEmail ?? ""
                     notes = insurance.notes ?? ""
+                } else if !prefilledDiverName.isEmpty {
+                    diverName = prefilledDiverName
                 }
             }
         }
@@ -1596,25 +1400,27 @@ struct AddInsuranceView: View {
 
     private func save() {
         if let insurance = insuranceToEdit {
+            insurance.diverName = diverName.trimmingCharacters(in: .whitespacesAndNewlines)
             insurance.insurerName = insurerName.trimmingCharacters(in: .whitespacesAndNewlines)
             insurance.policyNumber = policyNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-            insurance.coverageType = coverageType.trimmingCharacters(in: .whitespaces)
+            insurance.coverageType = coverageType.trimmingCharacters(in: .whitespacesAndNewlines)
             insurance.startDate = startDate
             insurance.endDate = endDate
-            let trimmedPhone = contactPhone.trimmingCharacters(in: .whitespaces)
+            let trimmedPhone = contactPhone.trimmingCharacters(in: .whitespacesAndNewlines)
             insurance.contactPhone = trimmedPhone.isEmpty ? nil : trimmedPhone
-            let trimmedEmail = contactEmail.trimmingCharacters(in: .whitespaces)
+            let trimmedEmail = contactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
             insurance.contactEmail = trimmedEmail.isEmpty ? nil : trimmedEmail
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             insurance.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
         } else {
-            let trimmedPhone = contactPhone.trimmingCharacters(in: .whitespaces)
-            let trimmedEmail = contactEmail.trimmingCharacters(in: .whitespaces)
+            let trimmedPhone = contactPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedEmail = contactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             let newInsurance = DivingInsurance(
                 insurerName: insurerName.trimmingCharacters(in: .whitespacesAndNewlines),
+                diverName: diverName.trimmingCharacters(in: .whitespacesAndNewlines),
                 policyNumber: policyNumber.trimmingCharacters(in: .whitespacesAndNewlines),
-                coverageType: coverageType.trimmingCharacters(in: .whitespaces),
+                coverageType: coverageType.trimmingCharacters(in: .whitespacesAndNewlines),
                 startDate: startDate,
                 endDate: endDate,
                 contactPhone: trimmedPhone.isEmpty ? nil : trimmedPhone,
@@ -1626,3 +1432,5 @@ struct AddInsuranceView: View {
         dismiss()
     }
 }
+
+

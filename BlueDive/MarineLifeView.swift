@@ -5,6 +5,7 @@ struct MarineLifeView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
@@ -31,7 +32,7 @@ struct MarineLifeView: View {
         let quantityCounts: [SightingQuantity: Int]  // times each range was recorded
     }
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
     private var totalSightingsCount: Int {
         allDives.reduce(0) { $0 + ($1.seenFish?.count ?? 0) }
