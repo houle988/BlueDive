@@ -977,7 +977,7 @@ struct CertificationCard: View {
                 Circle()
                     .fill(orgColor.opacity(0.2))
                     .frame(width: 60, height: 60)
-                Text(certification.organization)
+                Text(certification.localizedOrganization)
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundStyle(orgColor)
@@ -1069,7 +1069,7 @@ struct CertificationDetailView: View {
                                 Circle()
                                     .fill(orgColor.opacity(0.12))
                                     .frame(width: 64, height: 64)
-                                Text(certification.organization)
+                                Text(certification.localizedOrganization)
                                     .font(.caption)
                                     .fontWeight(.bold)
                                     .foregroundStyle(orgColor)
@@ -1104,7 +1104,7 @@ struct CertificationDetailView: View {
                             if !certification.diverName.isEmpty {
                                 DetailRow(icon: "person.fill", title: "Diver Name", value: certification.diverName)
                             }
-                            DetailRow(icon: "building.2.fill", title: "Organization", value: certification.organization)
+                            DetailRow(icon: "building.2.fill", title: "Organization", value: certification.localizedOrganization)
                             DetailRow(icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "") : certification.level)
                             DetailRow(icon: "number", title: "Number", value: certification.certificationNumber)
                             DetailRow(icon: "calendar", title: "Issue Date", value: formattedDate(certification.issueDate, style: .long))

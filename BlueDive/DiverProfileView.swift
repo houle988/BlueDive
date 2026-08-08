@@ -466,7 +466,7 @@ struct DiverProfileView: View {
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.primary)
-                                    Text(cert.organization)
+                                    Text(cert.localizedOrganization)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
