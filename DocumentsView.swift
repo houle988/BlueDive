@@ -1105,7 +1105,7 @@ struct CertificationDetailView: View {
                                 DetailRow(icon: "person.fill", title: "Diver Name", value: certification.diverName)
                             }
                             DetailRow(icon: "building.2.fill", title: "Organization", value: certification.localizedOrganization)
-                            DetailRow(icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "") : certification.level)
+                            DetailRow(icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : certification.level)
                             DetailRow(icon: "number", title: "Number", value: certification.certificationNumber)
                             DetailRow(icon: "calendar", title: "Issue Date", value: formattedDate(certification.issueDate, style: .long))
 
@@ -1314,9 +1314,9 @@ struct AddCertificationView: View {
                                 )
 
                                 #if os(macOS)
-                                certificationMenuRow("Organization", selection: organization) {
+                                certificationMenuRow("Organization", selection: CertificationOrganization(rawValue: organization)?.localizedName ?? organization) {
                                     ForEach(CertificationOrganization.allCases) { org in
-                                        Button(org.rawValue) {
+                                        Button(org.localizedName) {
                                             Task { @MainActor in
                                                 organization = org.rawValue
                                                 if !org.levels.contains(level) {
@@ -1327,7 +1327,7 @@ struct AddCertificationView: View {
                                         }
                                     }
                                 }
-                                certificationMenuRow("Level", selection: level) {
+                                certificationMenuRow("Level", selection: level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : level) {
                                     ForEach(availableLevels, id: \.self) { lvl in
                                         Button {
                                             Task { @MainActor in
@@ -1335,18 +1335,14 @@ struct AddCertificationView: View {
                                                 updateAutoName()
                                             }
                                         } label: {
-                                            if lvl == "Other" {
-                                                Text("Other")
-                                            } else {
-                                                Text(lvl)
-                                            }
+                                            Text(verbatim: lvl == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : lvl)
                                         }
                                     }
                                 }
                                 #else
                                 Picker("Organization", selection: $organization) {
                                     ForEach(CertificationOrganization.allCases) { org in
-                                        Text(org.rawValue).tag(org.rawValue)
+                                        Text(verbatim: org.localizedName).tag(org.rawValue)
                                     }
                                 }
                                 .onChange(of: organization) {
@@ -1358,13 +1354,8 @@ struct AddCertificationView: View {
                                 Picker("Level", selection: $level) {
                                     Text("Select a level").tag("")
                                     ForEach(availableLevels, id: \.self) { lvl in
-                                        Group {
-                                            if lvl == "Other" {
-                                                Text("Other")
-                                            } else {
-                                                Text(lvl)
-                                            }
-                                        }.tag(lvl)
+                                        Text(verbatim: lvl == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : lvl)
+                                            .tag(lvl)
                                     }
                                 }
                                 .onChange(of: level) {

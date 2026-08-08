@@ -3834,6 +3834,23 @@
         }
       }
     },
+    "BSAC" : {
+      "comment" : "Certification organization: known as VDST in Germany",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "VDST"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BSAC"
+          }
+        }
+      }
+    },
     "Buddies" : {
       "localizations" : {
         "de" : {
@@ -4288,23 +4305,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisissez Système pour suivre l'apparence de votre appareil, ou sélectionnez Clair ou Sombre."
-          }
-        }
-      }
-    },
-    "Choose System to follow your device's language, or override with English or Français." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Wähle System, um die Sprache deines Geräts zu übernehmen, oder überschreibe sie mit English oder Français."
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisissez Système pour suivre la langue de votre appareil, ou sélectionnez English ou Français."
           }
         }
       }

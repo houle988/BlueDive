@@ -98,7 +98,7 @@ enum CertificationOrganization: String, CaseIterable, Identifiable {
         case .naui:  return "NAUI"
         case .sdi:   return "SDI"
         case .tdi:   return "TDI"
-        case .bsac:  return "BSAC"
+        case .bsac:  return NSLocalizedString("BSAC", bundle: Bundle.forAppLanguage(), comment: "Certification organization: known as VDST in Germany")
         case .other: return NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification organization: other/unknown")
         }
     }
