@@ -212,7 +212,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterYear == nil,
                         color: .cyan
                     ) {
@@ -263,7 +263,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterCountry == nil,
                         color: .blue
                     ) {
@@ -325,7 +325,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterDiveType == nil,
                         color: .purple
                     ) {
@@ -370,7 +370,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterTag == nil,
                         color: .orange
                     ) {
@@ -548,7 +548,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterGasType == nil,
                         color: .green
                     ) {
@@ -782,7 +782,7 @@ struct DiveFilterSheet: View {
             
             HStack(spacing: 12) {
                 ModernFilterChip(
-                    label: "All",
+                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                     isSelected: filterMinRating == 0,
                     color: .yellow
                 ) {

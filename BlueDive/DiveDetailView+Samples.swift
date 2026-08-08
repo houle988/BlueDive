@@ -115,7 +115,12 @@ extension DiveDetailView {
                 FormatInfoCell(
                     icon: "arrow.down.to.line",
                     label: "Distance",
-                    value: dive.importDistanceUnit,
+                    value: {
+                        switch dive.importDistanceUnit {
+                        case "feet": return NSLocalizedString("Feet", bundle: Bundle.forAppLanguage(), comment: "Unit name: feet")
+                        default:     return NSLocalizedString("Meters", bundle: Bundle.forAppLanguage(), comment: "Unit name: metres")
+                        }
+                    }(),
                     color: .cyan
                 )
                 FormatInfoCell(
@@ -133,7 +138,12 @@ extension DiveDetailView {
                 FormatInfoCell(
                     icon: "cylinder.fill",
                     label: "Volume",
-                    value: dive.importVolumeUnit,
+                    value: {
+                        switch dive.importVolumeUnit {
+                        case "cubic feet": return NSLocalizedString("Cubic Feet", bundle: Bundle.forAppLanguage(), comment: "Unit name: cubic feet")
+                        default:           return NSLocalizedString("Liters", bundle: Bundle.forAppLanguage(), comment: "Unit name: litres")
+                        }
+                    }(),
                     color: .green
                 )
             }
