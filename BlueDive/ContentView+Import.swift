@@ -510,7 +510,9 @@ extension ContentView {
             diverName: diveData.diver ?? UserDefaults.standard.string(forKey: "userName") ?? "",
             buddies: buddiesString,
             rating: diveData.rating ?? 0,
-            isRepetitiveDive: (diveData.repetitiveDive ?? 0) > 0,
+            isRepetitiveDive: diveData.sourceImport == "MacDive"
+                ? (diveData.repetitiveDive ?? 1) > 1
+                : (diveData.repetitiveDive ?? 0) > 0,
             weights: diveData.weight,
             weather: diveData.weather,
             surfaceConditions: diveData.surfaceConditions,
