@@ -97,7 +97,7 @@ struct DocumentsView: View {
     }
 
     private var groupedCertifications: [(key: String, value: [Certification])] {
-        let grouped = Dictionary(grouping: filteredCertifications, by: { $0.organization })
+        let grouped = Dictionary(grouping: filteredCertifications.filter { !$0.isExpired }, by: { $0.organization })
         let knownOrder = CertificationOrganization.allCases.map(\.rawValue)
         return grouped.sorted { a, b in
             let ai = knownOrder.firstIndex(of: a.key) ?? Int.max
@@ -107,7 +107,7 @@ struct DocumentsView: View {
     }
 
     private var groupedInsurances: [(key: String, value: [DivingInsurance])] {
-        let grouped = Dictionary(grouping: filteredInsurances, by: {
+        let grouped = Dictionary(grouping: filteredInsurances.filter { !$0.isExpired }, by: {
             $0.insurerName.trimmingCharacters(in: .whitespaces)
         })
         return grouped.sorted { a, b in
@@ -116,28 +116,20 @@ struct DocumentsView: View {
         }
     }
 
+    private var certExpired: [Certification] { filteredCertifications.filter { $0.isExpired } }
+    private var insuranceExpired: [DivingInsurance] { filteredInsurances.filter { $0.isExpired } }
     private var certExpiringSoon: [Certification] { filteredCertifications.filter { $0.isExpiringSoon } }
     private var insuranceExpiringSoon: [DivingInsurance] { filteredInsurances.filter { $0.isExpiringSoon } }
 
     private var importSuccessMessage: String {
         if importSuccessTarget == .certifications {
-            return String(
-                format: NSLocalizedString(
-                    "%lld certification(s) imported successfully.",
-                    bundle: Bundle.forAppLanguage(),
-                    comment: "Alert message shown after a successful certification XML import. %lld is the count of imported records."
-                ),
-                importedCount
-            )
+            return importedCount == 1
+                ? NSLocalizedString("1 certification imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Alert message shown after importing exactly one certification.")
+                : String(format: NSLocalizedString("%lld certifications imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Alert message shown after a successful certification XML import."), importedCount)
         } else {
-            return String(
-                format: NSLocalizedString(
-                    "%lld insurance record(s) imported successfully.",
-                    bundle: Bundle.forAppLanguage(),
-                    comment: "Alert message shown after a successful insurance XML import. %lld is the count of imported records."
-                ),
-                importedCount
-            )
+            return importedCount == 1
+                ? NSLocalizedString("1 insurance record imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Alert message shown after importing exactly one insurance record from XML.")
+                : String(format: NSLocalizedString("%lld insurance records imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Alert message shown after importing multiple insurance records from XML."), importedCount)
         }
     }
 
@@ -155,7 +147,28 @@ struct DocumentsView: View {
                     )
                 } else {
                     List {
-                        // Expiry alerts
+                        // Expired alerts (shown first — most urgent)
+                        if !certExpired.isEmpty {
+                            Section {
+                                certExpiredAlertSection
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                        }
+
+                        if !insuranceExpired.isEmpty {
+                            Section {
+                                insuranceExpiredAlertSection
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                        }
+
+                        // Expiring soon alerts
                         if !certExpiringSoon.isEmpty {
                             Section {
                                 certExpiryAlertSection
@@ -177,7 +190,7 @@ struct DocumentsView: View {
                         }
 
                         // ── CERTIFICATIONS DOMAIN ─────────────────────────────────
-                        if !certifications.isEmpty {
+                        if !certifications.isEmpty && (filteredCertifications.isEmpty || !groupedCertifications.isEmpty) {
                             Section {
                                 domainHeaderRow(
                                     title: "Certifications",
@@ -199,7 +212,7 @@ struct DocumentsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                            } else {
+                            } else if !groupedCertifications.isEmpty {
                                 ForEach(groupedCertifications, id: \.key) { agency, certs in
                                     Section(isExpanded: sectionBinding("cert:" + agency)) {
                                         ForEach(certs) { cert in
@@ -216,7 +229,7 @@ struct DocumentsView: View {
                         }
 
                         // ── INSURANCE DOMAIN ──────────────────────────────────────
-                        if !insurances.isEmpty {
+                        if !insurances.isEmpty && (filteredInsurances.isEmpty || !groupedInsurances.isEmpty) {
                             Section {
                                 domainHeaderRow(
                                     title: "Insurance",
@@ -238,7 +251,7 @@ struct DocumentsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                            } else {
+                            } else if !groupedInsurances.isEmpty {
                                 ForEach(groupedInsurances, id: \.key) { insurer, policies in
                                     let displayName = insurer.isEmpty
                                         ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Fallback insurer group header when insurer name is blank.")
@@ -543,47 +556,96 @@ struct DocumentsView: View {
 
     // MARK: - Expiry Alert Sections
 
+    private var certExpiredAlertSection: some View {
+        alertBannerSection(
+            headerIcon: "xmark.circle.fill",
+            headerText: "Expired",
+            accentColor: .red,
+            domainTitle: "Certifications",
+            domainIcon: "graduationcap.fill",
+            domainColor: .cyan,
+            items: certExpired,
+            name: \.name,
+            rowSubtitle: { _ in NSLocalizedString("Expired", bundle: Bundle.forAppLanguage(), comment: "Row subtitle for an expired document in the alert banner.") },
+            onTap: { selectedCertification = $0 }
+        )
+    }
+
+    private var insuranceExpiredAlertSection: some View {
+        alertBannerSection(
+            headerIcon: "xmark.circle.fill",
+            headerText: "Expired",
+            accentColor: .red,
+            domainTitle: "Insurance",
+            domainIcon: "shield.fill",
+            domainColor: .blue,
+            items: insuranceExpired,
+            name: \.insurerName,
+            rowSubtitle: { _ in NSLocalizedString("Expired", bundle: Bundle.forAppLanguage(), comment: "Row subtitle for an expired document in the alert banner.") },
+            onTap: { selectedInsurance = $0 }
+        )
+    }
+
     private var certExpiryAlertSection: some View {
-        expiryAlertSection(
-            title: "Certifications",
-            icon: "graduationcap.fill",
-            color: .cyan,
+        alertBannerSection(
+            headerIcon: "exclamationmark.triangle.fill",
+            headerText: "Expiring Soon",
+            accentColor: .orange,
+            domainTitle: "Certifications",
+            domainIcon: "graduationcap.fill",
+            domainColor: .cyan,
             items: certExpiringSoon,
             name: \.name,
-            daysUntilExpiration: \.daysUntilExpiration,
+            rowSubtitle: { cert in
+                guard let days = cert.daysUntilExpiration else { return nil }
+                if days == 0 { return NSLocalizedString("Expires today", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label when the document expires today.") }
+                if days == 1 { return NSLocalizedString("Expires in 1 day", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section (exactly one day).") }
+                return String(format: NSLocalizedString("Expires in %lld days", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section (multiple days)."), days)
+            },
             onTap: { selectedCertification = $0 }
         )
     }
 
     private var insuranceExpiryAlertSection: some View {
-        expiryAlertSection(
-            title: "Insurance",
-            icon: "shield.fill",
-            color: .blue,
+        alertBannerSection(
+            headerIcon: "exclamationmark.triangle.fill",
+            headerText: "Expiring Soon",
+            accentColor: .orange,
+            domainTitle: "Insurance",
+            domainIcon: "shield.fill",
+            domainColor: .blue,
             items: insuranceExpiringSoon,
             name: \.insurerName,
-            daysUntilExpiration: \.daysUntilExpiration,
+            rowSubtitle: { insurance in
+                guard let days = insurance.daysUntilExpiration else { return nil }
+                if days == 0 { return NSLocalizedString("Expires today", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label when the document expires today.") }
+                if days == 1 { return NSLocalizedString("Expires in 1 day", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section (exactly one day).") }
+                return String(format: NSLocalizedString("Expires in %lld days", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section (multiple days)."), days)
+            },
             onTap: { selectedInsurance = $0 }
         )
     }
 
-    private func expiryAlertSection<Item: Identifiable>(
-        title: LocalizedStringKey,
-        icon: String,
-        color: Color,
+    private func alertBannerSection<Item: Identifiable>(
+        headerIcon: String,
+        headerText: LocalizedStringKey,
+        accentColor: Color,
+        domainTitle: LocalizedStringKey,
+        domainIcon: String,
+        domainColor: Color,
         items: [Item],
         name: KeyPath<Item, String>,
-        daysUntilExpiration: KeyPath<Item, Int?>,
+        rowSubtitle: @escaping (Item) -> String?,
         onTap: @escaping (Item) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                Text("Expiring Soon").font(.headline).foregroundStyle(.primary)
+                Image(systemName: headerIcon).foregroundStyle(accentColor)
+                Text(headerText).font(.headline).foregroundStyle(.primary)
                 Spacer()
-                Label(title, systemImage: icon)
+                Label(domainTitle, systemImage: domainIcon)
                     .font(.caption).fontWeight(.semibold)
-                    .foregroundStyle(color)
+                    .foregroundStyle(domainColor)
             }
             ForEach(items) { item in
                 Button {
@@ -595,17 +657,17 @@ struct DocumentsView: View {
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.primary)
-                            if let days = item[keyPath: daysUntilExpiration] {
-                                Text(verbatim: String(format: NSLocalizedString("Expires in %lld days", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section."), days))
+                            if let subtitle = rowSubtitle(item) {
+                                Text(verbatim: subtitle)
                                     .font(.caption)
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(accentColor)
                             }
                         }
                         Spacer()
                         Image(systemName: "chevron.right").foregroundStyle(.secondary)
                     }
                     .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.orange.opacity(0.15)))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(accentColor.opacity(0.15)))
                 }
                 .buttonStyle(.plain)
             }

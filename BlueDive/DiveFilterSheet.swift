@@ -815,15 +815,13 @@ struct DiveFilterSheet: View {
     private var resetButtonLabel: String {
         let hasFilters = activeFilterCount > 0
         if hasFilters && hasSortChange {
-            return String(
-                format: NSLocalizedString("Reset %lld filter(s) & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when both filters and sort order are active"),
-                activeFilterCount
-            )
+            return activeFilterCount == 1
+                ? NSLocalizedString("Reset 1 filter & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when exactly one filter and sort order are both active.")
+                : String(format: NSLocalizedString("Reset %lld filters & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when both multiple filters and sort order are active."), activeFilterCount)
         } else if hasFilters {
-            return String(
-                format: NSLocalizedString("Reset %lld filter(s)", bundle: Bundle.forAppLanguage(), comment: "Reset button label showing the number of active filters"),
-                activeFilterCount
-            )
+            return activeFilterCount == 1
+                ? NSLocalizedString("Reset 1 filter", bundle: Bundle.forAppLanguage(), comment: "Reset button label when exactly one filter is active.")
+                : String(format: NSLocalizedString("Reset %lld filters", bundle: Bundle.forAppLanguage(), comment: "Reset button label showing the number of active filters (plural)."), activeFilterCount)
         } else {
             return NSLocalizedString("Reset sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when only the sort order is changed")
         }

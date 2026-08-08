@@ -624,7 +624,11 @@ struct DiverProfileView: View {
                                     } else if insurance.isExpiringSoon {
                                         Group {
                                             if let days = insurance.daysUntilExpiration {
-                                                Text(verbatim: String(format: NSLocalizedString("%lldd remaining", bundle: Bundle.forAppLanguage(), comment: "Badge showing days remaining on expiring insurance in profile card."), days))
+                                                Text(verbatim: days == 0
+                                    ? NSLocalizedString("0d remaining", bundle: Bundle.forAppLanguage(), comment: "Badge showing zero days remaining on expiring insurance in profile card.")
+                                    : days == 1
+                                    ? NSLocalizedString("1d remaining", bundle: Bundle.forAppLanguage(), comment: "Badge showing exactly one day remaining on expiring insurance in profile card.")
+                                    : String(format: NSLocalizedString("%lldd remaining", bundle: Bundle.forAppLanguage(), comment: "Badge showing days remaining on expiring insurance in profile card."), days))
                                             } else {
                                                 Text("Expires Soon")
                                             }

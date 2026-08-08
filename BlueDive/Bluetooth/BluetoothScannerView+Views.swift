@@ -80,7 +80,10 @@ extension BluetoothScannerView {
                     }
 
                     if diveCountDuringDownload > 1 {
-                        Text(verbatim: String(format: NSLocalizedString("%lld dive(s) downloaded", bundle: Bundle.forAppLanguage(), comment: "A text label displaying the number of dives that have been successfully downloaded. The argument is the number of dives that have been downloaded."), diveCountDuringDownload - 1))
+                        let downloadedCount = diveCountDuringDownload - 1
+                        Text(verbatim: downloadedCount == 1
+                        ? NSLocalizedString("1 dive downloaded", bundle: Bundle.forAppLanguage(), comment: "A text label displayed when exactly one dive has been downloaded.")
+                        : String(format: NSLocalizedString("%lld dives downloaded", bundle: Bundle.forAppLanguage(), comment: "A text label displaying the number of dives that have been successfully downloaded."), downloadedCount))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -280,17 +283,23 @@ extension BluetoothScannerView {
                     .fontWeight(.semibold)
 
                 if imported > 0 {
-                    Text("\(imported) dive(s) imported")
+                    Text(verbatim: imported == 1
+                        ? NSLocalizedString("1 dive imported", bundle: .forAppLanguage(), comment: "A label displayed when exactly one dive has been imported.")
+                        : String(format: NSLocalizedString("%lld dives imported", bundle: .forAppLanguage(), comment: "A label displaying the number of dives imported."), imported))
                         .foregroundStyle(.secondary)
                 }
 
                 if merged > 0 {
-                    Text("\(merged) dive(s) updated")
+                    Text(verbatim: merged == 1
+                        ? NSLocalizedString("1 dive updated", bundle: .forAppLanguage(), comment: "A label displayed when exactly one dive has been updated.")
+                        : String(format: NSLocalizedString("%lld dives updated", bundle: .forAppLanguage(), comment: "A label indicating dives have been updated."), merged))
                         .foregroundStyle(.secondary)
                 }
 
                 if skipped > 0 {
-                    Text("\(skipped) dive(s) already in logbook")
+                    Text(verbatim: skipped == 1
+                        ? NSLocalizedString("1 dive already in logbook", bundle: .forAppLanguage(), comment: "A footnote when exactly one dive was skipped because it was already in the logbook.")
+                        : String(format: NSLocalizedString("%lld dives already in logbook", bundle: .forAppLanguage(), comment: "A footnote showing how many dives were skipped because they were already in the logbook."), skipped))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -502,7 +511,9 @@ extension BluetoothScannerView {
         case .downloading:
             return NSLocalizedString("Downloading...", bundle: bundle, comment: "A placeholder text displayed when downloading dives.")
         case .importing(let count):
-            return String(format: NSLocalizedString("Importing %lld dives...", bundle: bundle, comment: "Title shown while importing dives from a dive computer. %lld is the number of dives."), count)
+            return count == 1
+                ? NSLocalizedString("Importing 1 dive...", bundle: bundle, comment: "Title shown while importing exactly one dive from a dive computer.")
+                : String(format: NSLocalizedString("Importing %lld dives...", bundle: bundle, comment: "Title shown while importing multiple dives from a dive computer. %lld is the number of dives."), count)
         case .completed(let imported, let merged, _):
             return (imported + merged) > 0
                 ? NSLocalizedString("Sync Complete", bundle: bundle, comment: "A title and some body text displayed after a successful Bluetooth sync.")
@@ -536,9 +547,13 @@ extension BluetoothScannerView {
             if imported == 0 && merged == 0 && skipped == 0 {
                 return NSLocalizedString("Your logbook is up to date", bundle: bundle, comment: "Subtitle shown when the logbook is already up to date after sync")
             } else if merged > 0 && imported == 0 {
-                return String(format: NSLocalizedString("%lld dive(s) updated", bundle: bundle, comment: "A label indicating that a number of dives have been updated (merged) with existing dives in the logbook. The argument is the number of dives that have been updated."), merged)
+                return merged == 1
+                    ? NSLocalizedString("1 dive updated", bundle: bundle, comment: "A label displayed when exactly one dive has been updated.")
+                    : String(format: NSLocalizedString("%lld dives updated", bundle: bundle, comment: "A label indicating dives have been updated."), merged)
             } else if skipped > 0 {
-                return String(format: NSLocalizedString("%lld dive(s) already present", bundle: bundle, comment: "Subtitle showing the number of dives already present in the logbook"), skipped)
+                return skipped == 1
+                    ? NSLocalizedString("1 dive already present", bundle: bundle, comment: "Subtitle displayed when exactly one dive is already present in the logbook.")
+                    : String(format: NSLocalizedString("%lld dives already present", bundle: bundle, comment: "Subtitle showing the number of dives already present in the logbook."), skipped)
             }
             return NSLocalizedString("All dives have been imported", bundle: bundle, comment: "Subtitle shown when all dives have been successfully imported")
         case .error(let message):

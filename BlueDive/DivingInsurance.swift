@@ -56,10 +56,12 @@ extension DivingInsurance {
         return endDate < limit
     }
 
-    /// Days remaining until expiration
+    /// Days remaining until expiration, counted in calendar days (start-of-day to start-of-day).
     var daysUntilExpiration: Int? {
-        let components = Calendar.current.dateComponents([.day], from: Date(), to: endDate)
-        return components.day
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let expiry = calendar.startOfDay(for: endDate)
+        return calendar.dateComponents([.day], from: today, to: expiry).day
     }
 }
 

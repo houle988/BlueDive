@@ -453,38 +453,41 @@ extension Gear {
     ///
     /// In both paths, malformed JSON is validated and rejected before any state is mutated.
     /// Plain-text history never overwrites existing structured JSON history.
-    func syncServiceData(importedDate: Date?, importedHistory: String?) {
+    @discardableResult
+    func syncServiceData(importedDate: Date?, importedHistory: String?) -> Bool {
         // Treat an empty string identically to nil — both mean "no history provided."
         let importedHistory = importedHistory.flatMap { $0.isEmpty ? nil : $0 }
         if let importedDate {
-            guard lastServiceDate == nil || importedDate > lastServiceDate! else { return }
+            guard lastServiceDate == nil || importedDate > lastServiceDate! else { return false }
             // Validate incoming JSON before mutating any state so a malformed blob leaves
             // `lastServiceDate` and `serviceHistory` completely untouched.
             if let incoming = importedHistory, incoming.hasPrefix("[") {
-                guard Self.canDecodeServiceHistory(incoming) else { return }
+                guard Self.canDecodeServiceHistory(incoming) else { return false }
             }
             if let incoming = importedHistory {
                 // Never let incoming plain text overwrite existing structured JSON history.
                 // If that would be the case, skip the entire update — advancing lastServiceDate
                 // without also updating serviceHistory would create a date/record mismatch where
                 // the displayed "Last Maintenance" date doesn't correspond to any stored record.
-                guard !hasStructuredServiceHistory || incoming.hasPrefix("[") else { return }
+                guard !hasStructuredServiceHistory || incoming.hasPrefix("[") else { return false }
                 serviceHistory = incoming
             } else if hasStructuredServiceHistory {
                 // No history provided but gear already has structured records. Advancing
                 // lastServiceDate without a matching record would violate the invariant that
                 // lastServiceDate is always derivable from stored records.
-                return
+                return false
             }
             lastServiceDate = importedDate
+            return true
         } else {
             // No date anchor: only fill in history when the gear has none, and validate
             // incoming JSON so a malformed blob is rejected rather than stored silently.
-            guard let incoming = importedHistory, serviceHistory == nil else { return }
+            guard let incoming = importedHistory, serviceHistory == nil else { return false }
             if incoming.hasPrefix("[") {
-                guard Self.canDecodeServiceHistory(incoming) else { return }
+                guard Self.canDecodeServiceHistory(incoming) else { return false }
             }
             serviceHistory = incoming
+            return true
         }
     }
 

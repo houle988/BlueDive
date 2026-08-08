@@ -115,7 +115,9 @@ struct BluetoothScannerView: View {
                     importDownloadedDives()
                 }
             } message: {
-                Text("Do you want to import \(downloadedDives.count) dive(s) from your dive computer?")
+                Text(verbatim: downloadedDives.count == 1
+                    ? NSLocalizedString("Do you want to import 1 dive from your dive computer?", bundle: .forAppLanguage(), comment: "An alert message asking the user to confirm importing exactly one dive from their dive computer.")
+                    : String(format: NSLocalizedString("Do you want to import %lld dives from your dive computer?", bundle: .forAppLanguage(), comment: "An alert message asking the user to confirm importing multiple dives from their dive computer."), downloadedDives.count))
             }
             .onAppear {
                 // Don't auto-scan; show known devices first

@@ -1554,9 +1554,11 @@ struct SettingsView: View {
                             case .erasing:
                                 Text("Erasing all data…")
                             case .done(let errorCount, let countdown) where errorCount == 0:
-                                Text("All data erased. App will close in \(countdown)s.")
+                                Text(verbatim: String(format: NSLocalizedString("All data erased. App will close in %llds.", bundle: Bundle.forAppLanguage(), comment: "Status message shown after all local and iCloud data has been erased. The argument is the countdown in seconds before the app closes."), countdown))
                             case .done(let errorCount, let countdown):
-                                Text("Completed with \(errorCount) error(s). App will close in \(countdown)s.")
+                                Text(verbatim: errorCount == 1
+                                    ? String(format: NSLocalizedString("Completed with 1 error. App will close in %llds.", bundle: Bundle.forAppLanguage(), comment: "Status message when exactly one error occurs during erase. %lld is the countdown in seconds."), countdown)
+                                    : String(format: NSLocalizedString("Completed with %lld errors. App will close in %llds.", bundle: Bundle.forAppLanguage(), comment: "Status message when multiple errors occur during erase. First %lld is error count, second %lld is countdown seconds."), errorCount, countdown))
                             }
                         }
                             .font(.caption)

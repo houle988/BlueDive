@@ -1166,7 +1166,7 @@ extension DiveDetailView {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Buddy(ies)")
+                    Text("Buddies")
                         .font(.caption)
                         .foregroundStyle(.gray)
 

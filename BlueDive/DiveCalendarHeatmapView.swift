@@ -245,7 +245,7 @@ struct DiveCalendarHeatmapView: View {
         HStack(spacing: 0) {
             CalHeatStat(
                 value: "\(cachedYearDiveCount)",
-                label: "Dive(s)",
+                label: "Dives",
                 icon: "bubbles.and.sparkles",
                 color: .cyan
             )

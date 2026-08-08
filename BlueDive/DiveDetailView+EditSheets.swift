@@ -302,7 +302,7 @@ struct EditMenuStatsView: View {
                         macOSModernAutocompleteField("Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle.fill", suggestions: uniqueOptionalValues(for: \.entryType))
                     }
 
-                    macOSModernGroupBox("Buddy(ies)", icon: "person.2.fill", color: .green) {
+                    macOSModernGroupBox("Buddies", icon: "person.2.fill", color: .green) {
                         VStack(alignment: .leading, spacing: 12) {
                             // Current buddies
                             if !buddiesArray.isEmpty {
@@ -1089,7 +1089,7 @@ struct EditMenuStatsView: View {
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Buddy(ies)", icon: "person.2.fill", color: .green)
+                        MenuSectionHeader(title: "Buddies", icon: "person.2.fill", color: .green)
                     }
 
                     Section {
