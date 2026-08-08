@@ -36,6 +36,12 @@
             "value" : "BlueDive uses Bluetooth to connect to your dive computer."
           }
         },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive nutzt Bluetooth, um eine Verbindung zu deinem Tauchcomputer herzustellen."
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
@@ -51,6 +57,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "BlueDive uses your location to show your position on the dive map."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive nutzt deinen Standort, um deine Position auf der Tauchkarte anzuzeigen."
           }
         },
         "fr-CA" : {

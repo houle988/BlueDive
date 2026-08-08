@@ -325,12 +325,14 @@ enum AppLanguage: String, CaseIterable {
     case system = "system"
     case english = "en"
     case frenchCanada = "fr-CA"
+    case german = "de"
 
     var label: LocalizedStringKey {
         switch self {
         case .system:       "System"
         case .english:      "English"
         case .frenchCanada: "Français"
+        case .german:       "Deutsch"
         }
     }
 
@@ -339,6 +341,7 @@ enum AppLanguage: String, CaseIterable {
         case .system: return nil
         case .english: return Locale(identifier: "en_CA")
         case .frenchCanada: return Locale(identifier: "fr-CA")
+        case .german: return Locale(identifier: "de")
         }
     }
 }
@@ -706,7 +709,7 @@ struct SettingsView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Choose System to follow your device's language, or override with English or Français.")
+                    Text("Choose System to follow your device's language, or override with English, Français or Deutsch.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
