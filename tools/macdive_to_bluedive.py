@@ -95,8 +95,23 @@ def fmt_double(v):
         pass
     # MacDive stores weight as freeform strings like "48 pounds", "9 kg", or "4,5 kg".
     # Extract the leading numeric part (including comma decimals) and re-format it.
-    m = re.match(r'^\s*(-?[\d.,]+)', str(v))
+    # Warn when the embedded unit token contradicts the declared --weight-unit so the
+    # caller knows the number may be in the wrong unit.
+    s_v = str(v)
+    m = re.match(r'^\s*(-?[\d.,]+)\s*([a-zA-Z]*)', s_v)
     if m:
+        embedded_unit = m.group(2).strip().lower()
+        if embedded_unit:
+            _WEIGHT_UNIT_ALIASES = {
+                "kg": "kg", "kgs": "kg", "kilogram": "kg", "kilograms": "kg",
+                "lb": "lbs", "lbs": "lbs", "pound": "lbs", "pounds": "lbs",
+            }
+            canonical = _WEIGHT_UNIT_ALIASES.get(embedded_unit)
+            if canonical and hasattr(fmt_double, "_weight_unit") and canonical != fmt_double._weight_unit:
+                import sys as _sys
+                print(f"  Warning: weight value '{v}' has embedded unit '{embedded_unit}' "
+                      f"but --weight-unit={fmt_double._weight_unit} — number emitted without conversion",
+                      file=_sys.stderr)
         try:
             s = f"{float(m.group(1).replace(',', '.')):.4f}".rstrip("0").rstrip(".")
             return s if s not in ("", "-", "-0") else "0"
@@ -379,10 +394,14 @@ def fetch_tanks(cur, dive_pk):
         air_start, air_end, size, wp, mat, o2raw, he_raw, tank_type = row
         # O2/He stored as fractions (0.21) or percentages (21). Exactly 1.0 means
         # 100% O2 (pure oxygen, a valid deco gas) — not 1%.
-        if o2raw is not None and float(o2raw) <= 1.0:
+        # o2raw == 0 is treated as absent (same as None) — a stored 0 means "not recorded",
+        # not "no oxygen", which would be physically impossible.
+        if o2raw is not None and float(o2raw) > 0 and float(o2raw) <= 1.0:
             o2_pct = round(float(o2raw) * 100)
+        elif o2raw is not None and float(o2raw) > 0:
+            o2_pct = round(float(o2raw))
         else:
-            o2_pct = round(float(o2raw)) if o2raw is not None else 21
+            o2_pct = 21  # absent or 0 = air default
         if he_raw is not None and float(he_raw) <= 1.0:
             he_pct = round(float(he_raw) * 100)
         else:
@@ -694,7 +713,7 @@ WEIGHT_FORMAT = {
 # Values must be valid keys in the FORMAT dicts above.
 MACDIVE_UNIT_PRESETS = {
     "Metric":   {"distance": "meters", "temp": "C", "pressure": "bar", "volume": "liters", "weight": "kg"},
-    "Canadian": {"distance": "meters", "temp": "C", "pressure": "bar", "volume": "liters", "weight": "kg"},
+    "Canadian": {"distance": "feet",   "temp": "C", "pressure": "PSI", "volume": "cuft",   "weight": "kg"},
     "Imperial": {"distance": "feet",   "temp": "F", "pressure": "PSI", "volume": "cuft",   "weight": "lbs"},
 }
 
@@ -712,6 +731,7 @@ def parse_macdive_xml_samples(xml_path):
         diver     – str  diver name from <diver> element
         duration  – float | None  dive duration in seconds from <duration>
         samples   – list of sample dicts
+        gases     – list of gas dicts (from <gases><gas> blocks); may be empty
 
     Each sample dict:
         time        – float, seconds into the dive
@@ -724,8 +744,8 @@ def parse_macdive_xml_samples(xml_path):
     try:
         tree = ET.parse(xml_path)
     except Exception as exc:
-        print(f"Warning: could not parse MacDive XML '{xml_path}': {exc}", file=sys.stderr)
-        return "", []
+        print(f"Error: could not parse MacDive XML '{xml_path}': {exc}", file=sys.stderr)
+        sys.exit(1)
 
     root = tree.getroot()
 
@@ -752,6 +772,20 @@ def parse_macdive_xml_samples(xml_path):
         except ValueError:
             duration = None
 
+        def _dive_float(tag):
+            el = dive.find(tag)
+            if el is None or not el.text:
+                # Element absent or empty → MacDive had no sensor data for this field.
+                return None
+            try:
+                return float(el.text.strip())
+            except ValueError:
+                return None
+
+        xml_temp_high = _dive_float("tempHigh")
+        xml_temp_low  = _dive_float("tempLow")
+        xml_temp_air  = _dive_float("tempAir")
+
         samples = []
         for s in samples_el.findall("sample"):
             def _f(tag):
@@ -776,18 +810,56 @@ def parse_macdive_xml_samples(xml_path):
             samples.append({
                 "time":        time_val,
                 "depth":       depth_val,
-                "temperature": temp        if temp is not None and temp != 0.0 else None,
+                "temperature": temp,
                 "pressure":    pressure    if pressure and pressure > 0.0 else None,
                 "ppo2":        ppo2        if ppo2     and ppo2     > 0.0 else None,
-                "ndt":         int(ndt_raw) if ndt_raw and ndt_raw > 0.0 else None,
+                "ndt":         int(ndt_raw) if ndt_raw is not None else None,
             })
+
+        # Parse <gases> blocks.
+        # pressureStart/pressureEnd are correctly unit-converted by MacDive to the display unit.
+        # workingPressure and tankSize are raw SQLite pass-throughs (no unit conversion by MacDive).
+        gases = []
+        gases_el = dive.find("gases")
+        if gases_el is not None:
+            for g in gases_el.findall("gas"):
+                def _gf(tag):
+                    el = g.find(tag)
+                    if el is not None and el.text:
+                        try:
+                            return float(el.text.strip())
+                        except ValueError:
+                            return None
+                    return None
+                name_el   = g.find("tankName")
+                supply_el = g.find("supplyType")
+                def _pct(v, default=None):
+                    # MacDive may export O₂/He as fractions (0.21) or percentages (21).
+                    # Normalize to integer percent to match fetch_tanks storage.
+                    if v is None:
+                        return default
+                    return round(v * 100) if v <= 1.0 else round(v)
+                gases.append({
+                    "start":  _gf("pressureStart"),
+                    "end":    _gf("pressureEnd"),
+                    "o2":     _pct(_gf("oxygen")),  # None when absent; default applied at output time
+                    "he":     _pct(_gf("helium")),  # None when absent; default applied at output time
+                    "vol":    _gf("tankSize"),
+                    "wp":     _gf("workingPressure"),
+                    "name":   (name_el.text   or "").strip() if name_el   is not None else "",
+                    "supply": (supply_el.text or "").strip() if supply_el is not None else "",
+                })
 
         if samples:
             result.append({
-                "date_str": date_str,
-                "diver":    diver,
-                "duration": duration,
-                "samples":  samples,
+                "date_str":  date_str,
+                "diver":     diver,
+                "duration":  duration,
+                "samples":   samples,
+                "gases":     gases,
+                "temp_high": xml_temp_high,
+                "temp_low":  xml_temp_low,
+                "temp_air":  xml_temp_air,
             })
 
     print(f"  MacDive XML : {len(result)} dives with samples loaded from {xml_path}  (units={xml_units or 'unknown'})")
@@ -818,7 +890,10 @@ def _detect_consensus_offset(xml_dives, sqlite_utc_index):
             key = (naive - timedelta(hours=off)).strftime("%Y-%m-%d %H:%M:%S")
             if len({c[0] for c in sqlite_utc_index.get(key, [])}) == 1:
                 hits += 1
-        if hits > best_hits:
+        # On a tie prefer the offset closest to 0 (most common timezone); the previous
+        # offset wins only if it strictly beat the new one OR ties with a larger |off|.
+        if hits > best_hits or (hits == best_hits and (abs(off) < abs(best_off) or
+                                                        (abs(off) == abs(best_off) and off > best_off))):
             best_hits, best_off = hits, off
     return best_off, best_hits
 
@@ -853,11 +928,22 @@ def match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=False)
     if not xml_dives:
         return {}
 
-    # P1 — resolve the timezone offset once for the whole file
+    # P1 — resolve the timezone offset once for the whole file.
+    # Require at least 2 unambiguous hits before trusting the consensus; with fewer hits the
+    # winning offset could simply be the first one tried (0) with a single coincidental match.
+    # When confidence is low, warn loudly and fall back to the full -12..+12 sweep so no dive
+    # is silently attached to the wrong profile.
     consensus_off, consensus_hits = _detect_consensus_offset(xml_dives, sqlite_utc_index)
-    offsets_to_try = sorted({consensus_off - 1, consensus_off, consensus_off + 1})
-    print(f"  Consensus UTC offset : {consensus_off:+d}h  ({consensus_hits} unambiguous hits)"
-          f"  (trying offsets {offsets_to_try})")
+    _MIN_CONSENSUS_HITS = 2
+    if consensus_hits >= _MIN_CONSENSUS_HITS:
+        offsets_to_try = sorted({consensus_off - 1, consensus_off, consensus_off + 1})
+        print(f"  Consensus UTC offset : {consensus_off:+d}h  ({consensus_hits} unambiguous hits)"
+              f"  (trying offsets {offsets_to_try})")
+    else:
+        offsets_to_try = list(range(-12, 13))
+        print(f"  Warning: low consensus confidence ({consensus_hits} hit(s)) — "
+              f"falling back to full offset sweep {offsets_to_try[0]:+d}..{offsets_to_try[-1]:+d}h  "
+              f"(profile-to-dive matching may be less accurate)", file=sys.stderr)
 
     # Convert XML sample depths to metres for comparison against SQLite (always metres).
     depth_factor = 0.3048 if xml_depth_in_feet else 1.0
@@ -962,6 +1048,9 @@ def match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=False)
         c  = next(c for c in pool if c[0] == pk)
 
         # P5 — plausibility gate: depth and sample span must agree with SQLite values
+        if xml_samples and c[3] is None and c[2] is None:
+            print(f"  Warning: P5 skipped for {xml_dive['date_str']} — no depth or duration in SQLite to verify match",
+                  file=sys.stderr)
         if xml_samples and c[3] is not None:
             xml_max_m = max(s["depth"] for s in xml_samples) * depth_factor
             if abs(xml_max_m - c[3]) > 5.0:
@@ -989,12 +1078,127 @@ def match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=False)
 
     # P2 — greedy best-match assignment: sort by (dur_delta, depth_delta) ascending
     candidates_resolved.sort(key=lambda a: (a[2], a[3]))
-    pk_to_samples: dict = {}
+    pk_to_samples:   dict = {}
+    pk_to_gases:     dict = {}
+    pk_to_xml_temps: dict = {}
     for xi, pk, dur_delta, depth_delta, samples in candidates_resolved:
         if pk in pk_to_samples:
             unresolved.append((xi, "outscored", xml_dives[xi]["date_str"]))
             continue
-        pk_to_samples[pk] = samples
+        xd = xml_dives[xi]
+        pk_to_samples[pk]   = samples
+        pk_to_gases[pk]     = xd.get("gases", [])
+        pk_to_xml_temps[pk] = {
+            "temp_high": xd.get("temp_high"),
+            "temp_low":  xd.get("temp_low"),
+            "temp_air":  xd.get("temp_air"),
+        }
+
+    # Second pass — retry no_match dives from the narrow-window pass against the full
+    # -12..+12 sweep. This recovers dives from a different timezone than the consensus
+    # (e.g. a multi-destination dive trip). P4/P3/P5 guards still apply; only genuine
+    # matches survive. Skip this pass if we already tried the full sweep in the first pass.
+    no_match_indices = [xi for xi, reason, _ in unresolved if reason == "no_match"]
+    if no_match_indices and offsets_to_try != list(range(-12, 13)):
+        full_sweep = list(range(-12, 13))
+        retry_unresolved: list = []
+        # Collect all retry candidates first, then greedy-sort by score (same as primary P2),
+        # so the best match wins a contested PK rather than the first-in-list.
+        retry_candidates: list = []  # (xi, pk, dur_delta, depth_delta, xml_samples, c)
+        for xi in no_match_indices:
+            xml_dive    = xml_dives[xi]
+            xml_diver   = xml_dive["diver"]
+            xml_dur     = xml_dive["duration"]
+            xml_samples = xml_dive["samples"]
+            try:
+                naive = datetime.strptime(xml_dive["date_str"], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                retry_unresolved.append((xi, "bad_date", xml_dive["date_str"]))
+                continue
+            pool_all = []
+            for off in full_sweep:
+                base_dt = naive - timedelta(hours=off)
+                for sec_adj in (-2, -1, 0, 1, 2):
+                    utc_str = (base_dt + timedelta(seconds=sec_adj)).strftime("%Y-%m-%d %H:%M:%S")
+                    pool_all.extend(sqlite_utc_index.get(utc_str, []))
+            seen_pk2: set = set()
+            deduped2: list = []
+            for c in pool_all:
+                if c[0] not in seen_pk2:
+                    seen_pk2.add(c[0])
+                    deduped2.append(c)
+            pool_all = deduped2
+            if not pool_all:
+                retry_unresolved.append((xi, "no_match", xml_dive["date_str"]))
+                continue
+            norm_xml = _norm_name(xml_diver)
+            exact    = [c for c in pool_all if _norm_name(c[1]) == norm_xml]
+            relaxed  = exact or [c for c in pool_all
+                                 if norm_xml and norm_xml in _norm_name(c[1])]
+            if not relaxed and xml_diver:
+                print(f"  Warning: diver '{xml_diver}' not matched in candidates for "
+                      f"{xml_dive['date_str']} — using all {len(pool_all)} candidate(s)",
+                      file=sys.stderr)
+            pool = exact or relaxed or pool_all
+            unique_pks = {c[0] for c in pool}
+            if len(unique_pks) > 1 and xml_samples:
+                xml_max_m  = max(s["depth"] for s in xml_samples) * depth_factor
+                depth_pool = [c for c in pool
+                              if c[3] is not None and abs(c[3] - xml_max_m) <= 2.0]
+                if depth_pool:
+                    pool       = depth_pool
+                    unique_pks = {c[0] for c in pool}
+            if len(unique_pks) > 1 and xml_dur is not None:
+                dur_pool = [c for c in pool
+                            if c[2] is not None and abs(c[2] - xml_dur) <= 30]
+                if dur_pool:
+                    dur_pool.sort(key=lambda c: abs(c[2] - xml_dur))
+                    best_delta   = abs(dur_pool[0][2] - xml_dur)
+                    second_delta = abs(dur_pool[1][2] - xml_dur) if len(dur_pool) > 1 else 9999
+                    pool = [dur_pool[0]] if second_delta - best_delta > 15 else dur_pool
+                    unique_pks = {c[0] for c in pool}
+            if len(unique_pks) != 1:
+                retry_unresolved.append((xi, "ambiguous", xml_dive["date_str"]))
+                continue
+            pk = next(iter(unique_pks))
+            c  = next(c for c in pool if c[0] == pk)
+            if xml_samples and c[3] is None and c[2] is None:
+                print(f"  Warning: P5 skipped for {xml_dive['date_str']} — no depth or duration in SQLite to verify match",
+                      file=sys.stderr)
+            if xml_samples and c[3] is not None:
+                xml_max_m = max(s["depth"] for s in xml_samples) * depth_factor
+                if abs(xml_max_m - c[3]) > 5.0:
+                    retry_unresolved.append((xi, "depth_mismatch", xml_dive["date_str"]))
+                    continue
+            if xml_samples and c[2] is not None:
+                xml_span = max(s["time"] for s in xml_samples)
+                if abs(xml_span - c[2]) > 120:
+                    retry_unresolved.append((xi, "span_mismatch", xml_dive["date_str"]))
+                    continue
+            dur_delta   = abs(c[2] - xml_dur) if c[2] is not None and xml_dur is not None else 9999.0
+            depth_delta = (abs(max(s["depth"] for s in xml_samples) * depth_factor - c[3])
+                           if xml_samples and c[3] is not None else 9999.0)
+            retry_candidates.append((xi, pk, dur_delta, depth_delta, xml_samples, c))
+
+        # Greedy best-match assignment — same P2 logic as primary pass.
+        retry_candidates.sort(key=lambda a: (a[2], a[3]))
+        for xi, pk, dur_delta, depth_delta, xml_samples, c in retry_candidates:
+            if pk in pk_to_samples:
+                retry_unresolved.append((xi, "outscored", xml_dives[xi]["date_str"]))
+                continue
+            xd = xml_dives[xi]
+            pk_to_samples[pk]   = xml_samples
+            pk_to_gases[pk]     = xd.get("gases", [])
+            pk_to_xml_temps[pk] = {
+                "temp_high": xd.get("temp_high"),
+                "temp_low":  xd.get("temp_low"),
+                "temp_air":  xd.get("temp_air"),
+            }
+            print(f"  Note: full-sweep retry matched {xd['date_str']} ({xd['diver']})",
+                  file=sys.stderr)
+        # Replace no_match entries in unresolved with retry outcomes
+        unresolved = [(xi, r, d) for xi, r, d in unresolved if r != "no_match"]
+        unresolved.extend(retry_unresolved)
 
     total   = len(xml_dives)
     matched = len(pk_to_samples)
@@ -1010,7 +1214,7 @@ def match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=False)
             diver = xml_dives[xi]["diver"]
             print(f"    {reason:<16}  {date_str}  ({diver})", file=sys.stderr)
 
-    return pk_to_samples
+    return pk_to_samples, pk_to_gases, pk_to_xml_temps
 
 
 def profile_samples_xml_lines(samples, indent=4):
@@ -1060,6 +1264,7 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
               f"Expected one of: {', '.join(MACDIVE_UNIT_PRESETS)}.", file=sys.stderr)
         sys.exit(1)
     units = {**preset, "weight": weight_unit}
+    fmt_double._weight_unit = weight_unit  # expose to fmt_double for embedded-unit mismatch warnings
     # XML sample unit flags.
     # Depth:    Metric exports metres; Canadian / Imperial export feet.
     # Pressure: Canadian / Imperial export PSI; Metric exports bar.
@@ -1072,6 +1277,67 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     _to_fahr = units["temp"] == "F"
     def cvt_dist(v): return v * 3.28084 if (v is not None and _to_feet) else v
     def cvt_temp(v): return v * 9.0 / 5.0 + 32.0 if (v is not None and _to_fahr) else v
+
+    # XML temperature converter.
+    # MacDive exports temperature in the display unit (°F for Imperial, °C for Metric/Canadian).
+    # SQLite stores temperature in °C, but we do not assume this — prefer XML when available.
+    _xml_temp_in_fahr = xml_units == "Imperial"
+
+    def cvt_xml_temp(v):
+        if v is None:
+            return v
+        if _xml_temp_in_fahr and not _to_fahr:
+            return (v - 32.0) * 5.0 / 9.0   # °F → °C
+        if not _xml_temp_in_fahr and _to_fahr:
+            return v * 9.0 / 5.0 + 32.0     # °C → °F
+        return v
+
+    # Tank pressure / volume converters.
+    # MacDive does NOT convert ZTANK.ZWORKINGPRESSURE or ZTANK.ZSIZE when the user changes
+    # the unit setting — only ZAIRSTART/ZAIREND (via the XML export) are reliably converted.
+    _press_to_bar  = units["pressure"] == "bar"
+    _vol_to_liters = units["volume"]   == "liters"
+
+    def cvt_xml_press(v):
+        # XML pressureStart/pressureEnd are correctly unit-converted by MacDive to the display
+        # unit (PSI for Canadian/Imperial, bar for Metric). Convert to the output unit.
+        # 0 is treated as no-data (physically impossible starting/ending pressure).
+        if v is None or v == 0:
+            return None
+        if xml_pressure_in_psi and _press_to_bar:
+            return v / 14.5038
+        if not xml_pressure_in_psi and not _press_to_bar:
+            return v * 14.5038
+        return v
+
+    def cvt_press_auto(v):
+        # Fallback for SQLite ZAIRSTART/ZAIREND or ZTANK.ZWORKINGPRESSURE when no XML value
+        # is available. MacDive stores the raw entered value; >400 = PSI, <=400 = bar.
+        # 0 is treated as no-data (physically impossible starting/ending pressure).
+        if v is None or v == 0:
+            return None
+        if v > 400:
+            return v / 14.5038 if _press_to_bar else v
+        else:
+            return v if _press_to_bar else v * 14.5038
+
+    def cvt_vol(v, wp):
+        # ZTANK.ZSIZE unit mirrors ZWORKINGPRESSURE: cuft gas-volume when WP>400 (PSI context),
+        # litres water-capacity when WP<=400 (bar context).
+        if v is None or v == 0:
+            return v
+        if wp is not None and wp > 400:                        # WP in PSI → ZSIZE is cuft
+            if _vol_to_liters:
+                return v * 28.3168 / (wp / 14.696)            # cuft-gas → litres-water-capacity
+            return v
+        elif wp is not None and wp > 0:                        # WP in bar → ZSIZE is litres
+            if _vol_to_liters:
+                return v
+            return v * (wp * 14.5038 / 14.696) / 28.3168      # litres-water → cuft-gas
+        else:
+            # WP unknown — cannot determine unit or safely convert; emit raw value
+            return v
+
     print(f"  Units auto-detected: distance={units['distance']}  temp={units['temp']}  "
           f"pressure={units['pressure']}  volume={units['volume']}  weight={units['weight']}")
 
@@ -1131,9 +1397,11 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     sqlite_utc_index: dict = {}
     if ts_col != "NULL":
         has_diver_tbl = table_exists(cur, "ZDIVER")
-        diver_join  = "LEFT JOIN ZDIVER dv ON dv.Z_PK = d.ZRELATIONSHIPDIVER" if has_diver_tbl else ""
-        diver_expr  = "TRIM(COALESCE(dv.ZFIRSTNAME,'') || ' ' || COALESCE(dv.ZLASTNAME,''))" \
-                      if has_diver_tbl else "''"
+        has_diver_fk  = "ZRELATIONSHIPDIVER" in dc  # column may be absent in older schemas
+        diver_join = ("LEFT JOIN ZDIVER dv ON dv.Z_PK = d.ZRELATIONSHIPDIVER"
+                      if has_diver_tbl and has_diver_fk else "")
+        diver_expr = ("TRIM(COALESCE(dv.ZFIRSTNAME,'') || ' ' || COALESCE(dv.ZLASTNAME,''))"
+                      if has_diver_tbl and has_diver_fk else "''")
         dur_expr    = f"d.{dur_col}" if dur_col != "NULL" else "NULL"
         depth_col_m = col_or_null(dc, "ZMAXDEPTH")
         depth_expr  = f"d.{depth_col_m}" if depth_col_m != "NULL" else "NULL"
@@ -1155,7 +1423,10 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
             print(f"Warning: could not build UTC index for sample matching: {exc}",
                   file=sys.stderr)
 
-    pk_to_samples = match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=xml_depth_in_feet) if xml_dives else {}
+    pk_to_samples, pk_to_gases, pk_to_xml_temps = (
+        match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=xml_depth_in_feet)
+        if xml_dives else ({}, {}, {})
+    )
 
     order_expr = f'"{ts_col}"' if ts_col != "NULL" else "ROWID"
 
@@ -1199,6 +1470,31 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     cur.execute(sql)
     rows = cur.fetchall()
 
+    # Calibration counters: track how many values used XML (unit-verified) vs SQLite fallback.
+    _n_xml_press  = 0
+    _n_auto_press = 0
+    _n_xml_temp   = 0
+    _n_auto_temp  = 0
+
+    # Per-dive unit log setup.
+    log_path       = str(Path(output_path).with_suffix(".log"))
+    _all_dive_logs: list = []
+    _log_pu = "PSI" if not _press_to_bar  else "bar"    # output pressure unit label
+    _log_du = "ft"  if _to_feet           else "m"      # output distance unit label
+    _log_tu = "°F"  if _to_fahr           else "°C"     # output temp unit label
+    _log_vu = "cuft" if not _vol_to_liters else "L"     # output volume unit label
+    _xml_pu = "PSI" if xml_pressure_in_psi else "bar"   # XML input pressure unit label
+    _xml_tu = "°F"  if _xml_temp_in_fahr   else "°C"   # XML input temp unit label
+
+    def _fv(v, d=2):
+        """Format a numeric value for the log; returns '—' for None."""
+        if v is None:
+            return "—"
+        try:
+            return f"{float(v):.{d}f}"
+        except (TypeError, ValueError):
+            return "—"
+
     lines = []
     lines.append('<?xml version="1.0" encoding="UTF-8"?>')
     lines.append("<blueDiveExport>")
@@ -1233,7 +1529,179 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
 
         diver_name = divers.get(int(diver_fk) if diver_fk is not None else None, "")
         site       = sites.get(site_fk_val, {}) if site_fk_val is not None else {}
-        tanks      = fetch_tanks(cur, pk)
+        tanks     = fetch_tanks(cur, pk)
+        xml_gases = pk_to_gases.get(pk, [])
+        # _dive_log is initialised here — immediately before the tank loop — so tank entries
+        # can append to it before depth/temp entries are added further down.
+        try:
+            _log_dive_num = str(round(float(dive_num))) if dive_num is not None else "?"
+            _dive_num_str = str(round(float(dive_num))) if dive_num is not None else ""
+        except (ValueError, TypeError):
+            _log_dive_num = "?"
+            _dive_num_str = ""
+        _dive_log = [
+            f"Dive #{_log_dive_num}"
+            f"  {coredata_to_str(ts)}  {diver_name or '(unknown)'}"
+            f"  {'[XML dive matched]' if pk in pk_to_samples else '[no XML match]'}"
+        ]
+        # For start/end pressure, prefer XML values (correctly unit-converted by MacDive).
+        # wp_out and vol_out are pre-computed here so the output block and log share the same value.
+        #
+        # Match XML gases to SQLite tanks by O₂/He mix key. This prevents cross-assignment when
+        # MacDive's XML <gas> order differs from the SQLite ZORDER. Fall back to positional index
+        # only when the mix key is absent or ambiguous (e.g. multiple tanks with the same gas mix).
+        def _gas_key(entry):
+            o2 = entry.get("o2")
+            he = entry.get("he")
+            if o2 is None and he is None:
+                return None
+            return (round(o2 or 0, 1), round(he or 0, 1))
+
+        _xml_key_map: dict = {}
+        _xml_key_ambiguous: set = set()
+        for _xg_idx, _xg_entry in enumerate(xml_gases):
+            _k = _gas_key(_xg_entry)
+            if _k is not None:
+                if _k in _xml_key_map:
+                    _xml_key_ambiguous.add(_k)
+                else:
+                    _xml_key_map[_k] = _xg_idx
+
+        # Also mark a key ambiguous when >1 SQLite tank shares the same O₂/He mix —
+        # key matching cannot distinguish which XML gas belongs to which SQLite tank.
+        _sqlite_key_counts: dict = {}
+        for _st in tanks:
+            _stk = _gas_key(_st)
+            if _stk is not None:
+                _sqlite_key_counts[_stk] = _sqlite_key_counts.get(_stk, 0) + 1
+        for _stk, _cnt in _sqlite_key_counts.items():
+            if _cnt > 1:
+                _xml_key_ambiguous.add(_stk)
+                _dive_log.append(f"  [INFO] {_cnt} SQLite tanks share mix {_stk} — key matching disabled for this mix, using positional fallback")
+
+        if len(tanks) != len(xml_gases) and xml_gases:
+            _dropped = max(0, len(xml_gases) - len(tanks))
+            _warn_msg = (f"  [WARN] tank count ({len(tanks)}) ≠ XML gas count ({len(xml_gases)})"
+                         + (f" — {_dropped} XML gas(es) dropped (no matching SQLite tank)" if _dropped else "")
+                         + (" — positional fallback may misalign" if len(tanks) > len(xml_gases) else ""))
+            _dive_log.append(_warn_msg)
+
+        for _i, _t in enumerate(tanks):
+            _tk = _gas_key(_t)
+            if _tk is not None and _tk not in _xml_key_ambiguous and _tk in _xml_key_map:
+                _xg_resolved_i = _xml_key_map[_tk]
+                _xg = xml_gases[_xg_resolved_i]
+                _gas_match_verified = True
+                if _xg_resolved_i != _i:
+                    _dive_log.append(f"  [INFO] tank[{_i + 1}] matched XML gas[{_xg_resolved_i + 1}] by O₂/He ({_tk}) instead of position")
+            else:
+                _xg = xml_gases[_i] if _i < len(xml_gases) else None
+                _gas_match_verified = False  # positional fallback or no XML gas
+            _raw_wp  = _t.get("wp")
+            _raw_vol = _t.get("vol")
+
+            if _xg is not None and _xg.get("start"):
+                _xml_start  = _xg["start"]
+                _xml_end    = _xg.get("end")
+                _raw_end_sq = _t.get("end")   # SQLite end used when XML end is absent
+                _t["start"] = cvt_xml_press(_xml_start)
+                if _xml_end:
+                    _t["end"] = cvt_xml_press(_xml_end)
+                elif _raw_end_sq is not None:
+                    # ZAIREND comes from the same computer as ZAIRSTART so it is in the same unit.
+                    # Calibrate from XML start magnitude (not the file-wide preset), matching the
+                    # SQLite-path start-calibrates-end logic so the two paths stay consistent.
+                    _xml_start_is_psi = _xml_start > 400
+                    if _xml_start_is_psi:
+                        _t["end"] = _raw_end_sq / 14.5038 if _press_to_bar else _raw_end_sq
+                    else:
+                        # Bar-start: treat end as bar unconditionally (same computer, same unit).
+                        # Do NOT re-apply the >400 magnitude heuristic — that would break
+                        # start-calibrates-end for any end value that happens to look like PSI.
+                        _t["end"] = _raw_end_sq * 14.5038 if not _press_to_bar else _raw_end_sq
+                else:
+                    _t["end"] = None
+                # Count start and end sources independently so the summary is accurate.
+                # Only count as XML-verified when the gas was matched by O₂/He key; positional
+                # fallback pairings are not guaranteed to be the right gas for this tank.
+                if _gas_match_verified:
+                    _n_xml_press += 1                      # start from XML, key-verified
+                    if _xml_end:
+                        _n_xml_press += 1                  # end also from XML, key-verified
+                    elif _raw_end_sq is not None:
+                        _n_auto_press += 1                 # end fell back to SQLite
+                else:
+                    _n_auto_press += 1                     # start from XML but positional — not guaranteed
+                    if _xml_end:
+                        _n_auto_press += 1
+                    elif _raw_end_sq is not None:
+                        _n_auto_press += 1
+                _start_log = f"{_fv(_xml_start)} {_xml_pu} (XML) → {_fv(_t['start'])} {_log_pu}"
+                if _xml_end:
+                    _end_log = f"{_fv(_xml_end)} {_xml_pu} (XML) → {_fv(_t['end'])} {_log_pu}"
+                elif _raw_end_sq is not None:
+                    _sq_pu = "PSI" if _xml_start > 400 else "bar"
+                    _end_log = (f"{_fv(_raw_end_sq)} SQLite ({_sq_pu}, calibrated from XML start magnitude)"
+                                f" → {_fv(_t['end'])} {_log_pu}")
+                else:
+                    _end_log = "— (no data)"
+            else:
+                # No XML gas data — magnitude heuristic; calibrate end unit from start.
+                start_raw    = _t.get("start")
+                end_raw      = _t.get("end")
+                _t["start"]  = cvt_press_auto(start_raw)
+                start_is_psi = start_raw is not None and start_raw > 400
+                if end_raw is None or end_raw == 0:
+                    _t["end"] = None
+                elif start_is_psi:
+                    _t["end"] = end_raw / 14.5038 if _press_to_bar else end_raw
+                else:
+                    _t["end"] = cvt_press_auto(end_raw)
+                _n_auto_press += 1
+                _s_ctx     = ">400 → PSI" if (start_raw and start_raw > 400) else "≤400 → bar"
+                _start_log = (f"{_fv(start_raw)} (SQLite, {_s_ctx}) → {_fv(_t['start'])} {_log_pu}"
+                              if start_raw else "— (no data)")
+                if end_raw is None or end_raw == 0:
+                    _end_log = "— (no data)"
+                elif start_is_psi and end_raw <= 400:
+                    _end_log = f"{_fv(end_raw)} (SQLite, ≤400 calibrated PSI from start) → {_fv(_t['end'])} {_log_pu}"
+                elif start_is_psi:
+                    _end_log = f"{_fv(end_raw)} (SQLite, >400 → PSI) → {_fv(_t['end'])} {_log_pu}"
+                else:
+                    _e_ctx   = ">400 → PSI" if end_raw > 400 else "≤400 → bar"
+                    _end_log = f"{_fv(end_raw)} (SQLite, {_e_ctx}) → {_fv(_t['end'])} {_log_pu}"
+
+            # Pre-compute wp and vol — unconditionally after the XML/auto branch.
+            # When WP is unknown, vol_out is set to None (omitted from XML) rather than
+            # emitting the raw value under a definite unit label that may be wrong.
+            _t["wp_out"]  = cvt_press_auto(_raw_wp)
+            _vol_wp_known = _raw_wp is not None and _raw_wp != 0
+            _t["vol_out"] = cvt_vol(_raw_vol, _raw_wp) if _vol_wp_known else None
+
+            # WP log
+            if _raw_wp is None or _raw_wp == 0:
+                _wp_log = "— (no data)"
+            else:
+                _wp_ctx = ">400 → PSI" if _raw_wp > 400 else "≤400 → bar"
+                _wp_log = f"{_fv(_raw_wp)} (SQLite, {_wp_ctx}) → {_fv(_t['wp_out'])} {_log_pu}"
+
+            # Volume log — context derived from raw wp using the same thresholds as cvt_vol.
+            if _raw_vol is None or _raw_vol == 0:
+                _vol_log = "— (no data)"
+            elif _raw_wp is not None and _raw_wp > 400:
+                _vol_log = (f"{_fv(_raw_vol)} cuft (SQLite, PSI context, WP={_fv(_raw_wp, 0)} PSI)"
+                            f" → {_fv(_t['vol_out'], 4)} {_log_vu}")
+            elif _raw_wp is not None and _raw_wp > 0:
+                _vol_log = (f"{_fv(_raw_vol)} L (SQLite, bar context, WP={_fv(_raw_wp, 0)} bar)"
+                            f" → {_fv(_t['vol_out'], 4)} {_log_vu}")
+            else:
+                _vol_log = f"{_fv(_raw_vol)} (SQLite, WP unknown) → omitted (unit indeterminate)"
+
+            _dive_log.append(f"  tank[{_i + 1}]")
+            _dive_log.append(f"    start  : {_start_log}")
+            _dive_log.append(f"    end    : {_end_log}")
+            _dive_log.append(f"    wp     : {_wp_log}")
+            _dive_log.append(f"    volume : {_vol_log}")
 
         buddy_names = junction_lookup(cur, pk, buddy_jt, buddies)
         type_names  = junction_lookup(cur, pk, type_jt,  types_lkp)
@@ -1241,7 +1709,10 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
         critters    = fetch_critters(cur, pk, critter_jt)
         gear_items  = fetch_dive_gear(cur, pk, gear_map, gear_jts)
 
-        dur_secs = round(float(duration)) if duration is not None else 0
+        try:
+            dur_secs = round(float(duration)) if duration is not None else 0
+        except (ValueError, TypeError):
+            dur_secs = 0
 
         lines.append("  <dive>")
 
@@ -1256,11 +1727,18 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
         # Basic info
         lines.append(xtag("date",           coredata_to_str(ts),             indent=4))
         lines.append(xtag("identifier",     str(uuid or ""),                  indent=4))
-        lines.append(xtag("diveNumber",     str(round(float(dive_num))) if dive_num is not None else "", indent=4))
-        lines.append(xtag("rating",         str(round(float(rating))) if rating is not None else "", indent=4))
+        try:
+            _rating_str = str(round(float(rating))) if rating is not None else ""
+        except (ValueError, TypeError):
+            _rating_str = ""
+        lines.append(xtag("diveNumber",     _dive_num_str, indent=4))
+        lines.append(xtag("rating",         _rating_str,   indent=4))
         # MacDive stores the dive number in the repetitive sequence (1 = first/solo dive,
         # 2+ = genuinely repetitive). Only flag as repetitive when the number is > 1.
-        is_repetitive = repetitive is not None and int(float(repetitive)) > 1
+        try:
+            is_repetitive = repetitive is not None and int(float(repetitive)) > 1
+        except (ValueError, TypeError):
+            is_repetitive = False
         lines.append(xtag("repetitiveDive", "1" if is_repetitive else "0",  indent=4))
         lines.append(xtag("diver",          diver_name,                       indent=4))
         lines.append(xtag("computer",       comp_name,                        indent=4))
@@ -1270,17 +1748,63 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
         lines.append(xtag("maxDepth",        fmt_double(cvt_dist(max_depth)),  indent=4))
         lines.append(xtag("averageDepth",    fmt_double(cvt_dist(avg_depth)),  indent=4))
         lines.append(xtag("duration",        str(dur_secs),          indent=4))
-        lines.append(xtag("surfaceInterval", str(round(float(surf_int))) if surf_int is not None else "", indent=4))
+        _dive_log.append(f"  maxDepth   : {_fv(max_depth, 4)} m (SQLite) → {_fv(cvt_dist(max_depth), 4)} {_log_du}")
+        _dive_log.append(f"  avgDepth   : {_fv(avg_depth, 4)} m (SQLite) → {_fv(cvt_dist(avg_depth), 4)} {_log_du}")
+        try:
+            _surf_int_str = str(round(float(surf_int))) if surf_int is not None else ""
+        except (ValueError, TypeError):
+            _surf_int_str = ""
+        lines.append(xtag("surfaceInterval", _surf_int_str, indent=4))
 
         # Decompression
         lines.append(xtag("cns",               fmt_double(cns),                          indent=4))
         lines.append(xtag("decoModel",         str(deco_model or ""),                    indent=4))
         lines.append(xtag("decompressionDive", "1" if is_deco else "0",                  indent=4))
 
-        # Temperatures — SQLite always stores °C; convert to °F for imperial output.
-        lines.append(xtag("tempAir",  fmt_double(cvt_temp(temp_air)),  indent=4))
-        lines.append(xtag("tempHigh", fmt_double(cvt_temp(temp_high)), indent=4))
-        lines.append(xtag("tempLow",  fmt_double(cvt_temp(temp_low)),  indent=4))
+        # Temperatures — prefer XML (correctly unit-converted by MacDive); fall back to SQLite.
+        _xt     = pk_to_xml_temps.get(pk, {})
+        _t_air  = _xt.get("temp_air")
+        _t_high = _xt.get("temp_high")
+        _t_low  = _xt.get("temp_low")
+        # Must be defined before the counters and _resolve_temp closure below.
+        _sqlite_temp_safe = not _to_fahr or pk in pk_to_xml_temps
+        if _t_air  is not None:                              _n_xml_temp  += 1
+        elif temp_air  is not None and _sqlite_temp_safe:   _n_auto_temp += 1
+        if _t_high is not None:                              _n_xml_temp  += 1
+        elif temp_high is not None and _sqlite_temp_safe:   _n_auto_temp += 1
+        if _t_low  is not None:                              _n_xml_temp  += 1
+        elif temp_low  is not None and _sqlite_temp_safe:   _n_auto_temp += 1
+        # SQLite always stores temperature in °C. For Metric/Canadian output, cvt_temp converts
+        # correctly. For Imperial output, cvt_temp converts °C → °F — but only when the XML
+        # matched this dive (XML temps are authoritative). For unmatched Imperial dives the SQLite
+        # value is assumed °C; if the user originally entered °F in MacDive the fallback would
+        # double-convert to garbage, so suppress the SQLite fallback for Imperial unmatched dives.
+        # (_sqlite_temp_safe is defined above, before the counters.)
+        def _resolve_temp(xml_val, sqlite_val):
+            if xml_val is not None:
+                return cvt_xml_temp(xml_val)
+            if sqlite_val is not None and _sqlite_temp_safe:
+                return cvt_temp(sqlite_val)
+            return None
+
+        lines.append(xtag("tempAir",  fmt_double(_resolve_temp(_t_air,  temp_air)),  indent=4))
+        lines.append(xtag("tempHigh", fmt_double(_resolve_temp(_t_high, temp_high)), indent=4))
+        lines.append(xtag("tempLow",  fmt_double(_resolve_temp(_t_low,  temp_low)),  indent=4))
+
+        def _temp_log_entry(label, xml_val, sqlite_val):
+            if xml_val is not None:
+                out = cvt_xml_temp(xml_val)
+                return f"  {label:<10}: {_fv(xml_val)} {_xml_tu} (XML) → {_fv(out)} {_log_tu}"
+            if sqlite_val is not None and _sqlite_temp_safe:
+                out = cvt_temp(sqlite_val)
+                src = f"{_fv(sqlite_val)} °C (SQLite, assumed)"
+                return f"  {label:<10}: {src} → {_fv(out)} {_log_tu}"
+            if sqlite_val is not None:
+                return f"  {label:<10}: {_fv(sqlite_val)} °C (SQLite) → omitted (Imperial unmatched dive, unit unverified)"
+            return f"  {label:<10}: — (no data)"
+        _dive_log.append(_temp_log_entry("tempAir",  _t_air,  temp_air))
+        _dive_log.append(_temp_log_entry("tempHigh", _t_high, temp_high))
+        _dive_log.append(_temp_log_entry("tempLow",  _t_low,  temp_low))
 
         # Conditions
         lines.append(xtag("visibility",        str(visibility  or ""), indent=4))
@@ -1344,10 +1868,10 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
                 lines.append(xtag("id",              "",                         indent=8))
                 lines.append(xtag("oxygen",          str(t["o2"]),               indent=8))
                 lines.append(xtag("helium",          str(t["he"]),               indent=8))
-                lines.append(xtag("volume",          fmt_double(t.get("vol")),   indent=8))
-                lines.append(xtag("startPressure",   fmt_double(t.get("start")), indent=8))
-                lines.append(xtag("endPressure",     fmt_double(t.get("end")),   indent=8))
-                lines.append(xtag("workingPressure", fmt_double(t.get("wp")),    indent=8))
+                lines.append(xtag("volume",          fmt_double(t.get("vol_out")),  indent=8))
+                lines.append(xtag("startPressure",   fmt_double(t.get("start")),   indent=8))
+                lines.append(xtag("endPressure",     fmt_double(t.get("end")),     indent=8))
+                lines.append(xtag("workingPressure", fmt_double(t.get("wp_out")),  indent=8))
                 lines.append(xtag("tankMaterial",    str(t.get("mat")  or ""),   indent=8))
                 lines.append(xtag("tankType",        str(t.get("type") or ""),   indent=8))
                 lines.append(xtag("usageStartTime",  "",                         indent=8))
@@ -1392,14 +1916,15 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
         # Profile samples from MacDive XML (matched by UTC + diver + duration)
         samples = pk_to_samples.get(pk, [])
         if samples:
-            # Convert sample depth from the XML's native unit to the output unit when they differ.
+            # Sample depths come from XML in the display unit; convert only if output differs.
+            # (All three presets share the same input/output unit system, so these branches
+            #  are currently unreachable, but are retained for safety should overrides be added.)
             if xml_depth_in_feet and units["distance"] == "meters":
                 samples = [{**s, "depth": s["depth"] * 0.3048} for s in samples]
             elif not xml_depth_in_feet and units["distance"] == "feet":
                 samples = [{**s, "depth": s["depth"] / 0.3048} for s in samples]
-            # Canadian XML exports pressure in PSI but the output format is bar — convert.
-            if xml_pressure_in_psi and units["pressure"] == "bar":
-                samples = [{**s, "pressure": s["pressure"] / 14.5038 if s["pressure"] is not None else None} for s in samples]
+            # Sample tank pressures come from XML already in the display unit; no conversion needed
+            # because the output pressure unit always matches the XML export unit for all presets.
             lines.append("    <!-- BlueDiveSamplesData -->")
             lines.extend(profile_samples_xml_lines(samples, indent=4))
 
@@ -1409,11 +1934,16 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
             if b64_lines:
                 lines.append("    <!-- Raw dive computer data (Base64-encoded binary) -->")
                 lines.extend(b64_lines)
+            else:
+                print(f"  Note: dive #{_log_dive_num} ZRAWDATA has TEXT affinity — raw dive-computer profile skipped",
+                      file=sys.stderr)
 
         # MacDive parser type hint — useful for future profile decoding in BlueDive
         if parser_type:
             lines.append(xtag("parserType", str(parser_type), indent=4))
 
+        _all_dive_logs.extend(_dive_log)
+        _all_dive_logs.append("")
         lines.append("  </dive>")
 
     lines.append("  </dives>")
@@ -1421,13 +1951,23 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     con.close()
 
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")
+    Path(log_path).write_text("\n".join(_all_dive_logs), encoding="utf-8")
     print(f"✓ {len(rows)} dives exported to {output_path}")
+    print(f"  Log         : {log_path}")
     print(f"  Gear items  : {len(gear_map)}")
     print(f"  Distance    : {distance_fmt}")
     print(f"  Temperature : {temp_fmt}")
     print(f"  Pressure    : {pressure_fmt}")
     print(f"  Volume      : {volume_fmt}")
-    print(f"  Weight      : {weight_fmt}")
+    print(f"  Weight      : {weight_fmt}  (declared via --weight-unit; raw SQLite value emitted as-is)")
+    if _n_xml_press + _n_auto_press > 0:
+        print(f"  Tank start/end pressure source:")
+        print(f"    XML (unit-verified)  : {_n_xml_press} field(s)")
+        print(f"    SQLite fallback      : {_n_auto_press} field(s)  (magnitude heuristic: >400=PSI, ≤400=bar)")
+    if _n_xml_temp + _n_auto_temp > 0:
+        print(f"  Temperature source:")
+        print(f"    XML (unit-verified)  : {_n_xml_temp} field(s)")
+        print(f"    SQLite fallback      : {_n_auto_temp} field(s)  (assumed °C)")
 
 
 # ---------------------------------------------------------------------------
@@ -1517,6 +2057,7 @@ def gear_group_xml_lines(group, indent=4):
 
 def export_gears(input_path, output_path, weight_unit):
     _reset_schema_caches()
+    fmt_double._weight_unit = weight_unit
     con = sqlite3.connect(input_path)
     cur = con.cursor()
 
