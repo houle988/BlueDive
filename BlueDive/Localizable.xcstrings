@@ -2444,25 +2444,19 @@
         }
       }
     },
-    "All data erased. App will close in %llds." : {
-      "comment" : "Status message shown after all local and iCloud data has been erased. The argument is the countdown in seconds before the app closes.",
+    "All data erased. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen." : {
+      "comment" : "Status message shown after all local and iCloud data has been erased. Instructs the user to wait for iCloud upload to complete before closing the app.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Alle Daten gelöscht. Die App wird in %llds geschlossen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
             "state" : "translated",
-            "value" : "All data erased. App will close in %llds."
+            "value" : "Alle Daten gelöscht. Warte, bis der iCloud-Upload abgeschlossen ist, bevor du die App schließt. Beobachte das Wolkensymbol auf dem Hauptbildschirm."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toutes les données supprimées. L'application se fermera dans %llds."
+            "value" : "Toutes les données supprimées. Attendez la fin du téléversement iCloud avant de fermer l'app. Surveillez l'icône de nuage sur l'écran principal."
           }
         }
       }
@@ -4635,48 +4629,36 @@
         }
       }
     },
-    "Completed with %lld errors. App will close in %llds." : {
-      "comment" : "Status message when multiple errors occur during erase. First %lld is error count, second %lld is countdown seconds.",
+    "Completed with %lld errors. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen." : {
+      "comment" : "Status message when multiple errors occur during erase. %lld is the error count.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Abgeschlossen mit %lld Fehlern. Die App wird in %llds geschlossen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
             "state" : "translated",
-            "value" : "Completed with %lld errors. App will close in %llds."
+            "value" : "Abgeschlossen mit %lld Fehlern. Warte, bis der iCloud-Upload abgeschlossen ist, bevor du die App schließt. Beobachte das Wolkensymbol auf dem Hauptbildschirm."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Terminé avec %lld erreurs. L'app se fermera dans %llds."
+            "value" : "Terminé avec %lld erreurs. Attendez la fin du téléversement iCloud avant de fermer l'app. Surveillez l'icône de nuage sur l'écran principal."
           }
         }
       }
     },
-    "Completed with 1 error. App will close in %llds." : {
-      "comment" : "Status message when exactly one error occurs during erase. %lld is the countdown in seconds.",
+    "Completed with 1 error. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen." : {
+      "comment" : "Status message when exactly one error occurs during erase.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Abgeschlossen mit 1 Fehler. Die App wird in %llds geschlossen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
             "state" : "translated",
-            "value" : "Completed with 1 error. App will close in %llds."
+            "value" : "Abgeschlossen mit 1 Fehler. Warte, bis der iCloud-Upload abgeschlossen ist, bevor du die App schließt. Beobachte das Wolkensymbol auf dem Hauptbildschirm."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Terminé avec 1 erreur. L'app se fermera dans %llds."
+            "value" : "Terminé avec 1 erreur. Attendez la fin du téléversement iCloud avant de fermer l'app. Surveillez l'icône de nuage sur l'écran principal."
           }
         }
       }
@@ -21741,25 +21723,19 @@
         }
       }
     },
-    "This will permanently delete all your data from this device and iCloud. This action cannot be undone. The app will close after 30 seconds." : {
+    "This will permanently delete all your data from this device and iCloud. This action cannot be undone. Wait for the iCloud sync to finish uploading before closing the app." : {
       "comment" : "An alert message warning the user that erasing all data is permanent and affects both local storage and iCloud.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Dadurch werden alle deine Daten von diesem Gerät und iCloud dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden. Die App wird nach 30 Sekunden geschlossen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
             "state" : "translated",
-            "value" : "This will permanently delete all your data from this device and iCloud. This action cannot be undone. The app will close after 30 seconds."
+            "value" : "Dadurch werden alle deine Daten von diesem Gerät und iCloud dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden. Warte, bis der iCloud-Upload abgeschlossen ist, bevor du die App schließt."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cette action supprimera définitivement toutes vos données de cet appareil et d'iCloud. Cette action est irréversible. L'application se fermera après 30 secondes."
+            "value" : "Cette action supprimera définitivement toutes vos données de cet appareil et d'iCloud. Cette action est irréversible. Attendez la fin du téléversement iCloud avant de fermer l'app."
           }
         }
       }

@@ -445,7 +445,7 @@ struct SettingsView: View {
     @State private var isErasingData = false
     private enum ErasePhase {
         case erasing
-        case done(errorCount: Int, countdown: Int)
+        case done(errorCount: Int)
     }
     @State private var erasePhase: ErasePhase?
     @State private var isDebugMode = LibDCSwift.Logger.shared.isDebugMode
@@ -561,7 +561,7 @@ struct SettingsView: View {
                     eraseAllData()
                 }
             } message: {
-                Text("This will permanently delete all your data from this device and iCloud. This action cannot be undone. The app will close after 30 seconds.")
+                Text("This will permanently delete all your data from this device and iCloud. This action cannot be undone. Wait for the iCloud sync to finish uploading before closing the app.")
             }
             #if os(iOS)
             .fileExporter(
@@ -1546,7 +1546,7 @@ struct SettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .disabled(isErasingData)
+                .disabled(isErasingData || erasePhase != nil)
                 
                 if let erasePhase {
                     HStack(spacing: 8) {
@@ -1556,12 +1556,12 @@ struct SettingsView: View {
                             switch erasePhase {
                             case .erasing:
                                 Text("Erasing all data…")
-                            case .done(let errorCount, let countdown) where errorCount == 0:
-                                Text(verbatim: String(format: NSLocalizedString("All data erased. App will close in %llds.", bundle: Bundle.forAppLanguage(), comment: "Status message shown after all local and iCloud data has been erased. The argument is the countdown in seconds before the app closes."), countdown))
-                            case .done(let errorCount, let countdown):
+                            case .done(let errorCount) where errorCount == 0:
+                                Text(verbatim: NSLocalizedString("All data erased. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen.", bundle: Bundle.forAppLanguage(), comment: "Status message shown after all local and iCloud data has been erased. Instructs the user to wait for iCloud upload to complete before closing the app."))
+                            case .done(let errorCount):
                                 Text(verbatim: errorCount == 1
-                                    ? String(format: NSLocalizedString("Completed with 1 error. App will close in %llds.", bundle: Bundle.forAppLanguage(), comment: "Status message when exactly one error occurs during erase. %lld is the countdown in seconds."), countdown)
-                                    : String(format: NSLocalizedString("Completed with %lld errors. App will close in %llds.", bundle: Bundle.forAppLanguage(), comment: "Status message when multiple errors occur during erase. First %lld is error count, second %lld is countdown seconds."), errorCount, countdown))
+                                    ? NSLocalizedString("Completed with 1 error. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen.", bundle: Bundle.forAppLanguage(), comment: "Status message when exactly one error occurs during erase.")
+                                    : String(format: NSLocalizedString("Completed with %lld errors. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen.", bundle: Bundle.forAppLanguage(), comment: "Status message when multiple errors occur during erase. %lld is the error count."), errorCount))
                             }
                         }
                             .font(.caption)
@@ -1988,7 +1988,7 @@ struct SettingsView: View {
     // MARK: - Erase All Data
 
     private func eraseAllData() {
-        guard !isErasingData else { return }
+        guard !isErasingData, erasePhase == nil else { return }
         isErasingData = true
         erasePhase = .erasing
 
@@ -2061,29 +2061,12 @@ struct SettingsView: View {
             WidgetCenter.shared.reloadTimelines(ofKind: "DiveCountWidget")
             WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")
 
-            // Step 3: Start a 30-second countdown, then close the app.
-            // This gives CloudKit enough time to propagate the local deletions
-            // to iCloud before the app terminates.
-            await MainActor.run {
-                erasePhase = .done(errorCount: errors.count, countdown: 30)
-            }
-
-            // Countdown from 30 to 0
-            for remaining in stride(from: 29, through: 0, by: -1) {
-                try? await Task.sleep(for: .seconds(1))
-                await MainActor.run {
-                    erasePhase = .done(errorCount: errors.count, countdown: remaining)
-                }
-            }
-
-            // Close the app
+            // Step 3: Mark erase as done. The user is instructed to wait for iCloud
+            // to finish uploading (visible via the cloud icon on the main screen)
+            // before closing the app manually.
             await MainActor.run {
                 isErasingData = false
-                #if os(macOS)
-                NSApplication.shared.terminate(nil)
-                #else
-                exit(0)
-                #endif
+                erasePhase = .done(errorCount: errors.count)
             }
         }
     }
