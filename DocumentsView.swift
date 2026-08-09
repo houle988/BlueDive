@@ -34,6 +34,16 @@ private enum ImportTarget {
     case certifications, insurance
 }
 
+// MARK: - Document Section Filter
+
+enum DocumentSection: String, CaseIterable, Identifiable {
+    case all = "All"
+    case certifications = "Certifications"
+    case insurance = "Insurance"
+
+    var id: String { rawValue }
+}
+
 // MARK: - Documents View
 
 struct DocumentsView: View {
@@ -48,6 +58,7 @@ struct DocumentsView: View {
     // MARK: - Appearance
     @State private var appeared = false
     @State private var emptyAppeared = false
+    @State private var selectedSection: DocumentSection
 
     // MARK: - Collapse State (namespaced: "cert:" prefix for orgs, "ins:" prefix for insurers)
     @State private var collapsedSections: Set<String> = []
@@ -81,6 +92,11 @@ struct DocumentsView: View {
     @State private var exportDocument: ExportableFileDocument?
     @State private var exportFileName: String = ""
     #endif
+
+    init(initialSection: DocumentSection = .all, onClose: (() -> Void)? = nil) {
+        self.onClose = onClose
+        self._selectedSection = State(initialValue: initialSection)
+    }
 
     // MARK: - Computed Properties
 
@@ -148,7 +164,7 @@ struct DocumentsView: View {
                 } else {
                     List {
                         // Expired alerts (shown first — most urgent)
-                        if !certExpired.isEmpty {
+                        if selectedSection != .insurance && !certExpired.isEmpty {
                             Section {
                                 certExpiredAlertSection
                                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -158,7 +174,7 @@ struct DocumentsView: View {
                             .listRowSeparator(.hidden)
                         }
 
-                        if !insuranceExpired.isEmpty {
+                        if selectedSection != .certifications && !insuranceExpired.isEmpty {
                             Section {
                                 insuranceExpiredAlertSection
                                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -169,7 +185,7 @@ struct DocumentsView: View {
                         }
 
                         // Expiring soon alerts
-                        if !certExpiringSoon.isEmpty {
+                        if selectedSection != .insurance && !certExpiringSoon.isEmpty {
                             Section {
                                 certExpiryAlertSection
                                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -179,7 +195,7 @@ struct DocumentsView: View {
                             .listRowSeparator(.hidden)
                         }
 
-                        if !insuranceExpiringSoon.isEmpty {
+                        if selectedSection != .certifications && !insuranceExpiringSoon.isEmpty {
                             Section {
                                 insuranceExpiryAlertSection
                                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -190,17 +206,19 @@ struct DocumentsView: View {
                         }
 
                         // ── CERTIFICATIONS DOMAIN ─────────────────────────────────
-                        if !certifications.isEmpty && (filteredCertifications.isEmpty || !groupedCertifications.isEmpty) {
-                            Section {
-                                domainHeaderRow(
-                                    title: "Certifications",
-                                    icon: "graduationcap.fill",
-                                    color: .cyan
-                                )
+                        if selectedSection != .insurance && !certifications.isEmpty && (selectedSection == .certifications || filteredCertifications.isEmpty || !groupedCertifications.isEmpty) {
+                            if selectedSection == .all {
+                                Section {
+                                    domainHeaderRow(
+                                        title: "Certifications",
+                                        icon: "graduationcap.fill",
+                                        color: .cyan
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 0, trailing: 16))
                             }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 0, trailing: 16))
 
                             if filteredCertifications.isEmpty {
                                 Section {
@@ -225,21 +243,33 @@ struct DocumentsView: View {
                                             .textCase(nil)
                                     }
                                 }
+                            } else {
+                                Section {
+                                    inlineDomainEmptyRow(
+                                        systemImage: "checkmark.seal",
+                                        message: "All certifications have expired."
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                             }
                         }
 
                         // ── INSURANCE DOMAIN ──────────────────────────────────────
-                        if !insurances.isEmpty && (filteredInsurances.isEmpty || !groupedInsurances.isEmpty) {
-                            Section {
-                                domainHeaderRow(
-                                    title: "Insurance",
-                                    icon: "shield.fill",
-                                    color: .blue
-                                )
+                        if selectedSection != .certifications && !insurances.isEmpty && (selectedSection == .insurance || filteredInsurances.isEmpty || !groupedInsurances.isEmpty) {
+                            if selectedSection == .all {
+                                Section {
+                                    domainHeaderRow(
+                                        title: "Insurance",
+                                        icon: "shield.fill",
+                                        color: .blue
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 0, trailing: 16))
                             }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 0, trailing: 16))
 
                             if filteredInsurances.isEmpty {
                                 Section {
@@ -267,11 +297,60 @@ struct DocumentsView: View {
                                             .textCase(nil)
                                     }
                                 }
+                            } else {
+                                Section {
+                                    inlineDomainEmptyRow(
+                                        systemImage: "shield",
+                                        message: "All insurance records have expired."
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                             }
+                        }
+
+                        // ── SECTION-SPECIFIC EMPTY STATES ─────────────────────────
+                        if selectedSection == .certifications && certifications.isEmpty {
+                            Section {
+                                inlineDomainEmptyRow(
+                                    systemImage: "graduationcap",
+                                    message: "No certifications"
+                                )
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                        }
+
+                        if selectedSection == .insurance && insurances.isEmpty {
+                            Section {
+                                inlineDomainEmptyRow(
+                                    systemImage: "shield",
+                                    message: "No insurance recorded"
+                                )
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                         }
                     }
                     // .sidebar is required for Section(isExpanded:) collapse/expand to function
                     .listStyle(.sidebar)
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !(certifications.isEmpty && insurances.isEmpty) {
+                    Picker("", selection: $selectedSection) {
+                        ForEach(DocumentSection.allCases) { section in
+                            Text(LocalizedStringKey(section.rawValue)).tag(section)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 2)
+                    .background(Color.platformBackground)
                 }
             }
             .opacity(appeared ? 1.0 : 0.0)
@@ -280,6 +359,9 @@ struct DocumentsView: View {
                 withAnimation(.easeOut(duration: 0.4)) { appeared = true }
             }
             .navigationTitle("Documents")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .scrollContentBackground(.hidden)
             .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)

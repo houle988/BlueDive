@@ -52,7 +52,7 @@ struct DiverProfileView: View {
 
     @State private var prefs = UserPreferences.shared
 
-    @State private var showingDocuments = false
+    @State private var documentsSection: DocumentSection?
     @State private var showingAddCertification = false
     @State private var showingAddInsurance = false
     @State private var profileAppeared = false
@@ -205,8 +205,8 @@ struct DiverProfileView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingDocuments) {
-                DocumentsView(onClose: { showingDocuments = false })
+            .sheet(item: $documentsSection) { section in
+                DocumentsView(initialSection: section, onClose: { documentsSection = nil })
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -539,7 +539,7 @@ struct DiverProfileView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Button {
-                                showingDocuments = true
+                                documentsSection = .certifications
                             } label: {
                                 Text("View All")
                                     .font(.subheadline)
@@ -687,7 +687,7 @@ struct DiverProfileView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Button {
-                                showingDocuments = true
+                                documentsSection = .insurance
                             } label: {
                                 Text("View All")
                                     .font(.subheadline)

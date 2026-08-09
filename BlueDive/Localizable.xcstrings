@@ -2444,6 +2444,23 @@
         }
       }
     },
+    "All certifications have expired." : {
+      "comment" : "Inline message shown in the Documents view Certifications tab when all certifications are expired.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Zertifizierungen sind abgelaufen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les certifications ont expiré."
+          }
+        }
+      }
+    },
     "All data erased. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen." : {
       "comment" : "Status message shown after all local and iCloud data has been erased. Instructs the user to wait for iCloud upload to complete before closing the app.",
       "localizations" : {
@@ -2549,6 +2566,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tous les équipements, groupes et modèles de cylindre du fichier existent déjà."
+          }
+        }
+      }
+    },
+    "All insurance records have expired." : {
+      "comment" : "Inline message shown in the Documents view Insurance tab when all insurance records are expired.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Versicherungseinträge sind abgelaufen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous les dossiers d'assurance ont expiré."
           }
         }
       }
@@ -18475,23 +18509,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Même identifiant d'ordinateur"
-          }
-        }
-      }
-    },
-    "Samples" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Messwerte"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Échantillons"
           }
         }
       }
