@@ -94,7 +94,7 @@ extension BluetoothScannerView {
                 Self.logger.info("Import complete: \(importedCount) imported, \(mergedCount) merged, \(skippedCount) skipped")
                 persistFingerprintRecord(for: selectedDevice)
                 if UserDefaults.standard.bool(forKey: "notificationsEnabled"),
-                   UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? true {
+                   UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? false {
                     let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
                     NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
                 }

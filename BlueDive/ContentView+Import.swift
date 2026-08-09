@@ -251,7 +251,7 @@ extension ContentView {
         do {
             try modelContext.save()
             if UserDefaults.standard.bool(forKey: "notificationsEnabled"),
-               UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? true {
+               UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? false {
                 let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
                 NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
             }

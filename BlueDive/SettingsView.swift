@@ -429,7 +429,7 @@ struct SettingsView: View {
     @AppStorage("notificationsEnabled")     private var notificationsEnabled = false
     @AppStorage("gearMaintenanceReminders") private var gearReminders  = true
     @AppStorage("certificationReminders")   private var certReminders  = true
-    @AppStorage("milestoneNotifications")   private var milestoneNotifs = true
+    @AppStorage("milestoneNotifications")   private var milestoneNotifs = false
     @AppStorage("filterUnusedTanks")         private var filterUnusedTanks = false
     @AppStorage("showCalculatorsMenu")       private var showCalculatorsMenu = false
 
@@ -965,6 +965,13 @@ struct SettingsView: View {
                         title: "Milestones reached",
                         subtitle: "Celebrate your achievements"
                     )
+
+                    Text("Counts dives for all divers combined. Not recommended when multiple divers share this app.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                        .padding(.leading, 68)
                     
                     #if os(macOS)
                     // On macOS, offer to open system preferences
