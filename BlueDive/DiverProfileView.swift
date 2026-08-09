@@ -399,6 +399,22 @@ struct DiverProfileView: View {
         }
     }
 
+    // MARK: - Add Document Button
+
+    private func addDocumentButton(label: LocalizedStringKey, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(color)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Certifications Section
 
     private static let previewLimit = 5
@@ -424,25 +440,31 @@ struct DiverProfileView: View {
             VStack(spacing: 0) {
                 if certifications.isEmpty {
                     // Truly empty — no certifications on record at all
-                    VStack(spacing: 10) {
-                        Image(systemName: "graduationcap")
-                            .font(.title2)
-                            .foregroundStyle(.cyan.opacity(0.5))
-                        Text("No certifications")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 16) {
+                        VStack(spacing: 10) {
+                            Image(systemName: "graduationcap")
+                                .font(.title2)
+                                .foregroundStyle(.cyan.opacity(0.5))
+                            Text("No certifications")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        addDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showingAddCertification = true }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 } else if filteredCertifications.isEmpty {
                     // Filter active — no certifications for the selected diver
-                    VStack(spacing: 10) {
-                        Image(systemName: "person.slash")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                        Text("No Certifications for Diver")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 16) {
+                        VStack(spacing: 10) {
+                            Image(systemName: "person.slash")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                            Text("No Certifications for Diver")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        addDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showingAddCertification = true }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -560,25 +582,31 @@ struct DiverProfileView: View {
             VStack(spacing: 0) {
                 if insurances.isEmpty {
                     // Truly empty — no insurance on record at all
-                    VStack(spacing: 10) {
-                        Image(systemName: "shield")
-                            .font(.title2)
-                            .foregroundStyle(.blue.opacity(0.5))
-                        Text("No insurance recorded")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 16) {
+                        VStack(spacing: 10) {
+                            Image(systemName: "shield")
+                                .font(.title2)
+                                .foregroundStyle(.blue.opacity(0.5))
+                            Text("No insurance recorded")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        addDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showingAddInsurance = true }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 } else if filteredInsurances.isEmpty {
                     // Filter active — no insurance for the selected diver
-                    VStack(spacing: 10) {
-                        Image(systemName: "person.slash")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                        Text("No Insurance for Diver")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 16) {
+                        VStack(spacing: 10) {
+                            Image(systemName: "person.slash")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                            Text("No Insurance for Diver")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        addDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showingAddInsurance = true }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)

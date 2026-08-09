@@ -157,10 +157,17 @@ struct DocumentsView: View {
                 if certifications.isEmpty && insurances.isEmpty {
                     ScrollView { bothEmptyStateView }
                 } else if !selectedDiver.isEmpty && filteredCertifications.isEmpty && filteredInsurances.isEmpty {
-                    NoEntriesForDiverView(
-                        title: "No Documents for Diver",
-                        description: "No certifications or insurance were found for the selected diver."
-                    )
+                    ContentUnavailableView {
+                        Label("No Documents for Diver", systemImage: "person.slash")
+                    } description: {
+                        Text("No certifications or insurance were found for the selected diver.")
+                    } actions: {
+                        VStack(spacing: 12) {
+                            addDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                            addDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                        }
+                        .padding(.horizontal, 40)
+                    }
                 } else {
                     List {
                         // Expired alerts (shown first — most urgent)
@@ -230,6 +237,7 @@ struct DocumentsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                addDocumentSection(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
                             } else if !groupedCertifications.isEmpty {
                                 ForEach(groupedCertifications, id: \.key) { agency, certs in
                                     Section(isExpanded: sectionBinding("cert:" + agency)) {
@@ -281,6 +289,7 @@ struct DocumentsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                addDocumentSection(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
                             } else if !groupedInsurances.isEmpty {
                                 ForEach(groupedInsurances, id: \.key) { insurer, policies in
                                     let displayName = insurer.isEmpty
@@ -321,6 +330,7 @@ struct DocumentsView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                            addDocumentSection(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
                         }
 
                         if selectedSection == .insurance && insurances.isEmpty {
@@ -333,6 +343,7 @@ struct DocumentsView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                            addDocumentSection(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
                         }
                     }
                     // .sidebar is required for Section(isExpanded:) collapse/expand to function
@@ -622,6 +633,29 @@ struct DocumentsView: View {
         .padding(.vertical, 4)
     }
 
+    // MARK: - Add Document Button
+
+    private func addDocumentButton(label: LocalizedStringKey, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 12).fill(color))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func addDocumentSection(label: LocalizedStringKey, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Section {
+            addDocumentButton(label: label, icon: icon, color: color, action: action)
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+    }
+
     // MARK: - Inline Empty Domain Row
 
     private func inlineDomainEmptyRow(systemImage: String, message: LocalizedStringKey) -> some View {
@@ -792,29 +826,13 @@ struct DocumentsView: View {
                 .offset(y: emptyAppeared ? 0 : 10)
 
             VStack(spacing: 12) {
-                Button { showAddCertification = true } label: {
-                    Label("Add Certification", systemImage: "graduationcap.fill")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.cyan))
-                }
-                .buttonStyle(.plain)
-                .scaleEffect(emptyAppeared ? 1.0 : 0.8)
-                .opacity(emptyAppeared ? 1.0 : 0.0)
+                addDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                    .scaleEffect(emptyAppeared ? 1.0 : 0.8)
+                    .opacity(emptyAppeared ? 1.0 : 0.0)
 
-                Button { showAddInsurance = true } label: {
-                    Label("Add Insurance", systemImage: "shield.fill")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue))
-                }
-                .buttonStyle(.plain)
-                .scaleEffect(emptyAppeared ? 1.0 : 0.8)
-                .opacity(emptyAppeared ? 1.0 : 0.0)
+                addDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                    .scaleEffect(emptyAppeared ? 1.0 : 0.8)
+                    .opacity(emptyAppeared ? 1.0 : 0.0)
             }
             .padding(.horizontal, 40)
         }
