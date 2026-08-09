@@ -2,7 +2,7 @@
 
 **A feature-rich dive log for iOS, iPadOS, and macOS.**
 
-[Website](https://www.bluedive.app) &middot; [App Store](https://apps.apple.com/us/app/bluedive/id6760430619) &middot; [Discussions](../../discussions) &middot; [Report a Bug](../../issues/new/choose)
+[Website](https://www.bluedive.app) · [App Store](https://apps.apple.com/us/app/bluedive/id6760430619) · [Discussions](https://github.com/houle988/BlueDive/discussions) · [Report a Bug](https://github.com/houle988/BlueDive/issues/new/choose)
 
 ---
 
@@ -28,17 +28,18 @@ BlueDive is a modern, actively maintained dive log app designed as a full-featur
 
 ## Requirements
 
-| Platform | Minimum Version |
-|---|---|
-| iPhone | iOS 18.6 |
-| iPad | iPadOS 18.6 |
+| Platform            | Minimum Version                  |
+| ------------------- | -------------------------------- |
+| iPhone              | iOS 18.6                         |
+| iPad                | iPadOS 18.6                      |
 | Mac (Apple Silicon) | macOS 15 (via Designed for iPad) |
 
 ## Contributing
 
-BlueDive welcomes contributions from developers and divers alike. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get involved.
+BlueDive welcomes contributions from developers and divers alike. See [CONTRIBUTING.md](https://github.com/houle988/BlueDive/blob/main/CONTRIBUTING.md) for how to get involved.
 
 **Ways to contribute:**
+
 - Add or improve dive computer support
 - Translate the app into additional languages
 - Report bugs or unexpected behaviour
@@ -50,6 +51,12 @@ BlueDive welcomes contributions from developers and divers alike. See [CONTRIBUT
 - [libdivecomputer](https://github.com/houle988/libdivecomputer) — LGPL-2.1-or-later (BlueDive fork)
 - [libdc-swift](https://github.com/houle988/libdc-swift) — LGPL-2.1 (BlueDive fork)
 
+## Support the Project
+
+If BlueDive has been useful for logging your dives, consider buying me a coffee to help support ongoing development.
+
+<a href="https://www.buymeacoffee.com/houle988"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="150"></a>
+
 ## License
 
-Source available under the [BlueDive Source Available License (BDSAL) v1.0](LICENSE). Not a traditional open-source license — see the license file for terms.
+Source available under the [BlueDive Source Available License (BDSAL) v1.0](https://github.com/houle988/BlueDive/blob/main/LICENSE). Not a traditional open-source license — see the license file for terms.
