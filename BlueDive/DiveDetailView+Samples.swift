@@ -236,7 +236,7 @@ extension DiveDetailView {
                                 if hasMultiTank {
                                     ForEach(tankIndices, id: \.self) { idx in
                                         if let press = sample.tankPressures?[idx] {
-                                            Text(String(format: "%.0f", dive.displayProfilePressure(press)))
+                                            Text(verbatim: dive.displayProfilePressure(press).localizedString(decimals: 0))
                                                 .font(.caption).foregroundStyle(.red)
                                                 .frame(width: 50, alignment: .trailing)
                                         } else {
@@ -260,7 +260,7 @@ extension DiveDetailView {
                                     Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
                                 }
                                 if let ndl = sample.ndl {
-                                    Text(String(format: "%.0f", ndl))
+                                    Text(verbatim: ndl >= ndlSentinel ? "—" : ndl.localizedString(decimals: 0))
                                         .font(.caption).foregroundStyle(.yellow)
                                         .frame(width: 45, alignment: .trailing)
                                 } else {

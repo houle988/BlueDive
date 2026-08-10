@@ -292,14 +292,14 @@ struct DiveMapView: View {
                             .tag(dive)
                         } else {
                             Annotation(
-                                String(format: NSLocalizedString("%lld dives", bundle: .forAppLanguage(), comment: "Number of dives in a cluster annotation"), Int64(cluster.dives.count)),
+                                String(format: NSLocalizedString("%@ dives", bundle: .forAppLanguage(), comment: "Plural dive count in a cluster map annotation"), Double(cluster.dives.count).localizedString(decimals: 0)),
                                 coordinate: cluster.coordinate
                             ) {
                                 DiveMapClusterPin(count: cluster.dives.count)
                                     .onTapGesture {
                                         handleClusterTap(cluster)
                                     }
-                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%lld dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), Int64(cluster.dives.count))))
+                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%@ dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), Double(cluster.dives.count).localizedString(decimals: 0))))
                                     .accessibilityAddTraits(.isButton)
                             }
                         }
@@ -524,7 +524,7 @@ struct DiveMapClusterPin: View {
                     )
                     .shadow(radius: 5)
 
-                Text(verbatim: "\(count)")
+                Text(verbatim: Double(count).localizedString(decimals: 0))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
             }
@@ -571,7 +571,7 @@ struct DiveClusterListCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: String(format: NSLocalizedString("%lld dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), dives.count))
+                    Text(verbatim: String(format: NSLocalizedString("%@ dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), Double(dives.count).localizedString(decimals: 0)))
                         .font(.headline)
                         .foregroundStyle(.primary)
                     if dives.dropFirst().allSatisfy({ $0.siteName == dives.first?.siteName }),

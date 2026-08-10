@@ -11,7 +11,7 @@
 		0C63B1762F8AC30B005F2A89 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C63B1752F8AC307005F2A89 /* README.md */; };
 		0C63B1782F8AC337005F2A89 /* CONTRIBUTING.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */; };
 		0C810B92302632060098790D /* DocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C810B91302632060098790D /* DocumentsView.swift */; };
-		0C89AA682F49ECBC00B7EEBE /* claude.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C89AA672F49ECB100B7EEBE /* claude.md */; };
+		0C89AA682F49ECBC00B7EEBE /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C89AA672F49ECB100B7EEBE /* CLAUDE.md */; };
 		0C89AA6C2F49EF2400B7EEBE /* LibDCSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 0C89AA6B2F49EF2400B7EEBE /* LibDCSwift */; };
 		0CF0DA742FB24469008E0330 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CF0DA732FB24469008E0330 /* WidgetKit.framework */; };
 		0CF0DA762FB24469008E0330 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CF0DA752FB24469008E0330 /* SwiftUI.framework */; };
@@ -47,7 +47,7 @@
 		0C63B1752F8AC307005F2A89 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTRIBUTING.md; sourceTree = "<group>"; };
 		0C810B91302632060098790D /* DocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsView.swift; sourceTree = "<group>"; };
-		0C89AA672F49ECB100B7EEBE /* claude.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = claude.md; sourceTree = "<group>"; };
+		0C89AA672F49ECB100B7EEBE /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 		0CF0DA722FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BlueDiveWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0CF0DA732FB24469008E0330 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		0CF0DA752FB24469008E0330 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -127,7 +127,7 @@
 				0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */,
 				0C63B1752F8AC307005F2A89 /* README.md */,
 				0C60FC712F89C6DC00C1F9A2 /* LICENSE */,
-				0C89AA672F49ECB100B7EEBE /* claude.md */,
+				0C89AA672F49ECB100B7EEBE /* CLAUDE.md */,
 				57EA9D4C2F42108A00486B7A /* BlueDive */,
 				0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */,
 				0C89AA6A2F49EF2400B7EEBE /* Frameworks */,
@@ -266,7 +266,7 @@
 				0C63B1762F8AC30B005F2A89 /* README.md in Resources */,
 				0C60FC722F89C6E500C1F9A2 /* LICENSE in Resources */,
 				0C63B1782F8AC337005F2A89 /* CONTRIBUTING.md in Resources */,
-				0C89AA682F49ECBC00B7EEBE /* claude.md in Resources */,
+				0C89AA682F49ECBC00B7EEBE /* CLAUDE.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

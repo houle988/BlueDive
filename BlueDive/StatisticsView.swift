@@ -209,14 +209,14 @@ struct StatisticsView: View {
         let warmDives = dives.filter { $0.waterTemperature != nil }
         let maxTempStr: String
         if let maxTemp = warmDives.compactMap({ $0.displayWaterTemperature }).max() {
-            maxTempStr = "\(Int(maxTemp.rounded()))\(tempSymbol)"
+            maxTempStr = maxTemp.localizedString(decimals: 0) + tempSymbol
         } else {
             maxTempStr = "—"
         }
         let coldDives = dives.filter { $0.minTemperature != nil }
         let minTempStr: String
         if let minTemp = coldDives.compactMap({ $0.displayMinTemperature }).min() {
-            minTempStr = "\(Int(minTemp.rounded()))\(tempSymbol)"
+            minTempStr = minTemp.localizedString(decimals: 0) + tempSymbol
         } else {
             minTempStr = "—"
         }
@@ -280,7 +280,7 @@ struct StatisticsView: View {
         // --- Average temperature ---
         let warmTemps = warmDives.compactMap { $0.displayWaterTemperature }
         let avgTempValue = warmTemps.isEmpty ? 0.0 : warmTemps.reduce(0, +) / Double(warmTemps.count)
-        let avgTempStr = warmDives.isEmpty ? "—" : "\(Int(avgTempValue.rounded()))\(tempSymbol)"
+        let avgTempStr = warmDives.isEmpty ? "—" : avgTempValue.localizedString(decimals: 0) + tempSymbol
 
         // --- RMV stats ---
         let rmvDives = dives.filter { $0.calculatedRMV > 0 }
@@ -295,8 +295,8 @@ struct StatisticsView: View {
             let avgRMVL = rmvValues.reduce(0, +) / Double(rmvValues.count)
             let isMetricRMV = prefs.pressureUnit != .psi
             let avgRMVFormatted = isMetricRMV
-                ? avgRMVL.formatted(.number.locale(locale).precision(.fractionLength(2))) + " L/min"
-                : (avgRMVL / 28.3168).formatted(.number.locale(locale).precision(.fractionLength(3))) + " " + NSLocalizedString("unit.volume.rmv.cu_ft_per_min", bundle: .forAppLanguage(), comment: "RMV unit: cubic feet per minute")
+                ? avgRMVL.localizedString(decimals: 2, minDecimals: 2) + " L/min"
+                : (avgRMVL / 28.3168).localizedString(decimals: 3, minDecimals: 3) + " " + NSLocalizedString("unit.volume.rmv.cu_ft_per_min", bundle: .forAppLanguage(), comment: "RMV unit: cubic feet per minute")
             let hasNonNative = rmvDives.contains { !$0.isRMVInNativeUnits }
             avgRMVStr = hasNonNative ? avgRMVFormatted + " *" : avgRMVFormatted
             bestRMVDive = rmvDives.min(by: { $0.calculatedRMV < $1.calculatedRMV })
@@ -315,7 +315,7 @@ struct StatisticsView: View {
             let sacUnit = prefs.pressureUnit.symbol
             let sacValues = sacDives.map { $0.calculatedSAC }
             let avgSACBar = sacValues.reduce(0, +) / Double(sacValues.count)
-            avgSACStr = prefs.pressureUnit.convertFromBar(avgSACBar).formatted(.number.locale(locale).precision(.fractionLength(2))) + " \(sacUnit)/min"
+            avgSACStr = prefs.pressureUnit.convertFromBar(avgSACBar).localizedString(decimals: 2, minDecimals: 2) + " \(sacUnit)/min"
             bestSACDive = sacDives.min(by: { $0.calculatedSAC < $1.calculatedSAC })
             worstSACDive = sacDives.max(by: { $0.calculatedSAC < $1.calculatedSAC })
         }
@@ -738,7 +738,7 @@ struct StatisticsView: View {
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 LifetimeStat(
-                    value: "\(cachedDiveCount)",
+                    value: Double(cachedDiveCount).localizedString(decimals: 0),
                     label: "Dives",
                     icon: "bubbles.and.sparkles",
                     color: .cyan
@@ -750,19 +750,19 @@ struct StatisticsView: View {
                     color: .green
                 )
                 LifetimeStat(
-                    value: "\(cachedUniqueSites)",
+                    value: Double(cachedUniqueSites).localizedString(decimals: 0),
                     label: "Sites",
                     icon: "mappin.circle.fill",
                     color: .orange
                 )
                 LifetimeStat(
-                    value: "\(cachedLongestStreak)",
+                    value: Double(cachedLongestStreak).localizedString(decimals: 0),
                     label: "Consecutive Days",
                     icon: "flame.fill",
                     color: .red
                 )
                 LifetimeStat(
-                    value: cachedUniqueCountries > 0 ? "\(cachedUniqueCountries)" : "-",
+                    value: cachedUniqueCountries > 0 ? Double(cachedUniqueCountries).localizedString(decimals: 0) : "-",
                     label: "Countries",
                     icon: "globe",
                     color: .purple
@@ -773,7 +773,7 @@ struct StatisticsView: View {
                         let converted = prefs.volumeUnit == .cubicFeet
                             ? cachedTotalAirConsumed * 0.0353147
                             : cachedTotalAirConsumed
-                        return converted.formatted(.number.locale(locale).precision(.fractionLength(0))) + " \(prefs.volumeUnit.symbol)"
+                        return converted.localizedString(decimals: 0) + " \(prefs.volumeUnit.symbol)"
                     }(),
                     label: "Air Consumed",
                     icon: "wind",
@@ -816,7 +816,7 @@ struct StatisticsView: View {
                     )
                     .cornerRadius(6)
                     .annotation(position: .top, spacing: 4) {
-                        Text("\(item.count)")
+                        Text(verbatim: Double(item.count).localizedString(decimals: 0))
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .foregroundStyle(.cyan)
                     }
@@ -880,7 +880,7 @@ struct StatisticsView: View {
                 }
 
                 VStack(spacing: 4) {
-                    Text(verbatim: cachedAvgDepth.formatted(.number.locale(locale).precision(.fractionLength(1))) + " \(prefs.depthUnit.symbol)")
+                    Text(verbatim: cachedAvgDepth.localizedString(decimals: 1, minDecimals: 1) + " \(prefs.depthUnit.symbol)")
                         .font(.system(.title, design: .rounded))
                         .fontWeight(.black)
                         .foregroundStyle(.primary)
@@ -1331,7 +1331,7 @@ struct StatisticsView: View {
                                 Spacer()
 
                                 // Dive count pill
-                                Text("\(site.count)")
+                                Text(verbatim: Double(site.count).localizedString(decimals: 0))
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
                                     .foregroundStyle(.cyan)
                                     .padding(.horizontal, 10)
@@ -1380,7 +1380,7 @@ struct StatisticsView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 StatisticsCard(
                     title: "Species Seen",
-                    value: "\(cachedTotalSpeciesSeen)",
+                    value: Double(cachedTotalSpeciesSeen).localizedString(decimals: 0),
                     icon: "fish.fill",
                     color: .orange
                 )

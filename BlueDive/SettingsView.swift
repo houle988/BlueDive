@@ -191,7 +191,7 @@ enum TemperatureUnit: String, CaseIterable {
     ///   - storedUnit: The unit the value was originally imported in.
     func formatted(_ value: Double, from storedUnit: TemperatureUnit) -> String {
         let display = convert(value, from: storedUnit)
-        return "\(Int(display.rounded()))\(symbol)"
+        return display.localizedString(decimals: 0) + symbol
     }
 
     /// Convenience overload for legacy callers that provide a value already in

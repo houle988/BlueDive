@@ -166,17 +166,68 @@ extension View {
     }
 }
 
-// MARK: - Locale-aware number formatting for TextFields
+// MARK: - Locale-aware number formatting
 
-extension Double {
-    /// Formats the value using the user's locale decimal separator (e.g. "12,5" in French CA).
-    /// Use this when pre-filling TextFields. Pairs with parseFlexibleDouble which accepts both separators.
-    func localizedString(decimals: Int = 1, minDecimals: Int = 0) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale.current
-        formatter.minimumFractionDigits = minDecimals
-        formatter.maximumFractionDigits = decimals
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: self)) ?? String(self)
+private enum NumberFormatterCache {
+    private static let lock = NSLock()
+    private static var cache = [String: NumberFormatter]()
+
+    // Performs both the cache lookup and the format call while holding the lock,
+    // since NumberFormatter is not thread-safe for concurrent use (e.g. PDF export
+    // or notification scheduling on a background thread).
+    static func format(_ value: Double, decimals: Int, minDecimals: Int, grouping: Bool, locale: Locale) -> String {
+        let key = "\(decimals),\(minDecimals),\(grouping ? 1 : 0),\(locale.identifier)"
+        lock.lock()
+        defer { lock.unlock() }
+        let formatter: NumberFormatter
+        if let cached = cache[key] {
+            formatter = cached
+        } else {
+            let f = NumberFormatter()
+            f.locale = locale
+            f.minimumFractionDigits = minDecimals
+            f.maximumFractionDigits = decimals
+            f.numberStyle = .decimal
+            f.usesGroupingSeparator = grouping
+            cache[key] = f
+            formatter = f
+        }
+        return formatter.string(from: NSNumber(value: value)) ?? String(value)
     }
 }
+
+extension Double {
+    /// Locale-aware decimal string with grouping separators (e.g. "3,000" en-CA, "3.000" de).
+    /// Use for display labels ONLY — never for TextField pre-fill (grouping separators corrupt values ≥ 1000 on parse).
+    func localizedString(decimals: Int = 1, minDecimals: Int = 0, locale: Locale = .current) -> String {
+        NumberFormatterCache.format(self, decimals: decimals, minDecimals: minDecimals, grouping: true, locale: locale)
+    }
+
+    /// Locale-aware decimal string without grouping separators — safe for TextField pre-fill.
+    /// Preserves the locale decimal separator (e.g. "12,5" in fr-CA) but omits thousands separators.
+    /// Pairs with parseFlexibleDouble. Never use localizedString(decimals:) for TextField pre-fill.
+    func editableString(decimals: Int = 1, minDecimals: Int = 0, locale: Locale = .current) -> String {
+        NumberFormatterCache.format(self, decimals: decimals, minDecimals: minDecimals, grouping: false, locale: locale)
+    }
+}
+
+// MARK: - Flexible Double Parsing
+
+/// Parses a string to Double, accepting '.' or ',' as decimal separator.
+/// Strips thin-space (U+202F) and non-breaking-space (U+00A0) grouping separators before parsing.
+/// Canonical counterpart to editableString(decimals:) for TextField round-trips.
+func parseFlexibleDouble(_ text: String) -> Double? {
+    let trimmed = text.trimmingCharacters(in: .whitespaces)
+    guard !trimmed.isEmpty else { return nil }
+    let normalized = trimmed
+        .replacingOccurrences(of: "\u{202F}", with: "")
+        .replacingOccurrences(of: "\u{00A0}", with: "")
+        .replacingOccurrences(of: ",", with: ".")
+    return Double(normalized)
+}
+
+// MARK: - NDL Sentinel
+
+/// Dive computers emit values at or above this threshold to signal "no decompression limit required".
+/// Profile samples with NDL ≥ ndlSentinel must be excluded from display and charting.
+let ndlSentinel: Double = 999

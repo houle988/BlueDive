@@ -773,7 +773,7 @@ struct GearRow: View {
             }
             
             // Nombre de plongées
-            Label("\(gear.totalDivesCount)", systemImage: "water.waves")
+            Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
                 .font(.caption)
                 .foregroundStyle(.cyan)
         }
@@ -823,7 +823,7 @@ struct CategoryFilterChip: View {
                     .fontWeight(isSelected ? .semibold : .regular)
                 
                 if let count = count {
-                    Text("\(count)")
+                    Text(verbatim: Double(count).localizedString(decimals: 0))
                         .font(.caption2)
                         .fontWeight(.bold)
                         .padding(.horizontal, 6)

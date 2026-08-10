@@ -195,19 +195,19 @@ struct MarineLifeView: View {
     private var heroStatsRow: some View {
         HStack(spacing: 12) {
             StatisticsHeroCard(
-                value: "\(cachedTotalSpecies)",
+                value: Double(cachedTotalSpecies).localizedString(decimals: 0),
                 label: "Species",
                 icon: "fish.fill",
                 color: .orange
             )
             StatisticsHeroCard(
-                value: "\(cachedTotalSightings)",
+                value: Double(cachedTotalSightings).localizedString(decimals: 0),
                 label: "Sightings",
                 icon: "eye.fill",
                 color: .cyan
             )
             StatisticsHeroCard(
-                value: "\(cachedDivesWithLife)",
+                value: Double(cachedDivesWithLife).localizedString(decimals: 0),
                 label: "Dives",
                 icon: "figure.open.water.swim",
                 color: .green
@@ -311,7 +311,7 @@ struct MarineLifeView: View {
         SightingQuantity.allCases.reversed()
             .compactMap { q -> String? in
                 guard let n = species.quantityCounts[q], n > 0 else { return nil }
-                return "\(n.formatted(.number.locale(locale)))× \(q.label)"
+                return "\(Double(n).localizedString(decimals: 0))× \(q.label)"
             }
             .joined(separator: " · ")
     }
@@ -363,7 +363,7 @@ struct MarineLifeView: View {
 
             Spacer()
 
-            Text(verbatim: "\(species.diveCount)")
+            Text(verbatim: Double(species.diveCount).localizedString(decimals: 0))
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.orange)
                 .padding(.horizontal, 10)
@@ -410,7 +410,7 @@ struct SpeciesDivesSheet: View {
                                 }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 3) {
-                                    Text(verbatim: "\(dive.displayMaxDepth.formatted(.number.precision(.fractionLength(1)).locale(locale))) \(prefs.depthUnit.symbol)")
+                                    Text(verbatim: "\(dive.displayMaxDepth.localizedString(decimals: 1, minDecimals: 1)) \(prefs.depthUnit.symbol)")
                                         .font(.subheadline.weight(.bold))
                                         .foregroundStyle(.cyan)
                                     Text(dive.formattedDuration)

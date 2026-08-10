@@ -155,7 +155,7 @@ class NotificationManager: NSObject {
         let content = UNMutableNotificationContent()
         let milestoneBundle = Bundle.forAppLanguage()
         content.title = NSLocalizedString("🏆 Milestone Reached!", bundle: milestoneBundle, comment: "")
-        content.body = String(format: NSLocalizedString("Congratulations! You've completed %lld dives! 🎉", bundle: milestoneBundle, comment: ""), Int64(reached))
+        content.body = String(format: NSLocalizedString("Congratulations! You've completed %@ dives! 🎉", bundle: milestoneBundle, comment: ""), Double(reached).localizedString(decimals: 0))
         content.sound = .default
         content.categoryIdentifier = "MILESTONE"
 

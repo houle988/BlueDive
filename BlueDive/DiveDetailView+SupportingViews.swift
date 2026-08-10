@@ -872,7 +872,7 @@ struct AddGearToDiveView: View {
                                                 .foregroundStyle(.secondary)
                                         }
 
-                                        Label("\(gear.totalDivesCount)", systemImage: "water.waves")
+                                        Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
                                             .font(.caption)
                                             .foregroundStyle(.cyan)
                                     }

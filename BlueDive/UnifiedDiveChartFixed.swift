@@ -284,7 +284,7 @@ private struct StaticChartLayer: View, Equatable {
     /// PPO₂ label for a tick. 0 bar at surface (y=0), 2.0 bar at deepest (y=yDomainMin).
     private func ppo2Label(for y: Double) -> String {
         let value = ppo2AxisMax * fraction(for: y)
-        return String(format: "%.1f bar", value)
+        return value.localizedString(decimals: 1, minDecimals: 1) + " bar"
     }
 
     // The Y domain — depth values are negated so deeper = more negative = lower on chart.
@@ -335,7 +335,7 @@ private struct StaticChartLayer: View, Equatable {
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
                         // v is negative — negate to show a positive depth label
-                        Text(String(format: "%.0f\(prefs.depthUnit.symbol)", -v))
+                        Text(verbatim: (-v).localizedString(decimals: 0) + prefs.depthUnit.symbol)
                             .font(.caption2)
                             .foregroundStyle(.cyan)
                     }
@@ -561,7 +561,7 @@ private struct StaticChartLayer: View, Equatable {
             // Skip leading zero NDL samples — dive computers emit 0 until they compute
             // the first valid NDL value. Find the index of the first non-zero sample
             // and only plot from that point onward. Underlying data is unchanged.
-            let allWithNDL = dive.profileSamples.filter { $0.ndl != nil }
+            let allWithNDL = dive.profileSamples.filter { $0.ndl != nil && ($0.ndl ?? 0) < ndlSentinel }
             let firstNonZeroIdx = allWithNDL.firstIndex { ($0.ndl ?? 0) != 0 } ?? allWithNDL.startIndex
             let samplesWithNDL = Array(allWithNDL[firstNonZeroIdx...])
             ForEach(samplesWithNDL) { sample in
@@ -1166,7 +1166,7 @@ struct UnifiedDiveChartOptimized: View {
     }
     
     private var hasNDLData: Bool {
-        dive.profileSamples.contains { $0.ndl != nil }
+        dive.profileSamples.contains { $0.ndl != nil && ($0.ndl ?? 0) < ndlSentinel }
     }
 
     private var hasDecoData: Bool {
@@ -1205,7 +1205,7 @@ struct UnifiedDiveChartOptimized: View {
         let minDisplay = dive.displayProfilePressure(minP)
         let maxDisplay = dive.displayProfilePressure(maxP)
         let symbol = prefs.pressureUnit.symbol
-        return "\(Int(minDisplay))-\(Int(maxDisplay)) \(symbol)"
+        return "\(minDisplay.localizedString(decimals: 0))-\(maxDisplay.localizedString(decimals: 0)) \(symbol)"
     }
 
     private func pressureRangeForTank(_ tankIdx: Int) -> String {
@@ -1214,13 +1214,13 @@ struct UnifiedDiveChartOptimized: View {
         let minDisplay = dive.displayProfilePressure(minP)
         let maxDisplay = dive.displayProfilePressure(maxP)
         let symbol = prefs.pressureUnit.symbol
-        return "\(Int(minDisplay))-\(Int(maxDisplay)) \(symbol)"
+        return "\(minDisplay.localizedString(decimals: 0))-\(maxDisplay.localizedString(decimals: 0)) \(symbol)"
     }
     
     private var ndlRange: String {
-        let ndls = dive.profileSamples.compactMap { $0.ndl }
+        let ndls = dive.profileSamples.compactMap { $0.ndl }.filter { $0 < ndlSentinel }
         guard !ndls.isEmpty, let min = ndls.min(), let max = ndls.max() else { return "—" }
-        return String(format: "%.0f-%.0f min", min, max)
+        return "\(min.localizedString(decimals: 0))-\(max.localizedString(decimals: 0)) min"
     }
     
 }
@@ -1282,8 +1282,8 @@ struct ChartTooltipView: View {
     }
     
     private var ndlLabel: String? {
-        guard let ndl = sample.ndl else { return nil }
-        return String(format: "%.0f min", ndl)
+        guard let ndl = sample.ndl, ndl < ndlSentinel else { return nil }
+        return ndl.localizedString(decimals: 0) + " min"
     }
 
     /// Mandatory deco stop (type == 2) whose diamond marker sits on this sample.
@@ -1305,8 +1305,8 @@ struct ChartTooltipView: View {
     /// Returns nil when the sample does not coincide with a mandatory stop point.
     private var decoStopDetail: String? {
         guard let stop = matchingDecoStop else { return nil }
-        let depth    = String(format: "%.0f%@", dive.displayProfileDepth(stop.depth), prefs.depthUnit.symbol)
-        let duration = String(format: "%.0fmin", ceil(stop.time / 60))
+        let depth    = dive.displayProfileDepth(stop.depth).localizedString(decimals: 0) + prefs.depthUnit.symbol
+        let duration = ceil(stop.time / 60).localizedString(decimals: 0) + "min"
         return "\(depth) · \(duration)"
     }
 
@@ -1389,7 +1389,7 @@ struct ChartTooltipView: View {
                     : p < DiveProfileEvent.ppo2WarnThreshold ? .green
                     : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
                     : .red
-                tooltipRow(icon: "lungs.fill", color: ppo2Color, label: String(format: "%.2f bar", p))
+                tooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
             }
 
             // Deco event — shown if enabled and this sample carries a deco obligation.

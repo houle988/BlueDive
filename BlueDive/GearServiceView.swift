@@ -37,20 +37,9 @@ struct GearServiceView: View {
         date.formatted(.dateTime.day().month().year().locale(locale))
     }
 
-    private func formattedCost(_ value: Double, grouping: Bool = true) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.usesGroupingSeparator = grouping
-        f.minimumFractionDigits = 2
-        f.maximumFractionDigits = 2
-        f.locale = locale
-        return f.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
-    }
-
     private var costIsInvalid: Bool {
-        let normalized = serviceCost.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
-        guard !normalized.isEmpty else { return false }
-        return Double(normalized).flatMap { $0.isFinite ? $0 : nil } == nil
+        guard !serviceCost.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        return parseFlexibleDouble(serviceCost).flatMap { $0.isFinite ? $0 : nil } == nil
     }
 
     // MARK: - Computed Properties
@@ -171,7 +160,7 @@ struct GearServiceView: View {
                         }
 
                         Section("Cost (optional)") {
-                            TextField(formattedCost(0, grouping: false), text: $serviceCost)
+                            TextField(0.0.editableString(decimals: 2, minDecimals: 2), text: $serviceCost)
                                 .platformKeyboardType(.decimalPad)
                                 .overlay(alignment: .trailing) {
                                     if !serviceCost.isEmpty {
@@ -251,10 +240,12 @@ struct GearServiceView: View {
                         ToolbarItem(placement: .confirmationAction) {
                             Button(mode.isEdit ? "Save" : "Confirm") {
                                 let desc = serviceDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-                                let normalized = serviceCost.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+                                let isBlank = serviceCost.trimmingCharacters(in: .whitespaces).isEmpty
                                 // Reject non-finite values (e.g. "inf", "nan") — JSONEncoder throws on them,
                                 // which would cause saveServiceRecords to silently drop the entire record.
-                                let parsedCost: Double? = normalized.isEmpty ? nil : Double(normalized).flatMap { $0.isFinite ? $0 : nil }
+                                let parsedCost: Double? = isBlank
+                                    ? nil
+                                    : parseFlexibleDouble(serviceCost).flatMap { $0.isFinite ? $0 : nil }
                                 switch mode {
                                 case .edit(let record):
                                     var updated = record
@@ -262,7 +253,7 @@ struct GearServiceView: View {
                                     updated.description = desc
                                     // Blank or whitespace-only → remove cost. Parseable → use it.
                                     // Non-empty but unparseable → preserve original to avoid silent data loss.
-                                    if normalized.isEmpty {
+                                    if isBlank {
                                         updated.cost = nil
                                     } else if let c = parsedCost {
                                         updated.cost = c
@@ -295,7 +286,7 @@ struct GearServiceView: View {
                     if case .edit(let record) = mode {
                         serviceDate = (record.isLegacy && record.date == .distantPast) ? Date() : record.date
                         serviceDescription = record.description
-                        serviceCost = record.cost.map { formattedCost($0, grouping: false) } ?? ""
+                        serviceCost = record.cost.map { $0.editableString(decimals: 2, minDecimals: 2) } ?? ""
                     }
                 }
                 .onDisappear { showDeleteConfirmation = false }
@@ -386,7 +377,7 @@ struct GearServiceView: View {
                         let currency = gear.currency ?? "CAD"
                         ModernInfoPill(
                             icon: "dollarsign.circle.fill",
-                            text: String(format: "%.0f %@", price, currency),
+                            text: price.localizedString(decimals: 0) + " \(currency)",
                             color: .green
                         )
                     }
@@ -576,7 +567,7 @@ struct GearServiceView: View {
                     icon: "water.waves",
                     iconColor: .blue,
                     title: "Dives",
-                    value: "\(gear.totalDivesCount)"
+                    value: Double(gear.totalDivesCount).localizedString(decimals: 0)
                 )
             }
             .padding(.horizontal)
@@ -603,7 +594,9 @@ struct GearServiceView: View {
             return Text("SERVICE OVERDUE")
         }
         if let days = daysUntilServiceDue {
-            return Text("SERVICE DUE IN \(days) DAYS")
+            return days == 1
+                ? Text(NSLocalizedString("SERVICE DUE IN 1 DAY", bundle: .forAppLanguage(), comment: "Title for alert when a gear service is due in exactly 1 day"))
+                : Text(verbatim: String(format: NSLocalizedString("SERVICE DUE IN %@ DAYS", bundle: .forAppLanguage(), comment: "Title for alert when a gear service is due in multiple days. The placeholder is the number of days."), Double(days).localizedString(decimals: 0)))
         }
         return Text("SERVICE DUE SOON")
     }
@@ -614,10 +607,16 @@ struct GearServiceView: View {
             if overdueDays == 0 {
                 return Text(verbatim: String(format: NSLocalizedString("Maintenance is due today (%@).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is due today. %@ is the formatted date."), formattedDate(nextDue)))
             }
-            return Text(verbatim: String(format: NSLocalizedString("Maintenance was due on %@ (%lld days ago).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is overdue. First arg is the formatted date, second is the number of days overdue."), formattedDate(nextDue), Int64(overdueDays)))
+            if overdueDays == 1 {
+                return Text(verbatim: String(format: NSLocalizedString("Maintenance was due on %@ (1 day ago).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is overdue by exactly 1 day. %@ is the formatted date."), formattedDate(nextDue)))
+            }
+            return Text(verbatim: String(format: NSLocalizedString("Maintenance was due on %@ (%@ days ago).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is overdue. First arg is the formatted date, second is the number of days overdue."), formattedDate(nextDue), Double(overdueDays).localizedString(decimals: 0)))
         }
         if let days = daysUntilServiceDue, let nextDue = gear.nextServiceDue {
-            return Text(verbatim: String(format: NSLocalizedString("Maintenance is due on %@ (%lld days remaining).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is due soon. First arg is the formatted date, second is the number of days remaining."), formattedDate(nextDue), Int64(days)))
+            if days == 1 {
+                return Text(verbatim: String(format: NSLocalizedString("Maintenance is due on %@ (1 day remaining).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is due in exactly 1 day. %@ is the formatted date."), formattedDate(nextDue)))
+            }
+            return Text(verbatim: String(format: NSLocalizedString("Maintenance is due on %@ (%@ days remaining).", bundle: .forAppLanguage(), comment: "Alert shown when maintenance is due soon. First arg is the formatted date, second is the number of days remaining."), formattedDate(nextDue), Double(days).localizedString(decimals: 0)))
         }
         return Text("Maintenance due soon.")
     }
@@ -759,7 +758,13 @@ struct GearServiceView: View {
                     icon: "calendar.badge.clock",
                     iconColor: .orange,
                     title: "Days Ago",
-                    value: String(format: NSLocalizedString("%lld days", bundle: .forAppLanguage(), comment: "Number of days since last maintenance service"), Int64(gear.daysSinceLastService))
+                    value: {
+                        let days = gear.daysSinceLastService
+                        let n = Double(days).localizedString(decimals: 0)
+                        return days == 1
+                            ? NSLocalizedString("1 day", bundle: .forAppLanguage(), comment: "Singular days since last maintenance service")
+                            : String(format: NSLocalizedString("%@ days", bundle: .forAppLanguage(), comment: "Plural days since last maintenance service, pre-formatted with locale grouping separator"), n)
+                    }()
                 )
             }
         } else {
@@ -841,7 +846,7 @@ struct GearServiceView: View {
                             // today so the user doesn't have to scroll from year 0001.
                             serviceDate = (record.isLegacy && record.date == .distantPast) ? Date() : record.date
                             serviceDescription = record.description
-                            serviceCost = record.cost.map { formattedCost($0, grouping: false) } ?? ""
+                            serviceCost = record.cost.map { $0.editableString(decimals: 2, minDecimals: 2) } ?? ""
                             scheduleNextService = false
                             showDeleteConfirmation = false
                             serviceSheetMode = .edit(record)
@@ -863,7 +868,7 @@ struct GearServiceView: View {
                             .font(.subheadline)
                             .fontWeight(.semibold)
                         Spacer()
-                        Text(verbatim: formattedCost(total) + (gear.currency.flatMap { $0.isEmpty ? nil : " " + $0 } ?? ""))
+                        Text(verbatim: total.localizedString(decimals: 2, minDecimals: 2) + (gear.currency.flatMap { $0.isEmpty ? nil : " " + $0 } ?? ""))
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundStyle(.primary)
@@ -1110,7 +1115,7 @@ struct ServiceRecordRow: View {
             Spacer()
 
             if let cost = record.cost {
-                Text(verbatim: cost.formatted(.number.precision(.fractionLength(2)).locale(locale)) + (currency.isEmpty ? "" : " " + currency))
+                Text(verbatim: cost.localizedString(decimals: 2, minDecimals: 2) + (currency.isEmpty ? "" : " " + currency))
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(.primary)
@@ -1306,17 +1311,23 @@ struct ServiceGauge: View {
                         .foregroundStyle(gaugeColor)
                     
                     if isCountdown {
-                        Text("\(daysRemaining)")
+                        Text(verbatim: Double(daysRemaining).localizedString(decimals: 0))
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
-                        Text("days")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        if daysRemaining == 1 {
+                            Text(NSLocalizedString("day", bundle: .forAppLanguage(), comment: "Singular day label in service countdown gauge"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text(NSLocalizedString("days", bundle: .forAppLanguage(), comment: "Plural days label in service countdown gauge"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
-                        Text("\(Int(value))")
+                        Text(verbatim: Double(value).localizedString(decimals: 0))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
-                        Text("/ \(Int(total))")
+                        Text(verbatim: "/ " + Double(total).localizedString(decimals: 0))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

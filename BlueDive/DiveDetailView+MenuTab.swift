@@ -16,6 +16,10 @@ extension DiveDetailView {
         return formatter.string(from: dive.timestamp)
     }
 
+    private var minAbbreviation: String {
+        NSLocalizedString("min", bundle: Bundle.forAppLanguage(), comment: "Abbreviation for minutes on chart time axis")
+    }
+
     var menuTabContent: some View {
         VStack(spacing: 20) {
             depthProfileSection
@@ -61,7 +65,7 @@ extension DiveDetailView {
                     .foregroundStyle(.white.opacity(0.2))
                 AxisValueLabel {
                     if let time = value.as(Double.self) {
-                        Text("\(Int(time)) min")
+                        Text(verbatim: Double(time).localizedString(decimals: 0) + " " + minAbbreviation)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -74,7 +78,7 @@ extension DiveDetailView {
                     .foregroundStyle(.white.opacity(0.2))
                 AxisValueLabel {
                     if let depth = value.as(Double.self) {
-                        Text("\(Int(depth))m")
+                        Text(verbatim: Double(depth).localizedString(decimals: 0) + " " + prefs.depthUnit.symbol)
                             .font(.caption2)
                             .foregroundStyle(.cyan)
                     }
@@ -87,7 +91,7 @@ extension DiveDetailView {
     var depthProfileSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
-                Text("#\(dive.diveNumber ?? diveNumber)")
+                Text(verbatim: "#\(dive.diveNumber ?? diveNumber)")
                     .font(.system(.caption, design: .monospaced))
                     .fontWeight(.bold)
                     .padding(.horizontal, 6)
@@ -211,7 +215,7 @@ extension DiveDetailView {
                         .foregroundStyle(.white.opacity(0.2))
                     AxisValueLabel {
                         if let time = value.as(Double.self) {
-                            Text("\(Int(time)) min")
+                            Text(verbatim: Double(time).localizedString(decimals: 0) + " " + minAbbreviation)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -224,7 +228,7 @@ extension DiveDetailView {
                         .foregroundStyle(.white.opacity(0.2))
                     AxisValueLabel {
                         if let depth = value.as(Double.self) {
-                            Text("\(Int(depth))m")
+                            Text(verbatim: Double(depth).localizedString(decimals: 0) + " " + prefs.depthUnit.symbol)
                                 .font(.caption2)
                                 .foregroundStyle(.cyan)
                         }
@@ -270,12 +274,12 @@ extension DiveDetailView {
                 }
 
                 // NDL
-                if dive.profileSamples.contains(where: { $0.ndl != nil }) {
+                if dive.profileSamples.contains(where: { $0.ndl != nil && ($0.ndl ?? 0) < ndlSentinel }) {
                     miniChartView(
                         title: "NDL",
-                        values: dive.profileSamples.compactMap { $0.ndl },
+                        values: dive.profileSamples.compactMap { $0.ndl }.filter { $0 < ndlSentinel },
                         color: .yellow,
-                        unit: "min"
+                        unit: minAbbreviation
                     )
                 }
             }
@@ -298,7 +302,7 @@ extension DiveDetailView {
 
             HStack(spacing: 4) {
                 if let min = values.min(), let max = values.max() {
-                    Text("\(Int(min))-\(Int(max))")
+                    Text(verbatim: "\(min.localizedString(decimals: 0))-\(max.localizedString(decimals: 0))")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundStyle(color)
@@ -949,7 +953,7 @@ extension DiveDetailView {
         guard !tanks.isEmpty else { return "—" }
         let values = tanks.map { tank -> String in
             guard let sp = tank.startPressure else { return "—" }
-            return String(format: "%.0f \(symbol)", dive.displayPressure(sp))
+            return dive.displayPressure(sp).localizedString(decimals: 0) + " \(symbol)"
         }
         return values.joined(separator: " / ")
     }
@@ -1109,7 +1113,7 @@ extension DiveDetailView {
                         .font(.caption)
                         .foregroundStyle(.gray)
                     if let diveNumber = dive.diveNumber {
-                        Text("\(diveNumber)")
+                        Text(verbatim: Double(diveNumber).localizedString(decimals: 0))
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(.primary)

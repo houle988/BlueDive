@@ -112,11 +112,11 @@ struct TankData: Identifiable, Sendable {
         return "Air"
     }
 
-    func gasDisplayName(locale: Locale = UserPreferences.shared.languageMode.locale ?? Locale.autoupdatingCurrent) -> String {
+    func gasDisplayName() -> String {
         if hePercentage > 0 {
             return String(format: NSLocalizedString("Trimix %d/%d", bundle: .forAppLanguage(), comment: "Trimix gas mix label showing oxygen/helium percentages e.g. Trimix 21/35"), o2Percentage, hePercentage)
         } else if o2Percentage > 21 {
-            let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(locale))
+            let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(.current))
             return String(format: NSLocalizedString("Nitrox %@", bundle: .forAppLanguage(), comment: "Nitrox gas mix label, %@ is the pre-formatted oxygen percentage e.g. Nitrox 32%"), pct)
         } else if o2Percentage < 21 {
             return NSLocalizedString("Hypoxic", bundle: .forAppLanguage(), comment: "Gas type: oxygen below 21%")

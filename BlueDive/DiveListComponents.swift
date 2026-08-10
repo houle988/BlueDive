@@ -185,7 +185,7 @@ struct StatsHeaderView: View {
         return HStack(spacing: 12) {
             StatMiniBox(
                 title: "DIVES",
-                value: "\(dives.count)",
+                value: Double(dives.count).localizedString(decimals: 0),
                 icon: "figure.open.water.swim",
                 color: .blue
             )

@@ -308,7 +308,7 @@ struct DiverProfileView: View {
             // Row 1 — main stats
             HStack(spacing: 12) {
                 BigStatCard(
-                    value: "\(totalDives)",
+                    value: Double(totalDives).localizedString(decimals: 0),
                     label: "Dives",
                     icon: "figure.open.water.swim",
                     color: .cyan
@@ -323,10 +323,10 @@ struct DiverProfileView: View {
 
             // Row 2 — secondary stats
             HStack(spacing: 12) {
-                SmallStatCard(value: String(format: "%.0f\(prefs.depthUnit.symbol)", maxDepth), label: "Max Depth",  icon: "arrow.down.circle.fill", color: .blue)
-                SmallStatCard(value: "\(countriesVisited)",              label: "Countries",  icon: "globe",                  color: .mint)
-                SmallStatCard(value: "\(uniqueSites)",                   label: "Sites",      icon: "mappin.and.ellipse",     color: .purple)
-                SmallStatCard(value: "\(totalCreatures)",                label: "Species",    icon: "fish.fill",              color: .orange)
+                SmallStatCard(value: maxDepth.localizedString(decimals: 0) + prefs.depthUnit.symbol, label: "Max Depth",  icon: "arrow.down.circle.fill", color: .blue)
+                SmallStatCard(value: Double(countriesVisited).localizedString(decimals: 0), label: "Countries",  icon: "globe",                  color: .mint)
+                SmallStatCard(value: Double(uniqueSites).localizedString(decimals: 0),      label: "Sites",      icon: "mappin.and.ellipse",     color: .purple)
+                SmallStatCard(value: Double(totalCreatures).localizedString(decimals: 0),   label: "Species",    icon: "fish.fill",              color: .orange)
             }
         }
     }
@@ -372,7 +372,7 @@ struct DiverProfileView: View {
                             Image(systemName: "eye.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
-                            Text("\(creature.count)")
+                            Text(verbatim: Double(creature.count).localizedString(decimals: 0))
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.orange)
@@ -858,7 +858,7 @@ private struct GoalRow: View {
 
                 Spacer()
 
-                Text("\(goal.target-goal.current)")
+                Text(verbatim: Double(goal.target - goal.current).localizedString(decimals: 0))
                     .font(.caption)
                     .foregroundStyle(goal.color)
                     .monospacedDigit()
@@ -918,13 +918,18 @@ enum GoalType {
     case countries
     
     func localizedTitle(count: Int) -> String {
+        let n = Double(count).localizedString(decimals: 0)
         switch self {
         case .dives:
-            return String(format: NSLocalizedString("%lld dives", bundle: .forAppLanguage(), comment: "Dive count goal label"), count)
+            return count == 1
+                ? String(format: NSLocalizedString("%@ dive", bundle: .forAppLanguage(), comment: "Singular dive count goal label"), n)
+                : String(format: NSLocalizedString("%@ dives", bundle: .forAppLanguage(), comment: "Plural dive count goal label"), n)
         case .species:
-            return String(format: NSLocalizedString("%lld species", bundle: .forAppLanguage(), comment: "Species count goal label"), count)
+            return String(format: NSLocalizedString("%@ species", bundle: .forAppLanguage(), comment: "Species count goal label"), n)
         case .countries:
-            return String(format: NSLocalizedString("%lld countries visited", bundle: .forAppLanguage(), comment: "Countries visited goal label"), count)
+            return count == 1
+                ? String(format: NSLocalizedString("%@ country visited", bundle: .forAppLanguage(), comment: "Singular countries visited goal label"), n)
+                : String(format: NSLocalizedString("%@ countries visited", bundle: .forAppLanguage(), comment: "Plural countries visited goal label"), n)
         }
     }
 

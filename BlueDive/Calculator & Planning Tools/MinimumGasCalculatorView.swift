@@ -160,13 +160,11 @@ struct MinimumGasCalculatorView: View {
     @State private var roundUpAscent = true
     @State private var safetyStop = false
     @State private var safetyMarginEnabled = false
-    @State private var safetyMarginStr = 1.5.localizedString(decimals: 1)
+    @State private var safetyMarginStr = 1.5.editableString(decimals: 1)
     @State private var showInfo = false
     @FocusState private var isAnyFieldFocused: Bool
 
-    private func toDouble(_ s: String) -> Double {
-        Double(s.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")) ?? 0
-    }
+    private func toDouble(_ s: String) -> Double { parseFlexibleDouble(s) ?? 0 }
 
     // Always returns the cylinder water-volume in litres, ready for calcMinimumGas.
     // In metric, the user enters water-volume (L) directly.
@@ -290,7 +288,7 @@ struct MinimumGasCalculatorView: View {
                     marginStr       = "40"
                 case .imperial:
                     depthStr        = "100"
-                    sacStr          = 0.75.localizedString(decimals: 2)
+                    sacStr          = 0.75.editableString(decimals: 2)
                     v1Str           = "30"
                     v2Str           = "10"
                     cylVolStr       = "100"

@@ -59,13 +59,13 @@ struct EditGearView: View {
             initialValue: GearCategory.allCases.first { $0.rawValue == gear.category } ?? .other
         )
         _weightContribution = State(initialValue: gear.weightContribution)
-        _weightContributionText = State(initialValue: gear.weightContribution == 0 ? "0" : gear.weightContribution.localizedString(decimals: 2))
+        _weightContributionText = State(initialValue: gear.weightContribution == 0 ? "0" : gear.weightContribution.editableString(decimals: 2))
         _weightContributionUnit = State(initialValue: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)
         _datePurchased = State(initialValue: gear.datePurchased)
         _manufacturerText = State(initialValue: gear.manufacturer ?? "")
         _modelText = State(initialValue: gear.model ?? "")
         _serialNumber = State(initialValue: gear.serialNumber ?? "")
-        _purchasePrice = State(initialValue: gear.purchasePrice.map { $0.localizedString(decimals: 2) } ?? "")
+        _purchasePrice = State(initialValue: gear.purchasePrice.map { $0.editableString(decimals: 2) } ?? "")
         _currency = State(initialValue: gear.currency ?? "CAD")
         _purchasedFrom = State(initialValue: gear.purchasedFrom ?? "")
         _isInactive = State(initialValue: gear.isInactive)
@@ -367,7 +367,7 @@ struct EditGearView: View {
                             .fontWeight(.medium)
 
                         HStack {
-                            TextField(0.0.localizedString(decimals: 2), text: $purchasePrice)
+                            TextField(0.0.editableString(decimals: 2), text: $purchasePrice)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                             if !purchasePrice.isEmpty {
@@ -516,15 +516,14 @@ struct EditGearView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            TextField(0.0.localizedString(decimals: 1), text: $weightContributionText)
+                            TextField(0.0.editableString(decimals: 1), text: $weightContributionText)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                                 .padding()
                                 .background(Color.platformSecondaryBackground)
                                 .cornerRadius(10)
                                 .onChange(of: weightContributionText) {
-                                    let normalized = weightContributionText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
-                                    weightContribution = Double(normalized) ?? 0.0
+                                    weightContribution = parseFlexibleDouble(weightContributionText) ?? 0.0
                                 }
                         }
                         .frame(maxWidth: .infinity)
@@ -629,7 +628,7 @@ struct EditGearView: View {
             return
         }
 
-        let priceValue = Double(purchasePrice.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        let priceValue = parseFlexibleDouble(purchasePrice)
 
         gear.name = trimmedName
         gear.category = selectedCategory.rawValue

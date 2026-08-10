@@ -301,7 +301,7 @@ struct AddGearView: View {
                             .fontWeight(.medium)
                         
                         HStack {
-                            TextField(0.0.localizedString(decimals: 2), text: $purchasePrice)
+                            TextField(0.0.editableString(decimals: 2), text: $purchasePrice)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                             if !purchasePrice.isEmpty {
@@ -436,15 +436,14 @@ struct AddGearView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             
-                            TextField(0.0.localizedString(decimals: 1), text: $weightContributionText)
+                            TextField(0.0.editableString(decimals: 1), text: $weightContributionText)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                                 .padding()
                                 .background(Color.platformSecondaryBackground)
                                 .cornerRadius(10)
                                 .onChange(of: weightContributionText) {
-                                    let normalized = weightContributionText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
-                                    weightContribution = Double(normalized) ?? 0.0
+                                    weightContribution = parseFlexibleDouble(weightContributionText) ?? 0.0
                                 }
                         }
                         .frame(maxWidth: .infinity)
@@ -577,7 +576,7 @@ struct AddGearView: View {
             return
         }
         
-        let priceValue = Double(purchasePrice.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        let priceValue = parseFlexibleDouble(purchasePrice)
         
         let newGear = Gear(
             name: trimmedName,

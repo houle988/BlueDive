@@ -598,27 +598,25 @@ struct DiveFilterSheet: View {
         case (true, true):
             let lo = Swift.min(filterMinDepth, filterMaxDepth)
             let hi = Swift.max(filterMinDepth, filterMaxDepth)
-            return "\(Int(lo)) – \(Int(hi)) \(unit)"
+            return "\(lo.localizedString(decimals: 1)) – \(hi.localizedString(decimals: 1)) \(unit)"
         case (true, false):
-            return "≥ \(Int(filterMinDepth)) \(unit)"
+            return "≥ \(filterMinDepth.localizedString(decimals: 1)) \(unit)"
         case (false, true):
-            return "≤ \(Int(filterMaxDepth)) \(unit)"
+            return "≤ \(filterMaxDepth.localizedString(decimals: 1)) \(unit)"
         default:
             return ""
         }
     }
 
     private func commitDepthFields() {
-        let rawMin = minDepthText.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
-        let rawMax = maxDepthText.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
-        let parsedMin = Double(rawMin) ?? 0
-        let parsedMax = Double(rawMax) ?? 0
+        let parsedMin = parseFlexibleDouble(minDepthText) ?? 0
+        let parsedMax = parseFlexibleDouble(maxDepthText) ?? 0
         // If both are set and inverted, swap them so the range is always lo–hi
         if parsedMin > 0, parsedMax > 0, parsedMin > parsedMax {
             filterMinDepth = parsedMax
             filterMaxDepth = parsedMin
-            minDepthText   = String(Int(parsedMax))
-            maxDepthText   = String(Int(parsedMin))
+            minDepthText   = parsedMax.editableString(decimals: 1)
+            maxDepthText   = parsedMin.editableString(decimals: 1)
         } else {
             filterMinDepth = parsedMin
             filterMaxDepth = parsedMax
@@ -691,12 +689,7 @@ struct DiveFilterSheet: View {
                             .keyboardType(.decimalPad)
                             #endif
                             .onChange(of: minDepthText) {
-                                let parsed = Double(
-                                    minDepthText
-                                        .replacingOccurrences(of: ",", with: ".")
-                                        .trimmingCharacters(in: .whitespaces)
-                                ) ?? 0
-                                filterMinDepth = parsed
+                                filterMinDepth = parseFlexibleDouble(minDepthText) ?? 0
                             }
                             .onSubmit { commitDepthFields() }
                         if !minDepthText.isEmpty {
@@ -735,12 +728,7 @@ struct DiveFilterSheet: View {
                             .keyboardType(.decimalPad)
                             #endif
                             .onChange(of: maxDepthText) {
-                                let parsed = Double(
-                                    maxDepthText
-                                        .replacingOccurrences(of: ",", with: ".")
-                                        .trimmingCharacters(in: .whitespaces)
-                                ) ?? 0
-                                filterMaxDepth = parsed
+                                filterMaxDepth = parseFlexibleDouble(maxDepthText) ?? 0
                             }
                             .onSubmit { commitDepthFields() }
                         if !maxDepthText.isEmpty {
@@ -769,8 +757,8 @@ struct DiveFilterSheet: View {
             .background(Color.platformSecondaryBackground)
             .cornerRadius(12)
             .onAppear {
-                minDepthText = filterMinDepth > 0 ? String(Int(filterMinDepth)) : ""
-                maxDepthText = filterMaxDepth > 0 ? String(Int(filterMaxDepth)) : ""
+                minDepthText = filterMinDepth > 0 ? filterMinDepth.editableString(decimals: 1) : ""
+                maxDepthText = filterMaxDepth > 0 ? filterMaxDepth.editableString(decimals: 1) : ""
             }
         }
         .filterCardStyle()

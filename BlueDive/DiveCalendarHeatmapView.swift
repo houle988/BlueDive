@@ -228,7 +228,7 @@ struct DiveCalendarHeatmapView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "flame.fill")
                         .foregroundStyle(.orange)
-                    Text("\(cachedCurrentStreak) days")
+                    Text(verbatim: Double(cachedCurrentStreak).localizedString(decimals: 0) + " days")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.orange)
                 }
@@ -244,7 +244,7 @@ struct DiveCalendarHeatmapView: View {
     private var yearSummary: some View {
         HStack(spacing: 0) {
             CalHeatStat(
-                value: "\(cachedYearDiveCount)",
+                value: Double(cachedYearDiveCount).localizedString(decimals: 0),
                 label: "Dives",
                 icon: "bubbles.and.sparkles",
                 color: .cyan
@@ -258,7 +258,7 @@ struct DiveCalendarHeatmapView: View {
             )
             Divider().frame(height: 36).background(Color.primary.opacity(0.1))
             CalHeatStat(
-                value: "\(cachedYearUniqueSites)",
+                value: Double(cachedYearUniqueSites).localizedString(decimals: 0),
                 label: "Sites",
                 icon: "mappin.circle.fill",
                 color: .orange

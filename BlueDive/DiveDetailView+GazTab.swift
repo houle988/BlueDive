@@ -105,7 +105,7 @@ extension DiveDetailView {
         let wpDisplay: String = {
             if let wpRaw = tank?.workingPressure {
                 let converted = dive.displayPressure(wpRaw)
-                return String(format: "%.0f \(UserPreferences.shared.pressureUnit.symbol)", converted)
+                return converted.localizedString(decimals: 0) + " \(UserPreferences.shared.pressureUnit.symbol)"
             }
             return "—"
         }()
@@ -151,11 +151,11 @@ extension DiveDetailView {
 
         let startDisplay: String = {
             guard let sp = tank?.startPressure else { return "—" }
-            return String(format: "%.0f \(pressSymbol)", dive.displayPressure(sp))
+            return dive.displayPressure(sp).localizedString(decimals: 0) + " \(pressSymbol)"
         }()
         let endDisplay: String = {
             guard let ep = tank?.endPressure else { return "—" }
-            return String(format: "%.0f \(pressSymbol)", dive.displayPressure(ep))
+            return dive.displayPressure(ep).localizedString(decimals: 0) + " \(pressSymbol)"
         }()
 
         return VStack(alignment: .leading, spacing: 16) {
