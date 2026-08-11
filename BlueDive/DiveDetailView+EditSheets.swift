@@ -1393,7 +1393,7 @@ struct EditSiteDetailsView: View {
     @Query(sort: \Dive.siteName) private var allDives: [Dive]
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesByDate: [Dive]
 
-    @State private var selectedSiteName: String = ""
+    @State private var selectedSite: Dive? = nil
     @State private var copyGPSCoordinates: Bool = true
     @State private var workingCountry: String
     @State private var workingLocation: String
@@ -1460,12 +1460,6 @@ struct EditSiteDetailsView: View {
             if result.count == 3 { break }
         }
         return result
-    }
-
-    /// All unique sites except the 3 most recent, sorted alphabetically by site name
-    private var remainingSites: [Dive] {
-        let recentKeys = Set(recentSites.map { $0.siteName.trimmingCharacters(in: .whitespaces).lowercased() })
-        return uniqueSites.filter { !recentKeys.contains($0.siteName.trimmingCharacters(in: .whitespaces).lowercased()) }
     }
 
     private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
@@ -1578,44 +1572,8 @@ struct EditSiteDetailsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     if !uniqueSites.isEmpty {
                         siteDetailsMacOSGroupBox("Copy from Existing Site", icon: "doc.on.doc.fill", color: .orange) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "mappin.circle.fill")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 20)
-                                Text("Site")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 120, alignment: .leading)
-                                Menu {
-                                    Button("Select a site…") { selectedSiteName = "" }
-                                    if !recentSites.isEmpty {
-                                        Section("Recent") {
-                                            ForEach(recentSites, id: \.siteName) { site in
-                                                Button(site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")) {
-                                                    selectedSiteName = site.siteName
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if !remainingSites.isEmpty {
-                                        Section("All Sites") {
-                                            ForEach(remainingSites, id: \.siteName) { site in
-                                                Button(site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")) {
-                                                    selectedSiteName = site.siteName
-                                                }
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(selectedSiteName.isEmpty ? "Select a site…" : selectedSiteName)
-                                        Spacer()
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.caption)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .padding(.vertical, 4)
+                            SiteSearchField(selectedSite: $selectedSite, recents: recentSites, allSites: uniqueSites)
+                                .padding(.vertical, 4)
 
                             HStack(spacing: 8) {
                                 Toggle(isOn: $copyGPSCoordinates) {
@@ -1632,13 +1590,13 @@ struct EditSiteDetailsView: View {
                                 Spacer()
 
                                 Button("Copy Site Information") {
-                                    if let source = uniqueSites.first(where: { $0.siteName == selectedSiteName }) {
+                                    if let source = selectedSite {
                                         applySite(from: source)
                                     }
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(.orange)
-                                .disabled(selectedSiteName.isEmpty)
+                                .disabled(selectedSite == nil)
                             }
                             .padding(.top, 8)
                         }
@@ -1890,26 +1848,7 @@ struct EditSiteDetailsView: View {
     private var copyFromSiteSection: some View {
         if !uniqueSites.isEmpty {
             Section {
-                Picker("Site", selection: $selectedSiteName) {
-                    Text("Select a site…").tag("")
-                    if !recentSites.isEmpty {
-                        Section("Recent") {
-                            ForEach(recentSites, id: \.siteName) { site in
-                                let label = site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
-                                Text(label).tag(site.siteName)
-                            }
-                        }
-                    }
-                    if !remainingSites.isEmpty {
-                        Section("All Sites") {
-                            ForEach(remainingSites, id: \.siteName) { site in
-                                let label = site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
-                                Text(label).tag(site.siteName)
-                            }
-                        }
-                    }
-                }
-                .tint(.orange)
+                SiteSearchField(selectedSite: $selectedSite, recents: recentSites, allSites: uniqueSites)
 
                 Toggle(isOn: $copyGPSCoordinates) {
                     HStack(spacing: 12) {
@@ -1922,7 +1861,7 @@ struct EditSiteDetailsView: View {
                 .tint(.green)
 
                 Button {
-                    if let source = uniqueSites.first(where: { $0.siteName == selectedSiteName }) {
+                    if let source = selectedSite {
                         applySite(from: source)
                     }
                 } label: {
@@ -1931,7 +1870,7 @@ struct EditSiteDetailsView: View {
                         Text("Copy Site Information")
                     }
                 }
-                .disabled(selectedSiteName.isEmpty)
+                .disabled(selectedSite == nil)
                 .foregroundStyle(.orange)
             } header: {
                 MenuSectionHeader(title: "Copy from Existing Site", icon: "doc.on.doc.fill", color: .orange)

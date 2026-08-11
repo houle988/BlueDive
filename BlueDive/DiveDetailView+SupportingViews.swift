@@ -1060,6 +1060,130 @@ struct AutocompleteMenuTextField: View {
     }
 }
 
+// MARK: - Site Search Field (for Copy from Existing Site)
+// Note: shares the same focus/dismiss/clear-button pattern as AutocompleteMenuTextField (below),
+// DiverAutocompleteField (DiverFilter.swift), and GearAutocompleteField (AddGearView.swift).
+// Any fix to that shared skeleton needs to be applied in all four places.
+
+struct SiteSearchField: View {
+    @Binding var selectedSite: Dive?
+    let recents: [Dive]
+    let allSites: [Dive]
+
+    @State private var searchText: String = ""
+    @State private var showSuggestions: Bool = false
+    @FocusState private var isFocused: Bool
+
+    private var selectedDisplayText: String {
+        guard let site = selectedSite else { return "" }
+        return site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
+    }
+
+    private var filtered: [Dive] {
+        if selectedSite != nil { return [] }
+        guard !searchText.isEmpty else { return [] }
+        return allSites.filter { site in
+            let haystack = [site.siteName, site.location, site.siteCountry ?? ""].joined(separator: " ")
+            return haystack.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: selectedSite == nil ? "magnifyingglass" : "checkmark.circle.fill")
+                    .foregroundStyle(.orange)
+                    .frame(width: 24)
+                TextField("Search sites…", text: $searchText)
+                    .foregroundStyle(.primary)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+                    .onChange(of: searchText) {
+                        if selectedSite != nil && searchText != selectedDisplayText {
+                            selectedSite = nil
+                            searchText = ""
+                        }
+                        showSuggestions = isFocused
+                    }
+                    .onChange(of: isFocused) {
+                        if isFocused {
+                            showSuggestions = true
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                if !isFocused { showSuggestions = false }
+                            }
+                        }
+                    }
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        selectedSite = nil
+                        showSuggestions = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if showSuggestions {
+                if searchText.isEmpty {
+                    if !recents.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Recent")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 6)
+                                .padding(.bottom, 2)
+                            ForEach(recents, id: \.id) { site in
+                                siteRow(site: site, icon: "clock", iconColor: .orange)
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                        .padding(.top, 4)
+                    }
+                } else if !filtered.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(filtered, id: \.id) { site in
+                                siteRow(site: site, icon: "magnifyingglass", iconColor: .secondary)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 260)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private func siteRow(site: Dive, icon: String, iconColor: Color) -> some View {
+        Button {
+            let label = site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
+            searchText = label
+            selectedSite = site
+            showSuggestions = false
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(iconColor)
+                Text(site.siteName + (site.location.isEmpty ? "" : " — \(site.location)"))
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct MenuPicker: View {
     let label: LocalizedStringKey
     @Binding var selection: String
