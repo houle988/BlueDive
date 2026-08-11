@@ -1689,7 +1689,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Ein funktionsreiches Tauchlogbuch für iPadOS & iOS"
+            "value" : "Ein funktionsreiches Logbuch für iPadOS & iOS"
           }
         },
         "fr-CA" : {
@@ -2680,7 +2680,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Bereits in deinem Tauchbuch"
+            "value" : "Bereits in deinem Logbuch"
           }
         },
         "fr-CA" : {
@@ -3265,7 +3265,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Durchschnittstiefe"
+            "value" : "ø Tiefe"
           }
         },
         "fr-CA" : {
@@ -3654,7 +3654,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "BlueDive ist ausschließlich eine Tauchlogbuch-App, die dazu dient, deine Tauchhistorie aufzuzeichnen und zu organisieren. Es ist kein Tauchplanungswerkzeug und darf niemals als solches verwendet werden."
+            "value" : "BlueDive ist ausschließlich eine Logbuch-App, die dazu dient, deine Tauchhistorie aufzuzeichnen und zu organisieren. Es ist kein Tauchplanungswerkzeug und darf niemals als solches verwendet werden."
           }
         },
         "fr-CA" : {
@@ -6792,7 +6792,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Nur Tauchbuch"
+            "value" : "Nur Logbuch"
           }
         },
         "fr-CA" : {
@@ -6808,7 +6808,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "TAUCHBUCH"
+            "value" : "LOGBUCH"
           }
         },
         "fr-CA" : {
@@ -9314,7 +9314,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Exportiere dein Tauchbuch jederzeit im XML-, UDDF- oder PDF-Format."
+            "value" : "Exportiere dein Logbuch jederzeit im XML-, UDDF- oder PDF-Format."
           }
         },
         "fr-CA" : {
@@ -10188,7 +10188,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Stiefel"
+            "value" : "Füssling"
           }
         },
         "en" : {
@@ -10464,7 +10464,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Rolle"
+            "value" : "Reel"
           }
         },
         "en" : {
@@ -11354,7 +11354,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Ich verstehe, dass BlueDive nur ein Tauchlogbuch und kein Tauchplanungswerkzeug ist"
+            "value" : "Ich verstehe, dass BlueDive nur ein Logbuch und kein Tauchplanungswerkzeug ist"
           }
         },
         "fr-CA" : {
@@ -11715,7 +11715,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Importiere aus BlueDive XML-, MacDive XML- oder UDDF-Dateien — alle wichtigen Tauchlogbuch-Formate werden unterstützt."
+            "value" : "Importiere aus BlueDive XML-, MacDive XML- oder UDDF-Dateien — alle wichtigen Logbuch-Formate werden unterstützt."
           }
         },
         "fr-CA" : {
@@ -16131,7 +16131,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Betreiber"
+            "value" : "Tauchbasis"
           }
         },
         "fr-CA" : {
@@ -17763,7 +17763,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "WIEDERHOLUNGS-"
+            "value" : "WIEDERH.-TG"
           }
         },
         "fr-CA" : {
@@ -18718,7 +18718,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Im Tauchbuch speichern..."
+            "value" : "Im Logbuch speichern..."
           }
         },
         "fr-CA" : {
@@ -20124,7 +20124,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Tauchplatz, Ort, Tauchpartner, Land, Typ, Etikett, Tauchgang #…"
+            "value" : "Tauchplatz, Ort, Tauchpartner, Land, Typ, Tag, Tauchgang #…"
           }
         },
         "en" : {
@@ -20698,7 +20698,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Oberflächenintervall"
+            "value" : "Oberfl. Intervall"
           }
         },
         "fr-CA" : {
@@ -20732,7 +20732,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Oberflächentemp."
+            "value" : "Oberfl. Temp."
           }
         },
         "fr-CA" : {
@@ -21055,7 +21055,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Etiketten"
+            "value" : "Tags"
           }
         },
         "en" : {
@@ -24321,7 +24321,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Dein modernes persönliches Tauchlogbuch"
+            "value" : "Dein modernes persönliches Logbuch"
           }
         },
         "fr-CA" : {

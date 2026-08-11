@@ -489,7 +489,7 @@ struct PDFDiveLogbook {
             (NSLocalizedString("Max Temp", bundle: loc, comment: ""),    dive.displayMaxTemperature.map { "\(Int($0.rounded()))\(tempUnit.symbol)" } ?? "—", accentRed),
             (NSLocalizedString("Min Temp", bundle: loc, comment: ""),    dive.displayMinTemperature.map { "\(Int($0.rounded()))\(tempUnit.symbol)" } ?? "—", accentBlue),
             (NSLocalizedString("Air Temp", bundle: loc, comment: ""),    airTempStr,    accentOrange),
-            (NSLocalizedString("Platform", bundle: loc, comment: ""),    dive.entryType ?? "—",   accentPurple),
+            (NSLocalizedString("Entry Type", bundle: loc, comment: ""),    dive.entryType ?? "—",   accentPurple),
             (NSLocalizedString("Dive Type", bundle: loc, comment: ""),   dive.primaryDiveType ?? "—", accentPurple),
             (NSLocalizedString("Trip", bundle: loc, comment: ""),        tripStr,       accentTeal),
         ]
