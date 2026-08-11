@@ -11,7 +11,7 @@ extension BluetoothScannerView {
 
     func startScanning() {
         syncState = .scanning
-        bleManager.startScanning(omitUnsupportedPeripherals: true)
+        bleManager.startScanning(omitUnsupportedPeripherals: false)
         Self.logger.info("Starting Bluetooth scan")
     }
 
