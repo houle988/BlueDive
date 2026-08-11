@@ -802,6 +802,14 @@ struct UnifiedDiveChartOptimized: View {
                     color: .green,
                     isAvailable: hasTemperatureData
                 )
+
+                ToggleButton(
+                    isOn: exclusiveBinding(for: \.showNDL),
+                    icon: "timer",
+                    label: "NDL",
+                    color: .ndlYellow,
+                    isAvailable: hasNDLData
+                )
             }
             
             HStack(spacing: 12) {
@@ -811,14 +819,6 @@ struct UnifiedDiveChartOptimized: View {
                     label: "Pressure",
                     color: .red,
                     isAvailable: hasPressureData
-                )
-                
-                ToggleButton(
-                    isOn: exclusiveBinding(for: \.showNDL),
-                    icon: "timer",
-                    label: "NDL",
-                    color: .ndlYellow,
-                    isAvailable: hasNDLData
                 )
 
                 ToggleButton(
