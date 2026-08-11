@@ -164,7 +164,7 @@ struct DiveDetailView: View {
     @ViewBuilder
     private func diveTitleLabel(number: Int, siteName: String) -> some View {
         HStack(spacing: 6) {
-            Text("#\(number)")
+            Text(verbatim: "#\(number)")
                 .font(.system(.caption, design: .monospaced))
                 .fontWeight(.bold)
                 .padding(.horizontal, 6)
@@ -179,7 +179,7 @@ struct DiveDetailView: View {
                 .truncationMode(.tail)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Dive \(number), \(siteName)"))
+        .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Dive %@, %@", bundle: Bundle.forAppLanguage(), comment: "VoiceOver label for a dive entry. First argument is the dive number (e.g. 1140), second is the site name."), "\(number)", siteName)))
     }
 
     var locationText: Text {
@@ -476,7 +476,7 @@ struct DiveDetailView: View {
             showFileExporter = false
             // Announce the newly-focused dive for VoiceOver users.
             let number = newValue.diveNumber ?? cachedDiveNumber
-            let announcement = String(format: NSLocalizedString("Dive %lld, %@", bundle: Bundle.forAppLanguage(), comment: ""), number, newValue.siteName)
+            let announcement = String(format: NSLocalizedString("Dive %@, %@", bundle: Bundle.forAppLanguage(), comment: "VoiceOver screen-change announcement when navigating to a dive. First argument is the dive number (e.g. 1140), second is the site name."), "\(number)", newValue.siteName)
             UIAccessibility.post(notification: .screenChanged, argument: announcement)
             #endif
         }

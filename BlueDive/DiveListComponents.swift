@@ -25,7 +25,7 @@ struct DiveRowView: View {
     private var diveIcon: some View {
         let resolved = resolvedFlag
         return VStack(spacing: 4) {
-            Text("#\(dive.diveNumber ?? diveNumber)")
+            Text(verbatim: "#\(dive.diveNumber ?? diveNumber)")
                 .font(.system(.caption, design: .monospaced))
                 .fontWeight(.bold)
                 .padding(.horizontal, 6)

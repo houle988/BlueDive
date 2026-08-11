@@ -265,7 +265,7 @@ struct MergeDivesSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if let num = dive.diveNumber {
-                        Text("#\(num)")
+                        Text(verbatim: "#\(num)")
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(.bold)
                             .padding(.horizontal, 6)

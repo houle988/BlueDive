@@ -1113,7 +1113,7 @@ extension DiveDetailView {
                         .font(.caption)
                         .foregroundStyle(.gray)
                     if let diveNumber = dive.diveNumber {
-                        Text(verbatim: Double(diveNumber).localizedString(decimals: 0))
+                        Text(verbatim: "\(diveNumber)")
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(.primary)
