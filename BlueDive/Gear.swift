@@ -191,6 +191,8 @@ enum GearCategory: String, CaseIterable, Identifiable {
     case spg = "SPG"
     case whistle = "Whistle"
     case tool = "Tool"
+    case camera = "Camera"
+    case rebreather = "Rebreather"
     case other = "Other"
     
     var id: String { rawValue }
@@ -201,6 +203,16 @@ enum GearCategory: String, CaseIterable, Identifiable {
     var localizedName: LocalizedStringKey {
         let key = "gear.category." + rawValue
         return LocalizedStringKey(key)
+    }
+
+    /// Returns all cases sorted alphabetically by localized display name for the given locale.
+    static func sorted(for locale: Locale) -> [GearCategory] {
+        let bundle = Bundle.forAppLanguage()
+        return allCases.sorted {
+            let lhs = NSLocalizedString("gear.category." + $0.rawValue, bundle: bundle, comment: "")
+            let rhs = NSLocalizedString("gear.category." + $1.rawValue, bundle: bundle, comment: "")
+            return lhs.compare(rhs, locale: locale) == .orderedAscending
+        }
     }
 
     /// Canonical English key used in XML export/import round-trips.
@@ -234,6 +246,8 @@ enum GearCategory: String, CaseIterable, Identifiable {
         case .spg:           return "spg"
         case .whistle:       return "whistle"
         case .tool:          return "tool"
+        case .camera:        return "camera"
+        case .rebreather:    return "rebreather"
         case .other:         return "other"
         }
     }
@@ -313,6 +327,8 @@ enum GearCategory: String, CaseIterable, Identifiable {
         case .spg: return "gauge.high"
         case .whistle: return "speaker.wave.2.fill"
         case .tool: return "wrench.fill"
+        case .camera: return "camera.fill"
+        case .rebreather: return "lungs.fill"
         case .other: return "wrench.and.screwdriver.fill"
         }
     }
@@ -347,7 +363,29 @@ enum GearCategory: String, CaseIterable, Identifiable {
         case .spg: return "teal"
         case .whistle: return "yellow"
         case .tool: return "gray"
+        case .camera: return "gray"
+        case .rebreather: return "teal"
         case .other: return "brown"
+        }
+    }
+
+    var swiftUIColor: Color {
+        switch color {
+        case "purple":  return .purple
+        case "blue":    return .blue
+        case "green":   return .green
+        case "teal":    return .teal
+        case "orange":  return .orange
+        case "gray":    return .gray
+        case "cyan":    return .cyan
+        case "pink":    return .pink
+        case "indigo":  return .indigo
+        case "mint":    return .mint
+        case "yellow":  return .yellow
+        case "red":     return .red
+        case "black":   return .black
+        case "brown":   return .brown
+        default:        return .secondary
         }
     }
 }

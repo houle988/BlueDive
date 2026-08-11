@@ -1224,6 +1224,8 @@ struct PDFDiveLogbook {
         case .weights: return textGray
         case .light: return accentYellow
         case .knife, .gloves: return accentRed
+        case .camera: return textGray
+        case .rebreather: return accentTeal
         default: return textGray
         }
     }

@@ -663,17 +663,7 @@ struct GearChipView: View {
     let gear: Gear
 
     private var categoryColor: Color {
-        switch gear.category {
-        case "Wetsuit": return .purple
-        case "Tank": return .blue
-        case "Regulator": return .green
-        case "BCD": return .orange
-        case "Computer": return .cyan
-        case "Fins": return .pink
-        case "Mask": return .indigo
-        case "Weights": return .gray
-        default: return .secondary
-        }
+        GearCategory(exportKeyOrRawValue: gear.category)?.swiftUIColor ?? .secondary
     }
 
     private var categoryIcon: String {
@@ -911,17 +901,7 @@ struct AddGearToDiveView: View {
     }
 
     private func categoryColor(for category: String) -> Color {
-        switch category {
-        case "Wetsuit": return .purple
-        case "Tank": return .blue
-        case "Regulator": return .green
-        case "BCD": return .orange
-        case "Computer": return .cyan
-        case "Fins": return .pink
-        case "Mask": return .indigo
-        case "Weights": return .gray
-        default: return .secondary
-        }
+        GearCategory(exportKeyOrRawValue: category)?.swiftUIColor ?? .secondary
     }
 
     private func categoryIcon(for category: String) -> String {

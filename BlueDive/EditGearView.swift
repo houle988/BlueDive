@@ -10,6 +10,7 @@ struct EditGearView: View {
     @Bindable var gear: Gear
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     // MARK: - Form State (mirrors AddGearView fields)
 
@@ -201,7 +202,7 @@ struct EditGearView: View {
             SectionHeaderView(title: "Category", icon: "list.bullet")
 
             Menu {
-                ForEach(GearCategory.allCases) { category in
+                ForEach(GearCategory.sorted(for: locale)) { category in
                     Button {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedCategory = category
@@ -234,24 +235,8 @@ struct EditGearView: View {
         .cardStyle()
     }
 
-    /// Helper to get color for a category
     private func categoryColor(for category: GearCategory) -> Color {
-        switch category.color {
-        case "purple": return .purple
-        case "blue": return .blue
-        case "green": return .green
-        case "orange": return .orange
-        case "gray": return .gray
-        case "cyan": return .cyan
-        case "pink": return .pink
-        case "indigo": return .indigo
-        case "teal": return .teal
-        case "mint": return .mint
-        case "yellow": return .yellow
-        case "red": return .red
-        case "brown": return .brown
-        default: return .cyan
-        }
+        category.swiftUIColor
     }
 
     private var basicInfoSection: some View {

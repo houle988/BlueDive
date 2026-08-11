@@ -13,6 +13,7 @@ struct GearListView: View {
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertificationsForFilter: [Certification]
     @Query private var allInsurances: [DivingInsurance]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     @State private var showAddGear = false
@@ -82,9 +83,23 @@ struct GearListView: View {
     /// Équipement groupé par catégorie
     private var groupedGear: [(key: String, value: [Gear])] {
         let grouped = Dictionary(grouping: filteredGear, by: { $0.category })
-        return grouped.sorted { $0.key < $1.key }
+        let bundle = Bundle.forAppLanguage()
+        // Resolve each localized sort key once (O(n)) rather than per comparison (O(n log n)).
+        var sortKeys = [String: String](minimumCapacity: grouped.count)
+        for key in grouped.keys {
+            sortKeys[key] = GearCategory(exportKeyOrRawValue: key).map {
+                NSLocalizedString("gear.category." + $0.rawValue, bundle: bundle, comment: "")
+            } ?? key
+        }
+        return grouped.sorted {
+            (sortKeys[$0.key] ?? $0.key).compare(sortKeys[$1.key] ?? $1.key, locale: locale) == .orderedAscending
+        }
     }
-    
+
+    private var sortedCategories: [GearCategory] {
+        GearCategory.sorted(for: locale)
+    }
+
     /// Équipement nécessitant un entretien — service due within 30 days or already past
     private var gearNeedingService: [Gear] {
         let calendar = Calendar.current
@@ -423,7 +438,7 @@ struct GearListView: View {
                     let diverBase = selectedDiver.isEmpty
                         ? allGear
                         : allGear.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
-                    ForEach(GearCategory.allCases) { category in
+                    ForEach(sortedCategories) { category in
                         let count = diverBase.filter { $0.category == category.rawValue }.count
                         if count > 0 {
                             CategoryFilterChip(

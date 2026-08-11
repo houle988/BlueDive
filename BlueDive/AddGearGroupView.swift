@@ -289,23 +289,7 @@ struct AddGearGroupView: View {
     // MARK: - Helpers
 
     private func categoryColor(for category: GearCategory?) -> Color {
-        guard let category else { return .cyan }
-        switch category.color {
-        case "purple": return .purple
-        case "blue": return .blue
-        case "green": return .green
-        case "orange": return .orange
-        case "gray": return .gray
-        case "cyan": return .cyan
-        case "pink": return .pink
-        case "indigo": return .indigo
-        case "teal": return .teal
-        case "mint": return .mint
-        case "yellow": return .yellow
-        case "red": return .red
-        case "brown": return .brown
-        default: return .cyan
-        }
+        category?.swiftUIColor ?? .cyan
     }
 }
 

@@ -4,6 +4,7 @@ import SwiftData
 struct AddGearView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     
     // MARK: - Form State
     
@@ -107,6 +108,7 @@ struct AddGearView: View {
         #if os(macOS)
         .frame(minWidth: 600, idealWidth: 650, maxWidth: 750)
         #endif
+        .onAppear { selectedCategory = GearCategory.sorted(for: locale).first ?? selectedCategory }
         .task { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
         .onChange(of: allGearItems) { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
     }
@@ -135,7 +137,7 @@ struct AddGearView: View {
             SectionHeaderView(title: "Category", icon: "list.bullet")
             
             Menu {
-                ForEach(GearCategory.allCases) { category in
+                ForEach(GearCategory.sorted(for: locale)) { category in
                     Button {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedCategory = category
@@ -168,24 +170,8 @@ struct AddGearView: View {
         .cardStyle()
     }
     
-    /// Helper to get color for a category
     private func categoryColor(for category: GearCategory) -> Color {
-        switch category.color {
-        case "purple": return .purple
-        case "blue": return .blue
-        case "green": return .green
-        case "orange": return .orange
-        case "gray": return .gray
-        case "cyan": return .cyan
-        case "pink": return .pink
-        case "indigo": return .indigo
-        case "teal": return .teal
-        case "mint": return .mint
-        case "yellow": return .yellow
-        case "red": return .red
-        case "brown": return .brown
-        default: return .cyan
-        }
+        category.swiftUIColor
     }
     
     private var basicInfoSection: some View {
@@ -617,43 +603,11 @@ struct CategoryButton: View {
     let action: () -> Void
     
     private var backgroundColor: Color {
-        let colorName = category.color
-        
-        let baseColor: Color = {
-            switch colorName {
-            case "purple": return .purple
-            case "blue": return .blue
-            case "green": return .green
-            case "orange": return .orange
-            case "gray": return .gray
-            case "cyan": return .cyan
-            case "pink": return .pink
-            case "indigo": return .indigo
-            default: return .brown
-            }
-        }()
-        
-        return baseColor.opacity(isSelected ? 0.25 : 0.08)
+        category.swiftUIColor.opacity(isSelected ? 0.25 : 0.08)
     }
-    
+
     private var borderColor: Color {
-        let colorName = category.color
-        
-        let baseColor: Color = {
-            switch colorName {
-            case "purple": return .purple
-            case "blue": return .blue
-            case "green": return .green
-            case "orange": return .orange
-            case "gray": return .gray
-            case "cyan": return .cyan
-            case "pink": return .pink
-            case "indigo": return .indigo
-            default: return .brown
-            }
-        }()
-        
-        return isSelected ? baseColor : .clear
+        isSelected ? category.swiftUIColor : .clear
     }
     
     var body: some View {
