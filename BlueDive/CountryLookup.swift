@@ -234,7 +234,7 @@ enum CountryLookup {
         // G
         "gabun": "ga", "georgien": "ge", "griechenland": "gr", "großbritannien": "gb", "grossbritannien": "gb",
         // I
-        "indien": "in", "indonesien": "id", "irland": "ie", "italien": "it",
+        "indien": "in", "indonesien": "id", "irland": "ie", "island": "is", "italien": "it",
         // J
         "jamaika": "jm", "jemen": "ye", "jordanien": "jo",
         // K
