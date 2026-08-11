@@ -565,14 +565,6 @@ struct SettingsView: View {
             }
             #if os(iOS)
             .fileExporter(
-                isPresented: $showBackupExporter,
-                document: backupDocument,
-                contentType: .zip,
-                defaultFilename: backupFileName
-            ) { result in
-                backupDocument = nil
-            }
-            .fileExporter(
                 isPresented: $showSyncLogExporter,
                 document: syncLogDocument,
                 contentType: .plainText,
@@ -604,6 +596,16 @@ struct SettingsView: View {
                 Text("Surface intervals have been recalculated.")
             }
         }
+        #if os(iOS)
+        .fileExporter(
+            isPresented: $showBackupExporter,
+            document: backupDocument,
+            contentType: .zip,
+            defaultFilename: backupFileName
+        ) { result in
+            backupDocument = nil
+        }
+        #endif
     }
     
     // MARK: - View Components
