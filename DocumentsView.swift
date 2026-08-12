@@ -39,7 +39,7 @@ private enum ImportTarget {
 enum DocumentSection: String, CaseIterable, Identifiable {
     case all = "All"
     case certifications = "Certifications"
-    case insurance = "Insurance"
+    case insurance = "Insurances"
 
     var id: String { rawValue }
 }
@@ -369,7 +369,6 @@ struct DocumentsView: View {
             .onAppear {
                 withAnimation(.easeOut(duration: 0.4)) { appeared = true }
             }
-            .navigationTitle("Documents")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
