@@ -107,13 +107,20 @@ struct TankData: Identifiable, Sendable {
     var hePercentage: Int { Int((he * 100).rounded()) }
 
     var gasName: String {
-        if hePercentage > 0 { return "Trimix" }
+        if hePercentage > 0 {
+            if 100 - o2Percentage - hePercentage <= 0 { return "Heliox" }
+            return "Trimix"
+        }
         if o2Percentage > 21 { return "Nitrox" }
+        if o2Percentage < 21 { return "Hypoxic" }
         return "Air"
     }
 
     func gasDisplayName() -> String {
         if hePercentage > 0 {
+            if 100 - o2Percentage - hePercentage <= 0 {
+                return String(format: NSLocalizedString("Heliox %d/%d", bundle: .forAppLanguage(), comment: "Heliox gas mix label showing oxygen/helium percentages e.g. Heliox 21/79"), o2Percentage, hePercentage)
+            }
             return String(format: NSLocalizedString("Trimix %d/%d", bundle: .forAppLanguage(), comment: "Trimix gas mix label showing oxygen/helium percentages e.g. Trimix 21/35"), o2Percentage, hePercentage)
         } else if o2Percentage > 21 {
             let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(.current))

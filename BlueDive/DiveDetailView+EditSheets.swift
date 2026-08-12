@@ -2545,6 +2545,11 @@ struct EditGazView: View {
     @Query(sort: \TankTemplate.name) private var templates: [TankTemplate]
     @State private var selectedTemplateName: String = ""
 
+    /// Original gas percentages as loaded — used in save() to avoid silently mutating
+    /// imported fractions that the user never touched.
+    private let originalO2: Int
+    private let originalHe: Int
+
     @State private var workingO2: Int
     @State private var workingHe: Int
     @State private var workingCylinderSize: Double?
@@ -2630,8 +2635,12 @@ struct EditGazView: View {
         self.tankIndex = tankIndex
         let tanks = dive.tanks
         let tank = tankIndex < tanks.count ? tanks[tankIndex] : nil
-        _workingO2               = State(initialValue: tank?.o2Percentage ?? 21)
-        _workingHe               = State(initialValue: tank?.hePercentage ?? 0)
+        let rawO2 = max(1, tank?.o2Percentage ?? 21)
+        let rawHe = min(tank?.hePercentage ?? 0, 100 - rawO2)
+        originalO2 = rawO2
+        originalHe = rawHe
+        _workingO2               = State(initialValue: rawO2)
+        _workingHe               = State(initialValue: rawHe)
         _workingCylinderSize     = State(initialValue: tank?.volume)
         _cylinderSizeText        = State(initialValue: Self.formatDouble(tank?.volume))
         _workingCylinderMaterial = State(initialValue: tank?.tankMaterial ?? "")
@@ -2692,6 +2701,9 @@ struct EditGazView: View {
     /// Détermine automatiquement le type de gaz selon O₂ et He
     private var autoGasLabel: String {
         if workingHe > 0 {
+            if 100 - workingO2 - workingHe <= 0 {
+                return NSLocalizedString("Heliox", bundle: .forAppLanguage(), comment: "Gas type label: oxygen and helium only, no nitrogen")
+            }
             return NSLocalizedString("Trimix", bundle: .forAppLanguage(), comment: "Gas type label: helium present")
         } else if workingO2 == 21 {
             return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Gas type label: 21% oxygen")
@@ -2702,6 +2714,8 @@ struct EditGazView: View {
         }
     }
 
+    /// Minimum O₂ % — 1% supports hypoxic diluents used in CCR diving
+    private let o2Min: Int = 1
     /// O₂ max sans dépasser 100 % en tenant compte de He
     private var o2Max: Int { 100 - workingHe }
     /// He max sans dépasser 100 % en tenant compte de O₂
@@ -2798,7 +2812,7 @@ struct EditGazView: View {
                         }
                         Divider()
                         gazMacOSRow("Oxygen (O₂)") {
-                            Stepper(value: $workingO2, in: 21...o2Max) {
+                            Stepper(value: $workingO2, in: o2Min...o2Max) {
                                 Text((Double(workingO2) / 100).formatted(.percent.precision(.fractionLength(0))))
                             }
                         }
@@ -3105,7 +3119,7 @@ struct EditGazView: View {
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.green)
                                 .frame(width: 48, alignment: .trailing)
-                            Stepper("", value: $workingO2, in: 21...o2Max)
+                            Stepper("", value: $workingO2, in: o2Min...o2Max)
                                 .labelsHidden()
                         }
 
@@ -3403,10 +3417,14 @@ struct EditGazView: View {
 
         if tankIndex < tanks.count {
             let existingTank = tanks[tankIndex]
+            // Preserve the original stored fraction if the user did not change the percentage,
+            // to avoid silently mutating imported fractions that round to the same integer.
+            let savedO2 = workingO2 == originalO2 ? existingTank.o2 : o2Fraction
+            let savedHe = min(workingHe == originalHe ? existingTank.he : heFraction, 1.0 - savedO2)
             tanks[tankIndex] = TankData(
                 id: existingTank.id,
-                o2: o2Fraction,
-                he: heFraction,
+                o2: savedO2,
+                he: savedHe,
                 volume: workingCylinderSize,
                 startPressure: startP,
                 endPressure: endP,
