@@ -21,7 +21,17 @@ enum DiveTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var localizedName: LocalizedStringKey { LocalizedStringKey(rawValue) }
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .menu:        return "Overview"
+        case .siteDetails: return "Site Details"
+        case .conditions:  return "Conditions"
+        case .gaz:         return "Gas"
+        case .samples:     return "Samples"
+        case .xmlExport:   return "XML Export"
+        case .uddfExport:  return "UDDF Export"
+        }
+    }
 
     /// Tabs visible in the tab bar (export tabs hidden)
     static var visibleCases: [DiveTab] {
