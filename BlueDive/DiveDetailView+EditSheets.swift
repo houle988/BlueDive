@@ -827,37 +827,6 @@ struct EditMenuStatsView: View {
         }
     }
 
-    private func macOSModernPicker(_ label: LocalizedStringKey, selection: Binding<String>, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            Menu {
-                Button("None")    { selection.wrappedValue = "None" }
-                Button("Reef")    { selection.wrappedValue = "Reef" }
-                Button("Wreck")   { selection.wrappedValue = "Wreck" }
-                Button("Cave")    { selection.wrappedValue = "Cave" }
-                Button("Night")   { selection.wrappedValue = "Night" }
-                Button("Photo")   { selection.wrappedValue = "Photo" }
-                Button("Deep")    { selection.wrappedValue = "Deep" }
-                Button("Drift")   { selection.wrappedValue = "Drift" }
-                Button("Training") { selection.wrappedValue = "Training" }
-            } label: {
-                HStack {
-                    Text(selection.wrappedValue.isEmpty ? "Choose…" : selection.wrappedValue)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.vertical, 4)
-    }
     #endif
 
     @ViewBuilder

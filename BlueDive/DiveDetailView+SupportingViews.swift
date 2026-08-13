@@ -1184,32 +1184,6 @@ struct SiteSearchField: View {
     }
 }
 
-struct MenuPicker: View {
-    let label: LocalizedStringKey
-    @Binding var selection: String
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-                .frame(width: 24)
-            Picker(label, selection: $selection) {
-                Label("None",   systemImage: "minus.circle").tag("None")
-                Label("Reef",   systemImage: "fish.fill").tag("Reef")
-                Label("Wreck",  systemImage: "anchor").tag("Wreck")
-                Label("Cave",   systemImage: "mountain.2.fill").tag("Cave")
-                Label("Night",  systemImage: "moon.stars.fill").tag("Night")
-                Label("Photo",  systemImage: "camera.fill").tag("Photo")
-                Label("Deep",   systemImage: "arrow.down.circle.fill").tag("Deep")
-                Label("Drift",  systemImage: "wind").tag("Drift")
-                Label("Training", systemImage: "graduationcap.fill").tag("Training")
-            }
-            .pickerStyle(.menu)
-        }
-    }
-}
 
 // MARK: - FlowLayout for macOS
 
