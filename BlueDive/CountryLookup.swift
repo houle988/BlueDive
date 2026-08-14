@@ -123,7 +123,7 @@ enum CountryLookup {
         "curaçao": "cw", "curacao": "cw", "french polynesia": "pf", "guadeloupe": "gp",
         "guam": "gu", "martinique": "mq", "new caledonia": "nc", "puerto rico": "pr",
         "réunion": "re", "reunion": "re", "turks and caicos islands": "tc", "turks and caicos": "tc",
-        "u.s. virgin islands": "vi", "british virgin islands": "vg",
+        "u.s. virgin islands": "vi", "us virgin islands": "vi", "british virgin islands": "vg",
         "american samoa": "as", "cook islands": "ck", "faroe islands": "fo",
         "french guiana": "gf", "gibraltar": "gi", "greenland": "gl", "hong kong": "hk",
         "macau": "mo", "macao": "mo", "mayotte": "yt", "montserrat": "ms",
