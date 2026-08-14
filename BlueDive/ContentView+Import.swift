@@ -462,6 +462,7 @@ extension ContentView {
                 tankPressures: sample.tankPressures,
                 ndl: sample.ndt != nil ? Double(sample.ndt!) : nil,
                 ppo2: sample.ppo2,
+                sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
                 currentGas: sample.currentGas
             )
@@ -759,6 +760,7 @@ extension ContentView {
                 tankPressures: sample.tankPressures,
                 ndl: sample.ndl,
                 ppo2: sample.ppo2,
+                sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
                 currentGas: sample.currentGas
             ))

@@ -180,9 +180,20 @@ extension DiveDetailView {
         return indices.sorted()
     }
 
+    /// Sorted O2 sensor indices that have per-sensor PPO2 data across the whole dive.
+    private var sampleSensorIndices: [Int] {
+        var indices = Set<Int>()
+        for sample in dive.profileSamples {
+            if let sp = sample.sensorPPO2 { indices.formUnion(sp.keys) }
+        }
+        return indices.sorted()
+    }
+
     var samplesTableSection: some View {
         let tankIndices = sampleTankIndices
         let hasMultiTank = tankIndices.count > 1
+        let sensorIndices = sampleSensorIndices
+        let hasSensorPPO2 = !sensorIndices.isEmpty
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -208,6 +219,11 @@ extension DiveDetailView {
                             Text("Press.").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
                         }
                         Text("PPO₂").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                        if hasSensorPPO2 {
+                            ForEach(sensorIndices, id: \.self) { idx in
+                                Text(verbatim: "S\(idx + 1)").font(.caption2).foregroundStyle(.secondary).frame(width: 42, alignment: .trailing)
+                            }
+                        }
                         Text("NDL").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
                         Text("Gas").font(.caption2).foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
                         Text("Events").font(.caption2).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
@@ -258,6 +274,17 @@ extension DiveDetailView {
                                         .frame(width: 50, alignment: .trailing)
                                 } else {
                                     Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                }
+                                if hasSensorPPO2 {
+                                    ForEach(sensorIndices, id: \.self) { idx in
+                                        if let p = sample.sensorPPO2?[idx] {
+                                            Text(verbatim: p.localizedString(decimals: 2))
+                                                .font(.caption).foregroundStyle(ppo2Color(for: p))
+                                                .frame(width: 42, alignment: .trailing)
+                                        } else {
+                                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 42, alignment: .trailing)
+                                        }
+                                    }
                                 }
                                 if let ndl = sample.ndl {
                                     Text(verbatim: ndl >= ndlSentinel ? "—" : ndl.localizedString(decimals: 0))

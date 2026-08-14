@@ -48,11 +48,12 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
     let tankPressure: Double? // Tank pressure in bar (single / primary tank)
     let tankPressures: [Int: Double]? // Per-tank pressure readings {tankIndex: bar}
     let ndl: Double? // No Decompression Limit in minutes
-    let ppo2: Double? // Oxygen partial pressure in bar
+    let ppo2: Double? // Oxygen partial pressure in bar (voted/representative)
+    let sensorPPO2: [Int: Double]? // Per-O2-sensor PPO2 {sensorIndex: bar}; nil for non-CCR/legacy
     let events: [DiveProfileEvent] // Events at this profile point
     let currentGas: Int? // Active tank index at this point (index into Dive.tanks)
 
-    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ppo2: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
+    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
         self.id = id
         self.time = time
         self.depth = depth
@@ -61,6 +62,7 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         self.tankPressures = tankPressures
         self.ndl = ndl
         self.ppo2 = ppo2
+        self.sensorPPO2 = sensorPPO2
         self.events = events
         self.currentGas = currentGas
     }
@@ -80,6 +82,7 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         tankPressure = perTank.flatMap { $0[0] ?? $0.min(by: { $0.key < $1.key })?.value } ?? storedPressure
         ndl = try container.decodeIfPresent(Double.self, forKey: .ndl)
         ppo2 = try container.decodeIfPresent(Double.self, forKey: .ppo2)
+        sensorPPO2 = try container.decodeIfPresent([Int: Double].self, forKey: .sensorPPO2)
         events = (try? container.decode([DiveProfileEvent].self, forKey: .events)) ?? []
         currentGas = try container.decodeIfPresent(Int.self, forKey: .currentGas)
     }

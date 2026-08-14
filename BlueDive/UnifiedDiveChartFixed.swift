@@ -119,9 +119,9 @@ fileprivate struct PPO2Setup {
     }
 }
 
-/// Builds a per-sample PPO₂ map for all profile samples in `dive`.
-/// Priority per sample: sensor-reported ppo2 → computed from gas mix + depth.
-/// Pass `tanks: dive.tanks` and a pre-built `PPO2Setup` when tanks are non-empty.
+/// Builds a per-sample representative PPO₂ map for all profile samples in `dive`.
+/// Priority per sample: device voted/controller PPO₂ (DC_SENSOR_NONE) →
+/// median of physical O₂ cells → computed from gas mix + depth (Dalton's Law).
 fileprivate func buildPPO2Map(for dive: Dive) -> [UUID: Double] {
     let tanks = dive.tanks
     let setup = tanks.isEmpty ? nil : PPO2Setup(dive: dive)
@@ -129,9 +129,19 @@ fileprivate func buildPPO2Map(for dive: Dive) -> [UUID: Double] {
     var result: [UUID: Double] = [:]
     for sample in dive.profileSamples {
         if let g = sample.currentGas, g >= 0, g < tanks.count { lastKnownGasIdx = g }
-        if let sensorPPO2 = sample.ppo2 {
-            result[sample.id] = sensorPPO2
+        if let voted = sample.ppo2 {
+            // Device-provided voted/controller value (DC_SENSOR_NONE) — Shearwater, Divesoft, Oceanic, etc.
+            result[sample.id] = voted
+        } else if let sensors = sample.sensorPPO2, !sensors.isEmpty {
+            // Physical sensors only (OSTC, Halcyon Symbios, etc.): compute median on the fly.
+            // Median is robust to a single degraded/outlier cell without a tuning threshold.
+            let sorted = sensors.values.sorted()
+            let mid = sorted.count / 2
+            result[sample.id] = sorted.count.isMultiple(of: 2)
+                ? (sorted[mid - 1] + sorted[mid]) / 2.0
+                : sorted[mid]
         } else if let s = setup {
+            // OC fallback: no sensor data — compute from gas mix + depth (Dalton's Law).
             let gasIdx: Int?
             if let idx = sample.currentGas, idx >= 0, idx < tanks.count { gasIdx = idx }
             else if tanks.count == 1 { gasIdx = 0 }
@@ -142,6 +152,39 @@ fileprivate func buildPPO2Map(for dive: Dive) -> [UUID: Double] {
         }
     }
     return result
+}
+
+/// Sorted O2 sensor indices that have per-sensor PPO2 data across all profile samples.
+fileprivate func sensorPPO2Indices(for dive: Dive) -> [Int] {
+    var indices = Set<Int>()
+    for sample in dive.profileSamples {
+        if let sp = sample.sensorPPO2 { indices.formUnion(sp.keys) }
+    }
+    return indices.sorted()
+}
+
+/// Line colour per physical O2 sensor index — cycles for N > 5.
+fileprivate func ppo2SensorColor(for sensorIdx: Int) -> Color {
+    let palette: [Color] = [
+        .indigo,
+        .purple,
+        Color(red: 0.45, green: 0.2, blue: 0.85), // violet
+        .teal,
+        .pink,
+    ]
+    return palette[sensorIdx % palette.count]
+}
+
+/// Dash pattern per sensor line position (sorted index in the sensor set) — cycles for N > 5.
+fileprivate func ppo2Dash(forSensorAtPosition position: Int) -> [CGFloat] {
+    let dashes: [[CGFloat]] = [
+        [],               // solid
+        [6, 3],           // long dash
+        [2, 3],           // short dash
+        [8, 2, 2, 2],     // long dash-dot
+        [4, 4],           // medium dash
+    ]
+    return dashes[position % dashes.count]
 }
 
 /// Bouton de toggle personnalisé pour les contrôles du graphique
@@ -497,6 +540,9 @@ private struct StaticChartLayer: View, Equatable {
         return indices.sorted()
     }
 
+    /// Sorted O2 sensor indices appearing in per-sensor PPO2 data across all samples.
+    private var chartSensorIndices: [Int] { sensorPPO2Indices(for: dive) }
+
     /// Dash pattern per tank index for visual distinction (all lines stay red).
     private func pressureDash(forTankAt position: Int) -> [CGFloat] {
         switch position {
@@ -589,19 +635,48 @@ private struct StaticChartLayer: View, Equatable {
 
     @ChartContentBuilder
     private var ppo2Marks: some ChartContent {
-        let data = ppo2RenderData
         let base = dive.displayMaxDepth
-        if base > 0 && !data.isEmpty {
-            ForEach(Array(data.enumerated()), id: \.offset) { _, point in
-                let y = -(base * (point.ppo2 / ppo2AxisMax).clamped(to: 0...1))
-                LineMark(
-                    x: .value("Time", point.time),
-                    y: .value("PPO₂", y),
-                    series: .value("Sequence", "PPO2")
-                )
-                .interpolationMethod(.catmullRom)
-                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                .foregroundStyle(Color.indigo)
+        let sensorIndices = chartSensorIndices
+        if visibility.showPPO2 && base > 0 {
+            if !sensorIndices.isEmpty {
+                // One line per physical O2 cell
+                ForEach(sensorIndices, id: \.self) { sensorIdx in
+                    let samplesWithSensor = dive.profileSamples.filter { $0.sensorPPO2?[sensorIdx] != nil }
+                    ForEach(samplesWithSensor) { sample in
+                        if let ppo2 = sample.sensorPPO2?[sensorIdx] {
+                            let y = -(base * (ppo2 / ppo2AxisMax).clamped(to: 0...1))
+                            LineMark(
+                                x: .value("Time", sample.time),
+                                y: .value("PPO₂", y),
+                                series: .value("Sequence", "PPO2-S\(sensorIdx)")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .lineStyle(StrokeStyle(
+                                lineWidth: 2,
+                                lineCap: .round,
+                                lineJoin: .round,
+                                dash: ppo2Dash(forSensorAtPosition: sensorIndices.firstIndex(of: sensorIdx) ?? 0)
+                            ))
+                            .foregroundStyle(ppo2SensorColor(for: sensorIdx))
+                        }
+                    }
+                }
+            } else {
+                // Fallback: voted or computed single-line PPO2
+                let data = ppo2RenderData
+                if !data.isEmpty {
+                    ForEach(Array(data.enumerated()), id: \.offset) { _, point in
+                        let y = -(base * (point.ppo2 / ppo2AxisMax).clamped(to: 0...1))
+                        LineMark(
+                            x: .value("Time", point.time),
+                            y: .value("PPO₂", y),
+                            series: .value("Sequence", "PPO2")
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                        .foregroundStyle(Color.indigo)
+                    }
+                }
             }
         }
     }
@@ -1053,7 +1128,14 @@ struct UnifiedDiveChartOptimized: View {
                 }
 
                 if visibility.showPPO2 && ppo2Available {
-                    legendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
+                    let sensorIndices = sensorPPO2Indices(for: dive)
+                    if sensorIndices.isEmpty {
+                        legendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
+                    } else {
+                        ForEach(sensorIndices, id: \.self) { idx in
+                            legendDot(ppo2SensorColor(for: idx), verbatim: String(format: NSLocalizedString("S%ld PPO₂ (0–2 bar)", bundle: Bundle.forAppLanguage(), comment: "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)"), idx + 1))
+                        }
+                    }
                 }
 
                 if visibility.showDeco && hasDecoData {
@@ -1091,6 +1173,15 @@ struct UnifiedDiveChartOptimized: View {
         HStack(spacing: 4) {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func legendDot(_ color: Color, verbatim text: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(verbatim: text)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -1155,6 +1246,7 @@ struct UnifiedDiveChartOptimized: View {
     private var ppo2Available: Bool {
         dive.tanks.contains { $0.o2 > 0 }
             || dive.profileSamples.contains { $0.ppo2 != nil }
+            || dive.profileSamples.contains { $0.sensorPPO2?.isEmpty == false }
     }
 
     private var hasTemperatureData: Bool {
@@ -1383,13 +1475,29 @@ struct ChartTooltipView: View {
                 tooltipRow(icon: "timer", color: .ndlYellow, label: nLabel)
             }
 
-            // PPO2 — shown if enabled
-            if visibility.showPPO2, let p = ppo2 {
-                let ppo2Color: Color = p < DiveProfileEvent.ppo2HypoxicThreshold ? .cyan
-                    : p < DiveProfileEvent.ppo2WarnThreshold ? .green
-                    : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
-                    : .red
-                tooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
+            // PPO2 — shown if enabled; voted row always shown, then per-sensor rows for CCR
+            if visibility.showPPO2 {
+                if let sensorData = sample.sensorPPO2, !sensorData.isEmpty {
+                    if let p = ppo2 {
+                        let ppo2Color: Color = p < DiveProfileEvent.ppo2HypoxicThreshold ? .cyan
+                            : p < DiveProfileEvent.ppo2WarnThreshold ? .green
+                            : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
+                            : .red
+                        tooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
+                    }
+                    ForEach(sensorData.keys.sorted(), id: \.self) { idx in
+                        if let p = sensorData[idx] {
+                            tooltipRow(icon: "lungs.fill", color: ppo2SensorColor(for: idx),
+                                       label: String(format: NSLocalizedString("S%ld: ", bundle: Bundle.forAppLanguage(), comment: "Tooltip label prefix for per-O2-sensor PPO2 in the dive chart; %ld = sensor number (1-based)"), idx + 1) + p.localizedString(decimals: 2, minDecimals: 2) + " bar")
+                        }
+                    }
+                } else if let p = ppo2 {
+                    let ppo2Color: Color = p < DiveProfileEvent.ppo2HypoxicThreshold ? .cyan
+                        : p < DiveProfileEvent.ppo2WarnThreshold ? .green
+                        : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
+                        : .red
+                    tooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
+                }
             }
 
             // Deco event — shown if enabled and this sample carries a deco obligation.

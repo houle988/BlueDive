@@ -170,17 +170,19 @@ struct BlueDiveSamplesData: Sendable {
     let tankPressures: [Int: Double]? // Per-tank pressure readings {tankIndex: bar}
     let temperature: Double?       // °C or °F or °K
     let ppo2: Double?
+    let sensorPPO2: [Int: Double]? // Per-O2-sensor PPO2 {sensorIndex: bar}; nil for non-CCR
     let ndt: Int?
     let events: [DiveProfileEvent]
     let currentGas: Int?           // active tank index at this sample point
 
-    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, ndt: Int? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
+    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
         self.time = time
         self.depth = depth
         self.pressure = pressure
         self.tankPressures = tankPressures
         self.temperature = temperature
         self.ppo2 = ppo2
+        self.sensorPPO2 = sensorPPO2
         self.ndt = ndt
         self.events = events
         self.currentGas = currentGas

@@ -264,6 +264,12 @@ enum BlueDiveXMLExporter {
                     attrs.append(("tankPressures", serialized))
                 }
                 if let ppo2     = sample.ppo2           { attrs.append(("ppo2", formatDouble(ppo2))) }
+                if let sp = sample.sensorPPO2, !sp.isEmpty {
+                    let serialized = sp.sorted(by: { $0.key < $1.key })
+                        .map { "\($0.key):\(formatDouble($0.value))" }
+                        .joined(separator: ",")
+                    attrs.append(("sensorPPO2", serialized))
+                }
                 if let ndl      = sample.ndl            { attrs.append(("ndl", formatDouble(ndl))) }
                 if let gas      = sample.currentGas     { attrs.append(("currentGas", String(gas))) }
                 let eventsStr = sample.events.map { serializeEvent($0) }.joined(separator: ",")
