@@ -681,15 +681,15 @@ struct SettingsView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    #if os(macOS)
+                    Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #else
+                    Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #endif
 
                     Text("Switching from or to System will close this window to apply the new setting.")
                         .font(.caption)
@@ -717,15 +717,15 @@ struct SettingsView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français or Deutsch.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français or Deutsch.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    #if os(macOS)
+                    Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français or Deutsch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #else
+                    Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français or Deutsch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #endif
 
                     Text("Switching from or to System will close this window to apply the new setting.")
                         .font(.caption)

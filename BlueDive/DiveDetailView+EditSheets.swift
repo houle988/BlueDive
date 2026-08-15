@@ -228,7 +228,7 @@ struct EditMenuStatsView: View {
                 }
                 .keyboardShortcut(.escape, modifiers: [])
 
-                Button("Save Changes") {
+                Button("Save") {
                     save()
                 }
                 .buttonStyle(.borderedProminent)
@@ -281,7 +281,7 @@ struct EditMenuStatsView: View {
                             Image(systemName: "calendar")
                                 .foregroundStyle(.secondary)
                                 .frame(width: 20)
-                            DatePicker("", selection: $workingTimestamp, displayedComponents: [.date, .hourMinuteAndSecond])
+                            DatePicker("", selection: $workingTimestamp, displayedComponents: [.date, .platformHourMinute])
                                 .labelsHidden()
                         }
                         .padding(.vertical, 4)
@@ -1320,20 +1320,9 @@ struct EditMenuStatsView: View {
         dive.computerName = trimmedComputerName
         let trimmedSerial = workingSerialNumber.trimmingCharacters(in: .whitespaces)
         dive.computerSerialNumber = trimmedSerial.isEmpty ? nil : trimmedSerial
-        // Seconds must always be written back exactly as they were recorded by the dive computer.
-        // The picker never exposes seconds to the user, so discarding them would silently destroy
-        // sub-minute precision that the dive computer captured (e.g. surface-interval calculations).
+        // The picker never exposes seconds; graft the original seconds back so sub-minute
+        // precision recorded by the dive computer is never lost.
         var timestampDidChange = false
-#if os(macOS)
-        // macOS: .hourMinuteAndSecond — workingTimestamp already carries the user-selected seconds
-        let origFloor = floor(dive.timestamp.timeIntervalSinceReferenceDate)
-        let newFloor = floor(workingTimestamp.timeIntervalSinceReferenceDate)
-        if origFloor != newFloor {
-            dive.timestamp = workingTimestamp
-            timestampDidChange = true
-        }
-#else
-        // iOS: .hourAndMinute only — graft the original seconds back so they are never lost
         let cal = Calendar.current
         var newComponents = cal.dateComponents([.year, .month, .day, .hour, .minute], from: workingTimestamp)
         newComponents.second = cal.component(.second, from: dive.timestamp)
@@ -1345,7 +1334,6 @@ struct EditMenuStatsView: View {
                 timestampDidChange = true
             }
         }
-#endif
         if timestampDidChange {
             Dive.recalculateSurfaceIntervals(in: modelContext, diverName: dive.diverName)
             if dive.diverName != originalDiverName {
@@ -1518,7 +1506,7 @@ struct EditSiteDetailsView: View {
                 }
                 .keyboardShortcut(.escape, modifiers: [])
 
-                Button("Save Changes") {
+                Button("Save") {
                     save()
                 }
                 .buttonStyle(.borderedProminent)
@@ -2179,7 +2167,7 @@ struct EditConditionsView: View {
 
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.escape, modifiers: [])
-                Button("Save Changes") { save() }
+                Button("Save") { save() }
                     .buttonStyle(.borderedProminent)
                     .tint(.yellow)
                     .controlSize(.large)
@@ -2713,7 +2701,7 @@ struct EditGazView: View {
 
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.escape, modifiers: [])
-                Button("Save Changes") { save() }
+                Button("Save") { save() }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
                     .controlSize(.large)
@@ -2772,7 +2760,7 @@ struct EditGazView: View {
                         }
                     }
 
-                    gazMacOSGroup("Gas Blend", icon: "bubbles.and.sparkles.fill", color: .green) {
+                    gazMacOSGroup("Gas blend", icon: "bubbles.and.sparkles.fill", color: .green) {
                         gazMacOSRow("Gas Type") {
                             Text(verbatim: autoGasLabel)
                                 .font(.subheadline)

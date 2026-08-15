@@ -12,19 +12,27 @@ extension Color {
         // Clamp percentage between 0.0 and 1.0
         let percent = max(0.0, min(1.0, percentage))
         
-        // Extract RGBA components for both colors
-        let startComponents = UIColor(self).cgColor.components ?? [0, 0, 0, 1]
-        let endComponents = UIColor(Color.green).cgColor.components ?? [0, 0, 0, 1]
+        // Extract RGBA components for both colors.
+        // On macOS, NSColor from a SwiftUI Color may resolve into a non-RGB color space
+        // (e.g. catalog or generic grey), causing cgColor.components to return nil or a
+        // 2-element [white, alpha] array instead of RGBA. Convert to sRGB first.
+        #if os(macOS)
+        let startComponents = (PlatformColor(self).usingColorSpace(.sRGB) ?? NSColor(red: 0, green: 0, blue: 0, alpha: 1)).cgColor.components ?? [0, 0, 0, 1]
+        let endComponents = (PlatformColor(Color.green).usingColorSpace(.sRGB) ?? NSColor(red: 0, green: 1, blue: 0, alpha: 1)).cgColor.components ?? [0, 0, 0, 1]
+        #else
+        let startComponents = PlatformColor(self).cgColor.components ?? [0, 0, 0, 1]
+        let endComponents = PlatformColor(Color.green).cgColor.components ?? [0, 0, 0, 1]
+        #endif
         
-        // Handle fallback if components are missing
+        // Guard all indices — a greyscale CGColor has only 2 components [white, alpha].
         let r1 = startComponents[0]
-        let g1 = startComponents[1]
-        let b1 = startComponents[2]
+        let g1 = startComponents.count > 1 ? startComponents[1] : 0.0
+        let b1 = startComponents.count > 2 ? startComponents[2] : 0.0
         let a1 = startComponents.count > 3 ? startComponents[3] : 1.0
-        
+
         let r2 = endComponents[0]
-        let g2 = endComponents[1]
-        let b2 = endComponents[2]
+        let g2 = endComponents.count > 1 ? endComponents[1] : 0.0
+        let b2 = endComponents.count > 2 ? endComponents[2] : 0.0
         let a2 = endComponents.count > 3 ? endComponents[3] : 1.0
         
         // Perform linear interpolation

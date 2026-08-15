@@ -1367,6 +1367,15 @@ struct PhotoPreviewSheet: View {
                 if photos.isEmpty {
                     Color.platformBackground.ignoresSafeArea()
                 } else {
+                    #if os(macOS)
+                    // macOS has no swipe gesture — show one photo at a time driven by currentIndex.
+                    // No UIPageViewController seeding dance needed; index changes are instantaneous.
+                    if let photo = currentPhoto {
+                        PhotoPageView(data: photo)
+                            .id(currentIndex)
+                            .animation(.easeInOut(duration: 0.15), value: currentIndex)
+                    }
+                    #else
                     TabView(selection: $currentIndex) {
                         ForEach(photos.indices, id: \.self) { index in
                             PhotoPageView(data: photos[index])
@@ -1376,6 +1385,7 @@ struct PhotoPreviewSheet: View {
                     .tabViewStyle(.page(indexDisplayMode: .never))
                     .opacity(isPageSeeded ? 1 : 0)
                     .animation(.easeIn(duration: 0.15), value: isPageSeeded)
+                    #endif
                 }
             }
             .background(Color.platformBackground.ignoresSafeArea())

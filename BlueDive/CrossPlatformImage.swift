@@ -6,10 +6,14 @@ import SwiftUI
 import UIKit
 /// Platform-agnostic image type. Maps to `UIImage` on iOS/iPadOS.
 typealias PlatformImage = UIImage
+/// Platform-agnostic color type. Maps to `UIColor` on iOS/iPadOS.
+typealias PlatformColor = UIColor
 #elseif os(macOS)
 import AppKit
 /// Platform-agnostic image type. Maps to `NSImage` on macOS.
 typealias PlatformImage = NSImage
+/// Platform-agnostic color type. Maps to `NSColor` on macOS.
+typealias PlatformColor = NSColor
 #endif
 
 // MARK: - SwiftUI Image helpers
@@ -92,20 +96,52 @@ extension View {
     }
 }
 
+// MARK: - Cross-platform DatePicker components
+
+#if os(macOS)
+extension DatePickerComponents {
+    /// `.hourAndMinute` — macOS does not expose seconds in a DatePicker. Call site is macOS-only.
+    static var platformHourMinute: DatePickerComponents { .hourAndMinute }
+}
+#endif
+
+// MARK: - iOS-only toolbar placements
+
+#if os(macOS)
+extension ToolbarItemPlacement {
+    /// `.bottomBar` is iOS-only. On macOS this maps to `.automatic`, which places toolbar items
+    /// in the window title bar area rather than a bottom bar. Photo viewer prev/next controls
+    /// use this placement and will appear at the top on macOS.
+    static var bottomBar: ToolbarItemPlacement { .automatic }
+}
+#endif
+
 // MARK: - Adaptive DatePicker style
 
 extension DatePicker {
-    /// Uses `.graphical` (full-size calendar) when running as an iPad app on Mac,
-    /// and `.compact` (small inline button) on actual iOS devices.
+    /// Uses `.graphical` (full-size calendar) on macOS, `.compact` on iOS/iPadOS.
     @ViewBuilder
     func adaptiveDatePickerStyle() -> some View {
-        if ProcessInfo.processInfo.isiOSAppOnMac {
-            self.datePickerStyle(.graphical)
-        } else {
-            self.datePickerStyle(.compact)
-        }
+        #if os(macOS)
+        self.datePickerStyle(.graphical)
+        #else
+        self.datePickerStyle(.compact)
+        #endif
     }
 }
+
+#if os(macOS)
+// .navigationBarTitleDisplayMode(_:) and NavigationBarItem are iOS-only.
+// Provide stubs so call sites compile on macOS without modification.
+// Note: if Apple ever vends NavigationBarItem on macOS, rename this stub to
+// avoid a redeclaration conflict and update navigationBarTitleDisplayMode accordingly.
+enum NavigationBarItem {
+    enum TitleDisplayMode { case automatic, inline, large }
+}
+extension View {
+    func navigationBarTitleDisplayMode(_ displayMode: NavigationBarItem.TitleDisplayMode) -> some View { self }
+}
+#endif
 
 #if os(iOS)
 extension View {
