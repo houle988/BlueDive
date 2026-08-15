@@ -156,6 +156,11 @@ struct BlueDiveApp: App {
             }
         }
         #endif
+        #if os(macOS)
+        Settings {
+            SettingsView()
+        }
+        #endif
     }
     
     // MARK: - Schema

@@ -531,6 +531,7 @@ struct SettingsView: View {
                 }
                 previousLanguage = prefs.languageMode
             }
+            #if os(iOS)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
@@ -538,6 +539,7 @@ struct SettingsView: View {
                         .keyboardShortcut(.escape, modifiers: [])
                 }
             }
+            #endif
             .task {
                 await checkNotificationStatus()
                 if notificationsEnabled {
@@ -751,7 +753,7 @@ struct SettingsView: View {
             SectionHeaderModern(title: "Units of Measure", icon: "ruler", color: .orange)
 
             
-            VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Depth", systemImage: "arrow.down.to.line")
                         .font(.subheadline)
@@ -844,6 +846,7 @@ struct SettingsView: View {
                     .padding(.horizontal)
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.primary.opacity(0.03))

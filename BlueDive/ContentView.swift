@@ -1021,11 +1021,19 @@ struct ContentView: View {
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         ToolbarItem(placement: .navigation) {
+            #if os(iOS)
             Button(action: { showSettings = true }) {
                 Image(systemName: "gearshape.fill")
                     .foregroundStyle(.cyan)
             }
             .help("Settings")
+            #else
+            SettingsLink {
+                Label("Settings", systemImage: "gearshape.fill")
+            }
+            .help("Settings")
+            #endif
+            
         }
         ToolbarItem(placement: .navigation) {
             cloudSyncToolbarItem
