@@ -251,7 +251,7 @@ extension ContentView {
         do {
             try modelContext.save()
             if UserDefaults.standard.bool(forKey: "notificationsEnabled"),
-               UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? true {
+               UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? false {
                 let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
                 NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
             }
@@ -462,6 +462,7 @@ extension ContentView {
                 tankPressures: sample.tankPressures,
                 ndl: sample.ndt != nil ? Double(sample.ndt!) : nil,
                 ppo2: sample.ppo2,
+                sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
                 currentGas: sample.currentGas
             )
@@ -510,7 +511,9 @@ extension ContentView {
             diverName: diveData.diver ?? UserDefaults.standard.string(forKey: "userName") ?? "",
             buddies: buddiesString,
             rating: diveData.rating ?? 0,
-            isRepetitiveDive: (diveData.repetitiveDive ?? 0) > 0,
+            isRepetitiveDive: diveData.sourceImport == "MacDive"
+                ? (diveData.repetitiveDive ?? 1) > 1
+                : (diveData.repetitiveDive ?? 0) > 0,
             weights: diveData.weight,
             weather: diveData.weather,
             surfaceConditions: diveData.surfaceConditions,
@@ -757,6 +760,7 @@ extension ContentView {
                 tankPressures: sample.tankPressures,
                 ndl: sample.ndl,
                 ppo2: sample.ppo2,
+                sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
                 currentGas: sample.currentGas
             ))

@@ -489,7 +489,7 @@ struct PDFDiveLogbook {
             (NSLocalizedString("Max Temp", bundle: loc, comment: ""),    dive.displayMaxTemperature.map { "\(Int($0.rounded()))\(tempUnit.symbol)" } ?? "—", accentRed),
             (NSLocalizedString("Min Temp", bundle: loc, comment: ""),    dive.displayMinTemperature.map { "\(Int($0.rounded()))\(tempUnit.symbol)" } ?? "—", accentBlue),
             (NSLocalizedString("Air Temp", bundle: loc, comment: ""),    airTempStr,    accentOrange),
-            (NSLocalizedString("Platform", bundle: loc, comment: ""),    dive.entryType ?? "—",   accentPurple),
+            (NSLocalizedString("Entry Type", bundle: loc, comment: ""),    dive.entryType ?? "—",   accentPurple),
             (NSLocalizedString("Dive Type", bundle: loc, comment: ""),   dive.primaryDiveType ?? "—", accentPurple),
             (NSLocalizedString("Trip", bundle: loc, comment: ""),        tripStr,       accentTeal),
         ]
@@ -536,7 +536,7 @@ struct PDFDiveLogbook {
 
         let altStr: String = {
             guard let alt = dive.displaySiteAltitude else { return "—" }
-            return String(format: "%.0f %@", alt, prefs.depthUnit.symbol)
+            return alt.localizedString(decimals: 0) + " \(prefs.depthUnit.symbol)"
         }()
 
         let fields: [Field] = [
@@ -603,7 +603,7 @@ struct PDFDiveLogbook {
             ctx.strokePath()
 
             let depthVal = maxDepth * Double(4 - i) / 4.0
-            let label = String(format: "%.0f", dive.displayDepth(depthVal))
+            let label = dive.displayDepth(depthVal).localizedString(decimals: 0)
             let labelAttrs: [NSAttributedString.Key: Any] = [
                 .font: font(size: 5.5),
                 .foregroundColor: platformColor(textMuted)
@@ -762,8 +762,7 @@ struct PDFDiveLogbook {
                 let pressStr: String = {
                     guard let sp = tank.startPressure else { return "" }
                     guard let ep = tank.endPressure else { return dive.formattedPressure(sp) }
-                    return String(format: "%.0f→%.0f %@",
-                                  dive.displayPressure(sp), dive.displayPressure(ep), pressSymbol)
+                    return "\(dive.displayPressure(sp).localizedString(decimals: 0))→\(dive.displayPressure(ep).localizedString(decimals: 0)) \(pressSymbol)"
                 }()
 
                 var components = [localizedTankType(tank.tankType), gasString(for: tank)]
@@ -815,7 +814,7 @@ struct PDFDiveLogbook {
             let consumedStr: String = {
                 guard let sp = tank.startPressure, let ep = tank.endPressure, sp > ep else { return "—" }
                 let delta = dive.displayPressure(sp) - dive.displayPressure(ep)
-                return String(format: "%.0f %@", delta, pressSymbol)
+                return delta.localizedString(decimals: 0) + " \(pressSymbol)"
             }()
             allRows.append((NSLocalizedString("Used", bundle: loc, comment: ""), consumedStr, accentRed))
         }
@@ -873,9 +872,7 @@ struct PDFDiveLogbook {
         // Add deco stops if present
         if dive.isDecompressionDive && !dive.decoStops.isEmpty {
             for stop in dive.decoStops {
-                let depthLabel = String(format: "%.0f %@",
-                                       dive.displayDepth(stop.depth),
-                                       UserPreferences.shared.depthUnit.symbol)
+                let depthLabel = dive.displayDepth(stop.depth).localizedString(decimals: 0) + " \(UserPreferences.shared.depthUnit.symbol)"
 
                 let timeLabel: String = {
                     let m = Int(stop.time) / 60
@@ -1227,6 +1224,8 @@ struct PDFDiveLogbook {
         case .weights: return textGray
         case .light: return accentYellow
         case .knife, .gloves: return accentRed
+        case .camera: return textGray
+        case .rebreather: return accentTeal
         default: return textGray
         }
     }

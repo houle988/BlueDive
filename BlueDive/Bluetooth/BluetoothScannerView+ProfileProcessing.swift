@@ -298,7 +298,7 @@ extension BluetoothScannerView {
             return DiveProfilePoint(
                 time: point.time, depth: point.depth, temperature: point.temperature,
                 tankPressure: point.tankPressure, tankPressures: point.tankPressures,
-                ndl: point.ndl, ppo2: point.ppo2, events: point.events,
+                ndl: point.ndl, ppo2: point.ppo2, sensorPPO2: point.sensorPPO2, events: point.events,
                 currentGas: gasMixToTankIndex[gasIdx]
             )
         }
@@ -356,6 +356,12 @@ extension BluetoothScannerView {
                 dict[0] ?? dict.min(by: { $0.key < $1.key })?.value
             } ?? base.pressure
 
+            // Merge per-sensor PPO2 across all points at this timestamp; base wins on conflict.
+            var mergedSensors: [Int: Double] = [:]
+            for p in group.points { mergedSensors.merge(p.sensorPPO2) { _, new in new } }
+            mergedSensors.merge(base.sensorPPO2) { _, new in new }
+            let sensorPPO2: [Int: Double]? = mergedSensors.isEmpty ? nil : mergedSensors
+
             // Use the last non-nil currentGas from this group — carries the most recent gas context.
             let currentGas: Int? = group.points.compactMap { $0.currentGas }.last
 
@@ -367,6 +373,7 @@ extension BluetoothScannerView {
                 tankPressures: perTank,
                 ndl: base.ndl.map { Double($0) / 60.0 }, // Seconds to minutes
                 ppo2: base.po2,
+                sensorPPO2: sensorPPO2,
                 events: allEvents,
                 currentGas: currentGas
             ))

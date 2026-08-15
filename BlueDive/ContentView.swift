@@ -22,6 +22,7 @@ private let widgetAppGroupSuite = "group.app.bluedive.universal"
 struct ContentView: View {
     @Environment(\.modelContext) var modelContext
     @Query(sort: \Dive.timestamp, order: .reverse) var dives: [Dive]
+    @Query private var allInsurances: [DivingInsurance]
     @State private var prefs = UserPreferences.shared
 
     @State var showScannerSheet = false
@@ -104,7 +105,7 @@ struct ContentView: View {
     @State private var showSyncStatusPopover = false
     @State private var collapsedDiverSections: Set<String> = []
     @State private var diveIndexLookup: [Dive.ID: Int] = [:]
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: dives) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: dives, insurances: allInsurances) }
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
         case dateDesc       = "dateDesc"

@@ -9,6 +9,7 @@ struct DiveCalendarHeatmapView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
 
     @State private var selectedYear: Int = Calendar(identifier: .gregorian).component(.year, from: .now)
     @State private var selectedDay: Date? = nil
@@ -37,7 +38,7 @@ struct DiveCalendarHeatmapView: View {
     @State private var statsReady = false
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
 
     private func recomputeAllStats(_ dives: [Dive]) {
@@ -227,7 +228,7 @@ struct DiveCalendarHeatmapView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "flame.fill")
                         .foregroundStyle(.orange)
-                    Text("\(cachedCurrentStreak) days")
+                    Text(verbatim: Double(cachedCurrentStreak).localizedString(decimals: 0) + " days")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.orange)
                 }
@@ -243,8 +244,8 @@ struct DiveCalendarHeatmapView: View {
     private var yearSummary: some View {
         HStack(spacing: 0) {
             CalHeatStat(
-                value: "\(cachedYearDiveCount)",
-                label: "Dive(s)",
+                value: Double(cachedYearDiveCount).localizedString(decimals: 0),
+                label: "Dives",
                 icon: "bubbles.and.sparkles",
                 color: .cyan
             )
@@ -257,7 +258,7 @@ struct DiveCalendarHeatmapView: View {
             )
             Divider().frame(height: 36).background(Color.primary.opacity(0.1))
             CalHeatStat(
-                value: "\(cachedYearUniqueSites)",
+                value: Double(cachedYearUniqueSites).localizedString(decimals: 0),
                 label: "Sites",
                 icon: "mappin.circle.fill",
                 color: .orange

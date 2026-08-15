@@ -25,7 +25,7 @@ struct DiveRowView: View {
     private var diveIcon: some View {
         let resolved = resolvedFlag
         return VStack(spacing: 4) {
-            Text("#\(dive.diveNumber ?? diveNumber)")
+            Text(verbatim: "#\(dive.diveNumber ?? diveNumber)")
                 .font(.system(.caption, design: .monospaced))
                 .fontWeight(.bold)
                 .padding(.horizontal, 6)
@@ -43,10 +43,17 @@ struct DiveRowView: View {
                     .font(.system(size: 24))
             }
 
-            if !(dive.seenFish?.isEmpty ?? true) {
-                Image(systemName: "fish.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.teal)
+            HStack(spacing: 4) {
+                if !(dive.seenFish?.isEmpty ?? true) {
+                    Image(systemName: "fish.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.teal)
+                }
+                if !(dive.photosData?.isEmpty ?? true) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                }
             }
         }
     }
@@ -178,7 +185,7 @@ struct StatsHeaderView: View {
         return HStack(spacing: 12) {
             StatMiniBox(
                 title: "DIVES",
-                value: "\(dives.count)",
+                value: Double(dives.count).localizedString(decimals: 0),
                 icon: "figure.open.water.swim",
                 color: .blue
             )

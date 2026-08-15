@@ -212,7 +212,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterYear == nil,
                         color: .cyan
                     ) {
@@ -263,7 +263,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterCountry == nil,
                         color: .blue
                     ) {
@@ -325,7 +325,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterDiveType == nil,
                         color: .purple
                     ) {
@@ -370,7 +370,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterTag == nil,
                         color: .orange
                     ) {
@@ -548,7 +548,7 @@ struct DiveFilterSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ModernFilterChip(
-                        label: "All",
+                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                         isSelected: filterGasType == nil,
                         color: .green
                     ) {
@@ -598,27 +598,25 @@ struct DiveFilterSheet: View {
         case (true, true):
             let lo = Swift.min(filterMinDepth, filterMaxDepth)
             let hi = Swift.max(filterMinDepth, filterMaxDepth)
-            return "\(Int(lo)) – \(Int(hi)) \(unit)"
+            return "\(lo.localizedString(decimals: 1)) – \(hi.localizedString(decimals: 1)) \(unit)"
         case (true, false):
-            return "≥ \(Int(filterMinDepth)) \(unit)"
+            return "≥ \(filterMinDepth.localizedString(decimals: 1)) \(unit)"
         case (false, true):
-            return "≤ \(Int(filterMaxDepth)) \(unit)"
+            return "≤ \(filterMaxDepth.localizedString(decimals: 1)) \(unit)"
         default:
             return ""
         }
     }
 
     private func commitDepthFields() {
-        let rawMin = minDepthText.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
-        let rawMax = maxDepthText.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
-        let parsedMin = Double(rawMin) ?? 0
-        let parsedMax = Double(rawMax) ?? 0
+        let parsedMin = parseFlexibleDouble(minDepthText) ?? 0
+        let parsedMax = parseFlexibleDouble(maxDepthText) ?? 0
         // If both are set and inverted, swap them so the range is always lo–hi
         if parsedMin > 0, parsedMax > 0, parsedMin > parsedMax {
             filterMinDepth = parsedMax
             filterMaxDepth = parsedMin
-            minDepthText   = String(Int(parsedMax))
-            maxDepthText   = String(Int(parsedMin))
+            minDepthText   = parsedMax.editableString(decimals: 1)
+            maxDepthText   = parsedMin.editableString(decimals: 1)
         } else {
             filterMinDepth = parsedMin
             filterMaxDepth = parsedMax
@@ -691,12 +689,7 @@ struct DiveFilterSheet: View {
                             .keyboardType(.decimalPad)
                             #endif
                             .onChange(of: minDepthText) {
-                                let parsed = Double(
-                                    minDepthText
-                                        .replacingOccurrences(of: ",", with: ".")
-                                        .trimmingCharacters(in: .whitespaces)
-                                ) ?? 0
-                                filterMinDepth = parsed
+                                filterMinDepth = parseFlexibleDouble(minDepthText) ?? 0
                             }
                             .onSubmit { commitDepthFields() }
                         if !minDepthText.isEmpty {
@@ -735,12 +728,7 @@ struct DiveFilterSheet: View {
                             .keyboardType(.decimalPad)
                             #endif
                             .onChange(of: maxDepthText) {
-                                let parsed = Double(
-                                    maxDepthText
-                                        .replacingOccurrences(of: ",", with: ".")
-                                        .trimmingCharacters(in: .whitespaces)
-                                ) ?? 0
-                                filterMaxDepth = parsed
+                                filterMaxDepth = parseFlexibleDouble(maxDepthText) ?? 0
                             }
                             .onSubmit { commitDepthFields() }
                         if !maxDepthText.isEmpty {
@@ -769,8 +757,8 @@ struct DiveFilterSheet: View {
             .background(Color.platformSecondaryBackground)
             .cornerRadius(12)
             .onAppear {
-                minDepthText = filterMinDepth > 0 ? String(Int(filterMinDepth)) : ""
-                maxDepthText = filterMaxDepth > 0 ? String(Int(filterMaxDepth)) : ""
+                minDepthText = filterMinDepth > 0 ? filterMinDepth.editableString(decimals: 1) : ""
+                maxDepthText = filterMaxDepth > 0 ? filterMaxDepth.editableString(decimals: 1) : ""
             }
         }
         .filterCardStyle()
@@ -782,7 +770,7 @@ struct DiveFilterSheet: View {
             
             HStack(spacing: 12) {
                 ModernFilterChip(
-                    label: "All",
+                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                     isSelected: filterMinRating == 0,
                     color: .yellow
                 ) {
@@ -815,15 +803,13 @@ struct DiveFilterSheet: View {
     private var resetButtonLabel: String {
         let hasFilters = activeFilterCount > 0
         if hasFilters && hasSortChange {
-            return String(
-                format: NSLocalizedString("Reset %lld filter(s) & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when both filters and sort order are active"),
-                activeFilterCount
-            )
+            return activeFilterCount == 1
+                ? NSLocalizedString("Reset 1 filter & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when exactly one filter and sort order are both active.")
+                : String(format: NSLocalizedString("Reset %lld filters & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when both multiple filters and sort order are active."), activeFilterCount)
         } else if hasFilters {
-            return String(
-                format: NSLocalizedString("Reset %lld filter(s)", bundle: Bundle.forAppLanguage(), comment: "Reset button label showing the number of active filters"),
-                activeFilterCount
-            )
+            return activeFilterCount == 1
+                ? NSLocalizedString("Reset 1 filter", bundle: Bundle.forAppLanguage(), comment: "Reset button label when exactly one filter is active.")
+                : String(format: NSLocalizedString("Reset %lld filters", bundle: Bundle.forAppLanguage(), comment: "Reset button label showing the number of active filters (plural)."), activeFilterCount)
         } else {
             return NSLocalizedString("Reset sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when only the sort order is changed")
         }

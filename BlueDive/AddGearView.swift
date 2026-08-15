@@ -4,6 +4,7 @@ import SwiftData
 struct AddGearView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     
     // MARK: - Form State
     
@@ -34,14 +35,15 @@ struct AddGearView: View {
     @Query(sort: \Gear.name) private var allGearItems: [Gear]
     @Query(sort: \Dive.timestamp) private var allDives: [Dive]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
 
     // Available currencies
     private let currencies = ["CAD", "USD", "EUR", "GBP", "CHF", "AUD", "JPY", "Other"]
 
     // MARK: - Computed Properties
-    
+
     private var diverNameSuggestions: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
+        DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications, insurances: allInsurances)
     }
 
     @State private var manufacturerSuggestions: [String] = []
@@ -106,6 +108,7 @@ struct AddGearView: View {
         #if os(macOS)
         .frame(minWidth: 600, idealWidth: 650, maxWidth: 750)
         #endif
+        .onAppear { selectedCategory = GearCategory.sorted(for: locale).first ?? selectedCategory }
         .task { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
         .onChange(of: allGearItems) { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
     }
@@ -134,7 +137,7 @@ struct AddGearView: View {
             SectionHeaderView(title: "Category", icon: "list.bullet")
             
             Menu {
-                ForEach(GearCategory.allCases) { category in
+                ForEach(GearCategory.sorted(for: locale)) { category in
                     Button {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedCategory = category
@@ -167,24 +170,8 @@ struct AddGearView: View {
         .cardStyle()
     }
     
-    /// Helper to get color for a category
     private func categoryColor(for category: GearCategory) -> Color {
-        switch category.color {
-        case "purple": return .purple
-        case "blue": return .blue
-        case "green": return .green
-        case "orange": return .orange
-        case "gray": return .gray
-        case "cyan": return .cyan
-        case "pink": return .pink
-        case "indigo": return .indigo
-        case "teal": return .teal
-        case "mint": return .mint
-        case "yellow": return .yellow
-        case "red": return .red
-        case "brown": return .brown
-        default: return .cyan
-        }
+        category.swiftUIColor
     }
     
     private var basicInfoSection: some View {
@@ -300,7 +287,7 @@ struct AddGearView: View {
                             .fontWeight(.medium)
                         
                         HStack {
-                            TextField(0.0.localizedString(decimals: 2), text: $purchasePrice)
+                            TextField(0.0.editableString(decimals: 2), text: $purchasePrice)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                             if !purchasePrice.isEmpty {
@@ -435,15 +422,14 @@ struct AddGearView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             
-                            TextField(0.0.localizedString(decimals: 1), text: $weightContributionText)
+                            TextField(0.0.editableString(decimals: 1), text: $weightContributionText)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                                 .padding()
                                 .background(Color.platformSecondaryBackground)
                                 .cornerRadius(10)
                                 .onChange(of: weightContributionText) {
-                                    let normalized = weightContributionText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
-                                    weightContribution = Double(normalized) ?? 0.0
+                                    weightContribution = parseFlexibleDouble(weightContributionText) ?? 0.0
                                 }
                         }
                         .frame(maxWidth: .infinity)
@@ -576,7 +562,7 @@ struct AddGearView: View {
             return
         }
         
-        let priceValue = Double(purchasePrice.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        let priceValue = parseFlexibleDouble(purchasePrice)
         
         let newGear = Gear(
             name: trimmedName,
@@ -617,43 +603,11 @@ struct CategoryButton: View {
     let action: () -> Void
     
     private var backgroundColor: Color {
-        let colorName = category.color
-        
-        let baseColor: Color = {
-            switch colorName {
-            case "purple": return .purple
-            case "blue": return .blue
-            case "green": return .green
-            case "orange": return .orange
-            case "gray": return .gray
-            case "cyan": return .cyan
-            case "pink": return .pink
-            case "indigo": return .indigo
-            default: return .brown
-            }
-        }()
-        
-        return baseColor.opacity(isSelected ? 0.25 : 0.08)
+        category.swiftUIColor.opacity(isSelected ? 0.25 : 0.08)
     }
-    
+
     private var borderColor: Color {
-        let colorName = category.color
-        
-        let baseColor: Color = {
-            switch colorName {
-            case "purple": return .purple
-            case "blue": return .blue
-            case "green": return .green
-            case "orange": return .orange
-            case "gray": return .gray
-            case "cyan": return .cyan
-            case "pink": return .pink
-            case "indigo": return .indigo
-            default: return .brown
-            }
-        }()
-        
-        return isSelected ? baseColor : .clear
+        isSelected ? category.swiftUIColor : .clear
     }
     
     var body: some View {

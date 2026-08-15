@@ -83,7 +83,7 @@ extension TankTemplate {
         }
         if let wp = workingPressure {
             let displayWP = prefs.pressureUnit.convert(wp, from: storedPressureUnit)
-            parts.append(String(format: "%.0f %@", displayWP, prefs.pressureUnit.symbol))
+            parts.append(displayWP.localizedString(decimals: 0) + " \(prefs.pressureUnit.symbol)")
         }
         if let mat = material, !mat.isEmpty {
             parts.append(localizedTankMaterial(mat))

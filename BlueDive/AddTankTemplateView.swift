@@ -34,8 +34,7 @@ struct AddTankTemplateView: View {
 
     /// Parsed working pressure value, nil if empty or not a valid number.
     private var parsedWorkingPressure: Double? {
-        let cleaned = workingPressureText.replacingOccurrences(of: ",", with: ".")
-        guard let val = Double(cleaned), val > 0 else { return nil }
+        guard let val = parseFlexibleDouble(workingPressureText), val > 0 else { return nil }
         return val
     }
 
@@ -135,7 +134,7 @@ struct AddTankTemplateView: View {
                     .fontWeight(.medium)
 
                 HStack {
-                    TextField(prefs.volumeUnit == .liters ? "e.g. \(12.0.localizedString(decimals: 1))" : "e.g. 80", text: $volumeText)
+                    TextField(prefs.volumeUnit == .liters ? "e.g. \(12.0.editableString(decimals: 1))" : "e.g. 80", text: $volumeText)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()
                         #if os(iOS)
@@ -333,8 +332,8 @@ struct AddTankTemplateView: View {
 
         let template = TankTemplate(
             name: trimmedName,
-            volume: Double(volumeText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")),
-            workingPressure: Double(workingPressureText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")),
+            volume: parseFlexibleDouble(volumeText),
+            workingPressure: parseFlexibleDouble(workingPressureText),
             volumeUnit: prefs.volumeUnit.rawValue,
             pressureUnit: prefs.pressureUnit.rawValue,
             material: material.isEmpty ? nil : material,

@@ -10,6 +10,7 @@ struct EditGearView: View {
     @Bindable var gear: Gear
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     // MARK: - Form State (mirrors AddGearView fields)
 
@@ -44,6 +45,7 @@ struct EditGearView: View {
     @Query(sort: \Gear.name) private var allGearItems: [Gear]
     @Query(sort: \Dive.timestamp) private var allDives: [Dive]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
 
     private let currencies = ["CAD", "USD", "EUR", "GBP", "CHF", "AUD", "JPY", "Other"]
 
@@ -58,13 +60,13 @@ struct EditGearView: View {
             initialValue: GearCategory.allCases.first { $0.rawValue == gear.category } ?? .other
         )
         _weightContribution = State(initialValue: gear.weightContribution)
-        _weightContributionText = State(initialValue: gear.weightContribution == 0 ? "0" : gear.weightContribution.localizedString(decimals: 2))
+        _weightContributionText = State(initialValue: gear.weightContribution == 0 ? "0" : gear.weightContribution.editableString(decimals: 2))
         _weightContributionUnit = State(initialValue: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)
         _datePurchased = State(initialValue: gear.datePurchased)
         _manufacturerText = State(initialValue: gear.manufacturer ?? "")
         _modelText = State(initialValue: gear.model ?? "")
         _serialNumber = State(initialValue: gear.serialNumber ?? "")
-        _purchasePrice = State(initialValue: gear.purchasePrice.map { $0.localizedString(decimals: 2) } ?? "")
+        _purchasePrice = State(initialValue: gear.purchasePrice.map { $0.editableString(decimals: 2) } ?? "")
         _currency = State(initialValue: gear.currency ?? "CAD")
         _purchasedFrom = State(initialValue: gear.purchasedFrom ?? "")
         _isInactive = State(initialValue: gear.isInactive)
@@ -77,7 +79,7 @@ struct EditGearView: View {
     // MARK: - Computed Properties
 
     private var diverNameSuggestions: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications)
+        DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications, insurances: allInsurances)
     }
 
     @State private var manufacturerSuggestions: [String] = []
@@ -200,7 +202,7 @@ struct EditGearView: View {
             SectionHeaderView(title: "Category", icon: "list.bullet")
 
             Menu {
-                ForEach(GearCategory.allCases) { category in
+                ForEach(GearCategory.sorted(for: locale)) { category in
                     Button {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedCategory = category
@@ -233,24 +235,8 @@ struct EditGearView: View {
         .cardStyle()
     }
 
-    /// Helper to get color for a category
     private func categoryColor(for category: GearCategory) -> Color {
-        switch category.color {
-        case "purple": return .purple
-        case "blue": return .blue
-        case "green": return .green
-        case "orange": return .orange
-        case "gray": return .gray
-        case "cyan": return .cyan
-        case "pink": return .pink
-        case "indigo": return .indigo
-        case "teal": return .teal
-        case "mint": return .mint
-        case "yellow": return .yellow
-        case "red": return .red
-        case "brown": return .brown
-        default: return .cyan
-        }
+        category.swiftUIColor
     }
 
     private var basicInfoSection: some View {
@@ -366,7 +352,7 @@ struct EditGearView: View {
                             .fontWeight(.medium)
 
                         HStack {
-                            TextField(0.0.localizedString(decimals: 2), text: $purchasePrice)
+                            TextField(0.0.editableString(decimals: 2), text: $purchasePrice)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                             if !purchasePrice.isEmpty {
@@ -515,15 +501,14 @@ struct EditGearView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            TextField(0.0.localizedString(decimals: 1), text: $weightContributionText)
+                            TextField(0.0.editableString(decimals: 1), text: $weightContributionText)
                                 .platformKeyboardType(.decimalPad)
                                 .textFieldStyle(.plain)
                                 .padding()
                                 .background(Color.platformSecondaryBackground)
                                 .cornerRadius(10)
                                 .onChange(of: weightContributionText) {
-                                    let normalized = weightContributionText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
-                                    weightContribution = Double(normalized) ?? 0.0
+                                    weightContribution = parseFlexibleDouble(weightContributionText) ?? 0.0
                                 }
                         }
                         .frame(maxWidth: .infinity)
@@ -628,7 +613,7 @@ struct EditGearView: View {
             return
         }
 
-        let priceValue = Double(purchasePrice.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        let priceValue = parseFlexibleDouble(purchasePrice)
 
         gear.name = trimmedName
         gear.category = selectedCategory.rawValue

@@ -520,6 +520,17 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             return dict.isEmpty ? nil : dict
         }
         let ppo2        = attributes["ppo2"].flatMap(Double.init)
+        let sensorPPO2: [Int: Double]? = attributes["sensorPPO2"].flatMap { raw in
+            var dict: [Int: Double] = [:]
+            for pair in raw.split(separator: ",") {
+                let parts = pair.split(separator: ":")
+                guard parts.count == 2,
+                      let idx = Int(parts[0]),
+                      let val = Double(parts[1]) else { continue }
+                dict[idx] = val
+            }
+            return dict.isEmpty ? nil : dict
+        }
         let ndt         = attributes["ndl"].flatMap(Double.init).map(Int.init)
         let currentGas  = attributes["currentGas"].flatMap(Int.init)
         let events: [DiveProfileEvent]
@@ -541,6 +552,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             tankPressures: tankPressures,
             temperature: temperature,
             ppo2: ppo2,
+            sensorPPO2: sensorPPO2,
             ndt: ndt,
             events: events,
             currentGas: currentGas

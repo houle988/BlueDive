@@ -11,7 +11,9 @@ struct GearListView: View {
     @Query(sort: \TankTemplate.name) private var allTankTemplates: [TankTemplate]
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesForFilter: [Dive]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertificationsForFilter: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     @State private var showAddGear = false
@@ -31,6 +33,8 @@ struct GearListView: View {
     @State private var importedGroupMissingMemberCount: Int = 0
     @State private var importedGearOnly = false
     @State private var showImportSuccess = false
+    @State private var showNothingToImport = false
+    @State private var importedServiceDataOnly = false
     @State private var pendingGearCSVData: Data?
     @State private var csvFormatOptions = ImportFormatOptions()
     @State private var showGearCSVFormatPicker = false
@@ -43,7 +47,7 @@ struct GearListView: View {
     // MARK: - Computed Properties
 
     private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: allDivesForFilter, gear: allGear, certifications: allCertificationsForFilter)
+        DiverFilter.uniqueDivers(in: allDivesForFilter, gear: allGear, certifications: allCertificationsForFilter, insurances: allInsurances)
     }
 
     /// Équipement filtré par recherche et catégorie
@@ -79,9 +83,23 @@ struct GearListView: View {
     /// Équipement groupé par catégorie
     private var groupedGear: [(key: String, value: [Gear])] {
         let grouped = Dictionary(grouping: filteredGear, by: { $0.category })
-        return grouped.sorted { $0.key < $1.key }
+        let bundle = Bundle.forAppLanguage()
+        // Resolve each localized sort key once (O(n)) rather than per comparison (O(n log n)).
+        var sortKeys = [String: String](minimumCapacity: grouped.count)
+        for key in grouped.keys {
+            sortKeys[key] = GearCategory(exportKeyOrRawValue: key).map {
+                NSLocalizedString("gear.category." + $0.rawValue, bundle: bundle, comment: "")
+            } ?? key
+        }
+        return grouped.sorted {
+            (sortKeys[$0.key] ?? $0.key).compare(sortKeys[$1.key] ?? $1.key, locale: locale) == .orderedAscending
+        }
     }
-    
+
+    private var sortedCategories: [GearCategory] {
+        GearCategory.sorted(for: locale)
+    }
+
     /// Équipement nécessitant un entretien — service due within 30 days or already past
     private var gearNeedingService: [Gear] {
         let calendar = Calendar.current
@@ -106,8 +124,46 @@ struct GearListView: View {
         }
     }
 
+    private var xmlImportBaseMessage: String {
+        let gearPhrase: String
+        if importedCount == 0 {
+            gearPhrase = NSLocalizedString("0 gear items", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for zero gear items in the XML import success message.")
+        } else if importedCount == 1 {
+            gearPhrase = NSLocalizedString("1 gear item", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for one gear item in the XML import success message.")
+        } else {
+            gearPhrase = String(format: NSLocalizedString("%lld gear items", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for multiple gear items in the XML import success message."), importedCount)
+        }
+        let groupPhrase: String
+        if importedGroupCount == 0 {
+            groupPhrase = NSLocalizedString("0 groups", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for zero groups in the XML import success message.")
+        } else if importedGroupCount == 1 {
+            groupPhrase = NSLocalizedString("1 group", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for one group in the XML import success message.")
+        } else {
+            groupPhrase = String(format: NSLocalizedString("%lld groups", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for multiple groups in the XML import success message."), importedGroupCount)
+        }
+        let templatePhrase: String
+        if importedTemplateCount == 0 {
+            templatePhrase = NSLocalizedString("0 tank templates", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for zero tank templates in the XML import success message.")
+        } else if importedTemplateCount == 1 {
+            templatePhrase = NSLocalizedString("1 tank template", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for one tank template in the XML import success message.")
+        } else {
+            templatePhrase = String(format: NSLocalizedString("%lld tank templates", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for multiple tank templates in the XML import success message."), importedTemplateCount)
+        }
+        return String(
+            format: NSLocalizedString("%1$@, %2$@, and %3$@ imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Sentence frame for the XML gear import success message. Arguments: gear noun phrase, group noun phrase, tank template noun phrase."),
+            gearPhrase, groupPhrase, templatePhrase
+        )
+    }
+
+    private var xmlImportWarning: String? {
+        guard importedGroupMissingMemberCount > 0 else { return nil }
+        return importedGroupMissingMemberCount == 1
+            ? NSLocalizedString("1 group member could not be matched and was skipped.", bundle: Bundle.forAppLanguage(), comment: "Warning when exactly one gear group member could not be matched and was skipped during import.")
+            : String(format: NSLocalizedString("%lld group members could not be matched and were skipped.", bundle: Bundle.forAppLanguage(), comment: "Warning when multiple gear group members could not be matched and were skipped during import."), importedGroupMissingMemberCount)
+    }
+
     // MARK: - Body
-    
+
     var body: some View {
         ZStack {
             Color.platformBackground.ignoresSafeArea()
@@ -198,28 +254,26 @@ struct GearListView: View {
         .alert("Import Successful", isPresented: $showImportSuccess) {
             Button("OK", role: .cancel) { }
         } message: {
-            if importedGearOnly {
-                Text(verbatim: String(
-                    format: NSLocalizedString("%lld gear item(s) imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items from a MacDive CSV file. Argument: gear count."),
-                    importedCount
-                ))
+            // importedServiceDataOnly must be checked before importedGearOnly: on the CSV path
+            // both flags are true simultaneously when the only change was a service data sync.
+            if importedServiceDataOnly {
+                Text("Service records updated for existing gear.")
+            } else if importedGearOnly {
+                Text(verbatim: importedCount == 0
+                    ? NSLocalizedString("0 gear items imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown when a gear CSV import completes but all items already existed.")
+                    : importedCount == 1
+                    ? NSLocalizedString("1 gear item imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing exactly one gear item.")
+                    : String(format: NSLocalizedString("%lld gear items imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items from a MacDive CSV file."), importedCount))
+            } else if let warning = xmlImportWarning {
+                Text(verbatim: xmlImportBaseMessage + "\n" + warning)
             } else {
-                let base = String(
-                    format: NSLocalizedString("%1$lld gear item(s), %2$lld group(s), and %3$lld tank template(s) imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items, gear groups, and tank templates from a gear XML file. Arguments: gear count, group count, template count."),
-                    importedCount,
-                    importedGroupCount,
-                    importedTemplateCount
-                )
-                if importedGroupMissingMemberCount > 0 {
-                    let warning = String(
-                        format: NSLocalizedString("%lld group member(s) could not be matched and were skipped.", bundle: Bundle.forAppLanguage(), comment: "Warning appended to the import success message when some gear IDs referenced inside imported gear groups could not be matched to any existing or newly imported gear item."),
-                        importedGroupMissingMemberCount
-                    )
-                    Text(verbatim: base + "\n" + warning)
-                } else {
-                    Text(verbatim: base)
-                }
+                Text(verbatim: xmlImportBaseMessage)
             }
+        }
+        .alert("Nothing to Import", isPresented: $showNothingToImport) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("All gear, groups, and tank templates in the file already exist.")
         }
         .alert("Import error", isPresented: $showImportError) {
             Button("OK", role: .cancel) { }
@@ -384,7 +438,7 @@ struct GearListView: View {
                     let diverBase = selectedDiver.isEmpty
                         ? allGear
                         : allGear.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
-                    ForEach(GearCategory.allCases) { category in
+                    ForEach(sortedCategories) { category in
                         let count = diverBase.filter { $0.category == category.rawValue }.count
                         if count > 0 {
                             CategoryFilterChip(
@@ -537,7 +591,7 @@ struct GearListView: View {
                 // existing store and updated after each insert, so both paths see gear
                 // inserted earlier in the same loop.
                 var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
-                let count = insertGearItems(result.gearItems, into: &gearByID)
+                let (count, anyGearUpdated) = insertGearItems(result.gearItems, into: &gearByID)
 
                 // ── Gear Groups ───────────────────────────────────────────────
                 let existingGroupIDs = Set(allGearGroups.map(\.id))
@@ -580,7 +634,12 @@ struct GearListView: View {
                 importedTemplateCount = templateCount
                 importedGroupMissingMemberCount = missingMemberCount
                 importedGearOnly = false
-                showImportSuccess = true
+                importedServiceDataOnly = count == 0 && groupCount == 0 && templateCount == 0 && anyGearUpdated
+                if count == 0 && groupCount == 0 && templateCount == 0 && !anyGearUpdated {
+                    showNothingToImport = true
+                } else {
+                    showImportSuccess = true
+                }
             } catch {
                 importError = error.localizedDescription
                 showImportError = true
@@ -604,28 +663,35 @@ struct GearListView: View {
             return
         }
         var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
-        let count = insertGearItems(items, into: &gearByID)
+        let (count, anyGearUpdated) = insertGearItems(items, into: &gearByID)
         try? modelContext.save()
         importedCount = count
         importedGroupCount = 0
         importedTemplateCount = 0
         importedGroupMissingMemberCount = 0
         importedGearOnly = true
-        showImportSuccess = true
+        importedServiceDataOnly = count == 0 && anyGearUpdated
+        if count > 0 || anyGearUpdated {
+            showImportSuccess = true
+        } else {
+            showNothingToImport = true
+        }
     }
 
     // MARK: - Gear Insert Helper
 
     /// Inserts gear items not already present, updating `gearByID` after each insert
     /// so subsequent lookups (e.g. group membership) see newly added items.
-    /// Returns the count of newly inserted items.
-    @discardableResult
-    private func insertGearItems(_ items: [GearXMLParser.ParsedGear], into gearByID: inout [UUID: Gear]) -> Int {
+    /// Returns the count of newly inserted items and whether any existing item had service data updated.
+    private func insertGearItems(_ items: [GearXMLParser.ParsedGear], into gearByID: inout [UUID: Gear]) -> (inserted: Int, anyUpdated: Bool) {
         var count = 0
+        var anyUpdated = false
         for item in items {
             // Primary dedup: by UUID (same source device, same export).
             if let existing = gearByID[item.id] {
-                existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory)
+                if existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory) {
+                    anyUpdated = true
+                }
                 continue
             }
             // Secondary dedup: by name + category + diverName + serial — catches gear previously
@@ -634,7 +700,9 @@ struct GearListView: View {
             if let existing = gearByID.values.first(where: {
                 $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
             }) {
-                existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory)
+                if existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory) {
+                    anyUpdated = true
+                }
                 gearByID[item.id] = existing
                 continue
             }
@@ -662,7 +730,7 @@ struct GearListView: View {
             gearByID[item.id] = gear
             count += 1
         }
-        return count
+        return (inserted: count, anyUpdated: anyUpdated)
     }
 }
 
@@ -720,7 +788,7 @@ struct GearRow: View {
             }
             
             // Nombre de plongées
-            Label("\(gear.totalDivesCount)", systemImage: "water.waves")
+            Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
                 .font(.caption)
                 .foregroundStyle(.cyan)
         }
@@ -770,7 +838,7 @@ struct CategoryFilterChip: View {
                     .fontWeight(isSelected ? .semibold : .regular)
                 
                 if let count = count {
-                    Text("\(count)")
+                    Text(verbatim: Double(count).localizedString(decimals: 0))
                         .font(.caption2)
                         .fontWeight(.bold)
                         .padding(.horizontal, 6)

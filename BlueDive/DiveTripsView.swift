@@ -117,6 +117,7 @@ struct DiveTripsView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
     @State private var selectedTrip: DiveTrip? = nil
     @State private var prefs = UserPreferences.shared
     @State private var tripsAppeared = false
@@ -124,7 +125,7 @@ struct DiveTripsView: View {
     @State private var tripsReady = false
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
 
     var body: some View {
@@ -222,11 +223,11 @@ struct TripsSummaryBanner: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            TripSummaryStat(value: "\(trips.count)", label: "Trips", icon: "airplane", color: .cyan)
+            TripSummaryStat(value: Double(trips.count).localizedString(decimals: 0), label: "Trips", icon: "airplane", color: .cyan)
             Divider().frame(height: 40).background(Color.primary.opacity(0.15))
-            TripSummaryStat(value: "\(totalLocations)", label: "Destinations", icon: "mappin.circle.fill", color: .orange)
+            TripSummaryStat(value: Double(totalLocations).localizedString(decimals: 0), label: "Destinations", icon: "mappin.circle.fill", color: .orange)
             Divider().frame(height: 40).background(Color.primary.opacity(0.15))
-            TripSummaryStat(value: "\(dives.count)", label: "Dives", icon: "bubbles.and.sparkles", color: .blue)
+            TripSummaryStat(value: Double(dives.count).localizedString(decimals: 0), label: "Dives", icon: "bubbles.and.sparkles", color: .blue)
         }
         .padding()
         .background(
@@ -310,13 +311,13 @@ struct TripCard: View {
 
             // Stats row
             HStack(spacing: 0) {
-                TripStatMini(icon: "bubbles.and.sparkles", value: "\(trip.totalDives)", label: "Dives")
+                TripStatMini(icon: "bubbles.and.sparkles", value: Double(trip.totalDives).localizedString(decimals: 0), label: "Dives")
                 Divider().frame(height: 30)
                 TripStatMini(icon: "timer", value: trip.formattedTotalTime, label: "Total")
                 Divider().frame(height: 30)
                 TripStatMini(icon: "arrow.down", value: prefs.depthUnit.formatted(trip.deepestDive?.maxDepth ?? 0, decimals: 0), label: "Max")
                 Divider().frame(height: 30)
-                TripStatMini(icon: "mappin", value: "\(trip.uniqueSites)", label: "Sites")
+                TripStatMini(icon: "mappin", value: Double(trip.uniqueSites).localizedString(decimals: 0), label: "Sites")
             }
             .padding(.vertical, 10)
             .background(Color.platformSecondaryBackground)
@@ -452,11 +453,11 @@ struct TripDetailSheet: View {
 
     private var heroSection: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            TripHeroStat(value: "\(trip.totalDives)", label: "Dives", icon: "bubbles.and.sparkles.fill", color: .cyan)
+            TripHeroStat(value: Double(trip.totalDives).localizedString(decimals: 0), label: "Dives", icon: "bubbles.and.sparkles.fill", color: .cyan)
             TripHeroStat(value: trip.formattedTotalTime, label: "Underwater", icon: "timer", color: .green)
-            TripHeroStat(value: "\(trip.durationDays)d", label: "Trip Duration", icon: "calendar", color: .orange)
+            TripHeroStat(value: Double(trip.durationDays).localizedString(decimals: 0) + "d", label: "Trip Duration", icon: "calendar", color: .orange)
             TripHeroStat(value: prefs.depthUnit.formatted(trip.averageMaxDepth), label: "Avg. Depth", icon: "arrow.down.circle", color: .blue)
-            TripHeroStat(value: "\(trip.uniqueSites)", label: "Sites", icon: "mappin.and.ellipse", color: .purple)
+            TripHeroStat(value: Double(trip.uniqueSites).localizedString(decimals: 0), label: "Sites", icon: "mappin.and.ellipse", color: .purple)
             if trip.averageRMV > 0 {
                 TripHeroStat(value: trip.averageRMV.localizedString(decimals: 1) + " L/m", label: "Avg. RMV", icon: "wind", color: .teal)
             } else {

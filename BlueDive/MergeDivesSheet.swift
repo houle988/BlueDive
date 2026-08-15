@@ -171,7 +171,11 @@ struct MergeDivesSheet: View {
                     .font(.headline)
                     .fontWeight(.semibold)
                 Spacer()
-                Text("\(filteredDives.count) dive(s)")
+                Text(verbatim: filteredDives.count == 0
+                    ? NSLocalizedString("0 dives", bundle: .forAppLanguage(), comment: "Zero dive count.")
+                    : filteredDives.count == 1
+                    ? NSLocalizedString("1 dive", bundle: .forAppLanguage(), comment: "Single dive count")
+                    : String(format: NSLocalizedString("%lld dives", bundle: .forAppLanguage(), comment: "Multiple dives count"), filteredDives.count))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -261,7 +265,7 @@ struct MergeDivesSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if let num = dive.diveNumber {
-                        Text("#\(num)")
+                        Text(verbatim: "#\(num)")
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(.bold)
                             .padding(.horizontal, 6)

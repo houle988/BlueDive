@@ -31,8 +31,8 @@ struct EditTankTemplateView: View {
         self.template = template
 
         _name = State(initialValue: template.name)
-        _volumeText = State(initialValue: template.volume.map { $0.localizedString(decimals: 1) } ?? "")
-        _workingPressureText = State(initialValue: template.workingPressure.map { $0.localizedString(decimals: 0) } ?? "")
+        _volumeText = State(initialValue: template.volume.map { $0.editableString(decimals: 1) } ?? "")
+        _workingPressureText = State(initialValue: template.workingPressure.map { $0.editableString(decimals: 0) } ?? "")
         _material = State(initialValue: template.material ?? "")
         _format = State(initialValue: template.format ?? "")
         _manufacturerText = State(initialValue: template.manufacturer ?? "")
@@ -49,8 +49,7 @@ struct EditTankTemplateView: View {
 
     /// Parsed working pressure value, nil if empty or not a valid number.
     private var parsedWorkingPressure: Double? {
-        let cleaned = workingPressureText.replacingOccurrences(of: ",", with: ".")
-        guard let val = Double(cleaned), val > 0 else { return nil }
+        guard let val = parseFlexibleDouble(workingPressureText), val > 0 else { return nil }
         return val
     }
 
@@ -240,7 +239,7 @@ struct EditTankTemplateView: View {
                     .fontWeight(.medium)
 
                 HStack {
-                    TextField(template.storedVolumeUnit == .liters ? "e.g. \(12.0.localizedString(decimals: 1))" : "e.g. 80", text: $volumeText)
+                    TextField(template.storedVolumeUnit == .liters ? "e.g. \(12.0.editableString(decimals: 1))" : "e.g. 80", text: $volumeText)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()
                         #if os(iOS)
@@ -423,8 +422,8 @@ struct EditTankTemplateView: View {
         }
 
         template.name = trimmedName
-        template.volume = Double(volumeText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
-        template.workingPressure = Double(workingPressureText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        template.volume = parseFlexibleDouble(volumeText)
+        template.workingPressure = parseFlexibleDouble(workingPressureText)
         template.material = material.isEmpty ? nil : material
         template.format = format.isEmpty ? nil : format
         template.manufacturer = manufacturerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

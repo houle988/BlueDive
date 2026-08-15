@@ -7,6 +7,7 @@ import SwiftData
 final class DivingInsurance {
     var id: UUID = UUID()
     var insurerName: String = ""       // Insurer name (e.g., DAN, General Insurance…)
+    var diverName: String = ""         // Owning diver (for multi-diver filtering)
     var policyNumber: String = ""      // Policy number
     var coverageType: String = ""      // Coverage type (e.g., Accident, Evacuation, Equipment…)
     var startDate: Date = Date.now           // Start date
@@ -18,6 +19,7 @@ final class DivingInsurance {
     init(
         id: UUID = UUID(),
         insurerName: String,
+        diverName: String = "",
         policyNumber: String,
         coverageType: String,
         startDate: Date = Date(),
@@ -28,6 +30,7 @@ final class DivingInsurance {
     ) {
         self.id = id
         self.insurerName = insurerName
+        self.diverName = diverName
         self.policyNumber = policyNumber
         self.coverageType = coverageType
         self.startDate = startDate
@@ -53,10 +56,12 @@ extension DivingInsurance {
         return endDate < limit
     }
 
-    /// Days remaining until expiration
+    /// Days remaining until expiration, counted in calendar days (start-of-day to start-of-day).
     var daysUntilExpiration: Int? {
-        let components = Calendar.current.dateComponents([.day], from: Date(), to: endDate)
-        return components.day
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let expiry = calendar.startOfDay(for: endDate)
+        return calendar.dateComponents([.day], from: today, to: expiry).day
     }
 }
 

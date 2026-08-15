@@ -77,10 +77,10 @@ struct MainTabView: View {
                 }
                 .tag(2)
 
-                // --- TAB 4 : CERTIFICATIONS ---
-                CertificationsView()
+                // --- TAB 4 : DOCUMENTS ---
+                DocumentsView()
                     .tabItem {
-                        Label("Certifications", systemImage: "graduationcap.fill")
+                        Label("Documents", systemImage: "person.text.rectangle.fill")
                     }
                     .tag(3)
             }

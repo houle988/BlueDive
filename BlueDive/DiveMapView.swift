@@ -9,6 +9,9 @@ private enum MapCoordinateMode: CaseIterable {
 
 struct DiveMapView: View {
     @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var selectedDive: Dive?
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
@@ -98,7 +101,7 @@ struct DiveMapView: View {
     }
 
     private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: dives)
+        DiverFilter.uniqueDivers(in: dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     private var availableMarineLife: [String] {
@@ -289,14 +292,14 @@ struct DiveMapView: View {
                             .tag(dive)
                         } else {
                             Annotation(
-                                "\(cluster.dives.count) dives",
+                                String(format: NSLocalizedString("%@ dives", bundle: .forAppLanguage(), comment: "Plural dive count in a cluster map annotation"), Double(cluster.dives.count).localizedString(decimals: 0)),
                                 coordinate: cluster.coordinate
                             ) {
                                 DiveMapClusterPin(count: cluster.dives.count)
                                     .onTapGesture {
                                         handleClusterTap(cluster)
                                     }
-                                    .accessibilityLabel(Text("\(cluster.dives.count) dives at this location"))
+                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%@ dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), Double(cluster.dives.count).localizedString(decimals: 0))))
                                     .accessibilityAddTraits(.isButton)
                             }
                         }
@@ -521,7 +524,7 @@ struct DiveMapClusterPin: View {
                     )
                     .shadow(radius: 5)
 
-                Text(verbatim: "\(count)")
+                Text(verbatim: Double(count).localizedString(decimals: 0))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
             }
@@ -568,7 +571,7 @@ struct DiveClusterListCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: String(format: NSLocalizedString("%lld dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), dives.count))
+                    Text(verbatim: String(format: NSLocalizedString("%@ dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), Double(dives.count).localizedString(decimals: 0)))
                         .font(.headline)
                         .foregroundStyle(.primary)
                     if dives.dropFirst().allSatisfy({ $0.siteName == dives.first?.siteName }),
@@ -696,6 +699,12 @@ struct DiveMapCard: View {
                     Image(systemName: "fish.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(.teal)
+                }
+
+                if !(dive.photosData?.isEmpty ?? true) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.red)
                 }
 
                 Button(action: onClose) {

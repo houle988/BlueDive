@@ -61,13 +61,19 @@ extension Certification {
         return expiration < thirtyDaysFromNow && !isExpired
     }
     
-    /// Days remaining until expiration
+    /// Days remaining until expiration, counted in calendar days (start-of-day to start-of-day).
     var daysUntilExpiration: Int? {
         guard let expiration = expirationDate else { return nil }
-        let components = Calendar.current.dateComponents([.day], from: Date(), to: expiration)
-        return components.day
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let expiry = calendar.startOfDay(for: expiration)
+        return calendar.dateComponents([.day], from: today, to: expiry).day
     }
-    
+
+    var localizedOrganization: String {
+        CertificationOrganization(rawValue: organization)?.localizedName ?? organization
+    }
+
 }
 
 // MARK: - Organizations
@@ -83,7 +89,20 @@ enum CertificationOrganization: String, CaseIterable, Identifiable {
     case other = "Other"
     
     var id: String { rawValue }
-    
+
+    var localizedName: String {
+        switch self {
+        case .padi:  return "PADI"
+        case .ssi:   return "SSI"
+        case .cmas:  return "CMAS"
+        case .naui:  return "NAUI"
+        case .sdi:   return "SDI"
+        case .tdi:   return "TDI"
+        case .bsac:  return NSLocalizedString("BSAC", bundle: Bundle.forAppLanguage(), comment: "Certification organization: known as VDST in Germany")
+        case .other: return NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification organization: other/unknown")
+        }
+    }
+
 }
 
 // MARK: - Certification Levels per Organization

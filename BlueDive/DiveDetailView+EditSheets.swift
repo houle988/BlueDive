@@ -12,6 +12,7 @@ struct EditMenuStatsView: View {
     @Query(sort: \Dive.siteName) private var allDives: [Dive]
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
 
     @State private var workingMaxDepth: Double
     @State private var workingAvgDepth: Double
@@ -46,7 +47,7 @@ struct EditMenuStatsView: View {
         _workingAvgDepth  = State(initialValue: dive.averageDepth)
         _workingDuration  = State(initialValue: dive.duration)
         _workingWeights   = State(initialValue: dive.weights)
-        _workingWeightsText = State(initialValue: dive.weights.map { $0.localizedString(decimals: 2) } ?? "")
+        _workingWeightsText = State(initialValue: dive.weights.map { $0.editableString(decimals: 2) } ?? "")
         _workingDiverName = State(initialValue: dive.diverName)
         _workingBuddies   = State(initialValue: dive.buddies)
         _workingTypes = State(initialValue: dive.diveTypes ?? "")
@@ -59,19 +60,12 @@ struct EditMenuStatsView: View {
         _workingBoat       = State(initialValue: dive.boat ?? "")
         _workingDiveCenter = State(initialValue: dive.diveOperator ?? "")
         _workingEntryType  = State(initialValue: dive.entryType ?? "")
-        _workingMaxDepthText  = State(initialValue: dive.maxDepth > 0 ? dive.maxDepth.localizedString(decimals: 2) : "")
-        _workingAvgDepthText  = State(initialValue: dive.averageDepth > 0 ? dive.averageDepth.localizedString(decimals: 2) : "")
+        _workingMaxDepthText  = State(initialValue: dive.maxDepth > 0 ? dive.maxDepth.editableString(decimals: 2) : "")
+        _workingAvgDepthText  = State(initialValue: dive.averageDepth > 0 ? dive.averageDepth.editableString(decimals: 2) : "")
         _workingDurationText  = State(initialValue: dive.duration > 0 ? String(dive.duration) : "")
         _workingComputerName  = State(initialValue: dive.computerName)
         _workingSerialNumber  = State(initialValue: dive.computerSerialNumber ?? "")
         _workingTimestamp     = State(initialValue: dive.timestamp)
-    }
-
-    /// Parses a string to Double, accepting both '.' and ',' as decimal separators.
-    static func parseFlexibleDouble(_ text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return nil }
-        return Double(trimmed.replacingOccurrences(of: ",", with: "."))
     }
 
     private var tagsArray: [String] {
@@ -169,7 +163,7 @@ struct EditMenuStatsView: View {
     }
 
     private var uniqueDiverNames: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications)
+        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     private var uniqueBuddyNames: [String] {
@@ -301,7 +295,7 @@ struct EditMenuStatsView: View {
                         macOSModernAutocompleteField("Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle.fill", suggestions: uniqueOptionalValues(for: \.entryType))
                     }
 
-                    macOSModernGroupBox("Buddy(ies)", icon: "person.2.fill", color: .green) {
+                    macOSModernGroupBox("Buddies", icon: "person.2.fill", color: .green) {
                         VStack(alignment: .leading, spacing: 12) {
                             // Current buddies
                             if !buddiesArray.isEmpty {
@@ -401,7 +395,7 @@ struct EditMenuStatsView: View {
                             TextField("Weight (\(dive.storedWeightUnit.symbol))", text: $workingWeightsText)
                                 .textFieldStyle(.roundedBorder)
                                 .onChange(of: workingWeightsText) {
-                                    workingWeights = Self.parseFlexibleDouble(workingWeightsText)
+                                    workingWeights = parseFlexibleDouble(workingWeightsText)
                                 }
                                 .overlay(alignment: .trailing) {
                                     if workingWeights != nil {
@@ -435,7 +429,7 @@ struct EditMenuStatsView: View {
                                 TextField("Max Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingMaxDepthText)
                                     .textFieldStyle(.roundedBorder)
                                     .onChange(of: workingMaxDepthText) {
-                                        workingMaxDepth = Self.parseFlexibleDouble(workingMaxDepthText) ?? 0
+                                        workingMaxDepth = parseFlexibleDouble(workingMaxDepthText) ?? 0
                                     }
                                     .overlay(alignment: .trailing) {
                                         if !workingMaxDepthText.isEmpty {
@@ -462,7 +456,7 @@ struct EditMenuStatsView: View {
                                 TextField("Avg Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingAvgDepthText)
                                     .textFieldStyle(.roundedBorder)
                                     .onChange(of: workingAvgDepthText) {
-                                        workingAvgDepth = Self.parseFlexibleDouble(workingAvgDepthText) ?? 0
+                                        workingAvgDepth = parseFlexibleDouble(workingAvgDepthText) ?? 0
                                     }
                                     .overlay(alignment: .trailing) {
                                         if !workingAvgDepthText.isEmpty {
@@ -489,7 +483,7 @@ struct EditMenuStatsView: View {
                                 TextField("Duration (min)", text: $workingDurationText)
                                     .textFieldStyle(.roundedBorder)
                                     .onChange(of: workingDurationText) {
-                                        workingDuration = Self.parseFlexibleDouble(workingDurationText).map(Int.init) ?? 0
+                                        workingDuration = parseFlexibleDouble(workingDurationText).map(Int.init) ?? 0
                                     }
                                     .overlay(alignment: .trailing) {
                                         if !workingDurationText.isEmpty {
@@ -833,37 +827,6 @@ struct EditMenuStatsView: View {
         }
     }
 
-    private func macOSModernPicker(_ label: LocalizedStringKey, selection: Binding<String>, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            Menu {
-                Button("None")    { selection.wrappedValue = "None" }
-                Button("Reef")    { selection.wrappedValue = "Reef" }
-                Button("Wreck")   { selection.wrappedValue = "Wreck" }
-                Button("Cave")    { selection.wrappedValue = "Cave" }
-                Button("Night")   { selection.wrappedValue = "Night" }
-                Button("Photo")   { selection.wrappedValue = "Photo" }
-                Button("Deep")    { selection.wrappedValue = "Deep" }
-                Button("Drift")   { selection.wrappedValue = "Drift" }
-                Button("Training") { selection.wrappedValue = "Training" }
-            } label: {
-                HStack {
-                    Text(selection.wrappedValue.isEmpty ? "Choose…" : selection.wrappedValue)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.vertical, 4)
-    }
     #endif
 
     @ViewBuilder
@@ -879,7 +842,7 @@ struct EditMenuStatsView: View {
                     .platformKeyboardType(.decimalPad)
                     .foregroundStyle(.primary)
                     .onChange(of: workingMaxDepthText) {
-                        workingMaxDepth = Self.parseFlexibleDouble(workingMaxDepthText) ?? 0
+                        workingMaxDepth = parseFlexibleDouble(workingMaxDepthText) ?? 0
                     }
                 if !workingMaxDepthText.isEmpty {
                     Button {
@@ -902,7 +865,7 @@ struct EditMenuStatsView: View {
                     .platformKeyboardType(.decimalPad)
                     .foregroundStyle(.primary)
                     .onChange(of: workingAvgDepthText) {
-                        workingAvgDepth = Self.parseFlexibleDouble(workingAvgDepthText) ?? 0
+                        workingAvgDepth = parseFlexibleDouble(workingAvgDepthText) ?? 0
                     }
                 if !workingAvgDepthText.isEmpty {
                     Button {
@@ -925,7 +888,7 @@ struct EditMenuStatsView: View {
                     .platformKeyboardType(.numberPad)
                     .foregroundStyle(.primary)
                     .onChange(of: workingDurationText) {
-                        workingDuration = Self.parseFlexibleDouble(workingDurationText).map(Int.init) ?? 0
+                        workingDuration = parseFlexibleDouble(workingDurationText).map(Int.init) ?? 0
                     }
                 if !workingDurationText.isEmpty {
                     Button {
@@ -1088,7 +1051,7 @@ struct EditMenuStatsView: View {
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Buddy(ies)", icon: "person.2.fill", color: .green)
+                        MenuSectionHeader(title: "Buddies", icon: "person.2.fill", color: .green)
                     }
 
                     Section {
@@ -1102,7 +1065,7 @@ struct EditMenuStatsView: View {
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
                                 .onChange(of: workingWeightsText) {
-                                    workingWeights = Self.parseFlexibleDouble(workingWeightsText)
+                                    workingWeights = parseFlexibleDouble(workingWeightsText)
                                 }
                             if workingWeights != nil {
                                 Button {
@@ -1326,9 +1289,9 @@ struct EditMenuStatsView: View {
     }
 
     private func save() {
-        dive.maxDepth     = Self.parseFlexibleDouble(workingMaxDepthText) ?? workingMaxDepth
-        dive.averageDepth = Self.parseFlexibleDouble(workingAvgDepthText) ?? workingAvgDepth
-        dive.duration     = Self.parseFlexibleDouble(workingDurationText).map(Int.init) ?? workingDuration
+        dive.maxDepth     = parseFlexibleDouble(workingMaxDepthText) ?? workingMaxDepth
+        dive.averageDepth = parseFlexibleDouble(workingAvgDepthText) ?? workingAvgDepth
+        dive.duration     = parseFlexibleDouble(workingDurationText).map(Int.init) ?? workingDuration
         dive.weights      = workingWeights
         let originalDiverName = dive.diverName
         dive.diverName    = workingDiverName.trimmingCharacters(in: .whitespaces)
@@ -1399,7 +1362,7 @@ struct EditSiteDetailsView: View {
     @Query(sort: \Dive.siteName) private var allDives: [Dive]
     @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesByDate: [Dive]
 
-    @State private var selectedSiteName: String = ""
+    @State private var selectedSite: Dive? = nil
     @State private var copyGPSCoordinates: Bool = true
     @State private var workingCountry: String
     @State private var workingLocation: String
@@ -1468,12 +1431,6 @@ struct EditSiteDetailsView: View {
         return result
     }
 
-    /// All unique sites except the 3 most recent, sorted alphabetically by site name
-    private var remainingSites: [Dive] {
-        let recentKeys = Set(recentSites.map { $0.siteName.trimmingCharacters(in: .whitespaces).lowercased() })
-        return uniqueSites.filter { !recentKeys.contains($0.siteName.trimmingCharacters(in: .whitespaces).lowercased()) }
-    }
-
     private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
         var seen = Set<String>()
         return allDives.compactMap { d -> String? in
@@ -1506,7 +1463,7 @@ struct EditSiteDetailsView: View {
         if copyGPSCoordinates {
             workingLatitude      = source.siteLatitude.map { String(format: "%.6f", $0) } ?? ""
             workingLongitude     = source.siteLongitude.map { String(format: "%.6f", $0) } ?? ""
-            workingAltitude      = source.siteAltitude.map { String(format: "%.0f", $0) } ?? ""
+            workingAltitude      = source.siteAltitude.map { $0.editableString(decimals: 0) } ?? ""
             workingExitLatitude  = source.exitLatitude.map { String(format: "%.6f", $0) } ?? ""
             workingExitLongitude = source.exitLongitude.map { String(format: "%.6f", $0) } ?? ""
         }
@@ -1521,7 +1478,7 @@ struct EditSiteDetailsView: View {
         _workingBodyOfWater = State(initialValue: dive.siteBodyOfWater ?? "")
         _workingLatitude     = State(initialValue: dive.siteLatitude.map { String(format: "%.6f", $0) } ?? "")
         _workingLongitude    = State(initialValue: dive.siteLongitude.map { String(format: "%.6f", $0) } ?? "")
-        _workingAltitude     = State(initialValue: dive.siteAltitude.map { $0.localizedString(decimals: 0) } ?? "")
+        _workingAltitude     = State(initialValue: dive.siteAltitude.map { $0.editableString(decimals: 0) } ?? "")
         _workingDifficulty   = State(initialValue: dive.siteDifficulty ?? "")
         _workingExitLatitude  = State(initialValue: dive.exitLatitude.map { String(format: "%.6f", $0) } ?? "")
         _workingExitLongitude = State(initialValue: dive.exitLongitude.map { String(format: "%.6f", $0) } ?? "")
@@ -1584,44 +1541,8 @@ struct EditSiteDetailsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     if !uniqueSites.isEmpty {
                         siteDetailsMacOSGroupBox("Copy from Existing Site", icon: "doc.on.doc.fill", color: .orange) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "mappin.circle.fill")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 20)
-                                Text("Site")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 120, alignment: .leading)
-                                Menu {
-                                    Button("Select a site…") { selectedSiteName = "" }
-                                    if !recentSites.isEmpty {
-                                        Section("Recent") {
-                                            ForEach(recentSites, id: \.siteName) { site in
-                                                Button(site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")) {
-                                                    selectedSiteName = site.siteName
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if !remainingSites.isEmpty {
-                                        Section("All Sites") {
-                                            ForEach(remainingSites, id: \.siteName) { site in
-                                                Button(site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")) {
-                                                    selectedSiteName = site.siteName
-                                                }
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(selectedSiteName.isEmpty ? "Select a site…" : selectedSiteName)
-                                        Spacer()
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.caption)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .padding(.vertical, 4)
+                            SiteSearchField(selectedSite: $selectedSite, recents: recentSites, allSites: uniqueSites)
+                                .padding(.vertical, 4)
 
                             HStack(spacing: 8) {
                                 Toggle(isOn: $copyGPSCoordinates) {
@@ -1638,13 +1559,13 @@ struct EditSiteDetailsView: View {
                                 Spacer()
 
                                 Button("Copy Site Information") {
-                                    if let source = uniqueSites.first(where: { $0.siteName == selectedSiteName }) {
+                                    if let source = selectedSite {
                                         applySite(from: source)
                                     }
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(.orange)
-                                .disabled(selectedSiteName.isEmpty)
+                                .disabled(selectedSite == nil)
                             }
                             .padding(.top, 8)
                         }
@@ -1896,26 +1817,7 @@ struct EditSiteDetailsView: View {
     private var copyFromSiteSection: some View {
         if !uniqueSites.isEmpty {
             Section {
-                Picker("Site", selection: $selectedSiteName) {
-                    Text("Select a site…").tag("")
-                    if !recentSites.isEmpty {
-                        Section("Recent") {
-                            ForEach(recentSites, id: \.siteName) { site in
-                                let label = site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
-                                Text(label).tag(site.siteName)
-                            }
-                        }
-                    }
-                    if !remainingSites.isEmpty {
-                        Section("All Sites") {
-                            ForEach(remainingSites, id: \.siteName) { site in
-                                let label = site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
-                                Text(label).tag(site.siteName)
-                            }
-                        }
-                    }
-                }
-                .tint(.orange)
+                SiteSearchField(selectedSite: $selectedSite, recents: recentSites, allSites: uniqueSites)
 
                 Toggle(isOn: $copyGPSCoordinates) {
                     HStack(spacing: 12) {
@@ -1928,7 +1830,7 @@ struct EditSiteDetailsView: View {
                 .tint(.green)
 
                 Button {
-                    if let source = uniqueSites.first(where: { $0.siteName == selectedSiteName }) {
+                    if let source = selectedSite {
                         applySite(from: source)
                     }
                 } label: {
@@ -1937,7 +1839,7 @@ struct EditSiteDetailsView: View {
                         Text("Copy Site Information")
                     }
                 }
-                .disabled(selectedSiteName.isEmpty)
+                .disabled(selectedSite == nil)
                 .foregroundStyle(.orange)
             } header: {
                 MenuSectionHeader(title: "Copy from Existing Site", icon: "doc.on.doc.fill", color: .orange)
@@ -2201,13 +2103,13 @@ struct EditSiteDetailsView: View {
         dive.siteWaterType  = trimmedWaterType.isEmpty ? nil : trimmedWaterType
         let trimmedBodyOfWater = workingBodyOfWater.trimmingCharacters(in: .whitespaces)
         dive.siteBodyOfWater = trimmedBodyOfWater.isEmpty ? nil : trimmedBodyOfWater
-        dive.siteLatitude   = Double(workingLatitude.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
-        dive.siteLongitude  = Double(workingLongitude.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
-        dive.siteAltitude   = Double(workingAltitude.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        dive.siteLatitude   = parseFlexibleDouble(workingLatitude)
+        dive.siteLongitude  = parseFlexibleDouble(workingLongitude)
+        dive.siteAltitude   = parseFlexibleDouble(workingAltitude)
         let trimmedDifficulty  = workingDifficulty.trimmingCharacters(in: .whitespaces)
         dive.siteDifficulty = trimmedDifficulty.isEmpty ? nil : trimmedDifficulty
-        dive.exitLatitude   = Double(workingExitLatitude.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
-        dive.exitLongitude  = Double(workingExitLongitude.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        dive.exitLatitude   = parseFlexibleDouble(workingExitLatitude)
+        dive.exitLongitude  = parseFlexibleDouble(workingExitLongitude)
         dismiss()
     }
 }
@@ -2245,9 +2147,9 @@ struct EditConditionsView: View {
     init(dive: Dive) {
         self.dive = dive
         _workingWaterTemp  = State(initialValue: dive.waterTemperature)
-        _workingMinTemp    = State(initialValue: dive.minTemperature.map { $0.localizedString(decimals: 1) } ?? "")
-        _workingAirTemp    = State(initialValue: dive.airTemperature.map { $0.localizedString(decimals: 1) } ?? "")
-        _workingMaxTemp    = State(initialValue: dive.maxTemperature.map { $0.localizedString(decimals: 1) } ?? "")
+        _workingMinTemp    = State(initialValue: dive.minTemperature.map { $0.editableString(decimals: 1) } ?? "")
+        _workingAirTemp    = State(initialValue: dive.airTemperature.map { $0.editableString(decimals: 1) } ?? "")
+        _workingMaxTemp    = State(initialValue: dive.maxTemperature.map { $0.editableString(decimals: 1) } ?? "")
         _workingWeather    = State(initialValue: dive.weather ?? "")
         _workingSurface    = State(initialValue: dive.surfaceConditions ?? "")
         _workingCurrent    = State(initialValue: dive.current ?? "")
@@ -2589,9 +2491,9 @@ struct EditConditionsView: View {
 
     private func save() {
         dive.waterTemperature  = workingWaterTemp
-        dive.minTemperature    = Double(workingMinTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
-        dive.airTemperature    = Double(workingAirTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
-        dive.maxTemperature    = Double(workingMaxTemp.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+        dive.minTemperature    = parseFlexibleDouble(workingMinTemp)
+        dive.airTemperature    = parseFlexibleDouble(workingAirTemp)
+        dive.maxTemperature    = parseFlexibleDouble(workingMaxTemp)
         let trimmedWeather     = workingWeather.trimmingCharacters(in: .whitespaces)
         dive.weather           = trimmedWeather.isEmpty    ? nil : trimmedWeather
         let trimmedSurface     = workingSurface.trimmingCharacters(in: .whitespaces)
@@ -2611,6 +2513,11 @@ struct EditGazView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \TankTemplate.name) private var templates: [TankTemplate]
     @State private var selectedTemplateName: String = ""
+
+    /// Original gas percentages as loaded — used in save() to avoid silently mutating
+    /// imported fractions that the user never touched.
+    private let originalO2: Int
+    private let originalHe: Int
 
     @State private var workingO2: Int
     @State private var workingHe: Int
@@ -2683,18 +2590,10 @@ struct EditGazView: View {
         }
     }
 
-    /// Parses a string to Double, accepting both '.' and ',' as decimal separators.
-    static func parseFlexibleDouble(_ text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return nil }
-        let normalized = trimmed.replacingOccurrences(of: ",", with: ".")
-        return Double(normalized)
-    }
-
-    /// Formats a Double? into a locale-aware string suitable for text field display.
+    /// Formats a Double? into an editable string for TextField pre-fill (no grouping separators).
     private static func formatDouble(_ value: Double?) -> String {
         guard let value else { return "" }
-        return value.localizedString(decimals: 4)
+        return value.editableString(decimals: 4)
     }
 
     private let materialOptions = ["Steel", "Galvanized Steel", "Aluminium", "Carbon"]
@@ -2705,8 +2604,12 @@ struct EditGazView: View {
         self.tankIndex = tankIndex
         let tanks = dive.tanks
         let tank = tankIndex < tanks.count ? tanks[tankIndex] : nil
-        _workingO2               = State(initialValue: tank?.o2Percentage ?? 21)
-        _workingHe               = State(initialValue: tank?.hePercentage ?? 0)
+        let rawO2 = max(1, tank?.o2Percentage ?? 21)
+        let rawHe = min(tank?.hePercentage ?? 0, 100 - rawO2)
+        originalO2 = rawO2
+        originalHe = rawHe
+        _workingO2               = State(initialValue: rawO2)
+        _workingHe               = State(initialValue: rawHe)
         _workingCylinderSize     = State(initialValue: tank?.volume)
         _cylinderSizeText        = State(initialValue: Self.formatDouble(tank?.volume))
         _workingCylinderMaterial = State(initialValue: tank?.tankMaterial ?? "")
@@ -2767,6 +2670,9 @@ struct EditGazView: View {
     /// Détermine automatiquement le type de gaz selon O₂ et He
     private var autoGasLabel: String {
         if workingHe > 0 {
+            if 100 - workingO2 - workingHe <= 0 {
+                return NSLocalizedString("Heliox", bundle: .forAppLanguage(), comment: "Gas type label: oxygen and helium only, no nitrogen")
+            }
             return NSLocalizedString("Trimix", bundle: .forAppLanguage(), comment: "Gas type label: helium present")
         } else if workingO2 == 21 {
             return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Gas type label: 21% oxygen")
@@ -2777,6 +2683,8 @@ struct EditGazView: View {
         }
     }
 
+    /// Minimum O₂ % — 1% supports hypoxic diluents used in CCR diving
+    private let o2Min: Int = 1
     /// O₂ max sans dépasser 100 % en tenant compte de He
     private var o2Max: Int { 100 - workingHe }
     /// He max sans dépasser 100 % en tenant compte de O₂
@@ -2873,7 +2781,7 @@ struct EditGazView: View {
                         }
                         Divider()
                         gazMacOSRow("Oxygen (O₂)") {
-                            Stepper(value: $workingO2, in: 21...o2Max) {
+                            Stepper(value: $workingO2, in: o2Min...o2Max) {
                                 Text((Double(workingO2) / 100).formatted(.percent.precision(.fractionLength(0))))
                             }
                         }
@@ -2896,7 +2804,7 @@ struct EditGazView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .foregroundStyle(cylinderSizeIsValid ? Color.primary : Color.orange)
                                 .onChange(of: cylinderSizeText) {
-                                    workingCylinderSize = Self.parseFlexibleDouble(cylinderSizeText)
+                                    workingCylinderSize = parseFlexibleDouble(cylinderSizeText)
                                 }
                                 .overlay(alignment: .trailing) {
                                     if workingCylinderSize != nil {
@@ -2926,7 +2834,7 @@ struct EditGazView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .foregroundStyle(workingPressureIsValid ? Color.primary : Color.orange)
                                 .onChange(of: workingPressureText) {
-                                    workingWorkingPressure = Self.parseFlexibleDouble(workingPressureText)
+                                    workingWorkingPressure = parseFlexibleDouble(workingPressureText)
                                 }
                                 .overlay(alignment: .trailing) {
                                     if workingWorkingPressure != nil {
@@ -3057,7 +2965,7 @@ struct EditGazView: View {
                             TextField("Usage Start", text: $usageStartTimeText)
                                 .textFieldStyle(.roundedBorder)
                                 .onChange(of: usageStartTimeText) {
-                                    if let parsed = Self.parseFlexibleDouble(usageStartTimeText) {
+                                    if let parsed = parseFlexibleDouble(usageStartTimeText) {
                                         workingUsageStartTime = usageTimeUnit.toSeconds(parsed)
                                     } else {
                                         workingUsageStartTime = nil
@@ -3089,7 +2997,7 @@ struct EditGazView: View {
                             TextField("Usage End", text: $usageEndTimeText)
                                 .textFieldStyle(.roundedBorder)
                                 .onChange(of: usageEndTimeText) {
-                                    if let parsed = Self.parseFlexibleDouble(usageEndTimeText) {
+                                    if let parsed = parseFlexibleDouble(usageEndTimeText) {
                                         workingUsageEndTime = usageTimeUnit.toSeconds(parsed)
                                     } else {
                                         workingUsageEndTime = nil
@@ -3180,7 +3088,7 @@ struct EditGazView: View {
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.green)
                                 .frame(width: 48, alignment: .trailing)
-                            Stepper("", value: $workingO2, in: 21...o2Max)
+                            Stepper("", value: $workingO2, in: o2Min...o2Max)
                                 .labelsHidden()
                         }
 
@@ -3209,7 +3117,7 @@ struct EditGazView: View {
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(cylinderSizeIsValid ? Color.primary : Color.orange)
                                 .onChange(of: cylinderSizeText) {
-                                    workingCylinderSize = Self.parseFlexibleDouble(cylinderSizeText)
+                                    workingCylinderSize = parseFlexibleDouble(cylinderSizeText)
                                 }
                             if workingCylinderSize != nil {
                                 Button {
@@ -3235,7 +3143,7 @@ struct EditGazView: View {
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(workingPressureIsValid ? Color.primary : Color.orange)
                                 .onChange(of: workingPressureText) {
-                                    workingWorkingPressure = Self.parseFlexibleDouble(workingPressureText)
+                                    workingWorkingPressure = parseFlexibleDouble(workingPressureText)
                                 }
                             if workingWorkingPressure != nil {
                                 Button {
@@ -3352,7 +3260,7 @@ struct EditGazView: View {
                             TextField("Usage Start", text: $usageStartTimeText)
                                 .platformKeyboardType(.decimalPad)
                                 .onChange(of: usageStartTimeText) {
-                                    if let parsed = Self.parseFlexibleDouble(usageStartTimeText) {
+                                    if let parsed = parseFlexibleDouble(usageStartTimeText) {
                                         workingUsageStartTime = usageTimeUnit.toSeconds(parsed)
                                     } else {
                                         workingUsageStartTime = nil
@@ -3379,7 +3287,7 @@ struct EditGazView: View {
                             TextField("Usage End", text: $usageEndTimeText)
                                 .platformKeyboardType(.decimalPad)
                                 .onChange(of: usageEndTimeText) {
-                                    if let parsed = Self.parseFlexibleDouble(usageEndTimeText) {
+                                    if let parsed = parseFlexibleDouble(usageEndTimeText) {
                                         workingUsageEndTime = usageTimeUnit.toSeconds(parsed)
                                     } else {
                                         workingUsageEndTime = nil
@@ -3478,10 +3386,14 @@ struct EditGazView: View {
 
         if tankIndex < tanks.count {
             let existingTank = tanks[tankIndex]
+            // Preserve the original stored fraction if the user did not change the percentage,
+            // to avoid silently mutating imported fractions that round to the same integer.
+            let savedO2 = workingO2 == originalO2 ? existingTank.o2 : o2Fraction
+            let savedHe = min(workingHe == originalHe ? existingTank.he : heFraction, 1.0 - savedO2)
             tanks[tankIndex] = TankData(
                 id: existingTank.id,
-                o2: o2Fraction,
-                he: heFraction,
+                o2: savedO2,
+                he: savedHe,
                 volume: workingCylinderSize,
                 startPressure: startP,
                 endPressure: endP,

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import ImageIO
 #if os(macOS)
 import AppKit
 #endif
@@ -662,17 +663,7 @@ struct GearChipView: View {
     let gear: Gear
 
     private var categoryColor: Color {
-        switch gear.category {
-        case "Wetsuit": return .purple
-        case "Tank": return .blue
-        case "Regulator": return .green
-        case "BCD": return .orange
-        case "Computer": return .cyan
-        case "Fins": return .pink
-        case "Mask": return .indigo
-        case "Weights": return .gray
-        default: return .secondary
-        }
+        GearCategory(exportKeyOrRawValue: gear.category)?.swiftUIColor ?? .secondary
     }
 
     private var categoryIcon: String {
@@ -871,7 +862,7 @@ struct AddGearToDiveView: View {
                                                 .foregroundStyle(.secondary)
                                         }
 
-                                        Label("\(gear.totalDivesCount)", systemImage: "water.waves")
+                                        Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
                                             .font(.caption)
                                             .foregroundStyle(.cyan)
                                     }
@@ -910,17 +901,7 @@ struct AddGearToDiveView: View {
     }
 
     private func categoryColor(for category: String) -> Color {
-        switch category {
-        case "Wetsuit": return .purple
-        case "Tank": return .blue
-        case "Regulator": return .green
-        case "BCD": return .orange
-        case "Computer": return .cyan
-        case "Fins": return .pink
-        case "Mask": return .indigo
-        case "Weights": return .gray
-        default: return .secondary
-        }
+        GearCategory(exportKeyOrRawValue: category)?.swiftUIColor ?? .secondary
     }
 
     private func categoryIcon(for category: String) -> String {
@@ -1079,32 +1060,130 @@ struct AutocompleteMenuTextField: View {
     }
 }
 
-struct MenuPicker: View {
-    let label: LocalizedStringKey
-    @Binding var selection: String
-    let icon: String
-    let color: Color
+// MARK: - Site Search Field (for Copy from Existing Site)
+// Note: shares the same focus/dismiss/clear-button pattern as AutocompleteMenuTextField (below),
+// DiverAutocompleteField (DiverFilter.swift), and GearAutocompleteField (AddGearView.swift).
+// Any fix to that shared skeleton needs to be applied in all four places.
 
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-                .frame(width: 24)
-            Picker(label, selection: $selection) {
-                Label("None",   systemImage: "minus.circle").tag("None")
-                Label("Reef",   systemImage: "fish.fill").tag("Reef")
-                Label("Wreck",  systemImage: "anchor").tag("Wreck")
-                Label("Cave",   systemImage: "mountain.2.fill").tag("Cave")
-                Label("Night",  systemImage: "moon.stars.fill").tag("Night")
-                Label("Photo",  systemImage: "camera.fill").tag("Photo")
-                Label("Deep",   systemImage: "arrow.down.circle.fill").tag("Deep")
-                Label("Drift",  systemImage: "wind").tag("Drift")
-                Label("Training", systemImage: "graduationcap.fill").tag("Training")
-            }
-            .pickerStyle(.menu)
+struct SiteSearchField: View {
+    @Binding var selectedSite: Dive?
+    let recents: [Dive]
+    let allSites: [Dive]
+
+    @State private var searchText: String = ""
+    @State private var showSuggestions: Bool = false
+    @FocusState private var isFocused: Bool
+
+    private var selectedDisplayText: String {
+        guard let site = selectedSite else { return "" }
+        return site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
+    }
+
+    private var filtered: [Dive] {
+        if selectedSite != nil { return [] }
+        guard !searchText.isEmpty else { return [] }
+        return allSites.filter { site in
+            let haystack = [site.siteName, site.location, site.siteCountry ?? ""].joined(separator: " ")
+            return haystack.localizedCaseInsensitiveContains(searchText)
         }
     }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: selectedSite == nil ? "magnifyingglass" : "checkmark.circle.fill")
+                    .foregroundStyle(.orange)
+                    .frame(width: 24)
+                TextField("Search sites…", text: $searchText)
+                    .foregroundStyle(.primary)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+                    .onChange(of: searchText) {
+                        if selectedSite != nil && searchText != selectedDisplayText {
+                            selectedSite = nil
+                            searchText = ""
+                        }
+                        showSuggestions = isFocused
+                    }
+                    .onChange(of: isFocused) {
+                        if isFocused {
+                            showSuggestions = true
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                if !isFocused { showSuggestions = false }
+                            }
+                        }
+                    }
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        selectedSite = nil
+                        showSuggestions = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if showSuggestions {
+                if searchText.isEmpty {
+                    if !recents.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Recent")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 6)
+                                .padding(.bottom, 2)
+                            ForEach(recents, id: \.id) { site in
+                                siteRow(site: site, icon: "clock", iconColor: .orange)
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                        .padding(.top, 4)
+                    }
+                } else if !filtered.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(filtered, id: \.id) { site in
+                                siteRow(site: site, icon: "magnifyingglass", iconColor: .secondary)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 260)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private func siteRow(site: Dive, icon: String, iconColor: Color) -> some View {
+        Button {
+            let label = site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
+            searchText = label
+            selectedSite = site
+            showSuggestions = false
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(iconColor)
+                Text(site.siteName + (site.location.isEmpty ? "" : " — \(site.location)"))
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+        }
+        .buttonStyle(.plain)
+    }
 }
+
 
 // MARK: - FlowLayout for macOS
 
@@ -1171,16 +1250,70 @@ extension Array {
 
 struct PhotoTransferable: Transferable {
     let data: Data
+    let suggestedName: String
+    // Parsed once at init so the three FileRepresentation closures never repeat the CGImageSource lookup.
+    let detectedUTType: UTType
 
-    private var contentType: UTType {
+    init(data: Data, suggestedName: String) {
+        self.data = data
+        self.suggestedName = suggestedName
+        self.detectedUTType = PhotoTransferable.utType(for: data)
+    }
+
+    // Used by the thumbnail task when a CGImageSource is already open,
+    // so type detection and thumbnail decode share the same allocation.
+    init(data: Data, suggestedName: String, detectedType: UTType) {
+        self.data = data
+        self.suggestedName = suggestedName
+        self.detectedUTType = detectedType
+    }
+
+    // Shared helper so savePhotoToDisk() can resolve the UTType without instantiating a full PhotoTransferable.
+    // Fast magic-byte check avoids CGImageSource allocation for the two most common formats,
+    // falling back to ImageIO only for HEIC, TIFF, GIF, etc.
+    static func utType(for data: Data) -> UTType {
         if data.prefix(2) == Data([0xFF, 0xD8]) { return .jpeg }
         if data.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]) { return .png }
-        return .jpeg
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let typeID = CGImageSourceGetType(source) as String?,
+              let utType = UTType(typeID) else { return .jpeg }
+        return utType
+    }
+
+    // Resolves UTType from an already-open CGImageSource so callers can
+    // share one source allocation between type detection and thumbnail decode.
+    static func utType(fromSource source: CGImageSource) -> UTType {
+        guard let typeID = CGImageSourceGetType(source) as String?,
+              let utType = UTType(typeID) else { return .jpeg }
+        return utType
+    }
+
+    var fileExtension: String {
+        detectedUTType.preferredFilenameExtension ?? "jpg"
+    }
+
+    fileprivate func tempFileURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(suggestedName).\(fileExtension)")
+    }
+
+    private func writeToTempFile() throws -> SentTransferredFile {
+        let url = tempFileURL()
+        try data.write(to: url, options: .atomic)
+        return SentTransferredFile(url)
     }
 
     static var transferRepresentation: some TransferRepresentation {
-        DataRepresentation(exportedContentType: .png) { $0.data }
-        DataRepresentation(exportedContentType: .jpeg) { $0.data }
+        // FileRepresentation preserves the suggested filename regardless of the requested content type.
+        // .image is the catch-all. .jpeg and .png are included so receivers that request a
+        // concrete subtype still get a named file (DataRepresentation does not carry a filename).
+        // All three write the original bytes unchanged — no transcoding is performed, so the
+        // file content always matches detectedUTType regardless of which representation was
+        // requested. Writes use .atomic so concurrent representation negotiation never produces
+        // a partially-written file.
+        FileRepresentation(exportedContentType: .image) { try $0.writeToTempFile() }
+        FileRepresentation(exportedContentType: .jpeg) { try $0.writeToTempFile() }
+        FileRepresentation(exportedContentType: .png)  { try $0.writeToTempFile() }
     }
 }
 
@@ -1195,37 +1328,107 @@ struct IdentifiablePhotoData: Identifiable {
 // MARK: - Photo Preview Sheet
 
 struct PhotoPreviewSheet: View {
-    let photoData: Data
-    let onDelete: () -> Void
+    @Binding var photos: [Data]
+    let initialIndex: Int
+    let onDelete: (Int) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var currentIndex: Int
     @State private var showDeleteAlert = false
+    @State private var shareThumbnail: PlatformImage?
+    @State private var isPageSeeded: Bool
+    @State private var cachedExportName: String
+    @State private var cachedShareItem: PhotoTransferable?
+    @State private var sessionTempFileURLs: Set<URL> = []
+    @State private var isPreparingShare = false
+
+    init(photos: Binding<[Data]>, initialIndex: Int, onDelete: @escaping (Int) -> Void) {
+        self._photos = photos
+        self.initialIndex = initialIndex
+        self.onDelete = onDelete
+        self._currentIndex = State(initialValue: initialIndex)
+        // No seeding needed when starting at page 0; UIPageViewController
+        // naturally initialises at its own page 0.
+        self._isPageSeeded = State(initialValue: initialIndex == 0)
+        // Seed the export name at construction time so the first body render
+        // already has a valid filename — avoids an empty-name SharePreview.
+        let exportPrefix = NSLocalizedString("BlueDive Photo", bundle: Bundle.forAppLanguage(), comment: "Prefix for exported photo filenames shown in share sheet and save dialog")
+        self._cachedExportName = State(initialValue: "\(exportPrefix) \(PhotoPreviewSheet.exportDateFormatter.string(from: Date()))")
+    }
+
+    // Returns nil when photos is empty so callers never subscript into an empty array.
+    private var currentPhoto: Data? {
+        guard !photos.isEmpty else { return nil }
+        return photos[min(currentIndex, photos.count - 1)]
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if let uiImage = PlatformImage(data: photoData) {
-                    Image(platformImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .padding()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.platformBackground.ignoresSafeArea())
-                } else {
+                if photos.isEmpty {
                     Color.platformBackground.ignoresSafeArea()
+                } else {
+                    TabView(selection: $currentIndex) {
+                        ForEach(photos.indices, id: \.self) { index in
+                            PhotoPageView(data: photos[index])
+                                .tag(index)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .opacity(isPageSeeded ? 1 : 0)
+                    .animation(.easeIn(duration: 0.15), value: isPageSeeded)
                 }
             }
             .background(Color.platformBackground.ignoresSafeArea())
-
+            .toolbar {
+                if photos.count > 1 {
+                    ToolbarItem(placement: .bottomBar) {
+                        Button {
+                            currentIndex -= 1
+                        } label: {
+                            Label("Previous Photo", systemImage: "chevron.left")
+                        }
+                        .disabled(currentIndex == 0)
+                    }
+                    ToolbarItem(placement: .bottomBar) {
+                        Text(verbatim: "\(currentIndex + 1) / \(photos.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    ToolbarItem(placement: .bottomBar) {
+                        Button {
+                            currentIndex += 1
+                        } label: {
+                            Label("Next Photo", systemImage: "chevron.right")
+                        }
+                        .disabled(currentIndex == photos.count - 1)
+                    }
+                }
+            }
             .toolbar {
                 #if os(iOS)
                 ToolbarItemGroup(placement: .cancellationAction) {
-                    ShareLink(
-                        item: PhotoTransferable(data: photoData),
-                        preview: SharePreview("Photo", image: Image(platformImage: PlatformImage(data: photoData)!))
-                    ) {
-                        Label("Save As", systemImage: "square.and.arrow.up")
-                            .foregroundStyle(.primary)
+                    if let shareItem = cachedShareItem {
+                        let name = cachedExportName
+                        if let thumbnail = shareThumbnail {
+                            ShareLink(
+                                item: shareItem,
+                                preview: SharePreview(name, image: Image(platformImage: thumbnail))
+                            ) { shareButtonLabel }
+                            .disabled(isPreparingShare)
+                        } else {
+                            ShareLink(
+                                item: shareItem,
+                                preview: SharePreview(name)
+                            ) { shareButtonLabel }
+                            .disabled(isPreparingShare)
+                        }
+                    } else {
+                        // First load: no share item yet — show a disabled placeholder so
+                        // the toolbar layout is stable from the first render onward.
+                        // Must be a Button (not a bare Label) so SwiftUI applies the
+                        // standard dimmed-disabled visual treatment.
+                        Button(action: {}) { shareButtonLabel }.disabled(true)
                     }
                     Button(role: .destructive) {
                         showDeleteAlert = true
@@ -1233,6 +1436,7 @@ struct PhotoPreviewSheet: View {
                         Image(systemName: "trash")
                             .foregroundStyle(.red)
                     }
+                    .disabled(photos.isEmpty)
                 }
                 #else
                 ToolbarItem(placement: .cancellationAction) {
@@ -1242,12 +1446,14 @@ struct PhotoPreviewSheet: View {
                         } label: {
                             Label("Save As", systemImage: "square.and.arrow.down")
                         }
+                        .disabled(photos.isEmpty)
                         Button {
                             showDeleteAlert = true
                         } label: {
                             Text("Delete")
                                 .foregroundStyle(.red)
                         }
+                        .disabled(photos.isEmpty)
                     }
                 }
                 #endif
@@ -1258,28 +1464,190 @@ struct PhotoPreviewSheet: View {
             }
             .alert("Remove Photo", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) {
-                    onDelete()
-                    dismiss()
+                    onDelete(currentIndex)
+                    // onChange(of: photos.count) handles both index clamping and dismissal
+                    // when count reaches zero (covers in-app delete AND external iCloud sync).
                 }
                 Button("Cancel", role: .cancel) { }
             } message: {
                 Text("Remove this photo from the dive?")
             }
+            .task(id: thumbnailTaskID) {
+                // The id-level sentinel (thumbnailTaskID returns 0 while !isPageSeeded)
+                // suppresses index-change re-fires during the seed dance, but .task(id:)
+                // always fires once on first appear regardless of id value. This guard
+                // makes that initial fire a no-op so the decode runs exactly once —
+                // after isPageSeeded becomes true and the id flips to the real photoTaskID.
+                guard isPageSeeded else { return }
+                // Snapshot the export filename once per photo change so the ShareLink
+                // item name is stable across body re-renders within the same photo.
+                let name = exportFileName
+                cachedExportName = name
+                // Mark loading so the share button stays visible but disabled while the
+                // new photo's share item resolves — avoids the button flashing away on
+                // every navigation. The old cachedShareItem is intentionally kept so the
+                // toolbar always has something to anchor the button's layout to.
+                // shareThumbnail IS cleared so the SharePreview image updates correctly.
+                isPreparingShare = true
+                shareThumbnail = nil
+                guard let data = currentPhoto else { isPreparingShare = false; return }
+                // Build the share item and thumbnail in one detached pass — the same
+                // CGImageSource is reused for type detection and thumbnail decode,
+                // so HEIC photos are parsed only once, fully off the main thread.
+                let (thumbnail, shareItem): (PlatformImage?, PhotoTransferable) = await Task.detached(priority: .userInitiated) {
+                    let cfData = data as CFData
+                    guard let source = CGImageSourceCreateWithData(cfData, nil) else {
+                        // Source creation failed — fall back to magic-byte type detection, no thumbnail.
+                        let utType = PhotoTransferable.utType(for: data)
+                        return (nil, PhotoTransferable(data: data, suggestedName: name, detectedType: utType))
+                    }
+                    let detectedType = PhotoTransferable.utType(fromSource: source)
+                    let item = PhotoTransferable(data: data, suggestedName: name, detectedType: detectedType)
+                    let opts: [CFString: Any] = [
+                        kCGImageSourceThumbnailMaxPixelSize: 256,
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceCreateThumbnailWithTransform: true
+                    ]
+                    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) else { return (nil, item) }
+                    #if os(iOS)
+                    return (UIImage(cgImage: cgImage), item)
+                    #else
+                    return (NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)), item)
+                    #endif
+                }.value
+                guard !Task.isCancelled else { return }
+                cachedShareItem = shareItem
+                shareThumbnail = thumbnail
+                isPreparingShare = false
+                // Record the temp path this share item will write to so onDisappear can
+                // clean up only this session's files, not files from concurrent sheets.
+                // Uses the same tempFileURL() the FileRepresentation closures use so the
+                // two path-construction sites cannot silently diverge.
+                sessionTempFileURLs.insert(shareItem.tempFileURL())
+            }
+            .onChange(of: photos.count) { _, newCount in
+                if newCount == 0 {
+                    // Covers both in-app delete-of-last and external iCloud sync emptying the array.
+                    dismiss()
+                } else {
+                    currentIndex = min(currentIndex, newCount - 1)
+                }
+            }
+            .task {
+                guard !isPageSeeded else { return }
+                // A single photo has no neighbour to visit; no offset mis-alignment occurs.
+                guard photos.count > 1 else { isPageSeeded = true; return }
+                let target = currentIndex   // always > 0 here (isPageSeeded == false iff initialIndex > 0)
+                // Safety net: if the invariant above ever weakens, avoid setting index to -1.
+                guard target > 0 else { isPageSeeded = true; return }
+                #if os(iOS)
+                // UIPageViewController's scroll view is initialised at an incorrect offset
+                // when the selection is non-zero, placing it visually between two pages.
+                // Seeding with one instant step to a neighbour and back forces it to
+                // re-commit to the correct offset.
+                // defer ensures setAnimationsEnabled(true) is restored even when this task
+                // is cancelled mid-sleep. try? converts CancellationError to nil so execution
+                // continues normally; defer fires on the closure's normal return.
+                defer { UIView.setAnimationsEnabled(true) }
+                UIView.setAnimationsEnabled(false)
+                currentIndex = target - 1
+                // Task.sleep reliably waits past a full display-link cycle (~16 ms at 60 fps),
+                // unlike Task.yield() which only reschedules without guaranteeing a UIKit layout commit.
+                try? await Task.sleep(nanoseconds: 33_000_000)
+                // Re-clamp in case photos shrank while sleeping (e.g., concurrent iCloud sync).
+                currentIndex = photos.isEmpty ? 0 : min(target, photos.count - 1)
+                try? await Task.sleep(nanoseconds: 33_000_000)
+                #endif
+                isPageSeeded = true
+            }
+            .onDisappear {
+                // Remove only the temp files this session predicted (one per photo navigated to).
+                // SentTransferredFile(allowAccessingOriginalFile: false) (the default) causes the
+                // system to copy the file before returning control, so deleting these paths is safe.
+                // A prefix-based sweep is intentionally avoided: it would also remove files written
+                // by other concurrently open photo sheets on iPad/Mac multi-window.
+                for url in sessionTempFileURLs {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
         }
+    }
+
+    private static let exportDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH-mm-ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        return f
+    }()
+
+    private var thumbnailTaskID: Int {
+        // Return a stable sentinel while the seed dance is in progress so that the
+        // two currentIndex writes (target-1 then target) don't each fire the thumbnail
+        // task and launch redundant Task.detached decodes for the neighbour photo.
+        // The decode runs exactly once when isPageSeeded becomes true — the .task(id:)
+        // mechanism fires twice (id=0 on first appear, real id after seeding), but the
+        // body guard at the top of the task neutralizes the id=0 fire as a no-op.
+        guard isPageSeeded else { return 0 }
+        return currentPhoto?.photoTaskID ?? 0
+    }
+
+    private var exportFileName: String {
+        let prefix = NSLocalizedString("BlueDive Photo", bundle: Bundle.forAppLanguage(), comment: "Prefix for exported photo filenames shown in share sheet and save dialog")
+        return "\(prefix) \(PhotoPreviewSheet.exportDateFormatter.string(from: Date()))"
+    }
+
+    @ViewBuilder private var shareButtonLabel: some View {
+        Label("Save As", systemImage: "square.and.arrow.up")
+            .foregroundStyle(.primary)
     }
 
     #if os(macOS)
     private func savePhotoToDisk() {
-        let isJPEG = photoData.prefix(2) == Data([0xFF, 0xD8])
-        let ext = isJPEG ? "jpg" : "png"
+        guard let photo = currentPhoto else { return }
+        let utType = PhotoTransferable.utType(for: photo)
+        let ext = utType.preferredFilenameExtension ?? "jpg"
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "Photo.\(ext)"
-        panel.allowedContentTypes = isJPEG ? [.jpeg] : [.png]
+        panel.nameFieldStringValue = "\(exportFileName).\(ext)"
+        panel.allowedContentTypes = [utType]
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? photoData.write(to: url)
+            try? photo.write(to: url)
         }
     }
     #endif
+}
+
+// MARK: - Photo Page View
+
+private struct PhotoPageView: View {
+    let data: Data
+    @State private var image: PlatformImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(platformImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ZStack {
+                    Color.platformBackground.ignoresSafeArea()
+                    ProgressView()
+                }
+            }
+        }
+        .task(id: data.photoTaskID) {
+            let d = data
+            let decoded = await Task.detached(priority: .userInitiated) {
+                PlatformImage(data: d)
+            }.value
+            guard !Task.isCancelled else { return }
+            image = decoded
+        }
+    }
 }

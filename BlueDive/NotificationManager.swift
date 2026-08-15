@@ -1,9 +1,10 @@
 import Foundation
+import OSLog
 import UserNotifications
-import SwiftData
 
 class NotificationManager: NSObject {
     static let shared = NotificationManager()
+    private static let logger = Logger(subsystem: "com.bluedive.app", category: "Notifications")
 
     private override init() {
         super.init()
@@ -23,11 +24,11 @@ class NotificationManager: NSObject {
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
             if granted {
-                print("✅ Notifications authorized")
+                Self.logger.info("Notifications authorized")
             }
             return granted
         } catch {
-            print("❌ Notification authorization error: \(error)")
+            Self.logger.error("Notification authorization error: \(error)")
             return false
         }
     }
@@ -45,7 +46,7 @@ class NotificationManager: NSObject {
     func scheduleGearMaintenanceReminder(for gear: Gear) {
         // Only schedule a notification if the user has set a service date
         guard let nextServiceDate = gear.nextServiceDue else {
-            print("⚠️ No service date set for \(gear.name) - notification skipped")
+            Self.logger.warning("No service date set for \(gear.name) — notification skipped")
             return
         }
 
@@ -77,13 +78,13 @@ class NotificationManager: NSObject {
 
             UNUserNotificationCenter.current().add(request) { error in
                 if let error = error {
-                    print("❌ Notification error: \(error)")
+                    Self.logger.error("Gear maintenance notification error for \(gear.name): \(error)")
                 } else {
-                    print("✅ Notification scheduled for \(gear.name) - 30 days before \(nextServiceDate.formatted(date: .abbreviated, time: .omitted))")
+                    Self.logger.info("Maintenance notification scheduled for \(gear.name)")
                 }
             }
         } else {
-            print("⚠️ Service date too close or already passed for \(gear.name) - notification not scheduled")
+            Self.logger.warning("Service date too close or already passed for \(gear.name) — notification not scheduled")
         }
     }
 
@@ -134,9 +135,9 @@ class NotificationManager: NSObject {
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("❌ Certification notification error: \(error)")
+                Self.logger.error("Certification notification error for \(cert.name): \(error)")
             } else {
-                print("✅ Notification scheduled for \(cert.name) - \(daysRemaining) days")
+                Self.logger.info("Certification notification scheduled for \(cert.name) — \(daysRemaining) days")
             }
         }
     }
@@ -144,19 +145,17 @@ class NotificationManager: NSObject {
     // MARK: - Milestone Achievement
 
     func notifyMilestoneAchieved(totalDives: Int) {
-        let milestones = [100, 250, 500, 1000, 1500, 2000, 2500, 3000, 4000, 5000]
         let key = "lastMilestoneNotified"
         let last = UserDefaults.standard.integer(forKey: key)
 
-        // Find the highest milestone that is ≤ totalDives and > last celebrated.
-        // Using > last (not >=) prevents re-notifying on the same value.
-        // Using max() over the filtered range handles bulk imports that skip milestones.
-        guard let reached = milestones.filter({ $0 <= totalDives && $0 > last }).max() else { return }
+        // Find the highest milestone > last celebrated using the shared tier grid.
+        // max() over the filtered range handles bulk imports that skip milestones.
+        guard let reached = diveMilestones(upTo: totalDives).filter({ $0 > last }).max() else { return }
 
         let content = UNMutableNotificationContent()
         let milestoneBundle = Bundle.forAppLanguage()
         content.title = NSLocalizedString("🏆 Milestone Reached!", bundle: milestoneBundle, comment: "")
-        content.body = String(format: NSLocalizedString("Congratulations! You've completed %lld dives! 🎉", bundle: milestoneBundle, comment: ""), Int64(reached))
+        content.body = String(format: NSLocalizedString("Congratulations! You've completed %@ dives! 🎉", bundle: milestoneBundle, comment: ""), Double(reached).localizedString(decimals: 0))
         content.sound = .default
         content.categoryIdentifier = "MILESTONE"
 
@@ -166,7 +165,7 @@ class NotificationManager: NSObject {
         // (e.g. system permission revoked) doesn't permanently consume the milestone.
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("❌ Milestone notification error: \(error)")
+                Self.logger.error("Milestone notification error: \(error)")
             } else {
                 UserDefaults.standard.set(reached, forKey: key)
             }
@@ -383,10 +382,10 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("❌ Reschedule error: \(error)")
+                Self.logger.error("Reschedule notification error: \(error)")
             } else {
                 let days = Int(delay / 86400)
-                print("✅ Notification rescheduled for \(days) day(s) from now")
+                Self.logger.info("Notification rescheduled for \(days) day(s) from now")
             }
         }
     }

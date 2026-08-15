@@ -79,10 +79,15 @@ enum CertificationXMLExporter {
             .replacingOccurrences(of: "'",  with: "&apos;")
     }
 
-    static func formatDate(_ date: Date) -> String {
+    private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
         f.locale = Locale(identifier: "en_US_POSIX")
-        return f.string(from: date)
+        f.timeZone = TimeZone.current
+        return f
+    }()
+
+    static func formatDate(_ date: Date) -> String {
+        dateFormatter.string(from: date)
     }
 }

@@ -48,11 +48,12 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
     let tankPressure: Double? // Tank pressure in bar (single / primary tank)
     let tankPressures: [Int: Double]? // Per-tank pressure readings {tankIndex: bar}
     let ndl: Double? // No Decompression Limit in minutes
-    let ppo2: Double? // Oxygen partial pressure in bar
+    let ppo2: Double? // Oxygen partial pressure in bar (voted/representative)
+    let sensorPPO2: [Int: Double]? // Per-O2-sensor PPO2 {sensorIndex: bar}; nil for non-CCR/legacy
     let events: [DiveProfileEvent] // Events at this profile point
     let currentGas: Int? // Active tank index at this point (index into Dive.tanks)
 
-    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ppo2: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
+    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
         self.id = id
         self.time = time
         self.depth = depth
@@ -61,6 +62,7 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         self.tankPressures = tankPressures
         self.ndl = ndl
         self.ppo2 = ppo2
+        self.sensorPPO2 = sensorPPO2
         self.events = events
         self.currentGas = currentGas
     }
@@ -80,6 +82,7 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         tankPressure = perTank.flatMap { $0[0] ?? $0.min(by: { $0.key < $1.key })?.value } ?? storedPressure
         ndl = try container.decodeIfPresent(Double.self, forKey: .ndl)
         ppo2 = try container.decodeIfPresent(Double.self, forKey: .ppo2)
+        sensorPPO2 = try container.decodeIfPresent([Int: Double].self, forKey: .sensorPPO2)
         events = (try? container.decode([DiveProfileEvent].self, forKey: .events)) ?? []
         currentGas = try container.decodeIfPresent(Int.self, forKey: .currentGas)
     }
@@ -107,16 +110,23 @@ struct TankData: Identifiable, Sendable {
     var hePercentage: Int { Int((he * 100).rounded()) }
 
     var gasName: String {
-        if hePercentage > 0 { return "Trimix" }
+        if hePercentage > 0 {
+            if 100 - o2Percentage - hePercentage <= 0 { return "Heliox" }
+            return "Trimix"
+        }
         if o2Percentage > 21 { return "Nitrox" }
+        if o2Percentage < 21 { return "Hypoxic" }
         return "Air"
     }
 
-    func gasDisplayName(locale: Locale = UserPreferences.shared.languageMode.locale ?? Locale.autoupdatingCurrent) -> String {
+    func gasDisplayName() -> String {
         if hePercentage > 0 {
+            if 100 - o2Percentage - hePercentage <= 0 {
+                return String(format: NSLocalizedString("Heliox %d/%d", bundle: .forAppLanguage(), comment: "Heliox gas mix label showing oxygen/helium percentages e.g. Heliox 21/79"), o2Percentage, hePercentage)
+            }
             return String(format: NSLocalizedString("Trimix %d/%d", bundle: .forAppLanguage(), comment: "Trimix gas mix label showing oxygen/helium percentages e.g. Trimix 21/35"), o2Percentage, hePercentage)
         } else if o2Percentage > 21 {
-            let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(locale))
+            let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(.current))
             return String(format: NSLocalizedString("Nitrox %@", bundle: .forAppLanguage(), comment: "Nitrox gas mix label, %@ is the pre-formatted oxygen percentage e.g. Nitrox 32%"), pct)
         } else if o2Percentage < 21 {
             return NSLocalizedString("Hypoxic", bundle: .forAppLanguage(), comment: "Gas type: oxygen below 21%")

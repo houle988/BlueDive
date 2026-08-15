@@ -27,14 +27,12 @@ struct BestMixCalculatorView: View {
 
     @State private var unitMode: UnitMode = .metric
     @State private var isSeawater = true
-    @State private var po2Str = 1.4.localizedString(decimals: 1)
+    @State private var po2Str = 1.4.editableString(decimals: 1)
     @State private var depthStr = "30"
     @State private var showInfo = false
     @FocusState private var isAnyFieldFocused: Bool
 
-    private func toDouble(_ s: String) -> Double {
-        Double(s.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")) ?? 0
-    }
+    private func toDouble(_ s: String) -> Double { parseFlexibleDouble(s) ?? 0 }
 
     private var po2: Double { max(0.01, toDouble(po2Str)) }
 

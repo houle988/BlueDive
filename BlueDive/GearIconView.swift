@@ -248,17 +248,6 @@ struct GearIconView: View {
     }
 
     private var iconColor: Color {
-        guard let colorName = category?.color else { return .cyan }
-        switch colorName {
-        case "purple":  return .purple
-        case "blue":    return .blue
-        case "green":   return .green
-        case "orange":  return .orange
-        case "gray":    return .gray
-        case "cyan":    return .cyan
-        case "pink":    return .pink
-        case "indigo":  return .indigo
-        default:        return .brown
-        }
+        category?.swiftUIColor ?? .cyan
     }
 }

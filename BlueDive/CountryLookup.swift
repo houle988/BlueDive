@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Centralised country-name-to-flag and accent-colour lookup.
-/// Supports English and French Canadian country names with accent-insensitive matching.
+/// Supports English, French Canadian, and German country names with accent-insensitive matching.
 enum CountryLookup {
 
     // MARK: - Public API
@@ -99,7 +99,7 @@ enum CountryLookup {
         // S
         "saint kitts and nevis": "kn", "saint lucia": "lc", "saint vincent and the grenadines": "vc",
         "samoa": "ws", "san marino": "sm", "sao tome and principe": "st", "saudi arabia": "sa",
-        "senegal": "sn", "serbia": "sr", "seychelles": "sc", "sierra leone": "sl", "singapore": "sg",
+        "senegal": "sn", "serbia": "rs", "seychelles": "sc", "sierra leone": "sl", "singapore": "sg",
         "slovakia": "sk", "slovenia": "si", "solomon islands": "sb", "somalia": "so", "south africa": "za",
         "south sudan": "ss", "spain": "es", "sri lanka": "lk", "sudan": "sd", "suriname": "sr",
         "sweden": "se", "switzerland": "ch", "syria": "sy",
@@ -123,7 +123,7 @@ enum CountryLookup {
         "curaçao": "cw", "curacao": "cw", "french polynesia": "pf", "guadeloupe": "gp",
         "guam": "gu", "martinique": "mq", "new caledonia": "nc", "puerto rico": "pr",
         "réunion": "re", "reunion": "re", "turks and caicos islands": "tc", "turks and caicos": "tc",
-        "u.s. virgin islands": "vi", "british virgin islands": "vg",
+        "u.s. virgin islands": "vi", "us virgin islands": "vi", "british virgin islands": "vg",
         "american samoa": "as", "cook islands": "ck", "faroe islands": "fo",
         "french guiana": "gf", "gibraltar": "gi", "greenland": "gl", "hong kong": "hk",
         "macau": "mo", "macao": "mo", "mayotte": "yt", "montserrat": "ms",
@@ -131,11 +131,14 @@ enum CountryLookup {
         "pitcairn islands": "pn", "saint helena": "sh", "saint pierre and miquelon": "pm",
         "sint maarten": "sx", "tokelau": "tk", "wallis and futuna": "wf",
         "western sahara": "eh", "åland islands": "ax", "aland islands": "ax",
+        // Netherlands Antilles dissolved in 2010; Bonaire became a Dutch special municipality (BQ)
+        "dutch antilles": "bq", "netherlands antilles": "bq",
         // French Canadian (fr-CA) country names
         // A
         "albanie": "al", "algérie": "dz", "allemagne": "de", "andorre": "ad",
         "antigua-et-barbuda": "ag", "arabie saoudite": "sa", "argentine": "ar", "arménie": "am",
         "australie": "au", "autriche": "at", "azerbaïdjan": "az", "afrique du sud": "za",
+        "antilles néerlandaises": "bq",
         // B
         "bahreïn": "bh", "belgique": "be", "bélize": "bz", "bénin": "bj", "bhoutan": "bt",
         "biélorussie": "by", "birmanie": "mm", "bolivie": "bo",
@@ -193,7 +196,7 @@ enum CountryLookup {
         "sahara occidental": "eh", "saint-kitts-et-nevis": "kn", "sainte-lucie": "lc",
         "saint-vincent-et-les-grenadines": "vc",
         "saint-marin": "sm", "são tomé-et-príncipe": "st", "sénégal": "sn",
-        "serbie": "sr", "singapour": "sg", "slovaquie": "sk", "slovénie": "si",
+        "serbie": "rs", "singapour": "sg", "slovaquie": "sk", "slovénie": "si",
         "somalie": "so", "soudan": "sd", "soudan du sud": "ss",
         "suède": "se", "suisse": "ch", "syrie": "sy",
         "saint-pierre-et-miquelon": "pm", "sainte-hélène": "sh",
@@ -212,6 +215,78 @@ enum CountryLookup {
         "yémen": "ye",
         // Z
         "zambie": "zm",
+        // German (de) country names
+        // A
+        "ägypten": "eg", "äquatorialguinea": "gq", "äthiopien": "et",
+        "albanien": "al", "algerien": "dz", "antigua und barbuda": "ag",
+        "argentinien": "ar", "armenien": "am", "aserbaidschan": "az",
+        "australien": "au", "österreich": "at",
+        // B
+        "bangladesch": "bd", "belgien": "be", "bolivien": "bo",
+        "bosnien und herzegowina": "ba", "brasilien": "br", "bulgarien": "bg",
+        "weißrussland": "by", "weissrussland": "by",
+        // D
+        "deutschland": "de", "dominikanische republik": "do", "dschibuti": "dj",
+        // E
+        "elfenbeinküste": "ci", "estland": "ee",
+        // F
+        "fidschi": "fj", "finnland": "fi", "frankreich": "fr",
+        // G
+        "gabun": "ga", "georgien": "ge", "griechenland": "gr", "großbritannien": "gb", "grossbritannien": "gb",
+        // I
+        "indien": "in", "indonesien": "id", "irland": "ie", "island": "is", "italien": "it",
+        // J
+        "jamaika": "jm", "jemen": "ye", "jordanien": "jo",
+        // K
+        "kaimaninseln": "ky", "kambodscha": "kh", "kamerun": "cm", "kanada": "ca",
+        "kap verde": "cv", "kasachstan": "kz", "katar": "qa", "kenia": "ke",
+        "kirgisistan": "kg", "kolumbien": "co", "komoren": "km", "kongo": "cg",
+        "kroatien": "hr", "kuba": "cu",
+        // L
+        "lettland": "lv", "libanon": "lb", "libyen": "ly", "litauen": "lt", "luxemburg": "lu",
+        // M
+        "madagaskar": "mg", "malediven": "mv", "marokko": "ma", "marshallinseln": "mh",
+        "mauretanien": "mr", "mexiko": "mx", "mikronesien": "fm",
+        "moldau": "md", "moldawien": "md", "mongolei": "mn", "mosambik": "mz",
+        // N
+        "neukaledonien": "nc", "neuseeland": "nz",
+        "niederländische antillen": "bq",
+        "niederlande": "nl", "nordkorea": "kp", "nordmazedonien": "mk",
+        "nördliche marianen": "mp", "norfolkinsel": "nf", "norwegen": "no",
+        // O
+        "osttimor": "tl",
+        // P
+        "palästina": "ps", "papua-neuguinea": "pg", "philippinen": "ph",
+        "pitcairninseln": "pn", "polen": "pl",
+        // R
+        "ruanda": "rw", "rumänien": "ro", "russland": "ru",
+        // S
+        "salomonen": "sb", "sambia": "zm", "são tomé und príncipe": "st",
+        "saudi-arabien": "sa", "schweden": "se", "schweiz": "ch",
+        "serbien": "rs", "seychellen": "sc", "simbabwe": "zw", "singapur": "sg",
+        "slowakei": "sk", "slowenien": "si", "spanien": "es",
+        "südafrika": "za", "südkorea": "kr", "südsudan": "ss", "syrien": "sy",
+        // T
+        "tadschikistan": "tj", "tansania": "tz", "tschad": "td",
+        "tschechien": "cz", "tschechische republik": "cz",
+        "trinidad und tobago": "tt", "tunesien": "tn", "türkei": "tr",
+        // U
+        "ungarn": "hu", "usbekistan": "uz",
+        // V
+        "vatikanstadt": "va", "vereinigte arabische emirate": "ae", "vae": "ae",
+        "vereinigte staaten": "us", "vereinigte staaten von amerika": "us",
+        "vereinigtes königreich": "gb",
+        // W
+        "wallis und futuna": "wf", "westsahara": "eh",
+        // Z
+        "zentralafrikanische republik": "cf", "zypern": "cy",
+        // German territory names
+        "amerikanisch-samoa": "as", "amerikanische jungferninseln": "vi",
+        "britische jungferninseln": "vg", "cookinseln": "ck", "färöer": "fo",
+        "französisch-guayana": "gf", "französisch-polynesien": "pf",
+        "grönland": "gl", "hongkong": "hk",
+        "saint-pierre und miquelon": "pm", "st. helena": "sh",
+        "turks- und caicosinseln": "tc", "ålandinseln": "ax",
     ]
 
     // MARK: - ISO code → accent colour
@@ -221,7 +296,7 @@ enum CountryLookup {
         // A
         "af": .green, "al": .red, "dz": .green, "ad": .red, "ao": .red,
         "ag": .red, "ar": .cyan, "am": .orange, "au": .blue, "at": .red,
-        "az": .cyan, "aw": .cyan,
+        "as": .blue, "az": .cyan, "aw": .cyan,
         // B
         "bs": .cyan, "bh": .red, "bd": .green, "bb": .blue, "by": .red,
         "be": .yellow, "bz": .blue, "bj": .green, "bt": .orange, "bo": .green,
@@ -275,7 +350,7 @@ enum CountryLookup {
         // Q
         "qa": .purple,
         // R
-        "ro": .blue, "ru": .blue, "rw": .blue, "re": .blue,
+        "ro": .blue, "ru": .blue, "rw": .blue, "re": .blue, "rs": .red,
         // S
         "kn": .green, "lc": .cyan, "vc": .blue, "ws": .red, "sm": .cyan,
         "st": .green, "sa": .green, "sn": .green, "sr": .green, "sc": .blue,

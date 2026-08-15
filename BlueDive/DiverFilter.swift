@@ -9,16 +9,18 @@ enum DiverFilter {
     /// Single source of truth for the AppStorage key.
     static let storageKey = "selectedDiverFilter"
 
-    /// Sorted, deduplicated list of non-empty diver names across dives, gear, and certifications.
+    /// Sorted, deduplicated list of non-empty diver names across dives, gear, certifications, and insurances.
     /// All parameters are optional so callers can pass only the sources they have.
     static func uniqueDivers(
         in dives: [Dive] = [],
         gear: [Gear] = [],
-        certifications: [Certification] = []
+        certifications: [Certification] = [],
+        insurances: [DivingInsurance] = []
     ) -> [String] {
         let names = dives.map { $0.diverName.trimmingCharacters(in: .whitespaces) }
             + gear.map { $0.diverName.trimmingCharacters(in: .whitespaces) }
             + certifications.map { $0.diverName.trimmingCharacters(in: .whitespaces) }
+            + insurances.map { $0.diverName.trimmingCharacters(in: .whitespaces) }
         return Array(Set(names.filter { !$0.isEmpty })).sorted()
     }
 
@@ -26,6 +28,16 @@ enum DiverFilter {
     /// Trims stored names before comparison so they match the trimmed picker values.
     static func apply(_ selected: String, to dives: [Dive]) -> [Dive] {
         selected.isEmpty ? dives : dives.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selected }
+    }
+
+    /// Returns `certifications` filtered to a single diver, or unchanged when no diver is selected.
+    static func apply(_ selected: String, to certifications: [Certification]) -> [Certification] {
+        selected.isEmpty ? certifications : certifications.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selected }
+    }
+
+    /// Returns `insurances` filtered to a single diver, or unchanged when no diver is selected.
+    static func apply(_ selected: String, to insurances: [DivingInsurance]) -> [DivingInsurance] {
+        selected.isEmpty ? insurances : insurances.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selected }
     }
 
     /// Applies the 15-parameter dive filter shared by the Map and Statistics views.
@@ -155,10 +167,104 @@ extension View {
     /// Clears `selectedDiver` when the persisted value no longer matches any
     /// available diver (e.g. after a delete, rename, or import).
     func diverFilterReset(uniqueDivers: [String], selectedDiver: Binding<String>) -> some View {
-        onChange(of: uniqueDivers) {
+        // task(id:) fires asynchronously after SwiftUI's first render pass, ensuring all @Query
+        // properties have populated before the stale-selection check runs.
+        // The empty-list guard preserves a valid selection during CloudKit's initial sync
+        // delay — the task fires again once data arrives and the check runs with real data.
+        task(id: uniqueDivers) {
+            guard !uniqueDivers.isEmpty else { return }
             if !selectedDiver.wrappedValue.isEmpty
                 && !uniqueDivers.contains(selectedDiver.wrappedValue) {
                 selectedDiver.wrappedValue = ""
+            }
+        }
+    }
+}
+
+// MARK: - Autocomplete Field
+
+/// Shared text field with inline autocomplete suggestions.
+/// Used in add/edit forms wherever a diver name (or similar value) can be
+/// populated from existing records. Pass `suggestionColor` to match the
+/// surrounding card's accent colour (`.cyan` for certifications, `.blue` for insurance).
+struct DiverAutocompleteField: View {
+    let label: LocalizedStringKey
+    var placeholder: LocalizedStringKey? = nil
+    @Binding var text: String
+    let suggestions: [String]
+    var suggestionColor: Color = .cyan
+
+    @State private var showSuggestions = false
+    @State private var cachedFiltered: [String] = []
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+            HStack {
+                TextField(placeholder ?? label, text: $text)
+                    .textFieldStyle(.plain)
+                    .focused($isFocused)
+                    .onChange(of: text) {
+                        cachedFiltered = text.isEmpty ? [] : suggestions.filter {
+                            $0.localizedCaseInsensitiveContains(text) && $0.lowercased() != text.lowercased()
+                        }
+                        showSuggestions = isFocused && !cachedFiltered.isEmpty
+                    }
+                    .onChange(of: suggestions) {
+                        cachedFiltered = text.isEmpty ? [] : suggestions.filter {
+                            $0.localizedCaseInsensitiveContains(text) && $0.lowercased() != text.lowercased()
+                        }
+                        showSuggestions = isFocused && !cachedFiltered.isEmpty
+                    }
+                    .onChange(of: isFocused) {
+                        if isFocused {
+                            showSuggestions = !cachedFiltered.isEmpty
+                        } else {
+                            Task {
+                                try? await Task.sleep(for: .seconds(0.2))
+                                showSuggestions = false
+                            }
+                        }
+                    }
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.primary.opacity(0.06))
+            )
+            if showSuggestions && !cachedFiltered.isEmpty {
+                ForEach(cachedFiltered.prefix(4), id: \.self) { suggestion in
+                    Button {
+                        text = suggestion
+                        showSuggestions = false
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(suggestion)
+                                .foregroundStyle(suggestionColor)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 3)
+                        .padding(.leading, 8)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
