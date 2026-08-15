@@ -125,6 +125,12 @@ struct DiverFilterToolbar: ToolbarContent {
 
     private var isActive: Bool { !selectedDiver.isEmpty }
 
+    private func initials(for name: String) -> String {
+        let words = name.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        let letters = words.prefix(2).compactMap { $0.first.map { String($0).uppercased() } }
+        return letters.isEmpty ? "?" : letters.joined()
+    }
+
     private var picker: some View {
         Menu {
             Button {
@@ -149,11 +155,23 @@ struct DiverFilterToolbar: ToolbarContent {
                 }
             }
         } label: {
-            Image(systemName: isActive ? "person.fill.checkmark" : "person.2")
-                .foregroundStyle(isActive ? Color.cyan : Color.secondary)
+            if isActive {
+                ZStack {
+                    Circle()
+                        .fill(Color.cyan)
+                        .frame(width: 24, height: 24)
+                    Text(initials(for: selectedDiver))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.black)
+                }
+                .accessibilityHidden(true)
+            } else {
+                Image(systemName: "person.2")
+                    .foregroundStyle(Color.secondary)
+            }
         }
         .accessibilityLabel(isActive
-            ? Text("Filter by diver: \(selectedDiver)")
+            ? Text(NSLocalizedString("Filter by diver: ", bundle: Bundle.forAppLanguage(), comment: "") + selectedDiver)
             : Text("Filter by diver"))
         .help(isActive
             ? NSLocalizedString("Diver: ", bundle: Bundle.forAppLanguage(), comment: "") + selectedDiver
