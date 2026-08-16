@@ -579,9 +579,14 @@ extension DiveDetailView {
                     }
                 }
             )
+            #if os(iOS)
             .presentationSizing(.page)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+            #else
+            .presentationSizing(.fitted)
+            #endif
+
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
         .onChange(of: selectedPhotos) {
