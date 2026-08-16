@@ -35,6 +35,9 @@ struct ContentView: View {
     @State private var showDeleteSingleConfirmation = false
     @State private var showDeleteSheet = false
     @State var isImporting = false
+    @State var importProgressFileName: String = ""
+    @State var importProgressCurrent: Int = 0
+    @State var importProgressTotal: Int = 0
     @State private var showExportMenu = false
     @State var exportDocument: ExportableFileDocument?
     @State var exportFileName: String = ""
@@ -498,16 +501,18 @@ struct ContentView: View {
                 ImportFormatPickerView(
                     options: $importFormatOptions,
                     fileData: pending.data,
-                    fileType: pending.fileType
+                    fileType: pending.fileType,
+                    fileName: pending.url.lastPathComponent
                 ) {
-                    // Confirm: dismiss the picker then start the import.
                     let url = pending.url
                     let data = pending.data
                     let type = pending.fileType
+                    importProgressFileName = pending.url.lastPathComponent
                     pendingImport = nil
                     importDiveFile(from: url, preloadedData: data, formats: importFormatOptions, fileType: type)
                 } onCancel: {
                     pendingImport = nil
+                    importProgressFileName = ""
                 }
                 .presentationSizing(.page)
                 .presentationDetents([.large])
@@ -517,6 +522,7 @@ struct ContentView: View {
                 DuplicateImportSheet(
                     totalCount: pending.parsedDives.count,
                     duplicates: pending.duplicates,
+                    parsedDives: pending.parsedDives,
                     fileName: pending.fileName,
                     onSkipDuplicates: {
                         let duplicateIndices = Set(pending.duplicates.map(\.parsedIndex))
@@ -640,10 +646,27 @@ struct ContentView: View {
                 ZStack {
                     Color.black.opacity(0.6).ignoresSafeArea()
                     VStack(spacing: 16) {
-                        ProgressView().tint(.cyan).scaleEffect(1.5)
-                        Text("Importing...")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                        if importProgressTotal > 0 {
+                            ProgressView(value: Double(importProgressCurrent), total: Double(importProgressTotal))
+                                .progressViewStyle(.linear)
+                                .tint(.cyan)
+                                .frame(width: 220)
+                            Text(String(format: NSLocalizedString("%@ of %@ dives imported", bundle: .forAppLanguage(), comment: "Progress label during dive import showing current and total count"), Double(importProgressCurrent).localizedString(decimals: 0), Double(importProgressTotal).localizedString(decimals: 0)))
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                        } else {
+                            ProgressView().tint(.cyan).scaleEffect(1.5)
+                            Text("Importing...")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                        }
+                        if !importProgressFileName.isEmpty {
+                            Text(verbatim: importProgressFileName)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
                     }
                     .padding(32)
                     .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
@@ -653,6 +676,7 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isImporting)
+        .animation(.linear(duration: 0.15), value: importProgressCurrent)
         .sheet(isPresented: $showSyncStatusPopover) {
             CloudKitSyncStatusView()
                 .presentationSizing(.page)
@@ -795,11 +819,11 @@ struct ContentView: View {
     
     @ViewBuilder
     private var contentSection: some View {
-        if dives.isEmpty {
-            emptyStateView
-                .transition(.opacity)
-        } else {
+        if !dives.isEmpty {
             diveList
+                .transition(.opacity)
+        } else if !isImporting {
+            emptyStateView
                 .transition(.opacity)
         }
     }

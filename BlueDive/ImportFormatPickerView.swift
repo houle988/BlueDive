@@ -111,6 +111,9 @@ struct ImportFormatPickerView: View {
     /// hidden because units are already embedded in the file.
     var fileType: ImportFileType = .macDive
 
+    /// The filename shown in the header for the user's reference.
+    var fileName: String = ""
+
     /// Called when the user taps "Import".
     var onConfirm: () -> Void
 
@@ -260,6 +263,16 @@ struct ImportFormatPickerView: View {
                      : NSLocalizedString("Configure options for your import", bundle: Bundle.forAppLanguage(), comment: "A description of the options available in the import format picker."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if !fileName.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.fill")
+                        Text(verbatim: fileName)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                }
             }
             Spacer()
             Button(action: onCancel) {

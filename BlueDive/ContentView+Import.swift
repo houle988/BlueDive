@@ -17,10 +17,11 @@ enum ImportFileType {
 enum ImportError: LocalizedError {
     case accessDenied
     case parsingFailed
+    case noValidDives
     case fileSelectionFailed(Error)
     case saveFailed(Error)
     case unsupportedFormat
-    
+
     var errorDescription: String? {
         let bundle = Bundle.forAppLanguage()
         switch self {
@@ -28,6 +29,8 @@ enum ImportError: LocalizedError {
             return NSLocalizedString("Unable to access the selected file.", bundle: bundle, comment: "")
         case .parsingFailed:
             return NSLocalizedString("The file could not be read correctly.", bundle: bundle, comment: "")
+        case .noValidDives:
+            return NSLocalizedString("No dives with a valid date were found in this file.", bundle: bundle, comment: "Error shown when every dive in the imported file is missing a date and is therefore skipped.")
         case .fileSelectionFailed(let error):
             let fmt = NSLocalizedString("Selection error: %@", bundle: bundle, comment: "")
             return String(format: fmt, error.localizedDescription)
@@ -36,6 +39,44 @@ enum ImportError: LocalizedError {
             return String(format: fmt, error.localizedDescription)
         case .unsupportedFormat:
             return NSLocalizedString("Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, and UDDF.", bundle: bundle, comment: "")
+        }
+    }
+}
+
+// MARK: - Gear Import Helpers
+
+struct GearSnapshot: Sendable {
+    let id: UUID
+    let name: String
+    let category: String
+    let diverName: String
+    let serialNumber: String?
+}
+
+private let gearSentinelSerials: Set<String> = ["n/a", "na", "unknown", "none", "0", "00", "-", "--"]
+
+private func normalizedGearSerial(_ s: String?) -> String? {
+    guard let trimmed = s?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+    return gearSentinelSerials.contains(trimmed.lowercased()) ? nil : trimmed
+}
+
+/// Returns the O(1) match key for a gear item, mirroring the logic in `Gear.matches()`.
+/// Gear WITH serial:    `"s:<lowercasedTrimmedName>|<category>|<lowercasedNormSerial>"`
+/// Gear WITHOUT serial: `"d:<lowercasedTrimmedName>|<category>|<lowercasedTrimmedDiver>"`
+private func gearMatchKey(name: String, category: String, diverName: String, serial: String?) -> String {
+    let n = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if let s = normalizedGearSerial(serial) {
+        return "s:\(n)|\(category)|\(s.lowercased())"
+    }
+    let d = diverName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    return "d:\(n)|\(category)|\(d)"
+}
+
+@ModelActor
+actor GearSnapshotReader {
+    func snapshots() throws -> [GearSnapshot] {
+        try modelContext.fetch(FetchDescriptor<Gear>()).map {
+            GearSnapshot(id: $0.id, name: $0.name, category: $0.category, diverName: $0.diverName, serialNumber: $0.serialNumber)
         }
     }
 }
@@ -147,26 +188,32 @@ extension ContentView {
                 }
 
                 let chosenFormats = formats ?? ImportFormatOptions()
-                let parsedDives = try parseImportData(
-                    data,
-                    fileType: fileType,
-                    formats: chosenFormats
-                )
+                let parsedDives: [BlueDiveGlobalData] = try await withCheckedThrowingContinuation { continuation in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        do {
+                            let result = try self.parseImportData(data, fileType: fileType, formats: chosenFormats)
+                            continuation.resume(returning: result)
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                }
 
                 await MainActor.run {
-                    isImporting = false
                     routeParsedDives(parsedDives, fileName: url.lastPathComponent)
                 }
 
             } catch let error as ImportError {
                 await MainActor.run {
                     isImporting = false
+                    importProgressFileName = ""
                     importError = error
                     showErrorAlert = true
                 }
             } catch {
                 await MainActor.run {
                     isImporting = false
+                    importProgressFileName = ""
                     importError = .saveFailed(error)
                     showErrorAlert = true
                 }
@@ -177,21 +224,25 @@ extension ContentView {
     // MARK: - Parsing
 
     // Parse and insert are kept separate so duplicate detection can run between them.
+    // Dives without a date are silently dropped — they cannot be reliably deduplicated
+    // and a timestamp is mandatory for a valid logbook entry.
     private func parseImportData(
         _ data: Data,
         fileType: ImportFileType,
         formats: ImportFormatOptions
     ) throws -> [BlueDiveGlobalData] {
+        let parsed: [BlueDiveGlobalData]
         switch fileType {
         case .macDive:
-            return try parseMacDiveXML(data: data, formats: formats)
+            parsed = try parseMacDiveXML(data: data, formats: formats)
         case .blueDive:
-            return try parseBlueDiveXML(data: data, importGear: formats.importGear)
+            parsed = try parseBlueDiveXML(data: data, importGear: formats.importGear)
         case .uddf:
-            return try parseUDDFXML(data: data, importGear: formats.importGear)
+            parsed = try parseUDDFXML(data: data, importGear: formats.importGear)
         case .gearCSV:
             throw ImportError.unsupportedFormat
         }
+        return parsed.filter { $0.date != nil }
     }
 
     private func parseMacDiveXML(data: Data, formats: ImportFormatOptions) throws -> [BlueDiveGlobalData] {
@@ -230,10 +281,19 @@ extension ContentView {
 
     @MainActor
     func routeParsedDives(_ parsed: [BlueDiveGlobalData], fileName: String) {
+        guard !parsed.isEmpty else {
+            isImporting = false
+            importProgressFileName = ""
+            importError = .noValidDives
+            showErrorAlert = true
+            return
+        }
         let duplicates = findDuplicateMatches(in: parsed)
         if duplicates.isEmpty {
             commitParsedDives(parsed, indices: Array(parsed.indices), fileName: fileName)
         } else {
+            isImporting = false
+            importProgressFileName = ""
             pendingDuplicateImport = PendingDuplicateImport(
                 parsedDives: parsed,
                 duplicates: duplicates,
@@ -244,20 +304,65 @@ extension ContentView {
 
     @MainActor
     func commitParsedDives(_ parsed: [BlueDiveGlobalData], indices: [Int], fileName: String) {
-        for index in indices {
-            guard parsed.indices.contains(index) else { continue }
-            insertDiveFromMacDive(parsed[index], fileName: fileName)
-        }
-        do {
-            try modelContext.save()
-            if UserDefaults.standard.bool(forKey: "notificationsEnabled"),
-               UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? false {
-                let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
-                NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
+        isImporting = true
+        importProgressFileName = fileName
+        let container = modelContext.container
+        Task {
+            // defer guarantees the overlay resets on every exit path — normal completion,
+            // a SwiftData save trap, or any other unhandled error inside the do block.
+            defer {
+                isImporting = false
+                importProgressFileName = ""
+                importProgressTotal = 0
+                importProgressCurrent = 0
             }
-        } catch {
-            importError = .saveFailed(error)
-            showErrorAlert = true
+
+            // Fetch gear snapshots on a background ModelActor — non-blocking on the main actor.
+            // Snapshot data is value-typed (Sendable) so it crosses the actor boundary safely.
+            var snapshotByID: [UUID: GearSnapshot] = [:]
+            var snapshotByMatchKey: [String: GearSnapshot] = [:]
+            if let snaps = try? await GearSnapshotReader(modelContainer: container).snapshots() {
+                for snap in snaps {
+                    snapshotByID[snap.id] = snap
+                    snapshotByMatchKey[gearMatchKey(name: snap.name, category: snap.category, diverName: snap.diverName, serial: snap.serialNumber)] = snap
+                }
+            }
+
+            // Set total before sleeping so the progress bar appears during the sheet-dismiss
+            // animation rather than showing a spinner for the full 350 ms pause.
+            importProgressCurrent = 0
+            importProgressTotal = indices.count
+
+            // Free the main actor for ~350 ms so the duplicate-sheet dismiss animation and the
+            // overlay fade-in can both complete before the heavy insert loop begins. Without this
+            // pause the first 50 synchronous inserts block CoreAnimation and the sheet hangs.
+            try? await Task.sleep(nanoseconds: 350_000_000)
+
+            // Lazy cache: actual Gear objects from the main context, fetched by UUID on first use.
+            var resolvedGearByID: [UUID: Gear] = [:]
+
+            var batch = 0
+            for index in indices {
+                guard parsed.indices.contains(index) else { continue }
+                insertDiveFromMacDive(parsed[index], fileName: fileName, snapshotByID: &snapshotByID, snapshotByMatchKey: &snapshotByMatchKey, resolvedGearByID: &resolvedGearByID)
+                batch += 1
+                importProgressCurrent = batch
+                if batch % 25 == 0 {
+                    try? await Task.sleep(nanoseconds: 2_000_000)
+                }
+            }
+            importProgressCurrent = indices.count
+            do {
+                try modelContext.save()
+                if UserDefaults.standard.bool(forKey: "notificationsEnabled"),
+                   UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? false {
+                    let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
+                    NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
+                }
+            } catch {
+                importError = .saveFailed(error)
+                showErrorAlert = true
+            }
         }
     }
 
@@ -451,7 +556,7 @@ extension ContentView {
     // MARK: - MacDive XML Import
     
     @MainActor
-    func insertDiveFromMacDive(_ diveData: BlueDiveGlobalData, fileName: String) {
+    func insertDiveFromMacDive(_ diveData: BlueDiveGlobalData, fileName: String, snapshotByID: inout [UUID: GearSnapshot], snapshotByMatchKey: inout [String: GearSnapshot], resolvedGearByID: inout [UUID: Gear]) {
         // Convert MacDive samples to DiveProfilePoints
         let profilePoints = diveData.samples.map { sample in
             DiveProfilePoint(
@@ -621,20 +726,11 @@ extension ContentView {
         }
         
         modelContext.insert(newDive)
-        
+
         // Create gear items from MacDive gear list
-        do {
-            var equipmentToAdd: [Gear] = []
+        var equipmentToAdd: [Gear] = []
 
-            // Fetch all gear once; both caches are updated after each insert so gear
-            // created earlier in this loop is visible to subsequent iterations.
-            var gearByID: [UUID: Gear] = {
-                let all = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
-                return Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-            }()
-            var gearList: [Gear] = Array(gearByID.values)
-
-            for gearItem in diveData.gear {
+        for gearItem in diveData.gear {
                 // Map MacDive gear types to app categories
                 let rawType = gearItem.type ?? "other"
                 let category = mapMacDiveGearType(rawType)
@@ -650,18 +746,28 @@ extension ContentView {
                     gearName = gearItem.name
                 }
 
-                // Check if gear already exists.
-                // Priority 1: UUID match (BlueDive XML exports carry the canonical gear UUID).
-                // Priority 2: name + category + diverName + serial match — catches gear that was
-                //   previously imported via a dive XML before UUID round-tripping was added, and
-                //   also handles MacDive/UDDF imports that never carry a UUID.
-                let existingGear: Gear?
-                if let gearID = gearItem.id, let byID = gearByID[gearID] {
-                    existingGear = byID
+                // Priority 1: UUID match — O(1) snapshot lookup, Gear resolved lazily on demand.
+                // Priority 2: name + category + diver + serial — O(1) hash index, resolved lazily.
+                let matchedID: UUID?
+                if let gearID = gearItem.id, snapshotByID[gearID] != nil {
+                    matchedID = gearID
                 } else {
-                    existingGear = gearList.first {
-                        $0.matches(name: gearName, category: category, diverName: gearItem.diverName, serial: gearItem.serial)
+                    let key = gearMatchKey(name: gearName, category: category, diverName: gearItem.diverName, serial: gearItem.serial)
+                    matchedID = snapshotByMatchKey[key]?.id
+                }
+
+                let existingGear: Gear?
+                if let mid = matchedID {
+                    if let cached = resolvedGearByID[mid] {
+                        existingGear = cached
+                    } else {
+                        let fetchID = mid
+                        let fetched = try? modelContext.fetch(FetchDescriptor<Gear>(predicate: #Predicate { $0.id == fetchID })).first
+                        resolvedGearByID[mid] = fetched
+                        existingGear = fetched
                     }
+                } else {
+                    existingGear = nil
                 }
 
                 if let gear = existingGear {
@@ -689,27 +795,28 @@ extension ContentView {
                         gearNotes: gearItem.gearNotes
                     )
                     modelContext.insert(newGear)
-                    gearByID[newGear.id] = newGear
-                    gearList.append(newGear)
+                    let snap = GearSnapshot(id: newGear.id, name: newGear.name, category: newGear.category, diverName: newGear.diverName, serialNumber: newGear.serialNumber)
+                    snapshotByID[newGear.id] = snap
+                    snapshotByMatchKey[gearMatchKey(name: newGear.name, category: newGear.category, diverName: newGear.diverName, serial: newGear.serialNumber)] = snap
+                    resolvedGearByID[newGear.id] = newGear
                     equipmentToAdd.append(newGear)
                 }
             }
             
-            // Associate gear with dive
-            if newDive.usedGear == nil { newDive.usedGear = [] }
-            newDive.usedGear!.append(contentsOf: equipmentToAdd)
-            
-            // Create marine life sightings from imported data
-            for marineLifeData in diveData.marineLifeSeen {
-                let marineSight = MarineSight(
-                    name: marineLifeData.name,
-                    count: marineLifeData.count
-                )
-                marineSight.dive = newDive
-                if newDive.seenFish == nil { newDive.seenFish = [] }
-                newDive.seenFish!.append(marineSight)
-                modelContext.insert(marineSight)
-            }
+        // Associate gear with dive
+        if newDive.usedGear == nil { newDive.usedGear = [] }
+        newDive.usedGear!.append(contentsOf: equipmentToAdd)
+
+        // Create marine life sightings from imported data
+        for marineLifeData in diveData.marineLifeSeen {
+            let marineSight = MarineSight(
+                name: marineLifeData.name,
+                count: marineLifeData.count
+            )
+            marineSight.dive = newDive
+            if newDive.seenFish == nil { newDive.seenFish = [] }
+            newDive.seenFish!.append(marineSight)
+            modelContext.insert(marineSight)
         }
     }
     
