@@ -41,6 +41,13 @@ struct GearListView: View {
     @State private var showGearCSVFormatPicker = false
     @State private var isImporting = false
     @State private var importProgressFileName: String = ""
+    // Gear import preview state (shared by XML and CSV paths)
+    @State private var showGearImportPreview = false
+    @State private var pendingGearXMLResult: GearXMLParser.GearParseResult?
+    @State private var pendingGearCSVItems: [GearXMLParser.ParsedGear]?
+    @State private var gearImportPreviewNew: [ImportPreviewItem] = []
+    @State private var gearImportPreviewDuplicates: [ImportPreviewItem] = []
+    @State private var gearPreviewFileName: String = ""
     #if os(iOS)
     @State private var showFileExporter = false
     @State private var exportDocument: ExportableFileDocument?
@@ -266,6 +273,41 @@ struct GearListView: View {
             .presentationSizing(.page)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showGearImportPreview) {
+            ImportPreviewSheet(
+                icon: "compass.drawing",
+                iconColor: .cyan,
+                newItems: gearImportPreviewNew,
+                duplicateItems: gearImportPreviewDuplicates,
+                fileName: gearPreviewFileName,
+                onImport: {
+                    if pendingGearXMLResult != nil {
+                        commitGearXMLImport()
+                    } else {
+                        commitGearCSVActualImport()
+                    }
+                },
+                onCancel: {
+                    showGearImportPreview = false
+                    pendingGearXMLResult = nil
+                    pendingGearCSVItems = nil
+                    gearImportPreviewNew = []
+                    gearImportPreviewDuplicates = []
+                }
+            )
+            .presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .onChange(of: showGearImportPreview) { _, isShown in
+            if !isShown {
+                pendingGearXMLResult = nil
+                pendingGearCSVItems = nil
+                gearImportPreviewNew = []
+                gearImportPreviewDuplicates = []
+                gearPreviewFileName = ""
+            }
         }
         .fileImporter(
             isPresented: $showImportPicker,
@@ -618,8 +660,9 @@ struct GearListView: View {
                 return
             }
 
-            // ── XML path: parse on background thread ──────────────────────────
-            importProgressFileName = url.lastPathComponent
+            // ── XML path: parse on background thread, then show preview ───────
+            let fileName = url.lastPathComponent
+            importProgressFileName = fileName
             isImporting = true
 
             Task {
@@ -636,61 +679,38 @@ struct GearListView: View {
                     }
 
                     await MainActor.run {
-                        // gearByID is the single source of truth for dedup: pre-populated from
-                        // the existing store and updated after each insert so both paths see
-                        // gear inserted earlier in the same loop.
-                        var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
-                        let (count, anyGearUpdated) = insertGearItems(parsed.gearItems, into: &gearByID)
-
-                        // ── Gear Groups ───────────────────────────────────────
-                        let existingGroupIDs = Set(allGearGroups.map(\.id))
-                        var groupCount = 0
-                        var missingMemberCount = 0
-                        for parsedGroup in parsed.gearGroups {
-                            guard !existingGroupIDs.contains(parsedGroup.id) else { continue }
-                            let members = parsedGroup.gearIDs.compactMap { gearByID[$0] }
-                            // Gear IDs that referenced items not in this import or existing store are dropped silently.
-                            missingMemberCount += parsedGroup.gearIDs.count - members.count
-                            let group = GearGroup(id: parsedGroup.id, name: parsedGroup.name, gear: members)
-                            modelContext.insert(group)
-                            groupCount += 1
-                        }
-
-                        // ── Tank Templates ────────────────────────────────────
-                        let existingTemplateIDs = Set(allTankTemplates.map(\.id))
-                        var templateCount = 0
-                        for parsedTemplate in parsed.tankTemplates {
-                            guard !existingTemplateIDs.contains(parsedTemplate.id) else { continue }
-                            let template = TankTemplate(
-                                id: parsedTemplate.id,
-                                name: parsedTemplate.name,
-                                volume: parsedTemplate.volume,
-                                workingPressure: parsedTemplate.workingPressure,
-                                volumeUnit: parsedTemplate.volumeUnit,
-                                pressureUnit: parsedTemplate.pressureUnit,
-                                material: parsedTemplate.material,
-                                format: parsedTemplate.format,
-                                manufacturer: parsedTemplate.manufacturer,
-                                model: parsedTemplate.model
-                            )
-                            modelContext.insert(template)
-                            templateCount += 1
-                        }
-
-                        try? modelContext.save()
-                        importedCount = count
-                        importedGroupCount = groupCount
-                        importedTemplateCount = templateCount
-                        importedGroupMissingMemberCount = missingMemberCount
-                        importedGearOnly = false
-                        importedServiceDataOnly = count == 0 && groupCount == 0 && templateCount == 0 && anyGearUpdated
                         isImporting = false
                         importProgressFileName = ""
-                        if count == 0 && groupCount == 0 && templateCount == 0 && !anyGearUpdated {
-                            showNothingToImport = true
-                        } else {
-                            showImportSuccess = true
+                        let (newGear, dupGear) = classifyGearItems(parsed.gearItems)
+
+                        let existingGroupIDs = Set(allGearGroups.map(\.id))
+                        let newGroups = parsed.gearGroups.filter { !existingGroupIDs.contains($0.id) }
+                        let dupGroups = parsed.gearGroups.filter { existingGroupIDs.contains($0.id) }
+
+                        let existingTemplateIDs = Set(allTankTemplates.map(\.id))
+                        let newTemplates = parsed.tankTemplates.filter { !existingTemplateIDs.contains($0.id) }
+                        let dupTemplates = parsed.tankTemplates.filter { existingTemplateIDs.contains($0.id) }
+
+                        // Nothing genuinely new: bypass the preview so service-data updates
+                        // on duplicate gear items are still committed.
+                        if newGear.isEmpty && newGroups.isEmpty && newTemplates.isEmpty {
+                            pendingGearXMLResult = parsed
+                            commitGearXMLImport()
+                            return
                         }
+
+                        let bundle = Bundle.forAppLanguage()
+                        let groupLabel = NSLocalizedString("Gear Group", bundle: bundle, comment: "Type label for a gear group in the import preview detail")
+                        let templateLabel = NSLocalizedString("Tank Template", bundle: bundle, comment: "Type label for a tank template in the import preview detail")
+                        gearImportPreviewNew = makeGearPreviewItems(newGear)
+                            + newGroups.map { ImportPreviewItem(name: $0.name, detail: groupLabel) }
+                            + newTemplates.map { ImportPreviewItem(name: $0.name, detail: templateLabel) }
+                        gearImportPreviewDuplicates = makeGearPreviewItems(dupGear)
+                            + dupGroups.map { ImportPreviewItem(name: $0.name, detail: groupLabel) }
+                            + dupTemplates.map { ImportPreviewItem(name: $0.name, detail: templateLabel) }
+                        pendingGearXMLResult = parsed
+                        gearPreviewFileName = fileName
+                        showGearImportPreview = true
                     }
                 } catch {
                     await MainActor.run {
@@ -711,6 +731,7 @@ struct GearListView: View {
     private func commitGearCSVImport() {
         guard let data = pendingGearCSVData else { return }
         pendingGearCSVData = nil
+        let fileName = pendingGearCSVFileName
         pendingGearCSVFileName = ""
         let diverName = UserDefaults.standard.string(forKey: "userName") ?? ""
         let weightFormat = csvFormatOptions.weightFormat
@@ -725,32 +746,169 @@ struct GearListView: View {
 
             await MainActor.run {
                 importProgressFileName = ""
-                defer { isImporting = false }
+                isImporting = false
 
                 guard let items else {
                     importError = NSLocalizedString("No gear data found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports a gear XML file that contains no gear items, groups, or tank templates.")
                     showImportError = true
                     return
                 }
-                var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
-                let (count, anyGearUpdated) = insertGearItems(items, into: &gearByID)
-                try? modelContext.save()
-                importedCount = count
-                importedGroupCount = 0
-                importedTemplateCount = 0
-                importedGroupMissingMemberCount = 0
-                importedGearOnly = true
-                importedServiceDataOnly = count == 0 && anyGearUpdated
-                if count > 0 || anyGearUpdated {
-                    showImportSuccess = true
-                } else {
+                guard !items.isEmpty else {
                     showNothingToImport = true
+                    return
                 }
+
+                let (newGear, dupGear) = classifyGearItems(items)
+                // No new gear items: bypass the preview so service-data updates
+                // on duplicates still get committed.
+                if newGear.isEmpty {
+                    pendingGearCSVItems = items
+                    commitGearCSVActualImport()
+                    return
+                }
+                gearImportPreviewNew = makeGearPreviewItems(newGear)
+                gearImportPreviewDuplicates = makeGearPreviewItems(dupGear)
+                pendingGearCSVItems = items
+                gearPreviewFileName = fileName
+                showGearImportPreview = true
             }
         }
     }
 
-    // MARK: - Gear Insert Helper
+    /// Commits the pending gear CSV import after the user confirms the preview.
+    @MainActor
+    private func commitGearCSVActualImport() {
+        guard let items = pendingGearCSVItems else { return }
+        pendingGearCSVItems = nil
+        showGearImportPreview = false
+        gearImportPreviewNew = []
+        gearImportPreviewDuplicates = []
+
+        var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        let (count, anyGearUpdated) = insertGearItems(items, into: &gearByID)
+        try? modelContext.save()
+        importedCount = count
+        importedGroupCount = 0
+        importedTemplateCount = 0
+        importedGroupMissingMemberCount = 0
+        importedGearOnly = true
+        importedServiceDataOnly = count == 0 && anyGearUpdated
+        if count > 0 || anyGearUpdated {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                showImportSuccess = true
+            }
+        } else {
+            showNothingToImport = true
+        }
+    }
+
+    // MARK: - Gear Import Helpers
+
+    private func makeGearPreviewItems(_ items: [GearXMLParser.ParsedGear]) -> [ImportPreviewItem] {
+        let bundle = Bundle.forAppLanguage()
+        return items.map { item in
+            let category = GearCategory(exportKeyOrRawValue: item.category)
+                .map { NSLocalizedString("gear.category." + $0.rawValue, bundle: bundle, comment: "") }
+                ?? item.category
+            let detail = item.diverName.isEmpty ? category : "\(category) • \(item.diverName)"
+            return ImportPreviewItem(name: item.name, detail: detail)
+        }
+    }
+
+    /// Classifies gear items as new vs duplicate without inserting anything.
+    private func classifyGearItems(_ items: [GearXMLParser.ParsedGear]) -> (new: [GearXMLParser.ParsedGear], duplicates: [GearXMLParser.ParsedGear]) {
+        var gearByID = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        var new: [GearXMLParser.ParsedGear] = []
+        var duplicates: [GearXMLParser.ParsedGear] = []
+        for item in items {
+            if gearByID[item.id] != nil ||
+                gearByID.values.contains(where: { $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber) }) {
+                duplicates.append(item)
+            } else {
+                // Mirror insertGearItems: track accepted items so intra-file duplicates
+                // (same gear listed twice) are classified consistently with what commit will do.
+                let placeholder = Gear(
+                    id: item.id, name: item.name, category: item.category,
+                    manufacturer: item.manufacturer, model: item.model,
+                    serialNumber: item.serialNumber, datePurchased: item.datePurchased,
+                    purchasePrice: item.purchasePrice, currency: item.currency,
+                    purchasedFrom: item.purchasedFrom,
+                    weightContribution: item.weightContribution,
+                    weightContributionUnit: item.weightContributionUnit,
+                    isInactive: item.isInactive, diverName: item.diverName,
+                    lastServiceDate: item.lastServiceDate, nextServiceDue: item.nextServiceDue,
+                    serviceHistory: item.serviceHistory, gearNotes: item.gearNotes
+                )
+                gearByID[item.id] = placeholder
+                new.append(item)
+            }
+        }
+        return (new, duplicates)
+    }
+
+    /// Commits the pending gear XML import after the user confirms the preview.
+    @MainActor
+    private func commitGearXMLImport() {
+        guard let parsed = pendingGearXMLResult else { return }
+        pendingGearXMLResult = nil
+        showGearImportPreview = false
+        gearImportPreviewNew = []
+        gearImportPreviewDuplicates = []
+
+        var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        let (count, anyGearUpdated) = insertGearItems(parsed.gearItems, into: &gearByID)
+
+        // ── Gear Groups ───────────────────────────────────────────────────────
+        let existingGroupIDs = Set(allGearGroups.map(\.id))
+        var groupCount = 0
+        var missingMemberCount = 0
+        for parsedGroup in parsed.gearGroups {
+            guard !existingGroupIDs.contains(parsedGroup.id) else { continue }
+            let members = parsedGroup.gearIDs.compactMap { gearByID[$0] }
+            missingMemberCount += parsedGroup.gearIDs.count - members.count
+            let group = GearGroup(id: parsedGroup.id, name: parsedGroup.name, gear: members)
+            modelContext.insert(group)
+            groupCount += 1
+        }
+
+        // ── Tank Templates ────────────────────────────────────────────────────
+        let existingTemplateIDs = Set(allTankTemplates.map(\.id))
+        var templateCount = 0
+        for parsedTemplate in parsed.tankTemplates {
+            guard !existingTemplateIDs.contains(parsedTemplate.id) else { continue }
+            let template = TankTemplate(
+                id: parsedTemplate.id,
+                name: parsedTemplate.name,
+                volume: parsedTemplate.volume,
+                workingPressure: parsedTemplate.workingPressure,
+                volumeUnit: parsedTemplate.volumeUnit,
+                pressureUnit: parsedTemplate.pressureUnit,
+                material: parsedTemplate.material,
+                format: parsedTemplate.format,
+                manufacturer: parsedTemplate.manufacturer,
+                model: parsedTemplate.model
+            )
+            modelContext.insert(template)
+            templateCount += 1
+        }
+
+        try? modelContext.save()
+        importedCount = count
+        importedGroupCount = groupCount
+        importedTemplateCount = templateCount
+        importedGroupMissingMemberCount = missingMemberCount
+        importedGearOnly = false
+        importedServiceDataOnly = count == 0 && groupCount == 0 && templateCount == 0 && anyGearUpdated
+        if count == 0 && groupCount == 0 && templateCount == 0 && !anyGearUpdated {
+            showNothingToImport = true
+        } else {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                showImportSuccess = true
+            }
+        }
+    }
 
     /// Inserts gear items not already present, updating `gearByID` after each insert
     /// so subsequent lookups (e.g. group membership) see newly added items.

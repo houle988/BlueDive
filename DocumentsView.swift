@@ -48,6 +48,7 @@ enum DocumentSection: String, CaseIterable, Identifiable {
 
 struct DocumentsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     @Query(sort: \DivingInsurance.endDate, order: .reverse) private var insurances: [DivingInsurance]
     @Query(sort: \Gear.name) private var allGear: [Gear]
@@ -85,6 +86,13 @@ struct DocumentsView: View {
     @State private var importedCount: Int = 0
     @State private var importSuccessTarget: ImportTarget = .certifications
     @State private var showImportSuccess = false
+    // Import preview state
+    @State private var showImportPreview = false
+    @State private var pendingCertImport: [CertificationXMLParser.ParsedCertification] = []
+    @State private var pendingInsuranceImport: [InsuranceXMLParser.ParsedInsurance] = []
+    @State private var importPreviewNew: [ImportPreviewItem] = []
+    @State private var importPreviewDuplicates: [ImportPreviewItem] = []
+    @State private var importPreviewFileName: String = ""
     @State private var exportError: String?
     @State private var showExportError = false
     #if os(iOS)
@@ -505,6 +513,34 @@ struct DocumentsView: View {
                     Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), comment: "Delete confirmation alert message."), insurance.insurerName))
                 }
             }
+            // --- Import Preview ---
+            .sheet(isPresented: $showImportPreview) {
+                ImportPreviewSheet(
+                    icon: importTarget == .certifications ? "rosette" : "shield.lefthalf.filled",
+                    iconColor: importTarget == .certifications ? .blue : .teal,
+                    newItems: importPreviewNew,
+                    duplicateItems: importPreviewDuplicates,
+                    fileName: importPreviewFileName,
+                    onImport: { commitPendingImport() },
+                    onCancel: {
+                        showImportPreview = false
+                        pendingCertImport = []
+                        pendingInsuranceImport = []
+                    }
+                )
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+            .onChange(of: showImportPreview) { _, isShown in
+                if !isShown {
+                    pendingCertImport = []
+                    pendingInsuranceImport = []
+                    importPreviewNew = []
+                    importPreviewDuplicates = []
+                    importPreviewFileName = ""
+                }
+            }
             // --- Import / Export ---
             .fileImporter(
                 isPresented: $showImportPicker,
@@ -917,10 +953,11 @@ struct DocumentsView: View {
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
             do {
                 let data = try Data(contentsOf: url)
+                let fileName = url.lastPathComponent
                 if importTarget == .certifications {
-                    handleCertificationsImport(data: data)
+                    handleCertificationsImport(data: data, fileName: fileName)
                 } else {
-                    handleInsuranceImport(data: data)
+                    handleInsuranceImport(data: data, fileName: fileName)
                 }
             } catch {
                 importError = error.localizedDescription
@@ -932,7 +969,7 @@ struct DocumentsView: View {
         }
     }
 
-    private func handleCertificationsImport(data: Data) {
+    private func handleCertificationsImport(data: Data, fileName: String) {
         let parser = CertificationXMLParser()
         guard let parsed = parser.parse(data: data), !parsed.isEmpty else {
             importError = NSLocalizedString(
@@ -943,7 +980,16 @@ struct DocumentsView: View {
             showImportError = true
             return
         }
-        var count = 0
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .none
+        dateFormatter.locale = locale
+
+        importPreviewNew = []
+        var newItems: [CertificationXMLParser.ParsedCertification] = []
+        var dupPreview: [ImportPreviewItem] = []
+
         for item in parsed {
             let isDuplicate = certifications.contains { existing in
                 existing.id == item.id ||
@@ -951,8 +997,120 @@ struct DocumentsView: View {
                  existing.certificationNumber == item.certificationNumber &&
                  existing.organization == item.organization)
             }
-            guard !isDuplicate else { continue }
+            let orgDisplay = CertificationOrganization(rawValue: item.organization)?.localizedName ?? item.organization
+            let previewItem = ImportPreviewItem(
+                name: item.name,
+                detail: [orgDisplay, dateFormatter.string(from: item.issueDate)]
+                    .filter { !$0.isEmpty }.joined(separator: " • ")
+            )
+            if isDuplicate {
+                dupPreview.append(previewItem)
+            } else {
+                newItems.append(item)
+                importPreviewNew.append(previewItem)
+            }
+        }
+
+        guard !newItems.isEmpty else {
+            importError = NSLocalizedString(
+                "All records in the file are already imported.",
+                bundle: Bundle.forAppLanguage(),
+                comment: "Message when all records in the import file already exist in the database."
+            )
+            showImportError = true
+            return
+        }
+        pendingCertImport = newItems
+        importPreviewDuplicates = dupPreview
+        importPreviewFileName = fileName
+        showImportPreview = true
+    }
+
+    private func handleInsuranceImport(data: Data, fileName: String) {
+        let parser = InsuranceXMLParser()
+        guard let parsed = parser.parse(data: data), !parsed.isEmpty else {
+            importError = NSLocalizedString(
+                "No insurance records found in the selected file.",
+                bundle: Bundle.forAppLanguage(),
+                comment: "Error message when the user imports an XML file that contains no insurance records."
+            )
+            showImportError = true
+            return
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .none
+        dateFormatter.locale = locale
+
+        importPreviewNew = []
+        var newItems: [InsuranceXMLParser.ParsedInsurance] = []
+        var dupPreview: [ImportPreviewItem] = []
+
+        for item in parsed {
+            let isDuplicate = insurances.contains { existing in
+                existing.id == item.id ||
+                (!item.policyNumber.isEmpty &&
+                 existing.insurerName == item.insurerName &&
+                 existing.policyNumber == item.policyNumber) ||
+                // Natural-key fallback for files exported before <id> was added to the format:
+                // when both UUID and policyNumber are absent, match on insurer + diver + coverage type + date range.
+                // Truncate to seconds before comparing — manually-created records have nanosecond precision
+                // while XML round-tripped dates are truncated to seconds, so exact equality always fails.
+                (item.policyNumber.isEmpty &&
+                 existing.insurerName == item.insurerName &&
+                 existing.diverName == item.diverName &&
+                 existing.coverageType == item.coverageType &&
+                 Int(existing.startDate.timeIntervalSince1970) == Int(item.startDate.timeIntervalSince1970) &&
+                 Int(existing.endDate.timeIntervalSince1970) == Int(item.endDate.timeIntervalSince1970))
+            }
+            let detail = [
+                item.coverageType,
+                dateFormatter.string(from: item.startDate) + " – " + dateFormatter.string(from: item.endDate)
+            ].filter { !$0.isEmpty }.joined(separator: " • ")
+            let previewItem = ImportPreviewItem(name: item.insurerName, detail: detail)
+            if isDuplicate {
+                dupPreview.append(previewItem)
+            } else {
+                newItems.append(item)
+                importPreviewNew.append(previewItem)
+            }
+        }
+
+        guard !newItems.isEmpty else {
+            importError = NSLocalizedString(
+                "All records in the file are already imported.",
+                bundle: Bundle.forAppLanguage(),
+                comment: "Message when all records in the import file already exist in the database."
+            )
+            showImportError = true
+            return
+        }
+        pendingInsuranceImport = newItems
+        importPreviewDuplicates = dupPreview
+        importPreviewFileName = fileName
+        showImportPreview = true
+    }
+
+    private func commitPendingImport() {
+        if importTarget == .certifications {
+            guard !pendingCertImport.isEmpty else { return }
+        } else {
+            guard !pendingInsuranceImport.isEmpty else { return }
+        }
+        showImportPreview = false
+        if importTarget == .certifications {
+            commitCertImport()
+        } else {
+            commitInsuranceImport()
+        }
+    }
+
+    private func commitCertImport() {
+        var count = 0
+        for item in pendingCertImport {
             let cert = Certification(
+                id: item.id,
                 name: item.name,
                 diverName: item.diverName,
                 organization: item.organization,
@@ -971,50 +1129,21 @@ struct DocumentsView: View {
             }
             count += 1
         }
+        pendingCertImport = []
+        importPreviewNew = []
+        importPreviewDuplicates = []
+        try? modelContext.save()
         importedCount = count
         importSuccessTarget = .certifications
-        if count > 0 {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
             showImportSuccess = true
-        } else {
-            importError = NSLocalizedString(
-                "All records in the file are already imported.",
-                bundle: Bundle.forAppLanguage(),
-                comment: "Message when all records in the import file already exist in the database."
-            )
-            showImportError = true
         }
     }
 
-    private func handleInsuranceImport(data: Data) {
-        let parser = InsuranceXMLParser()
-        guard let parsed = parser.parse(data: data), !parsed.isEmpty else {
-            importError = NSLocalizedString(
-                "No insurance records found in the selected file.",
-                bundle: Bundle.forAppLanguage(),
-                comment: "Error message when the user imports an XML file that contains no insurance records."
-            )
-            showImportError = true
-            return
-        }
+    private func commitInsuranceImport() {
         var count = 0
-        for item in parsed {
-            let isDuplicate = insurances.contains { existing in
-                existing.id == item.id ||
-                (!item.policyNumber.isEmpty &&
-                 existing.insurerName == item.insurerName &&
-                 existing.policyNumber == item.policyNumber) ||
-                // Natural-key fallback for files exported before <id> was added to the format:
-                // when both UUID and policyNumber are absent, match on insurer + diver + coverage type + date range.
-                // Truncate to seconds before comparing — manually-created records have nanosecond precision
-                // while XML round-tripped dates are truncated to seconds, so exact equality always fails.
-                (item.policyNumber.isEmpty &&
-                 existing.insurerName == item.insurerName &&
-                 existing.diverName == item.diverName &&
-                 existing.coverageType == item.coverageType &&
-                 Int(existing.startDate.timeIntervalSince1970) == Int(item.startDate.timeIntervalSince1970) &&
-                 Int(existing.endDate.timeIntervalSince1970) == Int(item.endDate.timeIntervalSince1970))
-            }
-            guard !isDuplicate else { continue }
+        for item in pendingInsuranceImport {
             let record = DivingInsurance(
                 id: item.id,
                 insurerName: item.insurerName,
@@ -1030,17 +1159,15 @@ struct DocumentsView: View {
             modelContext.insert(record)
             count += 1
         }
+        pendingInsuranceImport = []
+        importPreviewNew = []
+        importPreviewDuplicates = []
+        try? modelContext.save()
         importedCount = count
         importSuccessTarget = .insurance
-        if count > 0 {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
             showImportSuccess = true
-        } else {
-            importError = NSLocalizedString(
-                "All records in the file are already imported.",
-                bundle: Bundle.forAppLanguage(),
-                comment: "Message when all records in the import file already exist in the database."
-            )
-            showImportError = true
         }
     }
 }
