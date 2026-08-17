@@ -271,6 +271,23 @@
         }
       }
     },
+    "%@ of %@ dives exported" : {
+      "comment" : "Progress label during dive export showing current and total count",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ von %@ Tauchgängen exportiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ de %@ plongées exportées"
+          }
+        }
+      }
+    },
     "%@ of %@ dives imported" : {
       "comment" : "Progress label during dive import showing current and total count",
       "localizations" : {
@@ -9313,6 +9330,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exportez votre carnet de plongée au format XML ou UDDF quand vous le souhaitez."
+          }
+        }
+      }
+    },
+    "Exporting..." : {
+      "comment" : "A placeholder text displayed while exporting data.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird exportiert..."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporting..."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportation en cours..."
           }
         }
       }

@@ -40,6 +40,47 @@ enum BlueDiveXMLExporter {
         return lines.joined(separator: "\n")
     }
 
+    // MARK: - Async bulk export with progress
+
+    /// Async variant of the bulk export — reports per-dive progress so the UI can show
+    /// a progress bar. `onProgress` is called with (current, total) after each dive is appended.
+    @MainActor
+    static func generateXML(
+        for dives: [Dive],
+        onProgress: (Int, Int) -> Void
+    ) async -> String {
+        var lines: [String] = []
+
+        lines.append(#"<?xml version="1.0" encoding="UTF-8"?>"#)
+        lines.append("<blueDiveExport>")
+
+        let appName     = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "BlueDive"
+        let appVersion  = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        lines.append("  <metadata>")
+        lines.append(xmlTag("software",   appName,                          indent: 4))
+        lines.append(xmlTag("version",    "\(appVersion) (\(buildNumber))", indent: 4))
+        lines.append(xmlTag("exportedAt", formatDate(Date()),               indent: 4))
+        lines.append(xmlTag("diveCount",  String(dives.count),              indent: 4))
+        lines.append("  </metadata>")
+
+        lines.append("  <dives>")
+        onProgress(0, dives.count)
+        var count = 0
+        for dive in dives {
+            lines.append(contentsOf: diveLines(for: dive))
+            count += 1
+            onProgress(count, dives.count)
+            if count % 25 == 0 {
+                await Task.yield()
+            }
+        }
+        lines.append("  </dives>")
+
+        lines.append("</blueDiveExport>")
+        return lines.joined(separator: "\n")
+    }
+
     // MARK: - Single-dive XML (used by XMLExportTabView for preview)
 
     /// Generates a standalone BlueDive XML string for a single dive.

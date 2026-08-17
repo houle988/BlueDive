@@ -972,8 +972,7 @@ extension ContentView {
     }
 
     func exportAllDivesToXML() {
-        let xml = BlueDiveXMLExporter.generateXML(for: dives)
-        guard let data = xml.data(using: .utf8) else { return }
+        guard !isExporting else { return }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         let fileName = "BlueDive_Export_\(formatter.string(from: Date())).xml"
@@ -984,19 +983,51 @@ extension ContentView {
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? data.write(to: url)
+            isExporting = true
+            exportProgressCurrent = 0
+            exportProgressTotal = 0
+            Task { @MainActor in
+                defer {
+                    isExporting = false
+                    exportProgressCurrent = 0
+                    exportProgressTotal = 0
+                }
+                let xml = await BlueDiveXMLExporter.generateXML(for: dives) { current, total in
+                    exportProgressCurrent = current
+                    exportProgressTotal = total
+                }
+                guard let data = xml.data(using: .utf8) else { return }
+                try? data.write(to: url)
+            }
         }
         #else
-        exportDocument = ExportableFileDocument(data: data)
-        exportFileName = fileName
-        exportContentType = .xml
-        showFileExporter = true
+        isExporting = true
+        exportProgressCurrent = 0
+        exportProgressTotal = 0
+        Task { @MainActor in
+            let xml = await BlueDiveXMLExporter.generateXML(for: dives) { current, total in
+                exportProgressCurrent = current
+                exportProgressTotal = total
+            }
+            guard let data = xml.data(using: .utf8) else {
+                isExporting = false
+                exportProgressCurrent = 0
+                exportProgressTotal = 0
+                return
+            }
+            exportDocument = ExportableFileDocument(data: data)
+            exportFileName = fileName
+            exportContentType = .xml
+            showFileExporter = true
+            isExporting = false
+            exportProgressCurrent = 0
+            exportProgressTotal = 0
+        }
         #endif
     }
 
     func exportAllDivesToUDDF() {
-        let uddf = BlueDiveUDDFExporter.generateUDDF(for: dives)
-        guard let data = uddf.data(using: .utf8) else { return }
+        guard !isExporting else { return }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         let fileName = "BlueDive_Export_\(formatter.string(from: Date())).uddf"
@@ -1007,13 +1038,46 @@ extension ContentView {
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? data.write(to: url)
+            isExporting = true
+            exportProgressCurrent = 0
+            exportProgressTotal = 0
+            Task { @MainActor in
+                defer {
+                    isExporting = false
+                    exportProgressCurrent = 0
+                    exportProgressTotal = 0
+                }
+                let uddf = await BlueDiveUDDFExporter.generateUDDF(for: dives) { current, total in
+                    exportProgressCurrent = current
+                    exportProgressTotal = total
+                }
+                guard let data = uddf.data(using: .utf8) else { return }
+                try? data.write(to: url)
+            }
         }
         #else
-        exportDocument = ExportableFileDocument(data: data)
-        exportFileName = fileName
-        exportContentType = .uddf
-        showFileExporter = true
+        isExporting = true
+        exportProgressCurrent = 0
+        exportProgressTotal = 0
+        Task { @MainActor in
+            let uddf = await BlueDiveUDDFExporter.generateUDDF(for: dives) { current, total in
+                exportProgressCurrent = current
+                exportProgressTotal = total
+            }
+            guard let data = uddf.data(using: .utf8) else {
+                isExporting = false
+                exportProgressCurrent = 0
+                exportProgressTotal = 0
+                return
+            }
+            exportDocument = ExportableFileDocument(data: data)
+            exportFileName = fileName
+            exportContentType = .uddf
+            showFileExporter = true
+            isExporting = false
+            exportProgressCurrent = 0
+            exportProgressTotal = 0
+        }
         #endif
     }
 
