@@ -379,12 +379,14 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+            #if os(iOS)
             .sheet(isPresented: $showSettings) {
                 SettingsView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
+            #endif
             .sheet(isPresented: $showMinimumGasPlanning) {
                 MinimumGasCalculatorView()
                     .presentationSizing(.page)
@@ -1021,11 +1023,18 @@ struct ContentView: View {
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         ToolbarItem(placement: .navigation) {
+            #if os(iOS)
             Button(action: { showSettings = true }) {
                 Image(systemName: "gearshape.fill")
                     .foregroundStyle(.cyan)
             }
             .help("Settings")
+            #else
+            SettingsLink {
+                Label("Settings", systemImage: "gearshape.fill")
+            }
+            .help("Settings")
+            #endif
         }
         ToolbarItem(placement: .navigation) {
             cloudSyncToolbarItem

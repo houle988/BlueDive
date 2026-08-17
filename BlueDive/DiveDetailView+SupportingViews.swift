@@ -1391,6 +1391,7 @@ struct PhotoPreviewSheet: View {
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
                 if photos.count > 1 {
+                    #if os(iOS)
                     ToolbarItem(placement: .bottomBar) {
                         Button {
                             currentIndex -= 1
@@ -1413,6 +1414,30 @@ struct PhotoPreviewSheet: View {
                         }
                         .disabled(currentIndex == photos.count - 1)
                     }
+                    #else
+                    ToolbarItem(placement: .automatic) {
+                        Button {
+                            currentIndex -= 1
+                        } label: {
+                            Label("Previous Photo", systemImage: "chevron.left")
+                        }
+                        .disabled(currentIndex == 0)
+                    }
+                    ToolbarItem(placement: .automatic) {
+                        Text(verbatim: "\(currentIndex + 1) / \(photos.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    ToolbarItem(placement: .automatic) {
+                        Button {
+                            currentIndex += 1
+                        } label: {
+                            Label("Next Photo", systemImage: "chevron.right")
+                        }
+                        .disabled(currentIndex == photos.count - 1)
+                    }
+                    #endif
                 }
             }
             .toolbar {
@@ -1581,6 +1606,9 @@ struct PhotoPreviewSheet: View {
                 }
             }
         }
+        #if os(macOS)
+        .frame(minWidth: 800, idealWidth: 1240, maxWidth: .infinity, minHeight: 600, idealHeight: 800, maxHeight: .infinity)
+        #endif
     }
 
     private static let exportDateFormatter: DateFormatter = {
