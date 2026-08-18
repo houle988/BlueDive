@@ -5,29 +5,6 @@ import UniformTypeIdentifiers
 import AppKit
 #endif
 
-// MARK: - UI Extensions
-
-private extension CertificationOrganization {
-    var swiftUIColor: Color {
-        switch self {
-        case .padi: return .blue
-        case .ssi: return .cyan
-        case .cmas: return .orange
-        case .naui: return .green
-        case .sdi: return .purple
-        case .tdi: return .teal
-        case .bsac: return .red
-        case .other: return .gray
-        }
-    }
-}
-
-extension Certification {
-    var organizationColor: Color {
-        CertificationOrganization(rawValue: organization)?.swiftUIColor ?? .gray
-    }
-}
-
 // MARK: - Import Target
 
 private enum ImportTarget {
@@ -1199,15 +1176,7 @@ struct CertificationCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(orgColor.opacity(0.2))
-                    .frame(width: 60, height: 60)
-                Text(certification.localizedOrganization)
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(orgColor)
-            }
+            CertificationIconView(organization: certification.organization, size: 60, fillOpacity: 0.2)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayName)
@@ -1283,23 +1252,13 @@ struct CertificationDetailView: View {
     @State private var showEditCertification = false
     @State private var showDeleteConfirmation = false
 
-    private var orgColor: Color { certification.organizationColor }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(spacing: 24) {
                         VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(orgColor.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Text(certification.localizedOrganization)
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(orgColor)
-                            }
+                            CertificationIconView(organization: certification.organization, size: 64, fillOpacity: 0.12)
 
                             HStack(spacing: 6) {
                                 Circle()
@@ -1519,14 +1478,7 @@ struct AddCertificationView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(.cyan.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: "graduationcap.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(.cyan)
-                            }
+                            CertificationIconView(organization: organization, size: 64, fillOpacity: 0.12)
                         }
                         .padding(.top, 20)
 

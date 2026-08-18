@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "CMAS.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

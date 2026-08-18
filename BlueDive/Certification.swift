@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 @Model
 final class Certification {
@@ -74,6 +75,10 @@ extension Certification {
         CertificationOrganization(rawValue: organization)?.localizedName ?? organization
     }
 
+    var organizationColor: Color {
+        CertificationOrganization(rawValue: organization)?.swiftUIColor ?? .gray
+    }
+
 }
 
 // MARK: - Organizations
@@ -86,6 +91,7 @@ enum CertificationOrganization: String, CaseIterable, Identifiable {
     case sdi = "SDI"
     case tdi = "TDI"
     case bsac = "BSAC"
+    case gue = "GUE"
     case other = "Other"
     
     var id: String { rawValue }
@@ -99,10 +105,29 @@ enum CertificationOrganization: String, CaseIterable, Identifiable {
         case .sdi:   return "SDI"
         case .tdi:   return "TDI"
         case .bsac:  return NSLocalizedString("BSAC", bundle: Bundle.forAppLanguage(), comment: "Certification organization: known as VDST in Germany")
+        case .gue:   return "GUE"
         case .other: return NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification organization: other/unknown")
         }
     }
 
+}
+
+// MARK: - Organization Colors
+
+extension CertificationOrganization {
+    var swiftUIColor: Color {
+        switch self {
+        case .padi:  return .blue
+        case .ssi:   return .cyan
+        case .cmas:  return .orange
+        case .naui:  return .green
+        case .sdi:   return .purple
+        case .tdi:   return .teal
+        case .bsac:  return .red
+        case .gue:   return .indigo
+        case .other: return .gray
+        }
+    }
 }
 
 // MARK: - Certification Levels per Organization
@@ -356,6 +381,28 @@ extension CertificationOrganization {
                 "First Aid for Divers",
                 "Oxygen Administration",
                 "Boat Handling",
+                "Other",
+            ]
+        case .gue:
+            return [
+                // Recreational
+                "Recreational Diver 1",
+                "Recreational Diver 2",
+                "Recreational Diver 3",
+                // Technical
+                "Fundamentals",
+                "Tech 1",
+                "Tech 2",
+                // Cave
+                "Cave 1",
+                "Cave 2",
+                // Rebreather
+                "Rebreather 1",
+                "Rebreather 2",
+                // Specialties
+                "Diver Propulsion Vehicle",
+                "Sidemount",
+                "Ice Diver",
                 "Other",
             ]
         case .other:

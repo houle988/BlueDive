@@ -970,18 +970,8 @@ struct InsuranceCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(statusColor.opacity(0.2))
-                    .frame(width: 60, height: 60)
-                Text(insurance.insurerName.isEmpty ? "?" : String(insurance.insurerName.prefix(4)))
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(statusColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .padding(4)
-            }
+            InsuranceIconView(insurerName: insurance.insurerName, size: 60,
+                             fallbackColor: statusColor, fillOpacity: 0.2)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(insurance.insurerName)
@@ -1060,14 +1050,13 @@ struct InsuranceDetailView: View {
                     VStack(spacing: 24) {
                         // Icon header
                         VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(statusColor.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: insurance.isExpired ? "exclamationmark.shield.fill" : "shield.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(statusColor)
-                            }
+                            InsuranceIconView(
+                                insurerName: insurance.insurerName,
+                                size: 64,
+                                fallbackColor: statusColor,
+                                fillOpacity: 0.12,
+                                fallbackSymbol: insurance.isExpired ? "exclamationmark.shield.fill" : "shield.fill"
+                            )
 
                             // Status badge
                             HStack(spacing: 6) {
@@ -1237,14 +1226,7 @@ struct AddInsuranceView: View {
                     VStack(spacing: 24) {
                         // Icon header
                         VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(.blue.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: "shield.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(.blue)
-                            }
+                            InsuranceIconView(insurerName: insurerName, size: 64, fallbackColor: .blue, fillOpacity: 0.12, fallbackSymbol: "shield.fill")
                         }
                         .padding(.top, 20)
 
