@@ -192,9 +192,22 @@ struct ToggleButton: View {
     @Binding var isOn: Bool
     let icon: String
     let label: LocalizedStringKey
+    var shortLabel: LocalizedStringKey? = nil
     let color: Color
     var isAvailable: Bool = true
-    
+
+    @ViewBuilder
+    private var labelText: some View {
+        if let shortLabel {
+            ViewThatFits(in: .horizontal) {
+                Text(label).lineLimit(1)
+                Text(shortLabel).lineLimit(1).minimumScaleFactor(0.7)
+            }
+        } else {
+            Text(label)
+        }
+    }
+
     var body: some View {
         Button {
             if isAvailable {
@@ -204,7 +217,7 @@ struct ToggleButton: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption)
-                Text(label)
+                labelText
                     .font(.caption2)
             }
             .padding(.horizontal, 12)
@@ -866,6 +879,7 @@ struct UnifiedDiveChartOptimized: View {
                     isOn: .constant(true),
                     icon: "arrow.down.circle.fill",
                     label: "Depth",
+                    shortLabel: "Prof.",
                     color: .cyan,
                     isAvailable: true
                 )
@@ -874,6 +888,7 @@ struct UnifiedDiveChartOptimized: View {
                     isOn: exclusiveBinding(for: \.showTemperature),
                     icon: "thermometer",
                     label: "Temperature",
+                    shortLabel: "Temp.",
                     color: .green,
                     isAvailable: hasTemperatureData
                 )
@@ -892,6 +907,7 @@ struct UnifiedDiveChartOptimized: View {
                     isOn: exclusiveBinding(for: \.showPressure),
                     icon: "gauge.with.needle.fill",
                     label: "Pressure",
+                    shortLabel: "Press.",
                     color: .red,
                     isAvailable: hasPressureData
                 )
