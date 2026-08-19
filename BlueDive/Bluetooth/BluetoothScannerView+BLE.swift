@@ -394,7 +394,7 @@ extension BluetoothScannerView {
 
     // MARK: - Seed Lifecycle
 
-    private static let knownSentinelSerials: Set<String> = ["0", "00000000", "unknown", "n/a"]
+    static let knownSentinelSerials: Set<String> = ["0", "00000000", "unknown", "n/a"]
 
     func commitPendingSeed() {
         guard let seed = pendingDeviceStorageSeed else { return }

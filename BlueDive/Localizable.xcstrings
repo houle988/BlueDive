@@ -3662,6 +3662,23 @@
         }
       }
     },
+    "BlueDive ID" : {
+      "comment" : "Duplicate match reason: BlueDive SwiftData UUID matched via <id> tag",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive-ID"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID BlueDive"
+          }
+        }
+      }
+    },
     "BlueDive is not a photo album — keep photos to the most relevant shots. Up to 10 can be selected per import. Large collections may slow down iCloud sync." : {
       "localizations" : {
         "de" : {
@@ -18812,19 +18829,70 @@
         }
       }
     },
-    "Same dive computer ID" : {
-      "comment" : "Duplicate match reason: same dive computer identifier",
+    "Same dive computer & fingerprint" : {
+      "comment" : "Duplicate match reason: dive computer serial and dive fingerprint both matched",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gleiche Tauchcomputer-ID"
+            "value" : "Gleicher Tauchcomputer & Fingerabdruck"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Même identifiant d'ordinateur"
+            "value" : "Même ordinateur & empreinte de plongée"
+          }
+        }
+      }
+    },
+    "Same dive ID & profile" : {
+      "comment" : "Duplicate match reason: dive identifier matched and depth/duration profile corroborated it",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gleiche Tauch-ID & Profil"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Même ID de plongée & profil"
+          }
+        }
+      }
+    },
+    "Same dive ID & serial" : {
+      "comment" : "Duplicate match reason: dive identifier matched and both device serials confirmed equal",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gleiche Tauch-ID & Seriennummer"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Même ID de plongée & numéro de série"
+          }
+        }
+      }
+    },
+    "Same logbook record (Legacy)" : {
+      "comment" : "Duplicate match reason: BlueDive UUID matched via legacy identifier field in old export format",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gleicher Logbucheintrag (Legacy)"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Même enregistrement de carnet (Ancienne version)"
           }
         }
       }

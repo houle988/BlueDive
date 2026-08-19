@@ -369,19 +369,51 @@ extension ContentView {
     @MainActor
     func findDuplicateMatches(in parsed: [BlueDiveGlobalData]) -> [DuplicateImportMatch] {
         // Build lookup structures once so per-dive matching is O(1) instead of O(N).
-        // One-to-many dict: multiple existing dives can share the same identifier string
-        // (e.g. after a prior double-import). All candidates are kept; the best match is
-        // chosen by temporal proximity rather than silently discarding collision victims.
-        var divesByIdentifier: [String: [Dive]] = [:]
+        // divesByIdentifierLowercased: lowercased for case-insensitive O(1) lookup. One-to-many because
+        // multiple existing dives can share the same identifier (e.g. after a prior double-import or
+        // MacDive sequential IDs colliding across devices). Best match chosen by temporal proximity.
+        var divesByIdentifierLowercased: [String: [Dive]] = [:]
         for d in dives {
             let id = (d.identifier ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !id.isEmpty else { continue }
-            divesByIdentifier[id, default: []].append(d)
+            divesByIdentifierLowercased[id.lowercased(), default: []].append(d)
         }
         // Bucket existing dives by UTC minute; bucket radius is kept in sync with dateTolerance.
         let divesByMinute: [Int: [Dive]] = Dictionary(grouping: dives) {
             Int($0.timestamp.timeIntervalSince1970 / 60)
         }
+        // Keyed by SwiftData record id (lowercased) — distinct from Dive.identifier (per-dive
+        // computer ID). This is the permanent primary matcher for BLE/manual dives, whose
+        // identifier is nil by design (no dive computer assigns them one). The exporter writes
+        // <id> = dive.id.uuidString into every BlueDive XML, and Path A matches incoming.recordID
+        // against this dict. Not a temporary shim — do not collapse into divesByIdentifierLowercased.
+        let divesByRecordID: [String: Dive] = Dictionary(
+            dives.map { ($0.id.uuidString.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first } // defensive — SwiftData PKs are globally unique
+        )
+        // Pre-normalized serial keyed by Dive.id — avoids re-normalizing on every candidate
+        // inside the identifier loop and heuristic filter. Sentinel serials are excluded
+        // (normalizedComputerSerial returns nil for them) so absent means sentinel-or-nil.
+        let normalizedSerialByDiveID: [UUID: String] = Dictionary(
+            dives.compactMap { d in
+                guard let s = d.computerSerialNumber?.normalizedComputerSerial() else { return nil }
+                return (d.id, s)
+            },
+            uniquingKeysWith: { first, _ in first } // defensive — SwiftData PKs are globally unique
+        )
+        // Keyed by serial (lowercased) → fingerprint → Dive.
+        // Reuses normalizedSerialByDiveID to avoid a second normalisation pass. Sentinel serials
+        // are excluded. Used by Path B when the UUID fast-exit misses (e.g. cross-device export/import).
+        let divesBySerialFingerprint: [String: [Data: Dive]] = {
+            var dict: [String: [Data: Dive]] = [:]
+            for d in dives {
+                guard let serial = normalizedSerialByDiveID[d.id],
+                      let fp = d.fingerprintData,
+                      !fp.isEmpty else { continue }
+                dict[serial, default: [:]][fp] = d
+            }
+            return dict
+        }()
 
         var matches: [DuplicateImportMatch] = []
         var consumedExistingIDs = Set<UUID>()
@@ -389,8 +421,11 @@ extension ContentView {
             guard let (existing, reason) = findExistingDuplicate(
                 for: dive,
                 excluding: consumedExistingIDs,
-                divesByIdentifier: divesByIdentifier,
-                divesByMinute: divesByMinute
+                divesByIdentifierLowercased: divesByIdentifierLowercased,
+                divesByMinute: divesByMinute,
+                divesByRecordID: divesByRecordID,
+                divesBySerialFingerprint: divesBySerialFingerprint,
+                normalizedSerialByDiveID: normalizedSerialByDiveID
             ) else { continue }
             consumedExistingIDs.insert(existing.id)
             matches.append(DuplicateImportMatch(
@@ -411,38 +446,93 @@ extension ContentView {
     private func findExistingDuplicate(
         for incoming: BlueDiveGlobalData,
         excluding consumed: Set<UUID>,
-        divesByIdentifier: [String: [Dive]],
-        divesByMinute: [Int: [Dive]]
+        divesByIdentifierLowercased: [String: [Dive]],
+        divesByMinute: [Int: [Dive]],
+        divesByRecordID: [String: Dive],
+        divesBySerialFingerprint: [String: [Data: Dive]],
+        normalizedSerialByDiveID: [UUID: String]
     ) -> (Dive, DuplicateMatchReason)? {
+        let trimmedID = (incoming.identifier ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // MARK: BlueDive UUID fast-exit (Path A)
+        // Matches on <id> (the SwiftData UUID exported by BlueDiveXMLExporter) — distinct from
+        // <identifier> (computer-assigned ID). recordID is only populated by BlueDiveXMLParser;
+        // MacDive and UDDF parsers pass nil, so this block is naturally skipped for external imports.
+        // No sourceImport gate needed — recordID being non-nil is the definitive BlueDive XML signal.
+        //
+        // Note: DB rows created during the session window where Dive.init wrote identifier = id.uuidString
+        // (a since-reverted change) will emit both <id> = UUID and <identifier> = UUID. Path A matches
+        // on recordID first, so these rows still resolve correctly. No migration needed.
+        if let rid = incoming.recordID {
+            let loweredID = rid.lowercased()
+            let byRecordID = divesByRecordID[loweredID].flatMap { consumed.contains($0.id) ? nil : $0 }
+            if let match = byRecordID {
+                return (match, .sameRecord)
+            }
+        }
+
+        // MARK: BlueDive UUID legacy fast-exit (Path A-L)
+        // Old-format BlueDive XML (no <id> tag) wrote dive.id.uuidString into <identifier> as a
+        // fallback. When the identifier is a UUID, look it up in the same divesByRecordID dict as
+        // Path A — same PK, same evidence class, no profile check needed. Symmetric with Path A:
+        // new-format → A (UUID from <id>), old-format → A-L (UUID from <identifier>), then B.
+        // UUID(uuidString:) returns nil for MacDive sequential IDs ("42") and UDDF keys — safe.
+        if incoming.recordID == nil, UUID(uuidString: trimmedID) != nil {
+            let loweredID = trimmedID.lowercased()
+            let byRecordID = divesByRecordID[loweredID].flatMap { consumed.contains($0.id) ? nil : $0 }
+            if let match = byRecordID {
+                return (match, .sameRecordLegacy)
+            }
+        }
+
+        // Profile tolerances — shared by Path B, the identifier path, and the heuristic.
+        // BlueDiveGlobalData.duration is seconds; Dive.duration is stored in minutes (floor).
+        let depthToleranceMeters = 1.0
+        let durationToleranceMin = 2
+        let incomingDurationMin = incoming.duration / 60
+        let incomingDepthMeters = depthInMeters(incoming.maxDepth, unit: incoming.distanceFormat)
+
+        // MARK: Serial + fingerprint match (Path B)
+        // Not gated on sourceImport: any file (BlueDive, UDDF, re-exported) carrying serial +
+        // fingerprint benefits from this high-confidence path.
+        // Fires when the local DB holds a dive with the same serial+fingerprint but a different
+        // SwiftData id — e.g. a BLE-synced dive exported and re-imported on another device.
+        // Profile sanity (depth ±1m, duration ±2min) guards against fingerprint reuse after a
+        // firmware reset — a documented risk where firmware updates recycle fingerprint values for
+        // genuinely different dives. A recycled fingerprint always has a different profile; a
+        // genuine re-import always passes regardless of clock drift. On mismatch, fall through so
+        // the identifier/heuristic paths can still attempt a match.
+        if let serialKey = (incoming.serial ?? "").normalizedComputerSerial(),
+           let fp = incoming.fingerprintData, !fp.isEmpty,
+           let match = divesBySerialFingerprint[serialKey]?[fp],
+           !consumed.contains(match.id) {
+            let matchDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
+            if abs(matchDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
+               abs(match.duration - incomingDurationMin) <= durationToleranceMin {
+                return (match, .sameComputerAndFingerprint)
+            }
+            // Profile mismatch — suspected recycled fingerprint after firmware reset. Fall through.
+        }
+
         // Tracks dives proven to belong to a different computer via identifier path.
         // Prevents the heuristic path from re-matching a dive already ruled out by serial mismatch
         // or a failed profile sanity check. Scoped per call so other incoming dives can still claim them.
         var identifierRejectedIDs = Set<UUID>()
 
-        // Heuristic tolerances — also reused by the identifier path for profile sanity (H1 fix).
         let dateTolerance: TimeInterval = 180
-        let durationToleranceMin = 2
-        let depthToleranceMeters = 1.0
 
-        // Pre-compute incoming values once; both paths use them.
-        // BlueDiveGlobalData.duration is seconds; Dive.duration is stored in minutes (floor).
-        let incomingDurationMin = incoming.duration / 60
-        let incomingDepthMeters = depthInMeters(incoming.maxDepth, unit: incoming.distanceFormat)
         let incomingSiteName = (incoming.site?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let incomingSerial = (incoming.serial ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let incomingSerial = (incoming.serial ?? "").normalizedComputerSerial() ?? ""
+        let incomingDiverName = (incoming.diver ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
         // MARK: Identifier path
-        // O(1) lookup — computer UID survives unit changes and edits.
-        // Skipped entirely when incoming has no date (nil-date .min is non-deterministic).
-        let trimmedID = (incoming.identifier ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // Computer UID survives unit changes and edits; lookup is O(1) via the pre-lowercased
+        // dict. Skipped entirely when incoming has no date (nil-date .min is non-deterministic).
+        // UUID identifiers from old-format BlueDive XML are intercepted by Path A-L above,
+        // so trimmedID here is always a non-UUID computer ID (MacDive "42", UDDF keys, etc.).
         if !trimmedID.isEmpty, let incomingDate = incoming.date {
-            // M3: divesByIdentifier keys are exact-case from the caller; collect all candidates
-            // whose key case-folds equal to trimmedID so "42A" matches "42a".
             let loweredID = trimmedID.lowercased()
-            var idCandidates: [Dive] = []
-            for (key, dives) in divesByIdentifier where key.lowercased() == loweredID {
-                idCandidates.append(contentsOf: dives)
-            }
+            let idCandidates = divesByIdentifierLowercased[loweredID] ?? []
 
             // H2: try all candidates in temporal order, not just the nearest one.
             // A later candidate may have a better serial match even if the nearest one is rejected.
@@ -457,18 +547,31 @@ extension ContentView {
                 }
 
             for match in sortedCandidates {
-                let existingSerial = (match.computerSerialNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let existingSerial = normalizedSerialByDiveID[match.id] ?? ""
                 let bothSerialsMatch = !incomingSerial.isEmpty && !existingSerial.isEmpty && incomingSerial == existingSerial
                 // When both serials are confirmed equal, allow 24 h of clock drift / timezone
                 // ambiguity. Otherwise tighten to 2 h to reduce cross-diver false positives
                 // (MacDive uses sequential numbers like "42" as identifiers).
-                let dateLimit: TimeInterval = bothSerialsMatch ? 86_400 : 7_200
+                let dateLimit: TimeInterval = bothSerialsMatch ? deduplicationHighConfidenceWindow : deduplicationLowConfidenceWindow
                 let deltaT = abs(match.timestamp.timeIntervalSince(incomingDate))
 
                 // Candidates are sorted nearest-first, but dateLimit varies per candidate
                 // (a later candidate may have bothSerialsMatch and a larger window), so
                 // skip rather than break.
                 guard deltaT < dateLimit else { continue }
+
+                // Diver name discriminator: different name on a shared identifier means a
+                // different person's dive — reject and block the heuristic path.
+                // Skipped when both serials confirm the same physical device: serial identity
+                // is stronger evidence than a name string, which can legitimately differ across
+                // devices after a rename or different profile preferences on each device.
+                let existingDiverName = match.diverName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !bothSerialsMatch,
+                   !incomingDiverName.isEmpty, !existingDiverName.isEmpty,
+                   existingDiverName.compare(incomingDiverName, options: [.caseInsensitive, .diacriticInsensitive]) != .orderedSame {
+                    identifierRejectedIDs.insert(match.id)
+                    continue
+                }
 
                 let atLeastOneSerial = !incomingSerial.isEmpty || !existingSerial.isEmpty
                 let serialsCompatible = incomingSerial.isEmpty || existingSerial.isEmpty || incomingSerial == existingSerial
@@ -477,15 +580,15 @@ extension ContentView {
                     if deltaT <= dateTolerance && bothSerialsMatch {
                         // Both serials confirmed equal and within heuristic date window — maximum
                         // confidence. Trust identifier + serial directly; no profile check needed.
-                        return (match, .sameIdentifier)
+                        return (match, .sameComputerDiveID)
                     }
                     // Outside the heuristic window, or serials not both confirmed: require depth +
-                    // duration sanity before declaring .sameIdentifier. Guards against firmware
+                    // duration sanity before declaring .sameIdentifierAndProfile. Guards against firmware
                     // resets that recycle dive IDs — even within a short time window.
                     let existingDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
                     if abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
                        abs(match.duration - incomingDurationMin) <= durationToleranceMin {
-                        return (match, .sameIdentifier)
+                        return (match, .sameIdentifierAndProfile)
                     }
                     // Profile validation failed — proven wrong dive despite matching identifier+serial.
                     // Block the heuristic from re-matching this candidate.
@@ -532,8 +635,21 @@ extension ContentView {
                 // Serial discriminator: when both sides carry a serial number they must match.
                 // Prevents a buddy's simultaneous dive (different computer) from being flagged
                 // as a duplicate when profiles overlap and neither side has a site name.
-                let existingSerial = (existing.computerSerialNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let existingSerial = normalizedSerialByDiveID[existing.id] ?? ""
                 if !incomingSerial.isEmpty, !existingSerial.isEmpty, incomingSerial != existingSerial {
+                    return false
+                }
+                // Diver name discriminator: when both sides carry a diver name they must match.
+                // Prevents a dive partner's simultaneous dive from being flagged as a duplicate
+                // when profiles overlap and neither serial nor site name is available.
+                // Guard is intentionally "both non-empty AND differ": if either side has no diver
+                // name (e.g. a dive imported from an older MacDive export that omitted diver info),
+                // the check is skipped to preserve backward compatibility with pre-name records.
+                // The residual risk — a false positive when profiles overlap and one side has no
+                // name — is accepted as lower than missing duplicates for all legacy imports.
+                let existingDiverName = existing.diverName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !incomingDiverName.isEmpty, !existingDiverName.isEmpty,
+                   existingDiverName.compare(incomingDiverName, options: [.caseInsensitive, .diacriticInsensitive]) != .orderedSame {
                     return false
                 }
                 return true
@@ -616,7 +732,11 @@ extension ContentView {
             diverName: diveData.diver ?? UserDefaults.standard.string(forKey: "userName") ?? "",
             buddies: buddiesString,
             rating: diveData.rating ?? 0,
-            isRepetitiveDive: diveData.sourceImport == "MacDive"
+            // MacDive uses 1-indexed repetitiveDive; BlueDive XML exports a boolean 0/1.
+            // Gate on isBlueDiveXMLImport — not recordID or sourceImport — because the new
+            // parser preserves the real sourceImport (e.g. "MacDive"), which would falsely
+            // trigger the 1-indexed path for BlueDive XML round-trips of MacDive-origin dives.
+            isRepetitiveDive: (!diveData.isBlueDiveXMLImport && diveData.sourceImport == "MacDive")
                 ? (diveData.repetitiveDive ?? 1) > 1
                 : (diveData.repetitiveDive ?? 0) > 0,
             weights: diveData.weight,
@@ -735,10 +855,13 @@ extension ContentView {
                 let rawType = gearItem.type ?? "other"
                 let category = mapMacDiveGearType(rawType)
 
-                // BlueDive exports store the full name in <name>; MacDive stores only the model,
-                // so the manufacturer must be prepended for MacDive imports.
+                // BlueDive XML stores fully-formed gear names (manufacturer already included).
+                // MacDive stores only the model — manufacturer must be prepended on first import.
+                // Gate on isBlueDiveXMLImport — not sourceImport — because the new parser
+                // preserves the real sourceImport value (e.g. "MacDive"), which would falsely
+                // skip the stored name for old-format BlueDive XML files of MacDive-origin gear.
                 let gearName: String
-                if diveData.sourceImport == "BlueDive" {
+                if diveData.isBlueDiveXMLImport {
                     gearName = gearItem.name
                 } else if let manufacturer = gearItem.manufacturer, !manufacturer.isEmpty {
                     gearName = "\(manufacturer) \(gearItem.name)"

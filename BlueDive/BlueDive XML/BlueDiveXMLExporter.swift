@@ -126,7 +126,8 @@ enum BlueDiveXMLExporter {
         // Basic Info
         lines.append("    <!-- BlueDiveGlobalData: Basic Info -->")
         lines.append(xmlTag("date",           formatDate(dive.timestamp),                    indent: 4))
-        lines.append(xmlTag("identifier",     dive.identifier ?? "",                         indent: 4))
+        lines.append(xmlTag("id",               dive.id.uuidString,                            indent: 4))
+        lines.append(xmlTag("identifier",      dive.identifier ?? "",                         indent: 4))
         lines.append(xmlTag("diveNumber",     dive.diveNumber.map(String.init) ?? "",        indent: 4))
         lines.append(xmlTag("rating",         String(dive.rating),                           indent: 4))
         lines.append(xmlTag("repetitiveDive", dive.isRepetitiveDive ? "1" : "0",             indent: 4))

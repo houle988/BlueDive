@@ -840,12 +840,14 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             volumeFormat: "liters",
             weightFormat: "kg",
             sourceImport: "UDDF",
+            isBlueDiveXMLImport: false,
             date: currentDate,
             // UDDF <dive id="..."> is a file-local cross-reference key (dive_1, dive_2, …)
             // that changes on every export — it is not a stable per-dive identifier.
             // Setting nil here ensures UDDF dives are matched via the date/depth/duration
             // heuristic only, preventing false-positive collisions across different UDDF files.
             identifier: nil,
+            recordID: nil,
             diveNumber: currentDiveNumber,
             rating: currentRating,
             repetitiveDive: currentRepetitiveDive,

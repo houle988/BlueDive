@@ -15,23 +15,67 @@ struct DuplicateImportMatch: Identifiable {
 }
 
 enum DuplicateMatchReason: Sendable {
-    case sameIdentifier
+    /// BlueDive SwiftData UUID matched via <id> tag (Path A).
+    case sameRecord
+    /// BlueDive SwiftData UUID matched via legacy <identifier> fallback — old exports without <id> tag.
+    case sameRecordLegacy
+    /// Dive computer serial + libdcswift fingerprint both matched (Path B).
+    case sameComputerAndFingerprint
+    /// Dive computer identifier matched and both device serials confirmed equal (Path C).
+    case sameComputerDiveID
+    /// Dive computer identifier matched; profile (depth + duration) corroborated it; serial unconfirmed on one side (Path D).
+    case sameIdentifierAndProfile
+    /// Heuristic: date, depth, and duration all within tolerance; no identifier available.
     case sameDateAndProfile
 
     var label: String {
         let bundle = Bundle.forAppLanguage()
         switch self {
-        case .sameIdentifier:
-            return NSLocalizedString("Same dive computer ID", bundle: bundle, comment: "Duplicate match reason: same dive computer identifier")
+        case .sameRecord:
+            return NSLocalizedString("BlueDive ID", bundle: bundle, value: "BlueDive ID", comment: "Duplicate match reason: BlueDive SwiftData UUID matched via <id> tag")
+        case .sameRecordLegacy:
+            return NSLocalizedString("Same logbook record (Legacy)", bundle: bundle, value: "Same logbook record (Legacy)", comment: "Duplicate match reason: BlueDive UUID matched via legacy identifier field in old export format")
+        case .sameComputerAndFingerprint:
+            return NSLocalizedString("Same dive computer & fingerprint", bundle: bundle, value: "Same dive computer & fingerprint", comment: "Duplicate match reason: dive computer serial and dive fingerprint both matched")
+        case .sameComputerDiveID:
+            return NSLocalizedString("Same dive ID & serial", bundle: bundle, value: "Same dive ID & serial", comment: "Duplicate match reason: dive identifier matched and both device serials confirmed equal")
+        case .sameIdentifierAndProfile:
+            return NSLocalizedString("Same dive ID & profile", bundle: bundle, value: "Same dive ID & profile", comment: "Duplicate match reason: dive identifier matched and depth/duration profile corroborated it")
         case .sameDateAndProfile:
-            return NSLocalizedString("Same date, depth and duration", bundle: bundle, comment: "Duplicate match reason: heuristic match on date, depth and duration")
+            return NSLocalizedString("Same date, depth and duration", bundle: bundle, value: "Same date, depth and duration", comment: "Duplicate match reason: heuristic match on date, depth and duration")
         }
     }
 
     var icon: String {
         switch self {
-        case .sameIdentifier:     return "barcode.viewfinder"
-        case .sameDateAndProfile: return "calendar.badge.clock"
+        case .sameRecord:                 return "doc.badge.checkmark"
+        case .sameRecordLegacy:           return "clock.badge.checkmark"
+        case .sameComputerAndFingerprint: return "wave.3.right.circle"
+        case .sameComputerDiveID:         return "barcode.viewfinder"
+        case .sameIdentifierAndProfile:   return "number.square"
+        case .sameDateAndProfile:         return "calendar.badge.clock"
+        }
+    }
+}
+
+// MARK: - Match Confidence
+
+extension DuplicateMatchReason {
+    enum Confidence { case high, medium, low }
+
+    var confidence: Confidence {
+        switch self {
+        case .sameRecord, .sameRecordLegacy, .sameComputerAndFingerprint: return .high
+        case .sameComputerDiveID, .sameIdentifierAndProfile:              return .medium
+        case .sameDateAndProfile:                                          return .low
+        }
+    }
+
+    var tintColor: Color {
+        switch confidence {
+        case .high:   return .green
+        case .medium: return .orange
+        case .low:    return .red
         }
     }
 }
@@ -300,7 +344,7 @@ struct DuplicateImportSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: match.reason.icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(match.reason.tintColor)
                     .frame(width: 20)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(match.incomingSiteName.isEmpty
@@ -333,9 +377,9 @@ struct DuplicateImportSheet: View {
                 }
             }
             HStack(spacing: 6) {
-                Image(systemName: "link")
+                Image(systemName: match.reason.icon)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(match.reason.tintColor.opacity(0.8))
                 Text(verbatim: match.reason.label)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -345,8 +389,8 @@ struct DuplicateImportSheet: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.orange.opacity(0.08))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.orange.opacity(0.25), lineWidth: 1))
+                .fill(match.reason.tintColor.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(match.reason.tintColor.opacity(0.25), lineWidth: 1))
         )
     }
 
