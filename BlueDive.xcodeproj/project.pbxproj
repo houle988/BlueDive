@@ -677,7 +677,7 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/houle988/libdc-swift";
 			requirement = {
-				branch = main;
+				branch = working;
 				kind = branch;
 			};
 		};

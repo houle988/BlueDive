@@ -63,6 +63,7 @@ struct BluetoothScannerView: View {
     @State var peripheralForReassociationPicker: CBPeripheral?
     @State var reassociationCandidates: [ReassociationCandidate] = []
     @State var showingReassociationAlert = false
+    @State var isPartialSync: Bool = false
 
     // Logger for debugging
     static let logger = Logger(subsystem: "com.bluedive.app", category: "Bluetooth")
@@ -109,15 +110,20 @@ struct BluetoothScannerView: View {
                     downloadedDives = []
                     selectedDevice = nil
                     connectedDeviceName = nil
+                    isPartialSync = false
                     syncState = .idle
                 }
                 Button("Import") {
                     importDownloadedDives()
                 }
             } message: {
-                Text(verbatim: downloadedDives.count == 1
+                let base = downloadedDives.count == 1
                     ? NSLocalizedString("Do you want to import 1 dive from your dive computer?", bundle: .forAppLanguage(), comment: "An alert message asking the user to confirm importing exactly one dive from their dive computer.")
-                    : String(format: NSLocalizedString("Do you want to import %lld dives from your dive computer?", bundle: .forAppLanguage(), comment: "An alert message asking the user to confirm importing multiple dives from their dive computer."), downloadedDives.count))
+                    : String(format: NSLocalizedString("Do you want to import %lld dives from your dive computer?", bundle: .forAppLanguage(), comment: "An alert message asking the user to confirm importing multiple dives from their dive computer."), downloadedDives.count)
+                let partial = isPartialSync
+                    ? "\n\n" + NSLocalizedString("Sync was incomplete — one or more older dives on the device could not be read.", bundle: .forAppLanguage(), value: "Sync was incomplete — one or more older dives on the device could not be read.", comment: "Note appended to the import confirmation alert when a BLE sync completed only partially due to a protocol error on the dive computer (e.g. a corrupt dive slot).")
+                    : ""
+                Text(verbatim: base + partial)
             }
             .onAppear {
                 // Don't auto-scan; show known devices first
