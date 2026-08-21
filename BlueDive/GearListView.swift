@@ -733,7 +733,7 @@ struct GearListView: View {
         pendingGearCSVData = nil
         let fileName = pendingGearCSVFileName
         pendingGearCSVFileName = ""
-        let diverName = UserDefaults.standard.string(forKey: "userName") ?? ""
+        let diverName = ""
         let weightFormat = csvFormatOptions.weightFormat
 
         Task {

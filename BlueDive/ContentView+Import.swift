@@ -370,22 +370,62 @@ extension ContentView {
             // Lazy cache: actual Gear objects from the main context, fetched by UUID on first use.
             var resolvedGearByID: [UUID: Gear] = [:]
 
-            // Find the highest existing dive number so imported dives without one continue the sequence.
-            // Mirrors the BLE import path (BluetoothScannerView+Import.swift).
-            let hasNumberPredicate = #Predicate<Dive> { dive in dive.diveNumber != nil }
-            var maxNumberDescriptor = FetchDescriptor<Dive>(
-                predicate: hasNumberPredicate,
-                sortBy: [SortDescriptor(\Dive.diveNumber, order: .reverse)]
-            )
-            maxNumberDescriptor.fetchLimit = 1
-            var nextAutoNumber = ((try? modelContext.fetch(maxNumberDescriptor).first?.diveNumber) ?? 0) + 1
+            // Pre-resolve diver names for every dive. FIT files carry a device serial but may omit a
+            // UserProfile name; we look up the gear computer by serial to find the associated diver.
+            // Results are cached by serial so a batch from the same device triggers only one DB fetch.
+            var gearNameBySerial: [String: String] = [:]
+            var resolvedDiverNameByIndex: [Int: String] = [:]
+            for idx in indices {
+                guard parsed.indices.contains(idx) else { continue }
+                let embedded = parsed[idx].diver?.trimmingCharacters(in: .whitespaces) ?? ""
+                if !embedded.isEmpty {
+                    resolvedDiverNameByIndex[idx] = embedded
+                } else if let serial = parsed[idx].serial?.trimmingCharacters(in: .whitespaces), !serial.isEmpty {
+                    if let cached = gearNameBySerial[serial] {
+                        resolvedDiverNameByIndex[idx] = cached
+                    } else {
+                        let name = resolveGearDiverName(forSerial: serial, in: modelContext)
+                        gearNameBySerial[serial] = name
+                        resolvedDiverNameByIndex[idx] = name
+                    }
+                } else {
+                    resolvedDiverNameByIndex[idx] = ""
+                }
+            }
+
+            // Find the highest existing dive number per diver so imported dives without one
+            // continue their own diver's sequence independently. Build the set of unique diver
+            // names that need auto-numbering, then query each bucket's max once before the loop.
+            // Dives that already carry a number from the source file are skipped entirely.
+            let diverNamesNeedingNumbers: Set<String> = Set(indices.compactMap { idx -> String? in
+                guard parsed.indices.contains(idx), parsed[idx].diveNumber == nil else { return nil }
+                return resolvedDiverNameByIndex[idx] ?? ""
+            })
+            var nextAutoNumberByDiver: [String: Int] = [:]
+            for diverName in diverNamesNeedingNumbers {
+                let targetName = diverName
+                var diverDescriptor = FetchDescriptor<Dive>(
+                    predicate: #Predicate<Dive> { dive in
+                        dive.diveNumber != nil && dive.diverName == targetName
+                    },
+                    sortBy: [SortDescriptor(\Dive.diveNumber, order: .reverse)]
+                )
+                diverDescriptor.fetchLimit = 1
+                let highest = (try? modelContext.fetch(diverDescriptor).first?.diveNumber) ?? 0
+                nextAutoNumberByDiver[diverName] = highest + 1
+            }
 
             var batch = 0
             for index in indices {
                 guard parsed.indices.contains(index) else { continue }
-                let autoNumber: Int? = parsed[index].diveNumber == nil ? nextAutoNumber : nil
-                if autoNumber != nil { nextAutoNumber += 1 }
-                insertParsedDive(parsed[index], assignedDiveNumber: autoNumber, fileName: fileName, snapshotByID: &snapshotByID, snapshotByMatchKey: &snapshotByMatchKey, resolvedGearByID: &resolvedGearByID)
+                var autoNumber: Int? = nil
+                if parsed[index].diveNumber == nil {
+                    let diverName = resolvedDiverNameByIndex[index] ?? ""
+                    let current = nextAutoNumberByDiver[diverName] ?? 1
+                    autoNumber = current
+                    nextAutoNumberByDiver[diverName] = current + 1
+                }
+                insertParsedDive(parsed[index], assignedDiveNumber: autoNumber, overrideDiverName: resolvedDiverNameByIndex[index], fileName: fileName, snapshotByID: &snapshotByID, snapshotByMatchKey: &snapshotByMatchKey, resolvedGearByID: &resolvedGearByID)
                 batch += 1
                 importProgressCurrent = batch
                 if batch % 25 == 0 {
@@ -713,7 +753,7 @@ extension ContentView {
     // MARK: - MacDive XML Import
     
     @MainActor
-    func insertParsedDive(_ diveData: BlueDiveGlobalData, assignedDiveNumber: Int? = nil, fileName: String, snapshotByID: inout [UUID: GearSnapshot], snapshotByMatchKey: inout [String: GearSnapshot], resolvedGearByID: inout [UUID: Gear]) {
+    func insertParsedDive(_ diveData: BlueDiveGlobalData, assignedDiveNumber: Int? = nil, overrideDiverName: String? = nil, fileName: String, snapshotByID: inout [UUID: GearSnapshot], snapshotByMatchKey: inout [String: GearSnapshot], resolvedGearByID: inout [UUID: Gear]) {
         // Convert MacDive samples to DiveProfilePoints
         let profilePoints = diveData.samples.map { sample in
             DiveProfilePoint(
@@ -770,7 +810,7 @@ extension ContentView {
             computerName: diveData.computer ?? "",
             computerSerialNumber: diveData.serial,
             surfaceInterval: surfaceIntervalString,
-            diverName: diveData.diver ?? UserDefaults.standard.string(forKey: "userName") ?? "",
+            diverName: overrideDiverName ?? diveData.diver?.trimmingCharacters(in: .whitespaces) ?? "",
             buddies: buddiesString,
             rating: diveData.rating ?? 0,
             // MacDive uses 1-indexed repetitiveDive; BlueDive XML exports a boolean 0/1.
