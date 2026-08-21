@@ -755,7 +755,7 @@ extension ContentView {
         
         // Calculate average depth if not provided
         let averageDepth = diveData.averageDepth ?? (profilePoints.isEmpty
-            ? diveData.maxDepth * 0.6
+            ? 0.0
             : profilePoints.reduce(0.0) { $0 + $1.depth } / Double(profilePoints.count))
         
         // Create the dive with all MacDive information
