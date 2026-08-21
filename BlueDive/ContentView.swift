@@ -13,6 +13,7 @@ import AppKit
 
 extension UTType {
     static let uddf = UTType(importedAs: "org.uddf.uddf")
+    static let garminFIT = UTType(importedAs: "com.garmin.fit")
 }
 
 // Must match `appGroupSuite` in BlueDiveWidgetExtension.swift.
@@ -493,7 +494,7 @@ struct ContentView: View {
             #endif
             .fileImporter(
                 isPresented: $showFileImporter,
-                allowedContentTypes: [.xml, .uddf],
+                allowedContentTypes: [.xml, .uddf, .garminFIT],
                 allowsMultipleSelection: false
             ) { result in
                 handleFileImport(result: result)

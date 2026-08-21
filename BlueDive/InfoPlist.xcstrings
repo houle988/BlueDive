@@ -27,19 +27,41 @@
       },
       "shouldTranslate" : false
     },
+    "Garmin FIT Activity" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garmin-FIT-Aktivität"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garmin FIT Activity"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activité Garmin FIT"
+          }
+        }
+      }
+    },
     "NSBluetoothAlwaysUsageDescription" : {
       "comment" : "Permission message shown when the app requests Bluetooth access to connect to a dive computer.",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive nutzt Bluetooth, um eine Verbindung zu deinem Tauchcomputer herzustellen."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "BlueDive uses Bluetooth to connect to your dive computer."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "BlueDive nutzt Bluetooth, um eine Verbindung zu deinem Tauchcomputer herzustellen."
           }
         },
         "fr-CA" : {
@@ -53,16 +75,16 @@
     "NSLocationWhenInUseUsageDescription" : {
       "comment" : "Permission message shown when the app requests location access to display the user's position on the dive map.",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive nutzt deinen Standort, um deine Position auf der Tauchkarte anzuzeigen."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "BlueDive uses your location to show your position on the dive map."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "BlueDive nutzt deinen Standort, um deine Position auf der Tauchkarte anzuzeigen."
           }
         },
         "fr-CA" : {

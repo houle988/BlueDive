@@ -823,9 +823,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         // Build notes from para elements
         let notes = currentNotes.isEmpty ? nil : currentNotes.joined(separator: "\n")
 
-        // Surface interval: UDDF gives seconds, the app expects minutes for MacDive imports
-        // but our insertDiveFromMacDive expects the surfaceInterval field in minutes
-        // (MacDive exports surfaceInterval in minutes)
+        // Surface interval: UDDF gives seconds, but insertParsedDive expects minutes
+        // (MacDive exports surfaceInterval in minutes, so that convention is used throughout)
         let surfaceIntervalMinutes: Int?
         if let si = currentSurfaceInterval, si > 0 {
             surfaceIntervalMinutes = si / 60

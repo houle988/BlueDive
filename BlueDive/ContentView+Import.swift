@@ -10,6 +10,7 @@ enum ImportFileType {
     case blueDive
     case uddf
     case gearCSV
+    case garminFIT
 }
 
 // MARK: - Import Error
@@ -38,7 +39,7 @@ enum ImportError: LocalizedError {
             let fmt = NSLocalizedString("Save error: %@", bundle: bundle, comment: "")
             return String(format: fmt, error.localizedDescription)
         case .unsupportedFormat:
-            return NSLocalizedString("Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, and UDDF.", bundle: bundle, comment: "")
+            return NSLocalizedString("Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, and Garmin FIT.", bundle: bundle, value: "Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, and Garmin FIT.", comment: "Error message displayed when an unsupported file format is selected for import.")
         }
     }
 }
@@ -107,6 +108,15 @@ extension ContentView {
                 // ── Format detection ──────────────────────────────────────────────
                 // Priority order matters: check the most specific signatures first.
 
+                // 0. Garmin FIT — binary format; check raw bytes before UTF-8 decode.
+                //    FIT signature: ".FIT" (0x2E 0x46 0x49 0x54) at byte offset 8.
+                let isGarminFIT: Bool = {
+                    guard let data = rawData, data.count >= 12 else { return false }
+                    let sig = data.subdata(in: 8..<12)
+                    return sig.elementsEqual([0x2E, 0x46, 0x49, 0x54])
+                        || url.pathExtension.lowercased() == "fit"
+                }()
+
                 // 1. BlueDive XML — our own export format.
                 //    Signature: <software>BlueDive</software> inside <metadata>.
                 let isBlueDive = snippet.contains("<software>BlueDive</software>")
@@ -126,7 +136,16 @@ extension ContentView {
                 )
 
                 await MainActor.run {
-                    if isBlueDive {
+                    if isGarminFIT {
+                        // Garmin FIT — SI units are embedded; show the options sheet
+                        // for confirm/cancel parity with UDDF (no unit pickers, no gear toggle).
+                        let options = ImportFormatOptions()
+                        importFormatOptions = options
+                        if let data = rawData {
+                            pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .garminFIT)
+                        }
+
+                    } else if isBlueDive {
                         // BlueDive XML — units are stored inside the file but we
                         // still show the import sheet so the user can toggle gear import.
                         let options = ImportFormatOptions()
@@ -241,6 +260,8 @@ extension ContentView {
             parsed = try parseUDDFXML(data: data, importGear: formats.importGear)
         case .gearCSV:
             throw ImportError.unsupportedFormat
+        case .garminFIT:
+            parsed = try parseGarminFIT(data: data)
         }
         return parsed.filter { $0.date != nil }
     }
@@ -262,6 +283,14 @@ extension ContentView {
     private func parseBlueDiveXML(data: Data, importGear: Bool) throws -> [BlueDiveGlobalData] {
         let parser = BlueDiveXMLParser()
         parser.importGear = importGear
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    private func parseGarminFIT(data: Data) throws -> [BlueDiveGlobalData] {
+        let parser = GarminFITParser()
         guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
             throw ImportError.parsingFailed
         }
@@ -341,10 +370,22 @@ extension ContentView {
             // Lazy cache: actual Gear objects from the main context, fetched by UUID on first use.
             var resolvedGearByID: [UUID: Gear] = [:]
 
+            // Find the highest existing dive number so imported dives without one continue the sequence.
+            // Mirrors the BLE import path (BluetoothScannerView+Import.swift).
+            let hasNumberPredicate = #Predicate<Dive> { dive in dive.diveNumber != nil }
+            var maxNumberDescriptor = FetchDescriptor<Dive>(
+                predicate: hasNumberPredicate,
+                sortBy: [SortDescriptor(\Dive.diveNumber, order: .reverse)]
+            )
+            maxNumberDescriptor.fetchLimit = 1
+            var nextAutoNumber = ((try? modelContext.fetch(maxNumberDescriptor).first?.diveNumber) ?? 0) + 1
+
             var batch = 0
             for index in indices {
                 guard parsed.indices.contains(index) else { continue }
-                insertDiveFromMacDive(parsed[index], fileName: fileName, snapshotByID: &snapshotByID, snapshotByMatchKey: &snapshotByMatchKey, resolvedGearByID: &resolvedGearByID)
+                let autoNumber: Int? = parsed[index].diveNumber == nil ? nextAutoNumber : nil
+                if autoNumber != nil { nextAutoNumber += 1 }
+                insertParsedDive(parsed[index], assignedDiveNumber: autoNumber, fileName: fileName, snapshotByID: &snapshotByID, snapshotByMatchKey: &snapshotByMatchKey, resolvedGearByID: &resolvedGearByID)
                 batch += 1
                 importProgressCurrent = batch
                 if batch % 25 == 0 {
@@ -672,7 +713,7 @@ extension ContentView {
     // MARK: - MacDive XML Import
     
     @MainActor
-    func insertDiveFromMacDive(_ diveData: BlueDiveGlobalData, fileName: String, snapshotByID: inout [UUID: GearSnapshot], snapshotByMatchKey: inout [String: GearSnapshot], resolvedGearByID: inout [UUID: Gear]) {
+    func insertParsedDive(_ diveData: BlueDiveGlobalData, assignedDiveNumber: Int? = nil, fileName: String, snapshotByID: inout [UUID: GearSnapshot], snapshotByMatchKey: inout [String: GearSnapshot], resolvedGearByID: inout [UUID: Gear]) {
         // Convert MacDive samples to DiveProfilePoints
         let profilePoints = diveData.samples.map { sample in
             DiveProfilePoint(
@@ -719,11 +760,11 @@ extension ContentView {
         
         // Create the dive with all MacDive information
         let newDive = Dive(
-            diveNumber: diveData.diveNumber,
+            diveNumber: diveData.diveNumber ?? assignedDiveNumber,
             identifier: diveData.identifier,
             timestamp: diveData.date ?? Date(),
             location: diveData.site?.location ?? "",
-            siteName: diveData.site?.name ?? NSLocalizedString("Unknown site", bundle: .forAppLanguage(), comment: "Fallback site name when an imported dive has no site name"),
+            siteName: (diveData.site?.name).flatMap { $0.isEmpty ? nil : $0 } ?? NSLocalizedString("Unknown site", bundle: .forAppLanguage(), comment: "Fallback site name when an imported dive has no site name"),
             diveTypes: diveData.types.isEmpty ? nil : diveData.types.joined(separator: ", "),
             tags: diveData.tags,
             computerName: diveData.computer ?? "",
