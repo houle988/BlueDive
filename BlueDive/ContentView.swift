@@ -13,6 +13,7 @@ import AppKit
 
 extension UTType {
     static let uddf = UTType(importedAs: "org.uddf.uddf")
+    static let garminFIT = UTType(importedAs: "com.garmin.fit")
 }
 
 // Must match `appGroupSuite` in BlueDiveWidgetExtension.swift.
@@ -112,6 +113,7 @@ struct ContentView: View {
     @State private var collapsedDiverSections: Set<String> = []
     @State private var diveIndexLookup: [Dive.ID: Int] = [:]
     private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: dives, insurances: allInsurances) }
+    private var hasUnnamedDives: Bool { dives.contains { $0.diverName.trimmingCharacters(in: .whitespaces).isEmpty } }
 
     enum DiveSortOrder: String, CaseIterable, Identifiable {
         case dateDesc       = "dateDesc"
@@ -493,7 +495,7 @@ struct ContentView: View {
             #endif
             .fileImporter(
                 isPresented: $showFileImporter,
-                allowedContentTypes: [.xml, .uddf],
+                allowedContentTypes: [.xml, .uddf, .garminFIT],
                 allowsMultipleSelection: false
             ) { result in
                 handleFileImport(result: result)
@@ -932,7 +934,7 @@ struct ContentView: View {
                 .transition(.opacity)
             } else {
                 let filteredDiverCount = Set(displayedDives.map { $0.diverName.trimmingCharacters(in: .whitespaces) }).count
-                let showGrouped = selectedDiver.isEmpty && uniqueDivers.count > 1 && filteredDiverCount > 1
+                let showGrouped = selectedDiver.isEmpty && filteredDiverCount > 1
                 if showGrouped {
                     let grouped = groupedDives(from: displayedDives)
                     List {
@@ -1071,7 +1073,7 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver, hasUnnamedDives: hasUnnamedDives)
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         ToolbarItem(placement: .navigation) {
@@ -1449,7 +1451,7 @@ struct ContentView: View {
             siteName: "",
             computerName: "",
             surfaceInterval: surfaceInterval,
-            diverName: UserDefaults.standard.string(forKey: "userName") ?? "",
+            diverName: "",
             maxDepth: 0,
             averageDepth: 0,
             duration: 0,

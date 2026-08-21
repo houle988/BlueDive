@@ -1112,17 +1112,10 @@ extension DiveDetailView {
                     Text("Dive #")
                         .font(.caption)
                         .foregroundStyle(.gray)
-                    if let diveNumber = dive.diveNumber {
-                        Text(verbatim: "\(diveNumber)")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-                    } else {
-                        Text("—")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(verbatim: "\(dive.diveNumber ?? diveNumber)")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
                 }
 
                 Spacer()

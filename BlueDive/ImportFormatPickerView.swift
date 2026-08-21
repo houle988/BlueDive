@@ -218,7 +218,7 @@ struct ImportFormatPickerView: View {
                             apply: { options.weightFormat = $0 }
                         )
                     }
-                    if fileType != .gearCSV {
+                    if fileType != .gearCSV && fileType != .garminFIT {
                         importGearToggle
                     }
                     actionButtons
@@ -231,9 +231,9 @@ struct ImportFormatPickerView: View {
         #if os(macOS)
         .frame(
             minWidth: 540, idealWidth: 600, maxWidth: 750,
-            minHeight: fileType == .macDive ? 580 : fileType == .gearCSV ? 330 : 280,
-            idealHeight: fileType == .macDive ? 650 : fileType == .gearCSV ? 370 : 320,
-            maxHeight: fileType == .macDive ? 850 : fileType == .gearCSV ? 450 : 400
+            minHeight: fileType == .macDive ? 580 : fileType == .gearCSV ? 330 : fileType == .garminFIT ? 240 : 280,
+            idealHeight: fileType == .macDive ? 650 : fileType == .gearCSV ? 370 : fileType == .garminFIT ? 270 : 320,
+            maxHeight: fileType == .macDive ? 850 : fileType == .gearCSV ? 450 : fileType == .garminFIT ? 340 : 400
         )
         #endif
     }

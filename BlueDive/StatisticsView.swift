@@ -143,7 +143,8 @@ struct StatisticsView: View {
         timeFormatter.calendar = timeFormatterCal
         let totalTimeFormatted = timeFormatter.string(from: TimeInterval(totalMin * 60)) ?? "\(totalMin)m"
         let maxDepthEver = dives.map(\.displayMaxDepth).max() ?? 0
-        let avgDepth = dives.isEmpty ? 0 : dives.map(\.displayAverageDepth).reduce(0, +) / Double(dives.count)
+        let depthDives = dives.filter { $0.averageDepth > 0 }
+        let avgDepth = depthDives.isEmpty ? 0 : depthDives.map(\.displayAverageDepth).reduce(0, +) / Double(depthDives.count)
         let sortedDives = dives.sorted { $0.timestamp > $1.timestamp }
 
         let grouped = Dictionary(grouping: dives) { $0.siteName }

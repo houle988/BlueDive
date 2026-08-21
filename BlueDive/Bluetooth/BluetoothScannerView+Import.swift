@@ -27,16 +27,21 @@ extension BluetoothScannerView {
             // Sort dives chronologically so we can calculate surface intervals
             let sortedDives = downloadedDives.sorted { $0.datetime < $1.datetime }
 
-            // Find the highest dive number in the logbook so new dives continue the sequence
-            let hasNumberPredicate = #Predicate<Dive> { dive in
-                dive.diveNumber != nil
-            }
-            var maxNumberDescriptor = FetchDescriptor<Dive>(
-                predicate: hasNumberPredicate,
+            // Resolve the diver name once for the entire batch — the same computer is used for all dives.
+            let batchDiverName = resolveGearDiverName(forSerial: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial }, in: modelContext)
+
+            // Find the highest dive number for this diver's bucket so new dives continue their own
+            // sequence independently of other divers. Stored diverName values are always trimmed,
+            // so pre-trimming the target lets us use a DB-level predicate — no in-memory scan needed.
+            let targetDiverName = batchDiverName.trimmingCharacters(in: .whitespaces)
+            var diverNumberDescriptor = FetchDescriptor<Dive>(
+                predicate: #Predicate<Dive> { dive in
+                    dive.diveNumber != nil && dive.diverName == targetDiverName
+                },
                 sortBy: [SortDescriptor(\Dive.diveNumber, order: .reverse)]
             )
-            maxNumberDescriptor.fetchLimit = 1
-            let highestDiveNumber = (try? modelContext.fetch(maxNumberDescriptor).first?.diveNumber) ?? 0
+            diverNumberDescriptor.fetchLimit = 1
+            let highestDiveNumber = (try? modelContext.fetch(diverNumberDescriptor).first?.diveNumber) ?? 0
             var nextDiveNumber = highestDiveNumber + 1
 
             // Find the most recent existing dive before the first downloaded dive
@@ -57,9 +62,6 @@ extension BluetoothScannerView {
                     previousDiveEndTime = previousDive.timestamp.addingTimeInterval(Double(previousDive.duration) * 60)
                 }
             }
-
-            // Resolve the diver name once for the entire batch — the same computer is used for all dives.
-            let batchDiverName = resolveDiverName(forSerial: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial })
 
             // Build a fingerprint → Dive index once for the whole batch.
             // Serial is constant across all dives in this sync (same device), so one fetch covers all.
@@ -501,42 +503,4 @@ extension BluetoothScannerView {
 
     // MARK: - Diver Name
 
-    /// Returns the diver name to stamp on a Bluetooth-downloaded dive.
-    ///
-    /// Looks for a gear item of category "Computer" whose serial number matches the connected device.
-    /// Serial comparison is whitespace-trimmed and case-insensitive to handle firmware padding and
-    /// user-entry differences. If multiple computers share the same serial but disagree on the diver
-    /// name (ambiguous ownership), falls back to the profile name. Falls back to the profile name
-    /// when no matching gear is found or the fetch fails.
-    private func resolveDiverName(forSerial computerSerial: String?) -> String {
-        let profileName = (UserDefaults.standard.string(forKey: "userName") ?? "").trimmingCharacters(in: .whitespaces)
-        guard let rawSerial = computerSerial else { return profileName }
-        let serial = rawSerial.trimmingCharacters(in: .whitespaces)
-        guard !serial.isEmpty else { return profileName }
-
-        let computerCategory = GearCategory.computer.rawValue
-        // #Predicate cannot call instance methods, so fetch all computers and filter in-memory
-        // to apply trimmed case-insensitive serial comparison.
-        let predicate = #Predicate<Gear> { gear in
-            gear.category == computerCategory && gear.serialNumber != nil
-        }
-        do {
-            let computers = try modelContext.fetch(FetchDescriptor<Gear>(predicate: predicate))
-            let matches = computers.filter {
-                ($0.serialNumber ?? "").trimmingCharacters(in: .whitespaces)
-                    .caseInsensitiveCompare(serial) == .orderedSame
-                    && !$0.diverName.trimmingCharacters(in: .whitespaces).isEmpty
-            }
-            let distinctNames = Set(matches.map { $0.diverName.trimmingCharacters(in: .whitespaces) })
-            if distinctNames.count == 1, let name = distinctNames.first {
-                return name
-            }
-            if distinctNames.count > 1 {
-                Self.logger.warning("Multiple gear computers match serial \(serial) with different diver names — falling back to profile name")
-            }
-        } catch {
-            Self.logger.error("Failed to look up gear for computer serial \(serial): \(error.localizedDescription)")
-        }
-        return profileName
-    }
 }

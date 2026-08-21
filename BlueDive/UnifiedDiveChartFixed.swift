@@ -625,8 +625,11 @@ private struct StaticChartLayer: View, Equatable {
             let samplesWithNDL = Array(allWithNDL[firstNonZeroIdx...])
             ForEach(samplesWithNDL) { sample in
                 if let ndl = sample.ndl {
-                    // NDL 100 → y = 0 (top), NDL 0 → y = -displayMaxDepth (bottom)
-                    let value = -dive.displayMaxDepth * (1.0 - (min(ndl, 100.0) / 100.0))
+                    // NDL ≥ 100 min is capped at 99 so the line stays just below y=0
+                    // (the top edge). Without this, min(ndl, 100)/100 = 1 → value = 0
+                    // (surface line) and the yellow line is invisible. NDL 99 → near top,
+                    // NDL 0 → y = -displayMaxDepth (bottom).
+                    let value = -dive.displayMaxDepth * (1.0 - (min(ndl, 99.0) / 100.0))
                     LineMark(x: .value("Time", sample.time), y: .value("NDL", value), series: .value("Sequence", "NDL"))
                         .interpolationMethod(.catmullRom)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
