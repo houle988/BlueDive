@@ -86,6 +86,7 @@ struct ContentView: View {
     @State private var isSyncing = false
     @State private var showManualDiveDatePicker = false
     @State private var manualDiveDate = Date.now
+    @State private var manualDiveDiverName = ""
 
     // MARK: - Search & Filter State
     @State private var searchText = ""
@@ -572,6 +573,8 @@ struct ContentView: View {
                     Form {
                         DatePicker("Date & Time", selection: $manualDiveDate)
                             .datePickerStyle(.graphical)
+                        AutocompleteMenuTextField(label: "Diver (optional)", text: $manualDiveDiverName, icon: "person.fill", color: .cyan, suggestions: uniqueDivers)
+                            .autocorrectionDisabled()
                     }
                     .navigationTitle("New Dive Date")
                     .navigationBarTitleDisplayMode(.inline)
@@ -582,7 +585,7 @@ struct ContentView: View {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Add") {
                                 showManualDiveDatePicker = false
-                                createManualDive(date: manualDiveDate)
+                                createManualDive(date: manualDiveDate, diverName: manualDiveDiverName)
                             }
                             .fontWeight(.semibold)
                         }
@@ -602,7 +605,7 @@ struct ContentView: View {
                         Spacer()
                         Button("Add") {
                             showManualDiveDatePicker = false
-                            createManualDive(date: manualDiveDate)
+                            createManualDive(date: manualDiveDate, diverName: manualDiveDiverName)
                         }
                         .keyboardShortcut(.defaultAction)
                         .fontWeight(.semibold)
@@ -631,8 +634,15 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
+
+                    Divider()
+
+                    AutocompleteMenuTextField(label: "Diver (optional)", text: $manualDiveDiverName, icon: "person.fill", color: .cyan, suggestions: uniqueDivers)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                 }
-                .frame(width: 390, height: 390)
+                .frame(width: 390, height: 440)
                 #endif
             }
             .alert("Delete dive?", isPresented: $showDeleteSingleConfirmation, presenting: diveToDeleteDirectly) { dive in
@@ -1402,18 +1412,25 @@ struct ContentView: View {
 
     private func addManualDive() {
         manualDiveDate = .now
+        manualDiveDiverName = ""
         showManualDiveDatePicker = true
     }
 
-    private func createManualDive(date: Date) {
-        let nextNumber = (dives.compactMap(\.diveNumber).max() ?? 0) + 1
+    private func createManualDive(date: Date, diverName: String) {
+        let diverName = diverName.trimmingCharacters(in: .whitespaces)
+        let targetDiverName = diverName
+        var diverDescriptor = FetchDescriptor<Dive>(
+            predicate: #Predicate<Dive> { dive in
+                dive.diveNumber != nil && dive.diverName == targetDiverName
+            },
+            sortBy: [SortDescriptor(\Dive.diveNumber, order: .reverse)]
+        )
+        diverDescriptor.fetchLimit = 1
+        let nextNumber = ((try? modelContext.fetch(diverDescriptor).first?.diveNumber) ?? 0) + 1
 
-        // Find the most recent dive that ended before the selected date
+        // Find the most recent dive for the same diver that ended before the selected date
         let surfaceInterval: String = {
-            let previous = dives
-                .filter { $0.timestamp < date }
-                .sorted { $0.timestamp > $1.timestamp }
-                .first
+            let previous = dives.first(where: { $0.timestamp < date && $0.diverName == diverName })
             guard let prev = previous else { return "0h 00m" }
             let durationSeconds = TimeInterval(prev.duration * 60)
             let prevEnd = prev.timestamp.addingTimeInterval(durationSeconds)
@@ -1451,7 +1468,7 @@ struct ContentView: View {
             siteName: "",
             computerName: "",
             surfaceInterval: surfaceInterval,
-            diverName: "",
+            diverName: diverName,
             maxDepth: 0,
             averageDepth: 0,
             duration: 0,
@@ -1466,5 +1483,6 @@ struct ContentView: View {
             modelContext.insert(dive)
             try? modelContext.save()
         }
+        Dive.recalculateSurfaceIntervals(in: modelContext, diverName: diverName)
     }
 }

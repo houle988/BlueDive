@@ -1474,7 +1474,7 @@ extension Dive {
         let grouped = Dictionary(grouping: allDives) { $0.diverName }
         for (diver, diverDives) in grouped {
             if let diverFilter, diver != diverFilter { continue }
-            guard !diver.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            if diverFilter == nil, diver.trimmingCharacters(in: .whitespaces).isEmpty { continue }
             let sorted = diverDives.sorted { $0.timestamp < $1.timestamp }
             for (index, dive) in sorted.enumerated() {
                 if index == 0 {
