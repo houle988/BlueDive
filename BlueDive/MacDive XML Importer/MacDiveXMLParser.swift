@@ -146,6 +146,15 @@ struct BlueDiveTankData: Sendable {
         self.usageStartTime = usageStartTime
         self.usageEndTime = usageEndTime
     }
+
+    func withUsageTimes(start: Double, end: Double) -> BlueDiveTankData {
+        BlueDiveTankData(
+            id: id, oxygen: oxygen, helium: helium, double: double,
+            volume: volume, startPressure: startPressure, endPressure: endPressure,
+            workingPressure: workingPressure, tankMaterial: tankMaterial, tankType: tankType,
+            usageStartTime: start, usageEndTime: end
+        )
+    }
 }
 
 /// Gear / equipment item

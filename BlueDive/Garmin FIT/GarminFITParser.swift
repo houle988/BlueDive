@@ -182,6 +182,13 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
             }
             gasSwitches.sort { $0.date < $1.date }
 
+            // If Garmin firmware omits the t=0 initial-gas event, seed a synthetic entry so
+            // that the initial gas's usage window begins at t=0. Global position 0 matches the
+            // per-sample loop's currentTankIndex default for an unknown starting gas.
+            if !gasSwitches.isEmpty && gasSwitches.first!.date > startDate {
+                gasSwitches.insert((date: startDate, tankIndex: 0), at: 0)
+            }
+
             // Tank start/end pressures from TankSummaryMesg (one per transmitter per session).
             // Sensor IDs are mapped positionally to tank slots (first sensor → tank[0], etc.)
             // since DiveGasMesg carries no transmitter reference.
@@ -282,10 +289,14 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 let elapsed = ts.timeIntervalSince(startDate)
                 guard elapsed >= 0, let depthM = record.getDepth() else { continue }
 
-                // Advance active gas for any switches that occurred at or before this sample.
+                // Advance active gas for any switches at or before this sample.
+                // Suppress didSwitch for the t=0 initial-gas entry (real from Garmin or seeded):
+                // it establishes the starting gas, not a mid-dive switch.
+                var didSwitch = false
                 while let sw = nextSwitch, sw.date <= ts {
                     currentTankIndex = sw.tankIndex
                     nextSwitch = switchIterator.next()
+                    if sw.date > startDate { didSwitch = true }
                 }
 
                 // NDL: FIT stores in seconds; BlueDiveSamplesData.ndt is minutes.
@@ -320,10 +331,26 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                     ppo2: ppo2,
                     sensorPPO2: nil,
                     ndt: ndlMin,
-                    events: isMandatoryDeco ? [.decoStop] : [],
+                    events: {
+                    var evts: [DiveProfileEvent] = []
+                    if isMandatoryDeco { evts.append(.decoStop) }
+                    if didSwitch { evts.append(.gasChange) }
+                    return evts
+                }(),
                     currentGas: currentTankIndex
                 ))
             }
+
+            // Derive per-tank usage start/end times (seconds from dive start) from the
+            // gas-switch timeline. Use totalElapsed as the dive-end anchor — it comes from
+            // the FIT session summary and is unaffected by nil-depth gaps in profile samples.
+            let diveEndSeconds = totalElapsed
+            sessionTanks = applyFITTankUsageTimes(
+                to: sessionTanks,
+                gasSwitches: gasSwitches,
+                startDate: startDate,
+                diveEndSeconds: diveEndSeconds
+            )
 
             // Deco stops from the next-stop schedule recorded in profile samples.
             // nextStopDepth = stop the computer is scheduling (metres, Float64).
@@ -485,6 +512,62 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 rawDiveComputerData: nil,
                 fingerprintData: nil
             ))
+        }
+    }
+
+    // MARK: - Tank Usage Times
+
+    /// Derives per-tank usage start/end times (seconds from dive start) from the remapped
+    /// gas-switch timeline. The timeline is guaranteed to start at t=0 by construction: either
+    /// Garmin emits a diveGasSwitched event at session start, or a synthetic entry is seeded
+    /// upstream so the initial gas window always begins at 0.
+    ///
+    /// Switch-back guard: a tank appearing in multiple non-contiguous segments is left without
+    /// usage times, matching the BLE path's behaviour and preventing an inflated RMV/SAC
+    /// denominator.
+    private func applyFITTankUsageTimes(
+        to tanks: [BlueDiveTankData],
+        gasSwitches: [(date: Date, tankIndex: Int)],
+        startDate: Date,
+        diveEndSeconds: Double
+    ) -> [BlueDiveTankData] {
+        guard !tanks.isEmpty else { return tanks }
+
+        // Build a flat list of (start, end, tankIdx) segments in seconds.
+        let segments: [(start: Double, end: Double, tankIdx: Int)]
+        if gasSwitches.isEmpty {
+            // No switch events at all: full dive on tank 0.
+            segments = [(start: 0.0, end: diveEndSeconds, tankIdx: 0)]
+        } else {
+            segments = gasSwitches.enumerated().map { i, sw in
+                let start = max(0.0, sw.date.timeIntervalSince(startDate))
+                let end = i + 1 < gasSwitches.count
+                    ? max(start, gasSwitches[i + 1].date.timeIntervalSince(startDate))
+                    : diveEndSeconds
+                return (start: start, end: end, tankIdx: sw.tankIndex)
+            }
+        }
+
+        return tanks.enumerated().map { idx, tank in
+            let mine = segments.filter { $0.tankIdx == idx }
+            guard !mine.isEmpty else { return tank }
+
+            // Merge adjacent same-tank segments caused by duplicate switch events.
+            // Epsilon matches the BLE path (1e-6): segments are built so each end equals the
+            // next segment's start by construction, making any larger tolerance unnecessary and
+            // a hazard that could defeat the switch-back guard on rapid A→B→A dives.
+            let merged = mine.reduce(into: [(start: Double, end: Double)]()) { acc, seg in
+                if let last = acc.last, abs(last.end - seg.start) < 1e-6 {
+                    acc[acc.count - 1] = (start: last.start, end: seg.end)
+                } else {
+                    acc.append((start: seg.start, end: seg.end))
+                }
+            }
+
+            // Switch-back guard: skip tanks used in multiple non-contiguous windows.
+            guard merged.count == 1, merged[0].end > merged[0].start else { return tank }
+
+            return tank.withUsageTimes(start: merged[0].start, end: merged[0].end)
         }
     }
 
