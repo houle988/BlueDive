@@ -2510,6 +2510,7 @@ struct EditConditionsView: View {
 struct EditGazView: View {
     @Bindable var dive: Dive
     let tankIndex: Int
+    var onSlotChanged: ((Int) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \TankTemplate.name) private var templates: [TankTemplate]
     @State private var selectedTemplateName: String = ""
@@ -2566,6 +2567,8 @@ struct EditGazView: View {
     }
 
     @State private var usageTimeUnit: UsageTimeUnit = .seconds
+    @State private var workingSlot: Int = 1
+    @State private var rewriteSamples: Bool = true
 
     /// Validation: si le volume saisi semble hors limites selon l'unité stockée.
     private var cylinderSizeIsValid: Bool {
@@ -2599,9 +2602,10 @@ struct EditGazView: View {
     private let materialOptions = ["Steel", "Galvanized Steel", "Aluminium", "Carbon"]
     private let typeOptions     = ["Single tank", "Twinset", "Sidemount", "Pony", "Rebreather", "Other"]
 
-    init(dive: Dive, tankIndex: Int = 0) {
+    init(dive: Dive, tankIndex: Int = 0, onSlotChanged: ((Int) -> Void)? = nil) {
         self.dive = dive
         self.tankIndex = tankIndex
+        self.onSlotChanged = onSlotChanged
         let tanks = dive.tanks
         let tank = tankIndex < tanks.count ? tanks[tankIndex] : nil
         let rawO2 = max(1, tank?.o2Percentage ?? 21)
@@ -2624,6 +2628,7 @@ struct EditGazView: View {
         _usageStartTimeText      = State(initialValue: Self.formatDouble(tank?.usageStartTime))
         _workingUsageEndTime     = State(initialValue: tank?.usageEndTime)
         _usageEndTimeText        = State(initialValue: Self.formatDouble(tank?.usageEndTime))
+        _workingSlot             = State(initialValue: tankIndex < tanks.count ? tankIndex + 1 : tanks.count + 1)
     }
 
     /// Copy physical tank properties from a template into the working state variables.
@@ -2732,6 +2737,28 @@ struct EditGazView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    // Tank Slot — reorder tanks when multiple tanks exist
+                    if dive.tanks.count > 1 && tankIndex < dive.tanks.count {
+                        gazMacOSGroup("Tank Slot", icon: "number.circle.fill", color: .orange) {
+                            gazMacOSRow("Tank Number") {
+                                Picker("Tank Number", selection: $workingSlot) {
+                                    ForEach(1...dive.tanks.count, id: \.self) { slot in
+                                        Text(verbatim: "\(slot)").tag(slot)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                            }
+                            Divider()
+                            gazMacOSRow("Update Samples") {
+                                Toggle("Update Samples", isOn: $rewriteSamples)
+                                    .labelsHidden()
+                            }
+                            Text("Update Samples remaps tank pressures and the active-gas assignment in the dive profile to match the new slot order.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
                     // Copy from Tank Template
                     if !templates.isEmpty {
                         gazMacOSGroup("Copy from Tank Template", icon: "doc.on.doc.fill", color: .orange) {
@@ -3026,7 +3053,7 @@ struct EditGazView: View {
                 .padding(24)
             }
         }
-        .frame(width: 600, height: 550)
+        .frame(width: 600, minHeight: 640)
         .background(Color.platformBackground)
 
 #else
@@ -3035,6 +3062,27 @@ struct EditGazView: View {
                 Color.platformBackground.ignoresSafeArea()
 
                 Form {
+                    // Tank Slot — reorder tanks when multiple tanks exist
+                    if dive.tanks.count > 1 && tankIndex < dive.tanks.count {
+                        Section {
+                            Picker("Tank Number", selection: $workingSlot) {
+                                ForEach(1...dive.tanks.count, id: \.self) { slot in
+                                    Text(verbatim: "\(slot)").tag(slot)
+                                }
+                            }
+                            Toggle("Update Samples", isOn: $rewriteSamples)
+                        } header: {
+                            Label("Tank Slot", systemImage: "number.circle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .textCase(nil)
+                        } footer: {
+                            Text("Update Samples remaps tank pressures and the active-gas assignment in the dive profile to match the new slot order.")
+                                .font(.caption2)
+                        }
+                    }
+
                     // Copy from Tank Template
                     if !templates.isEmpty {
                         Section {
@@ -3372,6 +3420,47 @@ struct EditGazView: View {
     }
     #endif
 
+    // MARK: - Sample remapping helpers
+
+    /// Returns the new index for an element that was at `old` after moving the
+    /// element at `from` to `to` via remove-then-insert (no swap).
+    private func remappedIndex(_ old: Int, from: Int, to: Int) -> Int {
+        if old == from { return to }
+        if from < to {
+            // Moving forward: elements in (from, to] shift one position earlier.
+            if old > from && old <= to { return old - 1 }
+        } else {
+            // Moving backward: elements in [to, from) shift one position later.
+            if old >= to && old < from { return old + 1 }
+        }
+        return old
+    }
+
+    /// Rebuilds profile points so that `tankPressures` keys and `currentGas`
+    /// values reflect the new tank order after moving the element at `from` to `to`.
+    private func remapSamples(_ points: [DiveProfilePoint], from: Int, to: Int) -> [DiveProfilePoint] {
+        points.map { point in
+            let newCurrentGas = point.currentGas.map { remappedIndex($0, from: from, to: to) }
+            let newTankPressures = point.tankPressures.map { dict in
+                Dictionary(uniqueKeysWithValues: dict.map { (remappedIndex($0.key, from: from, to: to), $0.value) })
+            }
+            let newTankPressure = newTankPressures.flatMap { $0[0] ?? $0.min(by: { $0.key < $1.key })?.value } ?? point.tankPressure
+            return DiveProfilePoint(
+                id: point.id,
+                time: point.time,
+                depth: point.depth,
+                temperature: point.temperature,
+                tankPressure: newTankPressure,
+                tankPressures: newTankPressures,
+                ndl: point.ndl,
+                ppo2: point.ppo2,
+                sensorPPO2: point.sensorPPO2,
+                events: point.events,
+                currentGas: newCurrentGas
+            )
+        }
+    }
+
     private func save() {
         let o2Fraction = Double(workingO2) / 100.0
         let heFraction = Double(workingHe) / 100.0
@@ -3383,6 +3472,7 @@ struct EditGazView: View {
         let type = trimmedType.isEmpty ? nil : trimmedType
 
         var tanks = dive.tanks
+        var targetIndex = tankIndex  // updated below if a slot move is requested
 
         if tankIndex < tanks.count {
             let existingTank = tanks[tankIndex]
@@ -3403,6 +3493,11 @@ struct EditGazView: View {
                 usageStartTime: workingUsageStartTime,
                 usageEndTime: workingUsageEndTime
             )
+            targetIndex = min(max(workingSlot - 1, 0), tanks.count - 1)
+            if targetIndex != tankIndex {
+                let moved = tanks.remove(at: tankIndex)
+                tanks.insert(moved, at: targetIndex)
+            }
         } else {
             tanks.append(TankData(
                 o2: o2Fraction,
@@ -3417,7 +3512,16 @@ struct EditGazView: View {
                 usageEndTime: workingUsageEndTime
             ))
         }
+
+        // Write all dive mutations before notifying the parent so selectedTankIndex
+        // always refers to the already-reordered array.
         dive.tanks = tanks
+        if targetIndex != tankIndex {
+            if rewriteSamples {
+                dive.profileSamples = remapSamples(dive.profileSamples, from: tankIndex, to: targetIndex)
+            }
+            onSlotChanged?(targetIndex)
+        }
 
         dismiss()
     }

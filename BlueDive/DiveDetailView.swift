@@ -637,7 +637,9 @@ struct DiveDetailView: View {
         case .conditions:
             EditConditionsView(dive: dive)
         case .gaz:
-            EditGazView(dive: dive, tankIndex: selectedTankIndex)
+            EditGazView(dive: dive, tankIndex: selectedTankIndex) { newIndex in
+                selectedTankIndex = newIndex
+            }
         case .samples:
             // Samples come from a dive computer — no manual editing
             noEditAvailableView(title: DiveTab.samples.localizedName,
