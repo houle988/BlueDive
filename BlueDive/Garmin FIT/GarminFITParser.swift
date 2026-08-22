@@ -269,6 +269,13 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
             var currentTankIndex: Int? = sessionTanks.isEmpty ? nil : 0
             var switchIterator = gasSwitches.makeIterator()
             var nextSwitch = switchIterator.next()
+            // Track NDL history so we can extend the deco event flag into the final stop.
+            // Some Descent firmware versions drop both ndlTime AND nextStopDepth when the diver
+            // transitions to the last scheduled stop (e.g. 3 m), so we can't rely on either field
+            // being present. We continue flagging samples as deco whenever NDL was last seen as 0
+            // and the diver is still at meaningful depth (> 1.5 m), stopping when NDL recovers
+            // to a positive value or the diver reaches the surface.
+            var sampleNdlWasZero = false
 
             for record in sessionRecords {
                 guard let ts = record.getTimestamp()?.date else { continue }
@@ -282,10 +289,22 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 }
 
                 // NDL: FIT stores in seconds; BlueDiveSamplesData.ndt is minutes.
-                let ndlMin = record.getNdlTime().map { Int($0) / 60 }
+                let ndlTime = record.getNdlTime()
+                if let n = ndlTime {
+                    sampleNdlWasZero = (n == 0)   // resets to false when NDL recovers
+                }
+                let ndlMin = ndlTime.map { Int($0) / 60 }
                 // Po2: SDK returns scaled value (raw UINT8 / 100); represents partial pressure.
                 let ppo2 = record.getPo2()
                 let tempC = record.getTemperature().map { Double($0) }
+
+                // Mark sample as mandatory deco when:
+                // • NDL is explicitly 0 (computer confirmed deco obligation), OR
+                // • NDL was zero and Garmin dropped the field (nil) while the diver is still at
+                //   depth — this covers the final deco stop where the watch stops reporting both
+                //   ndlTime and nextStopDepth (firmware limitation on some Descent models).
+                let isMandatoryDeco = (ndlTime == 0)
+                    || (ndlTime == nil && sampleNdlWasZero && depthM > 1.5)
 
                 sampleList.append(BlueDiveSamplesData(
                     time: elapsed,
@@ -301,7 +320,7 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                     ppo2: ppo2,
                     sensorPPO2: nil,
                     ndt: ndlMin,
-                    events: [],
+                    events: isMandatoryDeco ? [.decoStop] : [],
                     currentGas: currentTankIndex
                 ))
             }

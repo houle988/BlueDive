@@ -1397,14 +1397,35 @@ struct ChartTooltipView: View {
         return ndl.localizedString(decimals: 0) + " min"
     }
 
-    /// Mandatory deco stop (type == 2) whose diamond marker sits on this sample.
-    /// Uses the shared `mandatoryDecoStopRepresentatives` resolution so the tooltip's
-    /// depth+duration sub-row lines up exactly with the diamond drawn on the chart.
+    /// Mandatory deco stop (type == 2) whose diamond marker sits on or near this sample.
+    /// Exact UUID match first; falls back to ±2 positions in the sorted deco-sample array
+    /// so the chart snapping to an adjacent sample still reveals the stop detail.
+    /// Sample-count window is recording-rate-agnostic (works for 1 s FIT and 4 s BLE).
     private var matchingDecoStop: DecoStop? {
         guard sample.events.contains(.decoStop) else { return nil }
-        return mandatoryDecoStopRepresentatives(for: dive)
-            .first { $0.sampleID == sample.id }?
-            .stop
+        let reps = mandatoryDecoStopRepresentatives(for: dive)
+        guard !reps.isEmpty else { return nil }
+
+        // 1. Exact match — representative sample itself.
+        if let exact = reps.first(where: { $0.sampleID == sample.id }) {
+            return exact.stop
+        }
+
+        // 2. Adjacent match — within ±2 positions in the sorted deco-sample array.
+        //    Pick the rep with the smallest index distance so that samples equidistant
+        //    between two stops resolve to the nearest diamond, not the deeper one.
+        let decoSamples = dive.profileSamples
+            .filter { $0.events.contains(.decoStop) }
+            .sorted { $0.time < $1.time }
+        guard let myIdx = decoSamples.firstIndex(where: { $0.id == sample.id }) else { return nil }
+        let best = reps
+            .compactMap { rep -> (stop: DecoStop, dist: Int)? in
+                guard let repIdx = decoSamples.firstIndex(where: { $0.id == rep.sampleID }) else { return nil }
+                let d = abs(myIdx - repIdx)
+                return d <= 2 ? (rep.stop, d) : nil
+            }
+            .min(by: { $0.dist < $1.dist })
+        return best?.stop
     }
 
     /// Header label for the deco row.
