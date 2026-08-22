@@ -190,8 +190,6 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
             }
 
             // Tank start/end pressures from TankSummaryMesg (one per transmitter per session).
-            // Sensor IDs are mapped positionally to tank slots (first sensor → tank[0], etc.)
-            // since DiveGasMesg carries no transmitter reference.
             // Upper bound extended by 120 s: TankSummaryMesg is a post-dive message and is
             // commonly emitted 1–2 s after the computed endDate.
             let sessionTankSummaries = tankSummaries.filter { ts in
@@ -223,10 +221,66 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
             }
             gasSwitches = gasSwitches.map { (date: $0.date, tankIndex: posRemap[$0.tankIndex] ?? 0) }
             var sessionTanks = referencedPositions.map { globalTanks[$0] }
-            for (pos, sensor) in sensorOrder.enumerated() where pos < sessionTanks.count {
-                let p = sensorPressures[sensor]!
-                let orig = sessionTanks[pos]
-                sessionTanks[pos] = BlueDiveTankData(
+
+            // Filter TankUpdateMesg here (before sensor-to-tank inference) so updates are
+            // available for both the inference pass and the profile sample loop below.
+            // Updates fire every ~4–8 s; only samples coinciding with an update get a reading
+            // (no step-hold interpolation — sparse data is expected).
+            let sessionTankUpdates = tankUpdates.filter { tu in
+                guard let tuDate = tu.getTimestamp()?.date else { return false }
+                return tuDate >= startDate && tuDate <= endDate
+            }
+
+            // Build sensor→tank mapping. With multiple tanks, infer which transmitter belongs to
+            // which tank by analysing pressure drops during each gas's active breathing period —
+            // mirrors inferShearwaterGasMixToTank on the BLE path. Positional fallback (first
+            // sensor → tank[0]) is used when inference is inconclusive or there is only one tank.
+            var sensorToTankPos: [UInt32: Int] = [:]
+            let inferred = sessionTanks.count > 1
+                ? inferFITSensorToTank(
+                    updates: sessionTankUpdates,
+                    gasSwitches: gasSwitches,
+                    sensorOrder: sensorOrder,
+                    tankCount: sessionTanks.count)
+                : nil
+            if let inferred = inferred {
+                for (sensor, tankPos) in inferred {
+                    sensorToTankPos[sensor] = tankPos
+                }
+                // Fill remaining sensors positionally, skipping already-claimed slots.
+                let claimedTanks = Set(sensorToTankPos.values)
+                var nextFree = 0
+                for sensor in sensorOrder where sensorToTankPos[sensor] == nil {
+                    while nextFree < sessionTanks.count && claimedTanks.contains(nextFree) { nextFree += 1 }
+                    if nextFree < sessionTanks.count {
+                        sensorToTankPos[sensor] = nextFree
+                        nextFree += 1
+                    }
+                }
+            } else {
+                // For single-tank dives with multiple sensors, promote the sensor with the
+                // highest start pressure to position 0. CCR O2 supply transmitters appear in
+                // TankSummaryMesg but have no DiveGasMesg counterpart (FIT's DiveGasMode has
+                // no closedCircuitOxygen — the O2 supply is pressure-only). Without this,
+                // the O2 sensor lands at position 1, which is out of range for a 1-tank session.
+                let orderedSensors: [UInt32]
+                if sessionTanks.count == 1 && sensorOrder.count > 1 {
+                    orderedSensors = sensorOrder.sorted {
+                        (sensorPressures[$0]?.start ?? 0) > (sensorPressures[$1]?.start ?? 0)
+                    }
+                } else {
+                    orderedSensors = sensorOrder
+                }
+                for (pos, sensor) in orderedSensors.enumerated() {
+                    sensorToTankPos[sensor] = pos
+                }
+            }
+
+            // Apply start/end pressures from TankSummaryMesg to the correct tank slot.
+            for (sensor, tankPos) in sensorToTankPos where tankPos < sessionTanks.count {
+                guard let p = sensorPressures[sensor] else { continue }
+                let orig = sessionTanks[tankPos]
+                sessionTanks[tankPos] = BlueDiveTankData(
                     id: orig.id,
                     oxygen: orig.oxygen,
                     helium: orig.helium,
@@ -240,26 +294,18 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 )
             }
 
-            // Per-sample tank pressure lookup from TankUpdateMesg.
-            // Sensor IDs use the same ordering as TankSummaryMesg.
-            // Updates fire every ~4–8 s; only samples coinciding with an update get a reading
-            // (no step-hold interpolation — sparse data is expected).
-            var sensorToTankPos: [UInt32: Int] = [:]
-            for (pos, sensor) in sensorOrder.enumerated() {
-                sensorToTankPos[sensor] = pos
-            }
-            let sessionTankUpdates = tankUpdates.filter { tu in
-                guard let tuDate = tu.getTimestamp()?.date else { return false }
-                return tuDate >= startDate && tuDate <= endDate
-            }
             // Assign positions to any sensors seen only in updates (no paired TankSummaryMesg).
             // Cap at sessionTanks.count: indices beyond the tank array are orphaned and unusable.
-            var nextSensorPos = sensorToTankPos.count
+            // Free-slot search skips inference-claimed positions — the inferred path can assign
+            // non-contiguous slots (e.g. A→2, B→0), so a bare count-based start would collide.
+            let takenSlots = Set(sensorToTankPos.values)
+            var nextUpdatePos = 0
             for tu in sessionTankUpdates {
                 guard let sensor = tu.getSensor(), sensorToTankPos[sensor] == nil else { continue }
-                guard nextSensorPos < sessionTanks.count else { continue }
-                sensorToTankPos[sensor] = nextSensorPos
-                nextSensorPos += 1
+                while nextUpdatePos < sessionTanks.count && takenSlots.contains(nextUpdatePos) { nextUpdatePos += 1 }
+                guard nextUpdatePos < sessionTanks.count else { continue }
+                sensorToTankPos[sensor] = nextUpdatePos
+                nextUpdatePos += 1
             }
             // Build FIT-timestamp keyed lookup: rawTimestamp → [tankPos: bar].
             var updatesByTimestamp: [UInt32: [Int: Double]] = [:]
@@ -569,6 +615,73 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
 
             return tank.withUsageTimes(start: merged[0].start, end: merged[0].end)
         }
+    }
+
+    // MARK: - Sensor-to-Tank Inference
+
+    /// Infers which FIT sensor ID belongs to which session tank by accumulating pressure drops
+    /// from TankUpdateMesg per gas-switch period. The sensor that shows the largest pressure drop
+    /// while a given tank's gas is active is assigned to that tank.
+    ///
+    /// Mirrors inferShearwaterGasMixToTank on the BLE path. Returns nil when the profile lacks
+    /// sufficient data for a reliable determination (e.g. single-gas dives, no update messages).
+    ///
+    /// Confidence thresholds (matching BLE constants):
+    /// - absolute margin ≥ 10 bar over the runner-up, OR
+    /// - drop ratio ≥ 3× the runner-up (handles short/shallow dives with small total consumption)
+    private func inferFITSensorToTank(
+        updates: [TankUpdateMesg],
+        gasSwitches: [(date: Date, tankIndex: Int)],
+        sensorOrder: [UInt32],
+        tankCount: Int
+    ) -> [UInt32: Int]? {
+        guard tankCount > 1, !updates.isEmpty, !sensorOrder.isEmpty else { return nil }
+
+        let sorted = updates.sorted { ($0.getTimestamp()?.timestamp ?? 0) < ($1.getTimestamp()?.timestamp ?? 0) }
+
+        // Accumulate pressure drops per sensor, attributed to the tank active at that moment.
+        var dropsBySensor: [UInt32: [Int: Double]] = [:]
+        var lastPressureBySensor: [UInt32: Double] = [:]
+
+        for tu in sorted {
+            guard let tsDate = tu.getTimestamp()?.date,
+                  let sensor = tu.getSensor(),
+                  let pressure = tu.getPressure(), pressure > 0 else { continue }
+            defer { lastPressureBySensor[sensor] = pressure }
+            guard let lastP = lastPressureBySensor[sensor] else { continue }
+            let drop = lastP - pressure
+            // Skip rising readings (valve adjustments, temperature) and dropout artifacts.
+            // A diver cannot consume 10 bar in a single sample interval under any realistic conditions.
+            guard drop > 0, drop <= 10.0 else { continue }
+            let activeTankIdx = gasSwitches.last(where: { $0.date <= tsDate })?.tankIndex ?? 0
+            dropsBySensor[sensor, default: [:]][activeTankIdx, default: 0] += drop
+        }
+
+        guard !dropsBySensor.isEmpty else { return nil }
+
+        // For each sensor, pick the tank with the dominant pressure drop.
+        var sensorToTank: [UInt32: Int] = [:]
+        var assignedTanks = Set<Int>()
+
+        // Process sensors in descending order of their best drop so the most-confident
+        // sensor always gets first pick, regardless of TankSummaryMesg arrival order.
+        let rankedSensors = sensorOrder.sorted {
+            (dropsBySensor[$0]?.values.max() ?? 0) > (dropsBySensor[$1]?.values.max() ?? 0)
+        }
+        for sensor in rankedSensors {
+            guard let tankDrops = dropsBySensor[sensor] else { continue }
+            let sortedDrops = tankDrops.sorted { $0.value > $1.value }
+            guard let best = sortedDrops.first, best.value > 0,
+                  !assignedTanks.contains(best.key) else { continue }
+            let runnerUp = sortedDrops.dropFirst().first?.value ?? 0
+            let margin = best.value - runnerUp
+            let ratio  = runnerUp > 0 ? best.value / runnerUp : Double.infinity
+            guard runnerUp == 0 || margin >= 10.0 || ratio >= 3.0 else { continue }
+            sensorToTank[sensor] = best.key
+            assignedTanks.insert(best.key)
+        }
+
+        return sensorToTank.isEmpty ? nil : sensorToTank
     }
 
     // MARK: - Coordinate Conversion
