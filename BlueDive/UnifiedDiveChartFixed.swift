@@ -10,50 +10,23 @@ private extension Comparable {
     }
 }
 
-// MARK: - Shared mandatory deco stop resolution
+// MARK: - Interpolated cursor point (display only — never stored)
 
-/// For each mandatory deco stop (type == 2), returns the deco-flagged profile sample
-/// whose time is closest to the interpolated ascending crossing of `stop.depth`.
-/// Used by both the diamond marker placement (`StaticChartLayer`) and the tooltip
-/// (`ChartTooltipView`) so the tooltip's stop sub-row appears exactly on the sample
-/// beneath each diamond, with no depth-vs-time-matching drift.
-fileprivate func mandatoryDecoStopRepresentatives(for dive: Dive) -> [(stop: DecoStop, sampleID: UUID)] {
-    let stops = dive.decoStops.filter { $0.type == 2 }
-    guard !stops.isEmpty else { return [] }
-
-    let decoSamples = dive.profileSamples
-        .filter { $0.events.contains(.decoStop) }
-        .sorted { $0.time < $1.time }
-    guard !decoSamples.isEmpty else { return [] }
-
-    let decoWindowStart = (decoSamples.first?.time ?? 0) - 2.0
-    let decoWindowEnd   = decoSamples.last?.time ?? 0
-    let windowSamples = dive.profileSamples
-        .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
-        .sorted { $0.time < $1.time }
-
-    var result: [(stop: DecoStop, sampleID: UUID)] = []
-    for stop in stops {
-        var crossTime: Double? = nil
-        if windowSamples.count >= 2 {
-            for i in 0..<(windowSamples.count - 1) {
-                let a = windowSamples[i], b = windowSamples[i + 1]
-                guard a.depth > stop.depth && b.depth <= stop.depth else { continue }
-                let t = (stop.depth - a.depth) / (b.depth - a.depth)
-                crossTime = a.time + t * (b.time - a.time)
-                break
-            }
-        }
-        if crossTime == nil {
-            crossTime = decoSamples
-                .min(by: { abs($0.depth - stop.depth) < abs($1.depth - stop.depth) })?.time
-        }
-        guard let time = crossTime,
-              let rep = decoSamples.min(by: { abs($0.time - time) < abs($1.time - time) })
-        else { continue }
-        result.append((stop: stop, sampleID: rep.id))
-    }
-    return result
+/// Synthetic point at an arbitrary cursor position, computed by linearly interpolating
+/// between the two bracketing profile samples. Values are chart-display only and never
+/// written to the data model.
+struct ChartInterpolatedPoint {
+    let time: Double
+    let depth: Double
+    let temperature: Double?
+    let tankPressure: Double?
+    let tankPressures: [Int: Double]?
+    let ndl: Double?
+    let ppo2: Double?
+    let sensorPPO2: [Int: Double]?
+    let events: [DiveProfileEvent]
+    let currentGas: Int?
+    let ascentSpeed: Double?
 }
 
 /// Configuration de visibilité des lignes du graphique
@@ -734,8 +707,15 @@ private struct StaticChartLayer: View, Equatable {
     /// Falls back to the deco sample whose depth is closest to `stop.depth` when the
     /// profile does not cross it between consecutive samples.
     /// Returns tuples of (chart X time, display depth).
+    ///
+    /// Algorithm is intentionally identical to buildDecoStopCache (deepest-first,
+    /// searchFloorTime anchoring, correct unit conversion) so diamond positions and
+    /// tooltip entry times always agree.
     private var mandatoryDecoStopPoints: [(time: Double, displayDepth: Double)] {
-        let stops = dive.decoStops.filter { $0.type == 2 }
+        // Process deepest-first, matching buildDecoStopCache's iteration order.
+        let stops = dive.decoStops
+            .filter { $0.type == 2 }
+            .sorted { $0.depth > $1.depth }
         guard !stops.isEmpty else { return [] }
 
         let decoSamples = dive.profileSamples
@@ -752,29 +732,37 @@ private struct StaticChartLayer: View, Equatable {
             .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
             .sorted { $0.time < $1.time }
 
+        // DecoStop.depth is always metres; sample.depth is in the stored unit.
+        let isFeet = dive.importDistanceUnit == "feet"
         var result: [(time: Double, displayDepth: Double)] = []
+        var searchFloorTime = -Double.greatestFiniteMagnitude
+
         for stop in stops {
-            // Look for an ascending crossing only (depth decreasing over time, a > b),
-            // which is when the diver ascends to the stop depth during decompression.
+            // Convert stop depth to the same unit as sample.depth for valid comparison.
+            let stopInStoredUnit = isFeet ? stop.depth * 3.28084 : stop.depth
             var crossTime: Double? = nil
             if windowSamples.count >= 2 {
                 for i in 0..<(windowSamples.count - 1) {
                     let a = windowSamples[i], b = windowSamples[i + 1]
-                    guard a.depth > stop.depth && b.depth <= stop.depth else { continue }
-                    let t = (stop.depth - a.depth) / (b.depth - a.depth)
-                    crossTime = a.time + t * (b.time - a.time)
+                    guard a.time >= searchFloorTime else { continue }
+                    guard a.depth > stopInStoredUnit && b.depth <= stopInStoredUnit else { continue }
+                    let denom = b.depth - a.depth
+                    guard denom != 0 else { continue }
+                    crossTime = a.time + ((stopInStoredUnit - a.depth) / denom) * (b.time - a.time)
                     break
                 }
             }
-            // Fall back: deco-event sample whose depth is closest to stop.depth
+            // Fall back: deco-event sample whose depth is closest to stop depth
             if crossTime == nil {
                 crossTime = decoSamples
-                    .min(by: { abs($0.depth - stop.depth) < abs($1.depth - stop.depth) })?.time
+                    .filter { $0.time >= searchFloorTime }
+                    .min(by: { abs($0.depth - stopInStoredUnit) < abs($1.depth - stopInStoredUnit) })?.time
             }
             guard let time = crossTime else { continue }
+            searchFloorTime = time
             result.append((
                 time:         time,
-                displayDepth: dive.displayProfileDepth(stop.depth)
+                displayDepth: dive.displayProfileDepth(stopInStoredUnit)
             ))
         }
         return result
@@ -829,11 +817,16 @@ struct UnifiedDiveChartOptimized: View {
     @State private var plotOriginX: CGFloat = 0     // leading edge of the plot area
     @State private var plotWidth: CGFloat = 1       // width of the plot area only
     @State private var lastTooltipUpdate: Date = .distantPast
-    @State private var cachedNearestSample: DiveProfilePoint? = nil
-    @State private var cachedNearestPPO2: Double? = nil
+    @State private var cachedInterpolatedPoint: ChartInterpolatedPoint? = nil
     /// Pre-built per-sample PPO₂ map (UUID → value). Rebuilt once on toggle or dive change.
     @State private var cachedPPO2BySampleID: [UUID: Double] = [:]
-    
+    /// Sorted (time, pressure) readings for single-tank dives — enables interpolation across sparse AI transmitter gaps.
+    @State private var cachedSinglePressureReadings: [(time: Double, pressure: Double)] = []
+    /// Sorted per-tank pressure readings for multi-tank dives.
+    @State private var cachedMultiPressureReadings: [Int: [(time: Double, pressure: Double)]] = [:]
+    /// Entry time (diamond position) per mandatory deco stop for tooltip matching — built once per dive.
+    @State private var cachedDecoStopEntries: [(stop: DecoStop, entryTime: Double)] = []
+
     var body: some View {
         VStack(spacing: 16) {
             toggleControls
@@ -844,6 +837,8 @@ struct UnifiedDiveChartOptimized: View {
             }
         }
         .task(id: "\(dive.id)\(tanksO2Hash)") {
+            buildPressureCache()
+            buildDecoStopCache()
             if visibility.showPPO2 { rebuildPPO2Cache() }
         }
         .onChange(of: visibility.showPPO2) { _, newValue in
@@ -977,17 +972,12 @@ struct UnifiedDiveChartOptimized: View {
                         }
 
                         // ── Tooltip ──
-                        if cursorX != nil, let sample = cachedNearestSample {
+                        if cursorX != nil, let point = cachedInterpolatedPoint {
                             ChartTooltipView(
-                                sample: sample,
+                                point: point,
                                 visibility: visibility,
                                 dive: dive,
-                                tempMin: tempRange.min,
-                                tempMax: tempRange.max,
-                                pressMin: pressRange.min,
-                                pressMax: pressRange.max,
-                                ppo2: cachedNearestPPO2,
-                                ascentSpeed: ascentSpeed(for: sample)
+                                decoStopEntries: cachedDecoStopEntries
                             )
                             .offset(x: tooltipOffsetX(
                                 screenX: cursorScreenX,
@@ -1019,16 +1009,13 @@ struct UnifiedDiveChartOptimized: View {
                                         let now = Date()
                                         if now.timeIntervalSince(lastTooltipUpdate) > 0.033 {
                                             lastTooltipUpdate = now
-                                            let nearest = nearestSample(at: fraction * xMax)
-                                            cachedNearestSample = nearest
-                                            cachedNearestPPO2 = nearest.flatMap { computePPO2(for: $0) }
+                                            cachedInterpolatedPoint = interpolatedPoint(at: fraction * xMax)
                                         }
                                     }
                                     .onEnded { _ in
                                         withAnimation(.easeOut(duration: 0.2)) {
                                             cursorX = nil
-                                            cachedNearestSample = nil
-                                            cachedNearestPPO2 = nil
+                                            cachedInterpolatedPoint = nil
                                         }
                                     }
                             )
@@ -1039,42 +1026,7 @@ struct UnifiedDiveChartOptimized: View {
 
     // MARK: - Tooltip Helpers
 
-    /// Returns the sample whose time is closest to `time`.
-    private func nearestSample(at time: Double) -> DiveProfilePoint? {
-        dive.profileSamples.min(by: { abs($0.time - time) < abs($1.time - time) })
-    }
-
-    /// Returns the ascent/descent speed in m/min at the given sample.
-    /// Positive = ascending, negative = descending. Uses adjacent samples for calculation.
-    private func ascentSpeed(for sample: DiveProfilePoint) -> Double? {
-        let samples = dive.profileSamples
-        guard samples.count >= 2 else { return nil }
-        guard let idx = samples.firstIndex(where: { $0.id == sample.id }) else { return nil }
-
-        let prev: DiveProfilePoint
-        let next: DiveProfilePoint
-        if idx > 0 && idx < samples.count - 1 {
-            // Middle sample: average over both neighbours for a smoother value
-            prev = samples[idx - 1]
-            next = samples[idx + 1]
-        } else if idx > 0 {
-            // Last sample
-            prev = samples[idx - 1]
-            next = sample
-        } else {
-            // First sample
-            prev = sample
-            next = samples[idx + 1]
-        }
-
-        let timeDiff = next.time - prev.time
-        guard timeDiff > 0 else { return nil }
-        let depthDiff = prev.depth - next.depth  // positive = ascending
-        return depthDiff / timeDiff
-    }
-
     /// Keeps the tooltip card within the plot area horizontally.
-    /// `screenX` is already in the overlay's coordinate space (origin-offset included).
     private func tooltipOffsetX(screenX: CGFloat, plotOriginX: CGFloat, plotWidth: CGFloat) -> CGFloat {
         let tooltipWidth: CGFloat = 200
         let padding: CGFloat = 8
@@ -1084,29 +1036,212 @@ struct UnifiedDiveChartOptimized: View {
         return x.clamped(to: minX...maxX)
     }
 
-    /// Pre-computed temperature range across all samples (used by tooltip for display).
-    private var tempRange: (min: Double?, max: Double?) {
-        let temps = dive.profileSamples.compactMap { $0.temperature }
-        return (temps.min(), temps.max())
+    // MARK: - Pressure Cache
+
+    /// Builds sorted arrays of (time, pressure) readings from all samples — called once per dive.
+    /// Enables O(log n) interpolation across sparse AI transmitter gaps.
+    private func buildPressureCache() {
+        var single: [(time: Double, pressure: Double)] = []
+        var multi: [Int: [(time: Double, pressure: Double)]] = [:]
+        for sample in dive.profileSamples {
+            if let p = sample.tankPressure {
+                single.append((sample.time, p))
+            }
+            if let tp = sample.tankPressures {
+                for (idx, p) in tp {
+                    multi[idx, default: []].append((sample.time, p))
+                }
+            }
+        }
+        cachedSinglePressureReadings = single.sorted { $0.time < $1.time }
+        for key in multi.keys { multi[key]!.sort { $0.time < $1.time } }
+        cachedMultiPressureReadings = multi
     }
 
-    /// Pre-computed pressure range across all samples (used by tooltip for display).
-    private var pressRange: (min: Double?, max: Double?) {
-        let pressures = dive.profileSamples.compactMap { $0.tankPressure.map { dive.displayProfilePressure($0) } }
-        return (pressures.min(), pressures.max())
+    /// Builds entry times for each mandatory deco stop using ascending depth crossings.
+    /// Stops are processed deepest-first so each shallower stop's crossing is anchored
+    /// after the deeper stop's entry, preventing oscillation from stealing an earlier crossing.
+    private func buildDecoStopCache() {
+        let stops = dive.decoStops
+            .filter { $0.type == 2 }
+            .sorted { $0.depth > $1.depth }     // deepest first
+        guard !stops.isEmpty else { cachedDecoStopEntries = []; return }
+
+        let samples = dive.profileSamples       // single decode, reused below
+        let decoSamples = samples
+            .filter { $0.events.contains(.decoStop) }
+            .sorted { $0.time < $1.time }
+        guard !decoSamples.isEmpty else { cachedDecoStopEntries = []; return }
+
+        let windowStart = (decoSamples.first?.time ?? 0) - 2.0
+        let windowEnd   = decoSamples.last?.time ?? 0
+        let windowSamples = samples
+            .filter { $0.time >= windowStart && $0.time <= windowEnd }
+            .sorted { $0.time < $1.time }
+
+        // DecoStop.depth is always metres; sample.depth is in the stored unit.
+        let isFeet = dive.importDistanceUnit == "feet"
+
+        var result: [(stop: DecoStop, entryTime: Double)] = []
+        var searchFloorTime = -Double.greatestFiniteMagnitude  // each stop entered after the prior
+
+        for stop in stops {
+            let stopInStoredUnit = isFeet ? stop.depth * 3.28084 : stop.depth
+            var entryTime: Double? = nil
+
+            if windowSamples.count >= 2 {
+                for i in 0..<(windowSamples.count - 1) {
+                    let a = windowSamples[i], b = windowSamples[i + 1]
+                    guard a.time >= searchFloorTime else { continue }
+                    guard a.depth > stopInStoredUnit && b.depth <= stopInStoredUnit else { continue }
+                    let denom = b.depth - a.depth
+                    guard denom != 0 else { continue }
+                    entryTime = a.time + ((stopInStoredUnit - a.depth) / denom) * (b.time - a.time)
+                    break
+                }
+            }
+
+            if entryTime == nil {
+                entryTime = decoSamples
+                    .filter { $0.time >= searchFloorTime }
+                    .min(by: { abs($0.depth - stopInStoredUnit) < abs($1.depth - stopInStoredUnit) })?
+                    .time
+            }
+
+            if let t = entryTime {
+                result.append((stop: stop, entryTime: t))
+                searchFloorTime = t
+            }
+        }
+
+        cachedDecoStopEntries = result.sorted { $0.entryTime < $1.entryTime }
     }
-    
+
+    /// Linearly interpolates a pressure value at time `t` from a sorted (time, pressure) array.
+    private func interpolatePressure(at t: Double, in readings: [(time: Double, pressure: Double)]) -> Double? {
+        guard !readings.isEmpty else { return nil }
+        if t <= readings.first!.time { return readings.first!.pressure }
+        if t >= readings.last!.time  { return nil }  // no reading after this point — show nothing rather than stale data
+        var lo = 0, hi = readings.count - 1
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if readings[mid].time <= t { lo = mid + 1 } else { hi = mid }
+        }
+        let next = readings[lo], prev = readings[lo - 1]
+        let dt = next.time - prev.time
+        let frac = dt > 0 ? (t - prev.time) / dt : 0.0
+        return prev.pressure + frac * (next.pressure - prev.pressure)
+    }
+
+    /// Interpolates pressures for all tanks at `cursorTime` from the pre-built multi-tank cache.
+    private func interpolateMultiPressures(at cursorTime: Double) -> [Int: Double]? {
+        guard !cachedMultiPressureReadings.isEmpty else { return nil }
+        var result: [Int: Double] = [:]
+        for (tankIdx, readings) in cachedMultiPressureReadings {
+            if let p = interpolatePressure(at: cursorTime, in: readings) { result[tankIdx] = p }
+        }
+        return result.isEmpty ? nil : result
+    }
+
+    // MARK: - Interpolated Point
+
+    /// Returns a synthetic point at `cursorTime` by linearly interpolating between the two
+    /// bracketing profile samples. Pressure is interpolated across the sparse AI transmitter
+    /// reading windows rather than just from the nearest sample.
+    private func interpolatedPoint(at cursorTime: Double) -> ChartInterpolatedPoint? {
+        let samples = dive.profileSamples
+        guard !samples.isEmpty else { return nil }
+
+        // Binary search: first index where sample.time > cursorTime (samples are time-sorted).
+        var lo = 0, hi = samples.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if samples[mid].time <= cursorTime { lo = mid + 1 } else { hi = mid }
+        }
+        let nextIdx = lo
+
+        guard nextIdx > 0 else {
+            return makeEdgePoint(cursorTime: cursorTime, from: samples[0], ascentSpeed: nil)
+        }
+        guard nextIdx < samples.count else {
+            return makeEdgePoint(cursorTime: cursorTime, from: samples.last!, ascentSpeed: nil)
+        }
+
+        let prev = samples[nextIdx - 1]
+        let next = samples[nextIdx]
+        let dt = next.time - prev.time
+        let t = dt > 0 ? (cursorTime - prev.time) / dt : 0.0
+
+        let depth = prev.depth + t * (next.depth - prev.depth)
+
+        let temperature: Double? = {
+            if let pt = prev.temperature, let nt = next.temperature { return pt + t * (nt - pt) }
+            return prev.temperature ?? next.temperature
+        }()
+
+        let ndl: Double? = {
+            let pn: Double? = { guard let n = prev.ndl, n < ndlSentinel else { return nil }; return n }()
+            let nn: Double? = { guard let n = next.ndl, n < ndlSentinel else { return nil }; return n }()
+            if let a = pn, let b = nn { return a + t * (b - a) }
+            return pn ?? nn
+        }()
+
+        let ppo2: Double? = {
+            let pp = cachedPPO2BySampleID[prev.id]
+            let np = cachedPPO2BySampleID[next.id]
+            if let a = pp, let b = np { return a + t * (b - a) }
+            return pp ?? np
+        }()
+
+        let tankPressure = interpolatePressure(at: cursorTime, in: cachedSinglePressureReadings)
+        let ascentSpeed: Double? = dt > 0 ? (prev.depth - next.depth) / dt : nil
+        let nearest = t < 0.5 ? prev : next
+
+        // Union events from both neighbours so continuous-state events (.decoStop) and
+        // point-in-time events (.gasChange) are never dropped due to the 50% split.
+        let mergedEvents = prev.events + next.events.filter { !prev.events.contains($0) }
+        // For gas display, prefer the sample carrying the switch so the correct new gas is shown.
+        let gasSource = prev.events.contains(.gasChange) ? prev
+            : next.events.contains(.gasChange) ? next
+            : nearest
+
+        return ChartInterpolatedPoint(
+            time: cursorTime,
+            depth: depth,
+            temperature: temperature,
+            tankPressure: tankPressure,
+            tankPressures: interpolateMultiPressures(at: cursorTime),
+            ndl: ndl,
+            ppo2: ppo2,
+            sensorPPO2: nearest.sensorPPO2,
+            events: mergedEvents,
+            currentGas: gasSource.currentGas,
+            ascentSpeed: ascentSpeed
+        )
+    }
+
+    /// Builds a clamped `ChartInterpolatedPoint` from a single sample (used at the edges).
+    private func makeEdgePoint(cursorTime: Double, from sample: DiveProfilePoint, ascentSpeed: Double?) -> ChartInterpolatedPoint {
+        ChartInterpolatedPoint(
+            time: cursorTime,
+            depth: sample.depth,
+            temperature: sample.temperature,
+            tankPressure: interpolatePressure(at: cursorTime, in: cachedSinglePressureReadings),
+            tankPressures: interpolateMultiPressures(at: cursorTime),
+            ndl: sample.ndl.flatMap { $0 < ndlSentinel ? $0 : nil },
+            ppo2: cachedPPO2BySampleID[sample.id],
+            sensorPPO2: sample.sensorPPO2,
+            events: sample.events,
+            currentGas: sample.currentGas,
+            ascentSpeed: ascentSpeed
+        )
+    }
+
     // MARK: - PPO2 Helpers
 
     /// Builds `cachedPPO2BySampleID` using `buildPPO2Map` — called once per toggle or dive change.
     private func rebuildPPO2Cache() {
         cachedPPO2BySampleID = buildPPO2Map(for: dive)
-    }
-
-    /// O(1) tooltip lookup — returns the pre-cached PPO₂ for the nearest sample.
-    private func computePPO2(for target: DiveProfilePoint) -> Double? {
-        guard visibility.showPPO2 else { return nil }
-        return cachedPPO2BySampleID[target.id]
     }
 
     // MARK: - Legend View
@@ -1341,91 +1476,65 @@ struct UnifiedDiveChartOptimized: View {
 /// Popup card that appears above the drag cursor showing depth, temperature, pressure and NDL
 /// for the nearest profile sample.
 struct ChartTooltipView: View {
-    let sample: DiveProfilePoint
+    let point: ChartInterpolatedPoint
     let visibility: ChartLineVisibility
     let dive: Dive
-
-    // Pre-computed ranges passed in to avoid recomputing inside the view
-    let tempMin: Double?
-    let tempMax: Double?
-    let pressMin: Double?
-    let pressMax: Double?
-
-    /// Pre-computed PPO2 value for this sample (nil when PPO2 overlay is off)
-    let ppo2: Double?
-
-    /// Ascent/descent speed in m/min at this sample (positive = ascending, negative = descending)
-    let ascentSpeed: Double?
+    let decoStopEntries: [(stop: DecoStop, entryTime: Double)]
 
     @State private var prefs = UserPreferences.shared
 
     // MARK: Formatted values
 
     private var timeLabel: String {
-        let totalSec = Int(sample.time * 60)
+        let totalSec = Int(point.time * 60)
         let m = totalSec / 60
         let s = totalSec % 60
         return String(format: "%d:%02d", m, s)
     }
 
     private var depthLabel: String {
-        let converted = dive.displayProfileDepth(sample.depth)
+        let converted = dive.displayProfileDepth(point.depth)
         let symbol = UserPreferences.shared.depthUnit.symbol
         return converted.localizedString(decimals: 1) + " \(symbol)"
     }
 
     private var temperatureLabel: String? {
-        guard let t = sample.temperature else { return nil }
-        // Route through the dive's import metadata so the stored unit is respected.
+        guard let t = point.temperature else { return nil }
         return prefs.temperatureUnit.formatted(t, from: dive.storedTemperatureUnit)
     }
 
     private var pressureLabel: String? {
-        guard let p = sample.tankPressure else { return nil }
-        // Use the dive's unit-aware conversion — never apply heuristics directly.
+        guard let p = point.tankPressure else { return nil }
         return dive.formattedPressure(p)
     }
 
     /// Per-tank pressure labels for multi-tank tooltip.
     private var perTankPressureLabels: [(index: Int, label: String)]? {
-        guard let tp = sample.tankPressures, tp.count > 1 else { return nil }
+        guard let tp = point.tankPressures, tp.count > 1 else { return nil }
         return tp.sorted(by: { $0.key < $1.key }).map { (index: $0.key, label: dive.formattedPressure($0.value)) }
     }
-    
+
     private var ndlLabel: String? {
-        guard let ndl = sample.ndl, ndl < ndlSentinel else { return nil }
+        guard let ndl = point.ndl else { return nil }
         return ndl.localizedString(decimals: 0) + " min"
     }
 
-    /// Mandatory deco stop (type == 2) whose diamond marker sits on or near this sample.
-    /// Exact UUID match first; falls back to ±2 positions in the sorted deco-sample array
-    /// so the chart snapping to an adjacent sample still reveals the stop detail.
-    /// Sample-count window is recording-rate-agnostic (works for 1 s FIT and 4 s BLE).
     private var matchingDecoStop: DecoStop? {
-        guard sample.events.contains(.decoStop) else { return nil }
-        let reps = mandatoryDecoStopRepresentatives(for: dive)
-        guard !reps.isEmpty else { return nil }
+        guard point.events.contains(.decoStop) else { return nil }
 
-        // 1. Exact match — representative sample itself.
-        if let exact = reps.first(where: { $0.sampleID == sample.id }) {
-            return exact.stop
+        // Each diamond on the chart marks the entry time of a mandatory stop (ascending crossing).
+        // Count how many diamonds the cursor has passed.
+        let passedCount = decoStopEntries.filter { $0.entryTime <= point.time }.count
+
+        if passedCount == 0 {
+            // Before the first diamond — show the first upcoming stop.
+            return decoStopEntries.first?.stop
         }
 
-        // 2. Adjacent match — within ±2 positions in the sorted deco-sample array.
-        //    Pick the rep with the smallest index distance so that samples equidistant
-        //    between two stops resolve to the nearest diamond, not the deeper one.
-        let decoSamples = dive.profileSamples
-            .filter { $0.events.contains(.decoStop) }
-            .sorted { $0.time < $1.time }
-        guard let myIdx = decoSamples.firstIndex(where: { $0.id == sample.id }) else { return nil }
-        let best = reps
-            .compactMap { rep -> (stop: DecoStop, dist: Int)? in
-                guard let repIdx = decoSamples.firstIndex(where: { $0.id == rep.sampleID }) else { return nil }
-                let d = abs(myIdx - repIdx)
-                return d <= 2 ? (rep.stop, d) : nil
-            }
-            .min(by: { $0.dist < $1.dist })
-        return best?.stop
+        // After diamond N, show stop N+1 (next upcoming). After the last diamond, show nothing.
+        let nextIndex = passedCount
+        guard nextIndex < decoStopEntries.count else { return nil }
+        return decoStopEntries[nextIndex].stop
     }
 
     /// Header label for the deco row.
@@ -1437,7 +1546,9 @@ struct ChartTooltipView: View {
     /// Returns nil when the sample does not coincide with a mandatory stop point.
     private var decoStopDetail: String? {
         guard let stop = matchingDecoStop else { return nil }
-        let depth    = dive.displayProfileDepth(stop.depth).localizedString(decimals: 0) + prefs.depthUnit.symbol
+        // DecoStop.depth is always metres; convert to stored unit before displayProfileDepth.
+        let stopInStoredUnit = dive.importDistanceUnit == "feet" ? stop.depth * 3.28084 : stop.depth
+        let depth    = dive.displayProfileDepth(stopInStoredUnit).localizedString(decimals: 0) + prefs.depthUnit.symbol
         let duration = ceil(stop.time / 60).localizedString(decimals: 0) + "min"
         return "\(depth) · \(duration)"
     }
@@ -1446,33 +1557,38 @@ struct ChartTooltipView: View {
     /// Uses the sample's recorded `currentGas` index directly (set by the dive computer parser),
     /// which correctly reflects switch-backs to a previously-used tank.
     private var gasChangeName: String? {
-        guard sample.events.contains(.gasChange),
-              let gasIdx = sample.currentGas,
+        guard point.events.contains(.gasChange),
+              let gasIdx = point.currentGas,
               gasIdx >= 0,
               gasIdx < dive.tanks.count else { return nil }
         return dive.tanks[gasIdx].gasDisplayName()
     }
 
+    // ascentSpeed is stored-unit/min; normalise to m/min before display so
+    // depthUnit.convert() (which assumes metres) and the m/min thresholds are correct.
+    private var ascentSpeedMetresPerMin: Double? {
+        guard let speed = point.ascentSpeed else { return nil }
+        return dive.importDistanceUnit == "feet" ? speed / 3.28084 : speed
+    }
+
     private var ascentSpeedLabel: String? {
-        guard let speed = ascentSpeed else { return nil }
-        let displaySpeed = prefs.depthUnit.convert(abs(speed))
+        guard let speedMPM = ascentSpeedMetresPerMin else { return nil }
+        let displaySpeed = prefs.depthUnit.convert(abs(speedMPM))
         let symbol = prefs.depthUnit.symbol
         return displaySpeed.localizedString(decimals: 1) + " \(symbol)/min"
     }
 
-    /// Colour for ascent speed: cyan for descent, orange for fast ascent, red for dangerous ascent
     private var ascentSpeedColor: Color {
-        guard let speed = ascentSpeed else { return .secondary }
-        if speed <= 0 { return .cyan }       // descending or level
-        if speed >= 18 { return .red }       // dangerous (≥18 m/min)
-        if speed >= 10 { return .orange }    // fast (10-18 m/min)
-        return .cyan                          // normal ascent
+        guard let speedMPM = ascentSpeedMetresPerMin else { return .secondary }
+        if speedMPM <= 0 { return .cyan }
+        if speedMPM >= 18 { return .red }
+        if speedMPM >= 10 { return .orange }
+        return .cyan
     }
 
-    /// Arrow icon indicating ascent or descent direction
     private var ascentSpeedIcon: String {
-        guard let speed = ascentSpeed else { return "arrow.up.arrow.down" }
-        if abs(speed) < 0.5 { return "equal" }  // essentially level
+        guard let speed = point.ascentSpeed else { return "arrow.up.arrow.down" }
+        if abs(speed) < 0.5 { return "equal" }
         return speed > 0 ? "arrow.up" : "arrow.down"
     }
 
@@ -1517,8 +1633,8 @@ struct ChartTooltipView: View {
 
             // PPO2 — shown if enabled; voted row always shown, then per-sensor rows for CCR
             if visibility.showPPO2 {
-                if let sensorData = sample.sensorPPO2, !sensorData.isEmpty {
-                    if let p = ppo2 {
+                if let sensorData = point.sensorPPO2, !sensorData.isEmpty {
+                    if let p = point.ppo2 {
                         let ppo2Color: Color = p < DiveProfileEvent.ppo2HypoxicThreshold ? .cyan
                             : p < DiveProfileEvent.ppo2WarnThreshold ? .green
                             : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
@@ -1531,7 +1647,7 @@ struct ChartTooltipView: View {
                                        label: String(format: NSLocalizedString("S%ld: ", bundle: Bundle.forAppLanguage(), comment: "Tooltip label prefix for per-O2-sensor PPO2 in the dive chart; %ld = sensor number (1-based)"), idx + 1) + p.localizedString(decimals: 2, minDecimals: 2) + " bar")
                         }
                     }
-                } else if let p = ppo2 {
+                } else if let p = point.ppo2 {
                     let ppo2Color: Color = p < DiveProfileEvent.ppo2HypoxicThreshold ? .cyan
                         : p < DiveProfileEvent.ppo2WarnThreshold ? .green
                         : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
@@ -1541,7 +1657,7 @@ struct ChartTooltipView: View {
             }
 
             // Deco event — shown if enabled and this sample carries a deco obligation.
-            if visibility.showDeco && sample.events.contains(.decoStop) {
+            if visibility.showDeco && point.events.contains(.decoStop) {
                 tooltipRow(icon: "exclamationmark.triangle.fill", color: .orange, label: decoDiveLabel)
                 // When on a mandatory stop point, show depth + duration on a sub-row.
                 if let detail = decoStopDetail {
