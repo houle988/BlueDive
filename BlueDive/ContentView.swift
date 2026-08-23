@@ -976,7 +976,7 @@ struct ContentView: View {
                                 }
                             )) {
                                 ForEach(sectionDives) { dive in
-                                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: displayedDives)) {
+                                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sectionDives)) {
                                         DiveRowView(
                                             dive: dive,
                                             diveNumber: dives.count - (diveIndexLookup[dive.id] ?? 0)
