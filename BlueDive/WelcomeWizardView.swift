@@ -14,7 +14,7 @@ struct WelcomeWizardView: View {
             title: "Welcome to BlueDive",
             subtitle: "Your modern personal dive logbook",
             features: [
-                Feature(icon: "doc.badge.plus", color: .blue, title: "Import Formats", description: "Import from BlueDive XML, MacDive XML, or UDDF files — all major dive log formats supported."),
+                Feature(icon: "doc.badge.plus", color: .blue, title: "Import Formats", description: "Import from BlueDive XML, MacDive XML, UDDF, or Garmin FIT files — all major dive log formats supported."),
                 Feature(icon: "antenna.radiowaves.left.and.right", color: .cyan, title: "Bluetooth Sync", description: "Connect directly to your dive computer via Bluetooth to download dives wirelessly."),
                 Feature(icon: "plus.circle", color: .green, title: "Manual Entry", description: "Log dives manually with full control over date, depth, duration, and all details."),
             ]
@@ -56,6 +56,7 @@ struct WelcomeWizardView: View {
                 Feature(icon: "tray.2.fill", color: .brown, title: "Gear Groups", description: "Organize equipment into groups — e.g. tropical kit, cold water setup."),
                 Feature(icon: "cylinder.fill", color: .mint, title: "Tank Templates", description: "Save your favorite tank configurations for quick reuse."),
                 Feature(icon: "graduationcap.fill", color: .blue, title: "Certifications", description: "Store diving certifications and get expiry alerts."),
+                Feature(icon: "shield.fill", color: .green, title: "Diving Insurance", description: "Store your dive insurance policies and keep renewal dates at hand."),
             ]
         ),
         // Page 5: Dive tools (Hidden – uncomment to re-enable calculators page)
