@@ -531,7 +531,7 @@ struct DocumentsView: View {
             .fileExporter(
                 isPresented: $showFileExporter,
                 document: exportDocument,
-                contentType: .xml,
+                contentType: .blueDiveXML,
                 defaultFilename: exportFileName
             ) { _ in
                 exportDocument = nil
@@ -903,11 +903,11 @@ struct DocumentsView: View {
         let xml = CertificationXMLExporter.generateXML(for: certifications)
         guard let data = xml.data(using: .utf8) else { return }
         let datePart = DocumentsView.exportDateFormatter.string(from: Date())
-        let fileName = "BlueDive_Certifications_\(datePart).xml"
+        let fileName = "BlueDive_Certifications_\(datePart).bluedive"
         #if os(macOS)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = fileName
-        panel.allowedContentTypes = [.xml]
+        panel.allowedContentTypes = [.blueDiveXML]
         panel.canCreateDirectories = true
         panel.begin { [self] response in
             guard response == .OK, let url = panel.url else { return }
@@ -931,11 +931,11 @@ struct DocumentsView: View {
         let xml = InsuranceXMLExporter.generateXML(for: insurances)
         guard let data = xml.data(using: .utf8) else { return }
         let datePart = DocumentsView.exportDateFormatter.string(from: Date())
-        let fileName = "BlueDive_Insurance_\(datePart).xml"
+        let fileName = "BlueDive_Insurance_\(datePart).bluedive"
         #if os(macOS)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = fileName
-        panel.allowedContentTypes = [.xml]
+        panel.allowedContentTypes = [.blueDiveXML]
         panel.canCreateDirectories = true
         panel.begin { [self] response in
             guard response == .OK, let url = panel.url else { return }

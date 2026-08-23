@@ -321,7 +321,7 @@ struct GearListView: View {
         .fileExporter(
             isPresented: $showFileExporter,
             document: exportDocument,
-            contentType: .xml,
+            contentType: .blueDiveXML,
             defaultFilename: exportFileName
         ) { _ in
             exportDocument = nil
@@ -629,12 +629,12 @@ struct GearListView: View {
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         let datePart = formatter.string(from: Date())
-        let fileName = "BlueDive_Gear_\(datePart).xml"
+        let fileName = "BlueDive_Gear_\(datePart).bluedive"
 
         #if os(macOS)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = fileName
-        panel.allowedContentTypes = [.xml]
+        panel.allowedContentTypes = [.blueDiveXML]
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
