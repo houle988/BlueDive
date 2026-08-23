@@ -110,6 +110,7 @@ struct ContentView: View {
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
     @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
     @Environment(CloudKitSyncMonitor.self) private var syncMonitor
+    @Environment(FileImportCoordinator.self) private var importCoordinator
     @State private var showSyncStatusPopover = false
     @State private var collapsedDiverSections: Set<String> = []
     @State private var diveIndexLookup: [Dive.ID: Int] = [:]
@@ -735,6 +736,12 @@ struct ContentView: View {
         }
         .onAppear {
             rebuildDerivedDiveState()
+            // Cold-launch: onOpenURL may fire before this view mounts, so check
+            // for a pending file URL that was stashed in the coordinator at launch.
+            if let url = importCoordinator.pendingURL {
+                importCoordinator.pendingURL = nil
+                handleExternalFileURL(url)
+            }
         }
         .task {
             updateWidgetDiveData()
@@ -745,6 +752,12 @@ struct ContentView: View {
         .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
         .onChange(of: uniqueDivers) { _, newDivers in
             collapsedDiverSections.formIntersection(newDivers)
+        }
+        // Warm-launch: handle file URLs that arrive while the app is already running.
+        .onChange(of: importCoordinator.pendingURL) { _, url in
+            guard let url else { return }
+            importCoordinator.pendingURL = nil
+            handleExternalFileURL(url)
         }
     }
 

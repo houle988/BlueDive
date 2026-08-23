@@ -18,6 +18,18 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Garmin FIT Activity</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.garmin.fit</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>Zip Archive</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>

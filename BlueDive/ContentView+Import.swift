@@ -13,6 +13,17 @@ enum ImportFileType {
     case garminFIT
 }
 
+// MARK: - File Import Coordinator
+
+/// Holds a pending file URL delivered by the OS when the user opens a .fit or .uddf
+/// file from Files, Mail, AirDrop, or any share sheet. Injected into the SwiftUI
+/// environment by BlueDiveApp so ContentView can consume it regardless of whether
+/// the app was cold-launched or already running.
+@Observable
+final class FileImportCoordinator {
+    var pendingURL: URL?
+}
+
 // MARK: - Import Error
 
 enum ImportError: LocalizedError {
@@ -90,7 +101,6 @@ extension ContentView {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
-            // Read the file once: used for format detection and later for import.
             Task {
                 guard url.startAccessingSecurityScopedResource() else {
                     await MainActor.run {
@@ -101,91 +111,114 @@ extension ContentView {
                 }
                 let rawData = try? Data(contentsOf: url)
                 url.stopAccessingSecurityScopedResource()
-
-                // Scan the first 4 KB — all format signatures appear near the top.
-                let snippet = rawData.flatMap { String(data: $0.prefix(4096), encoding: .utf8) } ?? ""
-
-                // ── Format detection ──────────────────────────────────────────────
-                // Priority order matters: check the most specific signatures first.
-
-                // 0. Garmin FIT — binary format; check raw bytes before UTF-8 decode.
-                //    FIT signature: ".FIT" (0x2E 0x46 0x49 0x54) at byte offset 8.
-                let isGarminFIT: Bool = {
-                    guard let data = rawData, data.count >= 12 else { return false }
-                    let sig = data.subdata(in: 8..<12)
-                    return sig.elementsEqual([0x2E, 0x46, 0x49, 0x54])
-                        || url.pathExtension.lowercased() == "fit"
-                }()
-
-                // 1. BlueDive XML — our own export format.
-                //    Signature: <software>BlueDive</software> inside <metadata>.
-                let isBlueDive = snippet.contains("<software>BlueDive</software>")
-
-                // 2. UDDF — identified by <uddf root element or .uddf extension.
-                //    Checked before MacDive because UDDF files exported by MacDive
-                //    may contain "mac-dive.com" in their <generator> section.
-                let isUDDF = !isBlueDive && (
-                    snippet.contains("<uddf")
-                    || url.pathExtension.lowercased() == "uddf"
-                )
-
-                // 3. MacDive XML — identified by its DOCTYPE declaration.
-                let isMacDive  = !isBlueDive && !isUDDF && (
-                    snippet.contains("<!DOCTYPE dives SYSTEM \"http://www.mac-dive.com/macdive_logbook.dtd\">")
-                    || snippet.contains("mac-dive.com")
-                )
-
-                await MainActor.run {
-                    if isGarminFIT {
-                        // Garmin FIT — SI units are embedded; show the options sheet
-                        // for confirm/cancel parity with UDDF (no unit pickers, no gear toggle).
-                        let options = ImportFormatOptions()
-                        importFormatOptions = options
-                        if let data = rawData {
-                            pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .garminFIT)
-                        }
-
-                    } else if isBlueDive {
-                        // BlueDive XML — units are stored inside the file but we
-                        // still show the import sheet so the user can toggle gear import.
-                        let options = ImportFormatOptions()
-                        importFormatOptions = options
-                        if let data = rawData {
-                            pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .blueDive)
-                        }
-
-                    } else if isUDDF {
-                        // UDDF — units are always SI (converted to metric by the parser)
-                        // but we still show the import sheet so the user can toggle gear import.
-                        let options = ImportFormatOptions()
-                        importFormatOptions = options
-                        if let data = rawData {
-                            pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .uddf)
-                        }
-
-                    } else if isMacDive {
-                        // MacDive XML — units are ambiguous, show the picker first.
-                        let options: ImportFormatOptions
-                        if let data = rawData,
-                           let detected = DetectedUnitSystem.detect(from: data) {
-                            options = detected.formatOptions
-                        } else {
-                            options = ImportFormatOptions()
-                        }
-                        importFormatOptions = options
-                        if let data = rawData {
-                            pendingImport = PendingImport(url: url, data: data, formatOptions: options)
-                        }
-
-                    } else {
-                        // Unrecognised format — inform the user.
-                        importError = .unsupportedFormat
-                        showErrorAlert = true
-                    }
-                }
+                await MainActor.run { routeImportData(rawData, url: url) }
             }
         case .failure(let error):
             importError = .fileSelectionFailed(error)
+            showErrorAlert = true
+        }
+    }
+
+    /// Handles a file URL delivered by the OS via document association (Files app, share
+    /// sheet, AirDrop, Mail). Unlike handleFileImport, there is no guarantee the URL is a
+    /// security-scoped bookmark: Inbox copies are directly readable, while iCloud/Files
+    /// routes can be security-scoped. The defensive start/stop dance is a harmless no-op
+    /// for the former and mandatory for the latter.
+    func handleExternalFileURL(_ url: URL) {
+        Task {
+            let accessed = url.startAccessingSecurityScopedResource()
+            let rawData = try? Data(contentsOf: url)
+            if accessed { url.stopAccessingSecurityScopedResource() }
+            guard let rawData else {
+                await MainActor.run { importError = .accessDenied; showErrorAlert = true }
+                return
+            }
+            await MainActor.run { routeImportData(rawData, url: url) }
+        }
+    }
+
+    /// Detects the format of rawData and sets pendingImport (or shows an error).
+    /// Must be called on the main actor; both handleFileImport and handleExternalFileURL
+    /// dispatch here via await MainActor.run {}.
+    @MainActor
+    private func routeImportData(_ rawData: Data?, url: URL) {
+        // Scan the first 4 KB — all format signatures appear near the top.
+        let snippet = rawData.flatMap { String(data: $0.prefix(4096), encoding: .utf8) } ?? ""
+
+        // ── Format detection ──────────────────────────────────────────────
+        // Priority order matters: check the most specific signatures first.
+
+        // 0. Garmin FIT — binary format; check raw bytes before UTF-8 decode.
+        //    FIT signature: ".FIT" (0x2E 0x46 0x49 0x54) at byte offset 8.
+        let isGarminFIT: Bool = {
+            guard let data = rawData, data.count >= 12 else { return false }
+            let sig = data.subdata(in: 8..<12)
+            return sig.elementsEqual([0x2E, 0x46, 0x49, 0x54])
+                || url.pathExtension.lowercased() == "fit"
+        }()
+
+        // 1. BlueDive XML — our own export format.
+        //    Signature: <software>BlueDive</software> inside <metadata>.
+        let isBlueDive = snippet.contains("<software>BlueDive</software>")
+
+        // 2. UDDF — identified by <uddf root element or .uddf extension.
+        //    Checked before MacDive because UDDF files exported by MacDive
+        //    may contain "mac-dive.com" in their <generator> section.
+        let isUDDF = !isBlueDive && (
+            snippet.contains("<uddf")
+            || url.pathExtension.lowercased() == "uddf"
+        )
+
+        // 3. MacDive XML — identified by its DOCTYPE declaration.
+        let isMacDive = !isBlueDive && !isUDDF && (
+            snippet.contains("<!DOCTYPE dives SYSTEM \"http://www.mac-dive.com/macdive_logbook.dtd\">")
+            || snippet.contains("mac-dive.com")
+        )
+
+        if isGarminFIT {
+            // Garmin FIT — SI units are embedded; show the options sheet
+            // for confirm/cancel parity with UDDF (no unit pickers, no gear toggle).
+            let options = ImportFormatOptions()
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .garminFIT)
+            }
+
+        } else if isBlueDive {
+            // BlueDive XML — units are stored inside the file but we
+            // still show the import sheet so the user can toggle gear import.
+            let options = ImportFormatOptions()
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .blueDive)
+            }
+
+        } else if isUDDF {
+            // UDDF — units are always SI (converted to metric by the parser)
+            // but we still show the import sheet so the user can toggle gear import.
+            let options = ImportFormatOptions()
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .uddf)
+            }
+
+        } else if isMacDive {
+            // MacDive XML — units are ambiguous, show the picker first.
+            let options: ImportFormatOptions
+            if let data = rawData,
+               let detected = DetectedUnitSystem.detect(from: data) {
+                options = detected.formatOptions
+            } else {
+                options = ImportFormatOptions()
+            }
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options)
+            }
+
+        } else {
+            // Unrecognised format — inform the user.
+            importError = .unsupportedFormat
             showErrorAlert = true
         }
     }

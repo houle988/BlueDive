@@ -105,6 +105,7 @@ struct BlueDiveApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var prefs = UserPreferences.shared
     @State private var syncMonitor = CloudKitSyncMonitor()
+    @State private var importCoordinator = FileImportCoordinator()
     #if os(macOS)
     @State private var showingAbout = false
     #endif
@@ -117,6 +118,7 @@ struct BlueDiveApp: App {
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
             .environment(syncMonitor)
+            .environment(importCoordinator)
             .onChange(of: scenePhase) { _, newPhase in
                 #if os(iOS)
                 if newPhase == .background, !ProcessInfo.processInfo.isiOSAppOnMac {
@@ -129,12 +131,20 @@ struct BlueDiveApp: App {
             }
             .onOpenURL { url in
                 // Widget deep-links: bluedive://add/manual | bluedive://add/bluetooth
-                guard let action = AddDiveDeepLink.action(for: url) else { return }
-                switch action {
-                case .manual:
-                    NotificationCenter.default.post(name: .addDiveManual, object: nil)
-                case .bluetooth:
-                    NotificationCenter.default.post(name: .addDiveBluetooth, object: nil)
+                if let action = AddDiveDeepLink.action(for: url) {
+                    switch action {
+                    case .manual:
+                        NotificationCenter.default.post(name: .addDiveManual, object: nil)
+                    case .bluetooth:
+                        NotificationCenter.default.post(name: .addDiveBluetooth, object: nil)
+                    }
+                    return
+                }
+                // File open: .fit and .uddf files from document associations, share
+                // sheet, AirDrop, or Files app. ContentView observes importCoordinator
+                // and calls handleExternalFileURL when this becomes non-nil.
+                if url.isFileURL {
+                    importCoordinator.pendingURL = url
                 }
             }
             #if os(macOS)
