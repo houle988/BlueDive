@@ -30,6 +30,18 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>BlueDive Dive Log</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>app.bluedive.xml</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>Zip Archive</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
@@ -67,6 +79,23 @@
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.xml</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>BlueDive Dive Log</string>
+			<key>UTTypeIdentifier</key>
+			<string>app.bluedive.xml</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>bluedive</string>
+				</array>
+			</dict>
+		</dict>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>

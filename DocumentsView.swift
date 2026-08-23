@@ -26,6 +26,7 @@ enum DocumentSection: String, CaseIterable, Identifiable {
 struct DocumentsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.locale) private var locale
+    @Environment(FileImportCoordinator.self) private var importCoordinator
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     @Query(sort: \DivingInsurance.endDate, order: .reverse) private var insurances: [DivingInsurance]
     @Query(sort: \Gear.name) private var allGear: [Gear]
@@ -551,6 +552,40 @@ struct DocumentsView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(verbatim: exportError ?? NSLocalizedString("An unknown error occurred.", bundle: Bundle.forAppLanguage(), comment: "Default error message shown in the export error alert when no specific error is available."))
+        }
+        .onAppear {
+            // Always nil the coordinator payloads so they are never stranded.
+            // Only invoke the handler when no preview sheet is already active —
+            // if both arrive simultaneously the cert import runs first; the
+            // insurance payload is dropped (showImportPreview will be true).
+            if let pending = importCoordinator.pendingCertXML {
+                importCoordinator.pendingCertXML = nil
+                if !showImportPreview {
+                    importTarget = .certifications
+                    handleCertificationsImport(data: pending.data, fileName: pending.fileName)
+                }
+            }
+            if let pending = importCoordinator.pendingInsuranceXML {
+                importCoordinator.pendingInsuranceXML = nil
+                if !showImportPreview {
+                    importTarget = .insurance
+                    handleInsuranceImport(data: pending.data, fileName: pending.fileName)
+                }
+            }
+        }
+        .onChange(of: importCoordinator.pendingCertXML) { _, newValue in
+            guard let pending = newValue else { return }
+            importCoordinator.pendingCertXML = nil
+            guard !showImportPreview else { return }
+            importTarget = .certifications
+            handleCertificationsImport(data: pending.data, fileName: pending.fileName)
+        }
+        .onChange(of: importCoordinator.pendingInsuranceXML) { _, newValue in
+            guard let pending = newValue else { return }
+            importCoordinator.pendingInsuranceXML = nil
+            guard !showImportPreview else { return }
+            importTarget = .insurance
+            handleInsuranceImport(data: pending.data, fileName: pending.fileName)
         }
     }
 

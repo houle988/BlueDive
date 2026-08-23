@@ -15,6 +15,15 @@ enum ImportFileType {
 
 // MARK: - File Import Coordinator
 
+/// Wraps a gear/certification/insurance XML payload delivered via file association.
+/// Equality is by ID so SwiftUI onChange comparisons are O(1).
+struct PendingXMLImport: Equatable {
+    let id: UUID
+    let data: Data
+    let fileName: String
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+}
+
 /// Holds a pending file URL delivered by the OS when the user opens a .fit or .uddf
 /// file from Files, Mail, AirDrop, or any share sheet. Injected into the SwiftUI
 /// environment by BlueDiveApp so ContentView can consume it regardless of whether
@@ -22,6 +31,9 @@ enum ImportFileType {
 @Observable
 final class FileImportCoordinator {
     var pendingURL: URL?
+    var pendingGearXML: PendingXMLImport?
+    var pendingCertXML: PendingXMLImport?
+    var pendingInsuranceXML: PendingXMLImport?
 }
 
 // MARK: - Import Error
@@ -157,9 +169,24 @@ extension ContentView {
                 || url.pathExtension.lowercased() == "fit"
         }()
 
-        // 1. BlueDive XML — our own export format.
-        //    Signature: <software>BlueDive</software> inside <metadata>.
-        let isBlueDive = snippet.contains("<software>BlueDive</software>")
+        // 1. BlueDive dive-log XML — our own dive export format.
+        //    Requires both the software tag AND the <blueDiveExport> root element to avoid
+        //    falsely matching gear/cert/insurance XML (which also include <software>BlueDive</software>).
+        //    The .bluedive extension is treated as a dive log only when the content does NOT
+        //    match a more-specific auxiliary type: ExportableFileDocument.writableContentTypes
+        //    includes .blueDiveXML (conforms to public.xml), so iOS can resolve contentType:.xml
+        //    to .blueDiveXML and save gear/cert/insurance exports with a .bluedive extension.
+        let isBlueDive = (snippet.contains("<software>BlueDive</software>") && snippet.contains("<blueDiveExport>"))
+            || (url.pathExtension.lowercased() == "bluedive"
+                && !snippet.contains("<blueDiveGearExport>")
+                && !snippet.contains("<blueDiveCertificationExport>")
+                && !snippet.contains("<blueDiveInsuranceExport>"))
+
+        // 1a. BlueDive auxiliary XML types — gear, certification, and insurance exports.
+        //     Checked after isBlueDive to avoid double-matching.
+        let isGearXML        = !isBlueDive && snippet.contains("<blueDiveGearExport>")
+        let isCertXML        = !isBlueDive && !isGearXML && snippet.contains("<blueDiveCertificationExport>")
+        let isInsuranceXML   = !isBlueDive && !isGearXML && !isCertXML && snippet.contains("<blueDiveInsuranceExport>")
 
         // 2. UDDF — identified by <uddf root element or .uddf extension.
         //    Checked before MacDive because UDDF files exported by MacDive
@@ -214,6 +241,27 @@ extension ContentView {
             importFormatOptions = options
             if let data = rawData {
                 pendingImport = PendingImport(url: url, data: data, formatOptions: options)
+            }
+
+        } else if isGearXML {
+            // BlueDive Gear XML — route to Equipment tab via coordinator + notification.
+            if let data = rawData {
+                importCoordinator.pendingGearXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
+                NotificationCenter.default.post(name: .importGearXML, object: nil)
+            }
+
+        } else if isCertXML {
+            // BlueDive Certification XML — route to Documents tab via coordinator + notification.
+            if let data = rawData {
+                importCoordinator.pendingCertXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
+                NotificationCenter.default.post(name: .importCertificationXML, object: nil)
+            }
+
+        } else if isInsuranceXML {
+            // BlueDive Insurance XML — route to Documents tab via coordinator + notification.
+            if let data = rawData {
+                importCoordinator.pendingInsuranceXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
+                NotificationCenter.default.post(name: .importInsuranceXML, object: nil)
             }
 
         } else {
@@ -1212,11 +1260,11 @@ extension ContentView {
         guard !isExporting else { return }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        let fileName = "BlueDive_Export_\(formatter.string(from: Date())).xml"
+        let fileName = "BlueDive_Export_\(formatter.string(from: Date())).bluedive"
         #if os(macOS)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = fileName
-        panel.allowedContentTypes = [.xml]
+        panel.allowedContentTypes = [.blueDiveXML]
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
@@ -1254,7 +1302,7 @@ extension ContentView {
             }
             exportDocument = ExportableFileDocument(data: data)
             exportFileName = fileName
-            exportContentType = .xml
+            exportContentType = .blueDiveXML
             showFileExporter = true
             isExporting = false
             exportProgressCurrent = 0

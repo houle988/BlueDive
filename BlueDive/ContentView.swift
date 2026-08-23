@@ -14,6 +14,7 @@ import AppKit
 extension UTType {
     static let uddf = UTType(importedAs: "org.uddf.uddf")
     static let garminFIT = UTType(importedAs: "com.garmin.fit")
+    static let blueDiveXML = UTType(exportedAs: "app.bluedive.xml")
 }
 
 // Must match `appGroupSuite` in BlueDiveWidgetExtension.swift.
@@ -110,7 +111,7 @@ struct ContentView: View {
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
     @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
     @Environment(CloudKitSyncMonitor.self) private var syncMonitor
-    @Environment(FileImportCoordinator.self) private var importCoordinator
+    @Environment(FileImportCoordinator.self) var importCoordinator
     @State private var showSyncStatusPopover = false
     @State private var collapsedDiverSections: Set<String> = []
     @State private var diveIndexLookup: [Dive.ID: Int] = [:]
@@ -497,7 +498,7 @@ struct ContentView: View {
             #endif
             .fileImporter(
                 isPresented: $showFileImporter,
-                allowedContentTypes: [.xml, .uddf, .garminFIT],
+                allowedContentTypes: [.xml, .uddf, .garminFIT, .blueDiveXML],
                 allowsMultipleSelection: false
             ) { result in
                 handleFileImport(result: result)

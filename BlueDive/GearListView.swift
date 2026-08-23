@@ -14,6 +14,7 @@ struct GearListView: View {
     @Query private var allInsurances: [DivingInsurance]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.locale) private var locale
+    @Environment(FileImportCoordinator.self) private var importCoordinator
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     @State private var showAddGear = false
@@ -354,6 +355,17 @@ struct GearListView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(verbatim: importError ?? NSLocalizedString("An unknown error occurred.", bundle: Bundle.forAppLanguage(), comment: "Default error message shown in the import error alert when no specific error is available."))
+        }
+        .onAppear {
+            if let pending = importCoordinator.pendingGearXML {
+                importCoordinator.pendingGearXML = nil
+                handleGearXMLData(pending.data, fileName: pending.fileName)
+            }
+        }
+        .onChange(of: importCoordinator.pendingGearXML) { _, newValue in
+            guard let pending = newValue else { return }
+            importCoordinator.pendingGearXML = nil
+            handleGearXMLData(pending.data, fileName: pending.fileName)
         }
 
     }
@@ -725,6 +737,69 @@ struct GearListView: View {
         case .failure(let error):
             importError = error.localizedDescription
             showImportError = true
+        }
+    }
+
+    /// Processes a Gear XML payload delivered via file association (coordinator path).
+    /// Mirrors the XML branch of handleImportResult but accepts pre-loaded Data.
+    func handleGearXMLData(_ data: Data, fileName: String) {
+        guard !showGearImportPreview, !isImporting else { return }
+        importProgressFileName = fileName
+        isImporting = true
+
+        Task {
+            do {
+                let parsed: GearXMLParser.GearParseResult = try await withCheckedThrowingContinuation { continuation in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let parser = GearXMLParser()
+                        guard let result = parser.parse(data: data), !result.isEmpty else {
+                            continuation.resume(throwing: ImportError.parsingFailed)
+                            return
+                        }
+                        continuation.resume(returning: result)
+                    }
+                }
+
+                await MainActor.run {
+                    isImporting = false
+                    importProgressFileName = ""
+                    let (newGear, dupGear) = classifyGearItems(parsed.gearItems)
+
+                    let existingGroupIDs = Set(allGearGroups.map(\.id))
+                    let newGroups = parsed.gearGroups.filter { !existingGroupIDs.contains($0.id) }
+                    let dupGroups = parsed.gearGroups.filter { existingGroupIDs.contains($0.id) }
+
+                    let existingTemplateIDs = Set(allTankTemplates.map(\.id))
+                    let newTemplates = parsed.tankTemplates.filter { !existingTemplateIDs.contains($0.id) }
+                    let dupTemplates = parsed.tankTemplates.filter { existingTemplateIDs.contains($0.id) }
+
+                    if newGear.isEmpty && newGroups.isEmpty && newTemplates.isEmpty {
+                        pendingGearXMLResult = parsed
+                        commitGearXMLImport()
+                        return
+                    }
+
+                    let bundle = Bundle.forAppLanguage()
+                    let groupLabel = NSLocalizedString("Gear Group", bundle: bundle, comment: "Type label for a gear group in the import preview detail")
+                    let templateLabel = NSLocalizedString("Tank Template", bundle: bundle, comment: "Type label for a tank template in the import preview detail")
+                    gearImportPreviewNew = makeGearPreviewItems(newGear)
+                        + newGroups.map { ImportPreviewItem(name: $0.name, detail: groupLabel) }
+                        + newTemplates.map { ImportPreviewItem(name: $0.name, detail: templateLabel) }
+                    gearImportPreviewDuplicates = makeGearPreviewItems(dupGear)
+                        + dupGroups.map { ImportPreviewItem(name: $0.name, detail: groupLabel) }
+                        + dupTemplates.map { ImportPreviewItem(name: $0.name, detail: templateLabel) }
+                    pendingGearXMLResult = parsed
+                    gearPreviewFileName = fileName
+                    showGearImportPreview = true
+                }
+            } catch {
+                await MainActor.run {
+                    isImporting = false
+                    importProgressFileName = ""
+                    importError = NSLocalizedString("No gear data found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports a gear XML file that contains no gear items, groups, or tank templates.")
+                    showImportError = true
+                }
+            }
         }
     }
 
