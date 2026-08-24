@@ -447,12 +447,13 @@ private struct StaticChartLayer: View, Equatable {
     private var cachedAscentRates: [Double] {
         let samples = dive.profileSamples
         guard samples.count >= 2 else { return [] }
+        let toMetres = dive.importDistanceUnit == "feet" ? 1.0 / 3.28084 : 1.0
         return (1..<samples.count).map { i in
             let previous = samples[i - 1]
             let current = samples[i]
             let timeDiff = current.time - previous.time
-            let depthDiff = previous.depth - current.depth
-            return timeDiff > 0 ? (depthDiff / timeDiff) : 0
+            let depthDiffMetres = (previous.depth - current.depth) * toMetres
+            return timeDiff > 0 ? (depthDiffMetres / timeDiff) : 0
         }
     }
 
