@@ -40,7 +40,6 @@ extension Color {
 // MARK: - Diver Profile View
 
 struct DiverProfileView: View {
-    @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     @Query(sort: \DivingInsurance.endDate, order: .reverse) private var insurances: [DivingInsurance]
     @Query(sort: \Gear.name) private var allGear: [Gear]
@@ -49,6 +48,7 @@ struct DiverProfileView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
+    @Environment(DiveStore.self) private var store
 
     @State private var prefs = UserPreferences.shared
 
@@ -62,11 +62,11 @@ struct DiverProfileView: View {
     // MARK: - Diver Filter
 
     private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: dives, gear: allGear, certifications: certifications, insurances: insurances)
+        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: certifications, insurances: insurances)
     }
 
     private var filteredDives: [Dive] {
-        DiverFilter.apply(selectedDiver, to: dives)
+        DiverFilter.apply(selectedDiver, to: store.dives)
     }
 
     private var filteredCertifications: [Certification] {
@@ -1189,8 +1189,8 @@ struct InsuranceDetailView: View {
 struct AddInsuranceView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(DiveStore.self) private var store
 
-    @Query(sort: \Dive.timestamp) private var allDives: [Dive]
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -1201,7 +1201,7 @@ struct AddInsuranceView: View {
     private var isEditing: Bool { insuranceToEdit != nil }
 
     private var diverNameSuggestions: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
+        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     @State private var diverName = ""

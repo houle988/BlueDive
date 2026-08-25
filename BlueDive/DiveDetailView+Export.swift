@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
@@ -74,7 +75,8 @@ extension DiveDetailView {
     }
 
     func exportToPDF() {
-        guard let data = PDFDiveLogbook.generatePDF(for: dive, allDives: allDives) else { return }
+        // store.dives is already sorted by timestamp desc (same order ContentView's @Query delivers)
+        guard let data = PDFDiveLogbook.generatePDF(for: dive, allDives: store.dives) else { return }
         let fileName = makeExportFileName(extension: "pdf")
 
         #if os(macOS)

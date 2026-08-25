@@ -5,6 +5,7 @@ struct AddGearView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
+    @Environment(DiveStore.self) private var store
     
     // MARK: - Form State
     
@@ -33,7 +34,6 @@ struct AddGearView: View {
     @State private var validationMessage = ""
 
     @Query(sort: \Gear.name) private var allGearItems: [Gear]
-    @Query(sort: \Dive.timestamp) private var allDives: [Dive]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
 
@@ -43,7 +43,7 @@ struct AddGearView: View {
     // MARK: - Computed Properties
 
     private var diverNameSuggestions: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGearItems, certifications: allCertifications, insurances: allInsurances)
+        DiverFilter.uniqueDivers(in: store.dives, gear: allGearItems, certifications: allCertifications, insurances: allInsurances)
     }
 
     @State private var manufacturerSuggestions: [String] = []

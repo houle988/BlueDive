@@ -9,7 +9,7 @@ struct EditMenuStatsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Dive.siteName) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -142,7 +142,7 @@ struct EditMenuStatsView: View {
 
     private func uniqueOptionalValues(for keyPath: KeyPath<Dive, String?>) -> [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             guard let val = d[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces),
                   !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -153,7 +153,7 @@ struct EditMenuStatsView: View {
 
     private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             let val = d[keyPath: keyPath].trimmingCharacters(in: .whitespaces)
             guard !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -163,12 +163,12 @@ struct EditMenuStatsView: View {
     }
 
     private var uniqueDiverNames: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
+        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     private var uniqueBuddyNames: [String] {
         var seen = Set<String>()
-        return allDives.flatMap { d -> [String] in
+        return store.dives.flatMap { d -> [String] in
             d.buddies
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -182,7 +182,7 @@ struct EditMenuStatsView: View {
 
     private var uniqueDiveTypeNames: [String] {
         var seen = Set<String>()
-        return allDives.flatMap { d -> [String] in
+        return store.dives.flatMap { d -> [String] in
             (d.diveTypes ?? "")
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -1347,11 +1347,33 @@ struct EditMenuStatsView: View {
         }
 #endif
         if timestampDidChange {
-            Dive.recalculateSurfaceIntervals(in: modelContext, diverName: dive.diverName)
-            if dive.diverName != originalDiverName {
-                Dive.recalculateSurfaceIntervals(in: modelContext, diverName: originalDiverName)
+            // Flush the timestamp change to the persistent store so the background
+            // context sees the new value when it fetches all dives for recalculation.
+            try? modelContext.save()
+            let container = modelContext.container
+            let newDiverName = dive.diverName
+            let oldDiverName = originalDiverName
+            let diverNameChanged = newDiverName != oldDiverName
+            Task.detached(priority: .utility) {
+                let bgContext = ModelContext(container)
+                var updates = Dive.recalculateSurfaceIntervals(in: bgContext, diverName: newDiverName)
+                if diverNameChanged {
+                    let extra = Dive.recalculateSurfaceIntervals(in: bgContext, diverName: oldDiverName)
+                    updates.merge(extra) { _, new in new }
+                }
+                // Capture as immutable before crossing the concurrency boundary.
+                // Patches summary caches directly with the computed values so the list
+                // reflects fresh surface intervals immediately, bypassing the main-context
+                // merge delay that would otherwise leave rows stale until app restart.
+                let finalUpdates = updates
+                await MainActor.run {
+                    store.commitSurfaceIntervals(finalUpdates)
+                }
             }
         }
+        // First commit triggers an immediate rebuild with the updated timestamp;
+        // surface intervals update via the second commit from the background task.
+        store.commit(dive, affects: .list)
         dismiss()
     }
 }
@@ -1359,8 +1381,9 @@ struct EditMenuStatsView: View {
 struct EditSiteDetailsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Dive.siteName) private var allDives: [Dive]
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesByDate: [Dive]
+    @Environment(DiveStore.self) private var store
+    // store.dives is sorted by timestamp desc (same order ContentView's @Query delivers)
+    private var allDivesByDate: [Dive] { store.dives }
 
     @State private var selectedSite: Dive? = nil
     @State private var copyGPSCoordinates: Bool = true
@@ -1407,13 +1430,13 @@ struct EditSiteDetailsView: View {
 
     private var uniqueSites: [Dive] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> Dive? in
+        return store.dives.compactMap { d -> Dive? in
             guard d.id != dive.id,
                   !d.siteName.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
             let key = d.siteName.trimmingCharacters(in: .whitespaces).lowercased()
             guard seen.insert(key).inserted else { return nil }
             return d
-        }
+        }.sorted { $0.siteName.localizedCaseInsensitiveCompare($1.siteName) == .orderedAscending }
     }
 
     /// The 3 most recently dived sites (by date, unique by name)
@@ -1433,7 +1456,7 @@ struct EditSiteDetailsView: View {
 
     private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             let val = d[keyPath: keyPath].trimmingCharacters(in: .whitespaces)
             guard !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -1444,7 +1467,7 @@ struct EditSiteDetailsView: View {
 
     private func uniqueOptionalValues(for keyPath: KeyPath<Dive, String?>) -> [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             guard let val = d[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces),
                   !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -2110,6 +2133,9 @@ struct EditSiteDetailsView: View {
         dive.siteDifficulty = trimmedDifficulty.isEmpty ? nil : trimmedDifficulty
         dive.exitLatitude   = parseFlexibleDouble(workingExitLatitude)
         dive.exitLongitude  = parseFlexibleDouble(workingExitLongitude)
+        // Site fields do not affect sort order, list grouping, or widget fingerprint.
+        // cachedAvailableCountries refreshes lazily when the filter sheet opens.
+        store.commit(dive, affects: .rowFields)
         dismiss()
     }
 }
@@ -2118,7 +2144,7 @@ struct EditSiteDetailsView: View {
 struct EditConditionsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Dive.siteName) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
 
     @State private var workingWaterTemp: Double?
     @State private var workingMinTemp: String
@@ -2135,7 +2161,7 @@ struct EditConditionsView: View {
 
     private var visibilitySuggestions: [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             guard let val = d.visibility?.trimmingCharacters(in: .whitespaces),
                   !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -2502,6 +2528,9 @@ struct EditConditionsView: View {
         dive.current           = trimmedCurrent.isEmpty    ? nil : trimmedCurrent
         let trimmedVisibility  = workingVisibility.trimmingCharacters(in: .whitespaces)
         dive.visibility        = trimmedVisibility.isEmpty ? nil : trimmedVisibility
+        // Conditions fields do not affect sort order, list grouping, or widget fingerprint.
+        // @Observable handles row display updates automatically.
+        store.commit(dive, affects: .rowFields)
         dismiss()
     }
 }
@@ -2512,6 +2541,7 @@ struct EditGazView: View {
     let tankIndex: Int
     var onSlotChanged: ((Int) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(DiveStore.self) private var store
     @Query(sort: \TankTemplate.name) private var templates: [TankTemplate]
     @State private var selectedTemplateName: String = ""
 
@@ -3523,6 +3553,11 @@ struct EditGazView: View {
             onSlotChanged?(targetIndex)
         }
 
+        // Gas/tank fields do not affect sort order, list grouping, or widget fingerprint.
+        // cachedAvailableGasTypes refreshes lazily when the filter sheet opens.
+        // If filterGasType is active, rebuildFilteredDives() reads gasType live and
+        // correctly includes/excludes this dive without a full rebuild.
+        store.commit(dive, affects: .rowFields)
         dismiss()
     }
 }

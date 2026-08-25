@@ -82,3 +82,67 @@ All date and time values displayed in SwiftUI views must respect both the system
 - When using SwiftUI's `Text(_:format:)` with a `Date.FormatStyle`, always append `.locale(locale)` to the format style, e.g. `Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))`.
 - When using `DateFormatter` directly, set `formatter.locale = locale` (from `@Environment(\.locale)`) rather than `.current` or `.autoupdatingCurrent`.
 - Never hardcode a locale or use `Locale.current` directly in a view — it does not reflect the in-app language override.
+
+## DiveStore Architecture
+
+All dive-list data flows through a single `DiveStore`. Follow these rules for any change that reads or mutates dive data displayed in lists, on the map, or in trips.
+
+### Purpose and Motivation
+
+SwiftData `@Query` has no delta mechanism — every observer receives a full re-delivery on any activation, so with multiple active `@Query Dive` observers (there were ~10), every sheet open/close cascaded through all of them. At 10 000+ dives the `gasType` JSON decode and `seenFish` relationship faults triggered by those cascades caused hard freezes. `DiveStore` collapses ownership to a single query and delivers targeted, scoped updates so the app scales from 10 to 10 000+ dives.
+
+### Core Types
+
+- **`@MainActor @Observable final class DiveStore`** — the single source of truth for the dive list, filters, sort, and all derived caches. It is injected via the SwiftUI environment from `BlueDiveApp.swift` and is **never** instantiated inside a child view.
+- **`struct DiveSummary: Identifiable, Hashable, Sendable`** — a value-type snapshot of one dive used by list rows, the map, and trips. All fields are scalar (no SwiftData faults). It carries mutable badge fields (`hasFish`, `hasPhotos`, `seenFishNames`) that the store patches in place. It is `Sendable` specifically so it can cross concurrency boundaries safely.
+- **`enum DiveChangeScope`** — the change classification passed to `commit(_:affects:)`: `.list`, `.rowBadges`, `.rowFields`, `.nothing`.
+
+### Environment Injection
+
+- `BlueDiveApp` owns `@State private var diveStore = DiveStore()` and passes it down with `.environment(diveStore)` on the root container wrapping `MainTabView` (`RootLaunchContainer`).
+- Every child view that needs the store declares `@Environment(DiveStore.self) private var store`. Never declare `@State private var store = DiveStore()` in a child view — that creates a second, disconnected instance.
+
+### @Query Ownership
+
+- **`ContentView` is the only `@Query Dive` owner.** It owns `@Query dives: [Dive]`, `@Query allInsurances: [DivingInsurance]`, and `@Query allMarineSights: [MarineSight]`.
+- When those query results change, `ContentView` passes them to `store.scheduleRebuild(dives:allInsurances:allMarineSights:selectedDiver:force:)`.
+- No other view may add a `@Query Dive`. Adding one reintroduces the full-re-delivery cascade freeze this architecture exists to prevent.
+
+### The Three Commit Scopes
+
+On any save, call `store.commit(_ dive: Dive, affects: DiveChangeScope)` with the narrowest scope that covers the change:
+
+- **`.list`** — full rebuild via `scheduleRebuild(force: true)`. Use when a change reorders or renumbers the list: timestamp, depth, duration, dive number, or diver name (EditMenuStatsView).
+- **`.rowFields`** — incremental single-dive summary patch. Rebuilds one `DiveSummary` and patches `cachedSummaries[idx]` in place; **`store.dives` is NOT reassigned.** If an active filter (search text, country, gas type, depth range, etc.) is set and the edited field could affect filter membership, `.rowFields` falls back to a full `rebuildFilteredDives` for that dive. Use for edits that change displayed row fields but not list order: site name, country, conditions, gas type (EditSiteDetailsView, EditConditionsView, EditGazView).
+- **`.rowBadges`** — badge-only patch via `refreshBadgeSets`. Faults `seenFish`/`photosData` for the one changed dive and patches `hasFish`/`hasPhotos`/`seenFishNames` on its summary. Use for fish and photo add/remove (AddFishView, EditFishView, DiveDetailView+MenuTab).
+- **`.nothing`** — no-op. Use for changes that affect neither list order, row fields, nor badges.
+- **`store.commitListRebuild()`** — full rebuild for the orphan-fish edge case (a fish with no parent dive), where there is no single `Dive` to pass to `commit`.
+
+### View Update Signals
+
+- `store.cachedSummaries` changes on **all three** commit scopes (`.list`, `.rowFields`, `.rowBadges`). A view that must refresh on any dive-field change observes `onChange(of: store.cachedSummaries)` and bumps a local version counter.
+- `store.dives` is reassigned **only** on `.list` commits. Do **not** use `onChange(of: store.dives)` as the change signal in a view that must respond to `.rowFields` edits — it will miss them.
+- `DiveMapView` already uses `onChange(of: store.cachedSummaries, initial: true)`. Do not change it.
+- `MarineLifeView` uses a fish-specific hash in its `.task(id:)` fingerprint and needs no summary observer.
+
+### Background Safety
+
+- `Task.detached` and `nonisolated` functions must never read `UserPreferences.shared` or any other `@MainActor`-isolated property.
+- For depth display inside a background task, capture `displayInFeet: Bool` and `depthFactor: Double` on the MainActor first and pass them in as parameters.
+- Never read `DiveSummary.displayMaxDepth` from a background task — it reads `UserPreferences.shared` (MainActor-isolated). Use the raw value plus a captured `depthFactor` instead.
+- `DiveSummary` conformance to `Sendable` is what makes it safe to hand across these boundaries.
+
+### What NOT To Do
+
+- Never add `@Query var dives: [Dive]` to any view other than `ContentView`.
+- Never post `NotificationCenter` notifications to signal dive changes — call `store.commit(_:affects:)` directly.
+- Never call `store.scheduleRebuild(...)` from a child view. Only `ContentView` owns the query inputs; child views call `commit()`.
+- Never use `onChange(of: store.dives)` to re-trigger a view that displays `.rowFields`-affected data (site, country, gas stats); use `onChange(of: store.cachedSummaries)`.
+- Never read `DiveSummary.displayMaxDepth` from a background task; use the raw value with a captured `depthFactor`.
+
+### Adding a New Edit Sheet
+
+1. Determine the applicable `DiveChangeScope` from the list above.
+2. Add `@Environment(DiveStore.self) private var store` to the edit view.
+3. On save, call `store.commit(dive, affects: <scope>)`, replacing any `NotificationCenter.default.post(...)` call.
+4. If the view must recompute its stats when any dive field changes, add `@State private var contentVersion: Int = 0`, add `.onChange(of: store.cachedSummaries) { _, _ in contentVersion += 1 }`, and include `contentVersion` in the view's `.task(id:)` fingerprint.

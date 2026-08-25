@@ -106,6 +106,7 @@ struct BlueDiveApp: App {
     @State private var prefs = UserPreferences.shared
     @State private var syncMonitor = CloudKitSyncMonitor()
     @State private var importCoordinator = FileImportCoordinator()
+    @State private var diveStore = DiveStore()
     #if os(macOS)
     @State private var showingAbout = false
     #endif
@@ -117,6 +118,7 @@ struct BlueDiveApp: App {
             }
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
+            .environment(diveStore)
             .environment(syncMonitor)
             .environment(importCoordinator)
             .onChange(of: scenePhase) { _, newPhase in

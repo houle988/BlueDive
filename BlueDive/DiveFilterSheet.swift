@@ -47,7 +47,7 @@ struct DiveFilterSheet: View {
     @Binding var filterTag: String?
     @Binding var filterMarineLife: [String]
     @Binding var filterMarineLifeMode: FilterMarineLifeMode
-    @Binding var sortOrder: ContentView.DiveSortOrder
+    @Binding var sortOrder: DiveSortOrder
 
     @Environment(\.dismiss) private var dismiss
     private let prefs = UserPreferences.shared
@@ -119,7 +119,7 @@ struct DiveFilterSheet: View {
             FilterSectionHeader(title: "Sort", icon: "arrow.up.arrow.down")
             
             VStack(spacing: 8) {
-                ForEach(ContentView.DiveSortOrder.allCases) { order in
+                ForEach(DiveSortOrder.allCases) { order in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             sortOrder = order
@@ -964,7 +964,7 @@ extension View {
 
 // MARK: - DiveSortOrder Extension
 
-extension ContentView.DiveSortOrder {
+extension DiveSortOrder {
     var icon: String {
         switch self {
         case .dateDesc:

@@ -18,14 +18,15 @@ extension UTType {
 }
 
 // Must match `appGroupSuite` in BlueDiveWidgetExtension.swift.
-private let widgetAppGroupSuite = "group.app.bluedive.universal"
-
+let widgetAppGroupSuite = "group.app.bluedive.universal"
 
 struct ContentView: View {
     @Environment(\.modelContext) var modelContext
     @Query(sort: \Dive.timestamp, order: .reverse) var dives: [Dive]
     @Query private var allInsurances: [DivingInsurance]
+    @Query(sort: \MarineSight.name) private var allMarineSights: [MarineSight]
     @State private var prefs = UserPreferences.shared
+    @Environment(DiveStore.self) private var store
 
     @State var showScannerSheet = false
     @State var showFileImporter = false
@@ -89,24 +90,6 @@ struct ContentView: View {
     @State private var manualDiveDate = Date.now
     @State private var manualDiveDiverName = ""
 
-    // MARK: - Search & Filter State
-    @State private var searchText = ""
-    @State private var showFilterSheet = false
-    @State private var filterYear: Int? = nil
-    @State private var filterYearNegate: Bool = false
-    @State private var filterGasType: String? = nil
-    @State private var filterGasTypeNegate: Bool = false
-    @State private var filterMinDepth: Double = 0
-    @State private var filterMaxDepth: Double = 0
-    @State private var filterMinRating: Int = 0
-    @State private var filterCountry: String? = nil
-    @State private var filterCountryNegate: Bool = false
-    @State private var filterDiveType: String? = nil
-    @State private var filterDiveTypeNegate: Bool = false
-    @State private var filterTag: String? = nil
-    @State private var filterMarineLife: [String] = []
-    @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
-    @State private var sortOrder: DiveSortOrder = .dateDesc
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
     @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
@@ -114,226 +97,6 @@ struct ContentView: View {
     @Environment(FileImportCoordinator.self) var importCoordinator
     @State private var showSyncStatusPopover = false
     @State private var collapsedDiverSections: Set<String> = []
-    @State private var diveIndexLookup: [Dive.ID: Int] = [:]
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: dives, insurances: allInsurances) }
-    private var hasUnnamedDives: Bool { dives.contains { $0.diverName.trimmingCharacters(in: .whitespaces).isEmpty } }
-
-    enum DiveSortOrder: String, CaseIterable, Identifiable {
-        case dateDesc       = "dateDesc"
-        case dateAsc        = "dateAsc"
-        case depthDesc      = "depthDesc"
-        case durationDesc   = "durationDesc"
-        case diveNumberDesc = "diveNumberDesc"
-        case diveNumberAsc  = "diveNumberAsc"
-        var id: String { rawValue }
-        var localizedTitle: LocalizedStringKey {
-            switch self {
-            case .dateDesc:       return "Date ↓"
-            case .dateAsc:        return "Date ↑"
-            case .depthDesc:      return "Depth ↓"
-            case .durationDesc:   return "Duration ↓"
-            case .diveNumberDesc: return "Dive # ↓"
-            case .diveNumberAsc:  return "Dive # ↑"
-            }
-        }
-    }
-    
-    // MARK: - Computed Properties
-
-    private var availableYears: [Int] {
-        let years = dives.compactMap { Calendar.current.dateComponents([.year], from: $0.timestamp).year }
-        return Array(Set(years)).sorted(by: >)
-    }
-
-    private var availableGasTypes: [String] {
-        let types = dives.map { $0.gasType }
-        return Array(Set(types)).sorted()
-    }
-
-    private var availableCountries: [String] {
-        let countries = dives.compactMap { $0.siteCountry }.filter { !$0.isEmpty }
-        return Array(Set(countries)).sorted()
-    }
-
-    private var availableDiveTypes: [String] {
-        var types = Set<String>()
-        for dive in dives {
-            dive.diveTypes?
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-                .forEach { types.insert($0) }
-        }
-        return types.sorted()
-    }
-
-    private var availableTags: [String] {
-        var tags = Set<String>()
-        for dive in dives {
-            dive.tags?
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-                .forEach { tags.insert($0) }
-        }
-        return tags.sorted()
-    }
-
-
-    private var availableMarineLife: [String] {
-        var species = Set<String>()
-        for dive in dives {
-            dive.seenFish?.forEach { sight in
-                let name = sight.name.trimmingCharacters(in: .whitespaces)
-                if !name.isEmpty { species.insert(name) }
-            }
-        }
-        return species.sorted()
-    }
-
-    private var activeFilterCount: Int {
-        var count = 0
-        if filterYear != nil            { count += 1 }
-        if filterGasType != nil         { count += 1 }
-        if filterMinDepth > 0 || filterMaxDepth > 0 { count += 1 }
-        if filterMinRating > 0          { count += 1 }
-        if filterCountry != nil         { count += 1 }
-        if filterDiveType != nil        { count += 1 }
-        if filterTag != nil             { count += 1 }
-        if !filterMarineLife.isEmpty    { count += 1 }
-        return count
-    }
-
-    /// Cheap fingerprint of the fields that `updateWidgetDiveData()` depends on.
-    /// Avoids allocating an O(N) String array on every render (the previous approach).
-    private var widgetDataFingerprint: Int {
-        var hasher = Hasher()
-        for dive in dives {
-            hasher.combine(dive.diverName)
-            hasher.combine(dive.maxDepth.bitPattern)
-            hasher.combine(dive.duration)
-            hasher.combine(dive.importDistanceUnit)
-            hasher.combine(dive.timestamp.timeIntervalSince1970.bitPattern)
-        }
-        return hasher.finalize()
-    }
-
-    private var filteredAndSortedDives: [Dive] {
-        var result = DiverFilter.apply(selectedDiver, to: dives).filter { dive in
-            // Text search
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if !query.isEmpty {
-                let tagWords = dive.tags?
-                    .split(separator: ",")
-                    .map { $0.trimmingCharacters(in: .whitespaces).lowercased() } ?? []
-                let diveTypesWords = dive.diveTypes?
-                    .split(separator: ",")
-                    .map { $0.trimmingCharacters(in: .whitespaces).lowercased() } ?? []
-                let matches = dive.siteName.lowercased().contains(query)
-                    || dive.location.lowercased().contains(query)
-                    || dive.buddies.lowercased().contains(query)
-                    || dive.diverName.lowercased().contains(query)
-                    || (dive.siteCountry?.lowercased().contains(query) ?? false)
-                    || diveTypesWords.contains(where: { $0.contains(query) })
-                    || tagWords.contains(where: { $0.contains(query) })
-                    || (dive.diveNumber.map { String($0) }?.contains(query) ?? false)
-                if !matches { return false }
-            }
-            // Year filter
-            if let year = filterYear {
-                let diveYear = Calendar.current.component(.year, from: dive.timestamp)
-                if filterYearNegate {
-                    if diveYear == year { return false }
-                } else {
-                    if diveYear != year { return false }
-                }
-            }
-            // Gas filter
-            if let gas = filterGasType {
-                if gas.isEmpty {
-                    if !dive.gasType.isEmpty { return false }
-                } else if filterGasTypeNegate {
-                    if dive.gasType == gas { return false }
-                } else {
-                    if dive.gasType != gas { return false }
-                }
-            }
-            // Depth range filter — compare in display units
-            if filterMinDepth > 0 || filterMaxDepth > 0 {
-                let depth = dive.displayMaxDepth
-                if filterMinDepth > 0, filterMaxDepth > 0 {
-                    let lo = Swift.min(filterMinDepth, filterMaxDepth)
-                    let hi = Swift.max(filterMinDepth, filterMaxDepth)
-                    if depth < lo || depth > hi { return false }
-                } else if filterMinDepth > 0 {
-                    if depth < filterMinDepth { return false }
-                } else if filterMaxDepth > 0 {
-                    if depth > filterMaxDepth { return false }
-                }
-            }
-            // Minimum rating filter
-            if filterMinRating > 0, dive.rating < filterMinRating { return false }
-            // Country filter
-            if let country = filterCountry {
-                if country.isEmpty {
-                    guard dive.siteCountry == nil || dive.siteCountry!.isEmpty else { return false }
-                } else if filterCountryNegate {
-                    if let diveCountry = dive.siteCountry, diveCountry == country { return false }
-                } else {
-                    guard let diveCountry = dive.siteCountry, diveCountry == country else { return false }
-                }
-            }
-            // Dive type filter
-            if let diveType = filterDiveType {
-                if diveType.isEmpty {
-                    let trimmed = dive.diveTypes?.trimmingCharacters(in: .whitespaces) ?? ""
-                    if !trimmed.isEmpty { return false }
-                } else {
-                    let allTypes = dive.diveTypes?
-                        .split(separator: ",")
-                        .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if filterDiveTypeNegate {
-                        if allTypes.contains(diveType) { return false }
-                    } else {
-                        if !allTypes.contains(diveType) { return false }
-                    }
-                }
-            }
-            // Tag filter
-            if let tag = filterTag {
-                if tag.isEmpty {
-                    let trimmed = dive.tags?.trimmingCharacters(in: .whitespaces) ?? ""
-                    if !trimmed.isEmpty { return false }
-                } else {
-                    let diveTags = dive.tags?
-                        .split(separator: ",")
-                        .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if !diveTags.contains(tag) { return false }
-                }
-            }
-            // Marine life filter
-            if !diveMatchesMarineLifeFilter(dive, species: filterMarineLife, mode: filterMarineLifeMode) { return false }
-            return true
-        }
-
-        switch sortOrder {
-        case .dateDesc:     result.sort { $0.timestamp > $1.timestamp }
-        case .dateAsc:      result.sort { $0.timestamp < $1.timestamp }
-        case .depthDesc:    result.sort { $0.displayMaxDepth > $1.displayMaxDepth }
-        case .durationDesc: result.sort { $0.duration > $1.duration }
-        case .diveNumberDesc: result.sort { ($0.diveNumber ?? 0) > ($1.diveNumber ?? 0) }
-        case .diveNumberAsc:
-            result.sort {
-                switch ($0.diveNumber, $1.diveNumber) {
-                case let (a?, b?): return a < b
-                case (_?, nil):    return true
-                case (nil, _?):    return false
-                case (nil, nil):   return false
-                }
-            }
-        }
-        return result
-    }
 
     private var backgroundGradient: LinearGradient {
         LinearGradient(
@@ -346,6 +109,7 @@ struct ContentView: View {
     // MARK: - Body
     
     var body: some View {
+        @Bindable var store = store
         NavigationStack {
             ZStack {
                 backgroundGradient.ignoresSafeArea()
@@ -356,35 +120,36 @@ struct ContentView: View {
             }
 
             #if os(iOS)
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Site, location, buddy, country, type, tag, dive #…")
+            .searchable(text: $store.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Site, location, buddy, country, type, tag, dive #…")
             #else
-            .searchable(text: $searchText, prompt: "Site, location, buddy, country, type, tag, dive #…")
+            .searchable(text: $store.searchText, prompt: "Site, location, buddy, country, type, tag, dive #…")
             #endif
-            .animation(.easeInOut(duration: 0.3), value: searchText)
+            .animation(.easeInOut(duration: 0.3), value: store.searchText)
             .toolbar { toolbarContent }
-            .sheet(isPresented: $showFilterSheet) {
+            .toolbarBackground(.visible, for: .navigationBar)
+            .sheet(isPresented: $store.showFilterSheet) {
                 DiveFilterSheet(
-                    availableYears: availableYears,
-                    availableGasTypes: availableGasTypes,
-                    availableCountries: availableCountries,
-                    availableDiveTypes: availableDiveTypes,
-                    availableTags: availableTags,
-                    availableMarineLife: availableMarineLife,
-                    filterYear: $filterYear,
-                    filterYearNegate: $filterYearNegate,
-                    filterGasType: $filterGasType,
-                    filterGasTypeNegate: $filterGasTypeNegate,
-                    filterMinDepth: $filterMinDepth,
-                    filterMaxDepth: $filterMaxDepth,
-                    filterMinRating: $filterMinRating,
-                    filterCountry: $filterCountry,
-                    filterCountryNegate: $filterCountryNegate,
-                    filterDiveType: $filterDiveType,
-                    filterDiveTypeNegate: $filterDiveTypeNegate,
-                    filterTag: $filterTag,
-                    filterMarineLife: $filterMarineLife,
-                    filterMarineLifeMode: $filterMarineLifeMode,
-                    sortOrder: $sortOrder
+                    availableYears: store.cachedAvailableYears,
+                    availableGasTypes: store.cachedAvailableGasTypes,
+                    availableCountries: store.cachedAvailableCountries,
+                    availableDiveTypes: store.cachedAvailableDiveTypes,
+                    availableTags: store.cachedAvailableTags,
+                    availableMarineLife: store.cachedAvailableMarineLife,
+                    filterYear: $store.filterYear,
+                    filterYearNegate: $store.filterYearNegate,
+                    filterGasType: $store.filterGasType,
+                    filterGasTypeNegate: $store.filterGasTypeNegate,
+                    filterMinDepth: $store.filterMinDepth,
+                    filterMaxDepth: $store.filterMaxDepth,
+                    filterMinRating: $store.filterMinRating,
+                    filterCountry: $store.filterCountry,
+                    filterCountryNegate: $store.filterCountryNegate,
+                    filterDiveType: $store.filterDiveType,
+                    filterDiveTypeNegate: $store.filterDiveTypeNegate,
+                    filterTag: $store.filterTag,
+                    filterMarineLife: $store.filterMarineLife,
+                    filterMarineLifeMode: $store.filterMarineLifeMode,
+                    sortOrder: $store.sortOrder
                 )
                 .presentationSizing(.page)
                 .presentationDetents([.large])
@@ -467,7 +232,7 @@ struct ContentView: View {
             #if os(macOS)
             .sheet(isPresented: $showDeleteSheet) {
                 MacOSDeleteDiveSheet(
-                    dives: filteredAndSortedDives,
+                    dives: store.cachedFilteredDives,
                     onDelete: { dive in
                         diveToDeleteDirectly = dive
                         showDeleteSingleConfirmation = true
@@ -479,7 +244,7 @@ struct ContentView: View {
             }
             #endif
             .sheet(isPresented: $showMergeDivesSheet) {
-                MergeDivesSheet(dives: filteredAndSortedDives) { diveA, diveB in
+                MergeDivesSheet(dives: store.cachedFilteredDives) { diveA, diveB in
                     mergeDives(diveA, with: diveB)
                 }
                 .presentationSizing(.page)
@@ -575,7 +340,7 @@ struct ContentView: View {
                     Form {
                         DatePicker("Date & Time", selection: $manualDiveDate)
                             .datePickerStyle(.graphical)
-                        AutocompleteMenuTextField(label: "Diver (optional)", text: $manualDiveDiverName, icon: "person.fill", color: .cyan, suggestions: uniqueDivers)
+                        AutocompleteMenuTextField(label: "Diver (optional)", text: $manualDiveDiverName, icon: "person.fill", color: .cyan, suggestions: store.cachedUniqueDivers)
                             .autocorrectionDisabled()
                     }
                     .navigationTitle("New Dive Date")
@@ -639,7 +404,7 @@ struct ContentView: View {
 
                     Divider()
 
-                    AutocompleteMenuTextField(label: "Diver (optional)", text: $manualDiveDiverName, icon: "person.fill", color: .cyan, suggestions: uniqueDivers)
+                    AutocompleteMenuTextField(label: "Diver (optional)", text: $manualDiveDiverName, icon: "person.fill", color: .cyan, suggestions: store.cachedUniqueDivers)
                         .autocorrectionDisabled()
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -736,7 +501,14 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
-            rebuildDerivedDiveState()
+            if !store.hasCacheBuilt {
+                // First mount: build caches immediately (cold launch or first appearance).
+                store.rebuildDerivedDiveState(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
+            } else {
+                // NavigationStack pop or scene re-activation: use the membership-guarded
+                // debounced path so no-op pops (cancel, no changes) skip the full rebuild.
+                store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
+            }
             // Cold-launch: onOpenURL may fire before this view mounts, so check
             // for a pending file URL that was stashed in the coordinator at launch.
             if let url = importCoordinator.pendingURL {
@@ -745,15 +517,17 @@ struct ContentView: View {
             }
         }
         .task {
-            updateWidgetDiveData()
+            store.updateWidgetDiveData(dives: dives)
         }
-        .onChange(of: dives) { _, _ in rebuildDerivedDiveState() }
-        .onChange(of: widgetDataFingerprint) { _, _ in updateWidgetDiveData() }
-        .onChange(of: prefs.depthUnit) { _, _ in updateWidgetDiveData() }
-        .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
-        .onChange(of: uniqueDivers) { _, newDivers in
+        .onChange(of: dives) { _, _ in store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver) }
+        .onChange(of: allInsurances) { _, _ in store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver, force: true) }
+        .onChange(of: store.cachedWidgetFingerprint) { _, _ in store.updateWidgetDiveData(dives: dives) }
+        .onChange(of: prefs.depthUnit) { _, _ in store.updateWidgetDiveData(dives: dives); store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+        .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
+        .onChange(of: store.cachedUniqueDivers) { _, newDivers in
             collapsedDiverSections.formIntersection(newDivers)
         }
+        .background(filterObservers)
         // Warm-launch: handle file URLs that arrive while the app is already running.
         .onChange(of: importCoordinator.pendingURL) { _, url in
             guard let url else { return }
@@ -762,121 +536,51 @@ struct ContentView: View {
         }
     }
 
-    private func updateWidgetDiveData() {
-        guard !dives.isEmpty else { return }
-        struct DiveSnapshot {
-            let diverName: String
-            let duration: Int
-            let maxDepth: Double
-            let importDistanceUnit: String
-            let timestamp: TimeInterval
-        }
-        // Capture value types on the main thread; computation runs on a background task.
-        let snapshot = dives.map {
-            DiveSnapshot(diverName: $0.diverName, duration: $0.duration,
-                         maxDepth: $0.maxDepth, importDistanceUnit: $0.importDistanceUnit,
-                         timestamp: $0.timestamp.timeIntervalSince1970)
-        }
-        let suiteName = widgetAppGroupSuite
-        let depthUnitStr = prefs.depthUnit == .feet ? "feet" : "meters"
-        let feetToMeters = 1.0 / DepthUnit.metersToFeetFactor  // captured on main actor; used in detached task
 
-        // Write picker-critical keys synchronously so WidgetKit's suggestedEntities()
-        // always sees the current diver list when the user opens the widget edit UI.
-        // These are fast O(N) operations and safe to run on the main thread.
-        let shared = UserDefaults(suiteName: suiteName)
-        // totalDiveCount counts ALL dives including those with no diver name.
-        // Per-diver buckets below exclude empty names, so the per-diver sum
-        // may be less than totalDiveCount — this is intentional.
-        shared?.set(snapshot.count, forKey: "totalDiveCount")
-
-        var countByDiver: [String: Int] = [:]
-        for dive in snapshot {
-            let name = dive.diverName.trimmingCharacters(in: .whitespaces)
-            // "__all__" is the sentinel ID used by DiverEntity for the "All Divers" option;
-            // exclude it here so it never appears as a real diver name in any stored dict.
-            guard !name.isEmpty, name != "__all__" else { continue }
-            countByDiver[name, default: 0] += 1
-        }
-        let diverNames = countByDiver.keys.sorted()
-        if let countData = try? JSONEncoder().encode(countByDiver) {
-            shared?.set(countData, forKey: "diveCountByDiver")
-        }
-        // DiveCountWidget only needs totalDiveCount and diveCountByDiver to render;
-        // diverNames is written in the detached task below, alongside the per-diver stat
-        // dicts, so the picker never sees a diver whose stats haven't been written yet,
-        // and the write happens close enough to reloadTimelines that UserDefaults has
-        // flushed to the shared container before the widget extension reads it.
-        WidgetCenter.shared.reloadTimelines(ofKind: "DiveCountWidget")
-
-        // Heavy stats aggregation runs in the background; DiverStatsWidget reloads after.
-        Task.detached(priority: .utility) {
-            let shared = UserDefaults(suiteName: suiteName)
-
-            // Depth aggregates are normalised to metres so dives imported in feet and
-            // dives imported in metres can be combined without converting stored values.
-            var totalMinutes: Int = 0
-            var maxDepthMeters: Double = 0
-            var longestDiveMinutes: Int = 0
-            var mostRecent: TimeInterval = 0
-
-            var totalMinutesByDiver: [String: Int] = [:]
-            var maxDepthByDiver: [String: Double] = [:]
-            var longestDiveByDiver: [String: Int] = [:]
-            var mostRecentByDiver: [String: Double] = [:]
-
-            for dive in snapshot {
-                totalMinutes += dive.duration
-                let factor = dive.importDistanceUnit == "feet" ? feetToMeters : 1.0
-                let depthM = dive.maxDepth * factor
-                if depthM > maxDepthMeters { maxDepthMeters = depthM }
-                if dive.duration > longestDiveMinutes { longestDiveMinutes = dive.duration }
-                if dive.timestamp > mostRecent { mostRecent = dive.timestamp }
-
-                let name = dive.diverName.trimmingCharacters(in: .whitespaces)
-                guard !name.isEmpty, name != "__all__" else { continue }
-                totalMinutesByDiver[name, default: 0] += dive.duration
-                if depthM > (maxDepthByDiver[name] ?? 0) { maxDepthByDiver[name] = depthM }
-                if dive.duration > (longestDiveByDiver[name] ?? 0) { longestDiveByDiver[name] = dive.duration }
-                if dive.timestamp > (mostRecentByDiver[name] ?? 0) { mostRecentByDiver[name] = dive.timestamp }
+    // Extracted into a separate property to avoid Swift type-checker timeouts
+    // caused by excessively long modifier chains in body.
+    @ViewBuilder
+    private var filterObserversA: some View {
+        Color.clear
+            .onChange(of: store.searchText) { _, _ in
+                store.scheduleSearchRebuild(dives: dives, selectedDiver: selectedDiver)
             }
-
-            shared?.set(totalMinutes, forKey: "totalMinutesUnderwater")
-            shared?.set(maxDepthMeters, forKey: "maxDepthMeters")
-            shared?.set(longestDiveMinutes, forKey: "longestDiveMinutes")
-            shared?.set(depthUnitStr, forKey: "depthUnit")
-            if mostRecent > 0 {
-                shared?.set(mostRecent, forKey: "mostRecentDiveDate")
-            } else {
-                shared?.removeObject(forKey: "mostRecentDiveDate")
-            }
-
-            if let data = try? JSONEncoder().encode(totalMinutesByDiver) {
-                shared?.set(data, forKey: "totalMinutesByDiver")
-            }
-            if let data = try? JSONEncoder().encode(maxDepthByDiver) {
-                shared?.set(data, forKey: "maxDepthMetersByDiver")
-            }
-            if let data = try? JSONEncoder().encode(longestDiveByDiver) {
-                shared?.set(data, forKey: "longestDiveMinutesByDiver")
-            }
-            if let data = try? JSONEncoder().encode(mostRecentByDiver) {
-                shared?.set(data, forKey: "mostRecentDiveDateByDiver")
-            }
-            // Write diverNames here, after all per-diver stat dicts, so the widget
-            // picker never shows a diver whose stats haven't been written yet.
-            if let namesData = try? JSONEncoder().encode(diverNames) {
-                shared?.set(namesData, forKey: "diverNames")
-            }
-            WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")
-        }
+            .onChange(of: selectedDiver)              { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterYear)           { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterYearNegate)     { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterGasType)        { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterGasTypeNegate)  { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterMinDepth)       { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterMaxDepth)       { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterMinRating)      { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
     }
 
-    private func rebuildDerivedDiveState() {
-        diveIndexLookup = Dictionary(
-            dives.enumerated().map { ($1.id, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
+    @ViewBuilder
+    private var filterObserversB: some View {
+        Color.clear
+            .onChange(of: store.filterCountry)        { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterCountryNegate)  { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterDiveType)       { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterDiveTypeNegate) { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterTag)            { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterMarineLife)     { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterMarineLifeMode) { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.sortOrder)            { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+    }
+
+    @ViewBuilder
+    private var modelObservers: some View {
+        Color.clear
+            .onChange(of: store.showFilterSheet) { _, isShowing in
+                if isShowing { store.rebuildFilterOptions() }
+            }
+    }
+
+    @ViewBuilder
+    private var filterObservers: some View {
+        filterObserversA
+        filterObserversB
+        modelObservers
     }
 
     // MARK: - View Components
@@ -926,9 +630,9 @@ struct ContentView: View {
     }
     
     private var diveList: some View {
-        let displayedDives = filteredAndSortedDives
+        let displayedSummaries = store.cachedFilteredSummaries
         return Group {
-            if displayedDives.isEmpty {
+            if displayedSummaries.isEmpty && store.hasCacheBuilt {
                 // No results for search / filters
                 VStack(spacing: 16) {
                     Spacer()
@@ -943,9 +647,9 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
-                    if activeFilterCount > 0 {
+                    if store.activeFilterCount > 0 {
                         Button {
-                            resetFilters()
+                            store.resetFilters()
                         } label: {
                             Label("Clear filters", systemImage: "xmark.circle.fill")
                                 .font(.subheadline.weight(.semibold))
@@ -957,14 +661,13 @@ struct ContentView: View {
                 }
                 .transition(.opacity)
             } else {
-                let filteredDiverCount = Set(displayedDives.map { $0.diverName.trimmingCharacters(in: .whitespaces) }).count
-                let showGrouped = selectedDiver.isEmpty && filteredDiverCount > 1
+                let showGrouped = store.cachedShowGrouped
                 if showGrouped {
-                    let grouped = groupedDives(from: displayedDives)
+                    let grouped = store.cachedGroupedSummaries
                     List {
                         ForEach(grouped, id: \.key) { group in
                             let diver = group.key
-                            let sectionDives = group.value
+                            let sectionSummaries = group.value
                             Section(isExpanded: Binding(
                                 get: { !collapsedDiverSections.contains(diver) },
                                 set: { isExpanded in
@@ -975,17 +678,19 @@ struct ContentView: View {
                                     }
                                 }
                             )) {
-                                ForEach(sectionDives) { dive in
-                                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sectionDives)) {
-                                        DiveRowView(
-                                            dive: dive,
-                                            diveNumber: dives.count - (diveIndexLookup[dive.id] ?? 0)
-                                        )
+                                ForEach(sectionSummaries) { summary in
+                                    let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
+                                    NavigationLink(destination: DiveDetailView(
+                                        dive: store.diveByID[summary.id]!,
+                                        sortedDives: sectionSummaries.compactMap { store.diveByID[$0.id] },
+                                        diveNumber: rowNumber
+                                    )) {
+                                        DiveRowView(summary: summary, diveNumber: rowNumber)
                                     }
                                     .listRowBackground(Color.primary.opacity(0.07))
                                     .contextMenu {
                                         Button(role: .destructive) {
-                                            diveToDeleteDirectly = dive
+                                            diveToDeleteDirectly = store.diveByID[summary.id]
                                             showDeleteSingleConfirmation = true
                                         } label: {
                                             Label("Delete dive", systemImage: "trash")
@@ -994,7 +699,8 @@ struct ContentView: View {
                                 }
                                 .onDelete { offsets in
                                     if let index = offsets.first {
-                                        diveToDeleteDirectly = sectionDives[index]
+                                        let summary = sectionSummaries[index]
+                                        diveToDeleteDirectly = store.diveByID[summary.id]
                                         showDeleteSingleConfirmation = true
                                     }
                                 }
@@ -1019,17 +725,19 @@ struct ContentView: View {
                     #endif
                 } else {
                     List {
-                        ForEach(displayedDives) { dive in
-                            NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: displayedDives)) {
-                                DiveRowView(
-                                    dive: dive,
-                                    diveNumber: dives.count - (diveIndexLookup[dive.id] ?? 0)
-                                )
+                        ForEach(displayedSummaries) { summary in
+                            let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
+                            NavigationLink(destination: DiveDetailView(
+                                dive: store.diveByID[summary.id]!,
+                                sortedDives: store.cachedFilteredDives,
+                                diveNumber: rowNumber
+                            )) {
+                                DiveRowView(summary: summary, diveNumber: rowNumber)
                             }
                             .listRowBackground(Color.primary.opacity(0.07))
                             .contextMenu {
                                 Button(role: .destructive) {
-                                    diveToDeleteDirectly = dive
+                                    diveToDeleteDirectly = store.diveByID[summary.id]
                                     showDeleteSingleConfirmation = true
                                 } label: {
                                     Label("Delete dive", systemImage: "trash")
@@ -1051,20 +759,6 @@ struct ContentView: View {
         }
     }
 
-    private func groupedDives(from sortedDives: [Dive]) -> [(key: String, value: [Dive])] {
-        var order: [String] = []
-        var dict: [String: [Dive]] = [:]
-        for dive in sortedDives {
-            let key = dive.diverName.trimmingCharacters(in: .whitespaces)
-            if dict[key] == nil {
-                order.append(key)
-                dict[key] = []
-            }
-            dict[key]!.append(dive)
-        }
-        return order.map { (key: $0, value: dict[$0]!) }
-    }
-    
     // MARK: - Toolbar
 
     @ViewBuilder
@@ -1097,7 +791,7 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver, hasUnnamedDives: hasUnnamedDives)
+        DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver, hasUnnamedDives: store.cachedHasUnnamedDives)
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         ToolbarItem(placement: .navigation) {
@@ -1158,9 +852,9 @@ struct ContentView: View {
             Button(action: { showFilterSheet = true }) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
-                    if activeFilterCount > 0 {
-                        Text("\(activeFilterCount)")
+                        .foregroundStyle(store.activeFilterCount > 0 ? .orange : .cyan)
+                    if store.activeFilterCount > 0 {
+                        Text("\(store.activeFilterCount)")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.black)
                             .padding(3)
@@ -1199,13 +893,13 @@ struct ContentView: View {
                         .foregroundStyle(.cyan)
                 }
 
-                Button(action: { showFilterSheet = true }) {
+                Button(action: { store.showFilterSheet = true }) {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "line.3.horizontal.decrease.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
-                        if activeFilterCount > 0 {
-                            Text("\(activeFilterCount)")
+                            .foregroundStyle(store.activeFilterCount > 0 ? .orange : .cyan)
+                        if store.activeFilterCount > 0 {
+                            Text("\(store.activeFilterCount)")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.black)
                                 .padding(3)
@@ -1383,34 +1077,16 @@ struct ContentView: View {
         withAnimation { isSyncing = false }
     }
     
-    private func resetFilters() {
-        filterYear           = nil
-        filterYearNegate     = false
-        filterGasType        = nil
-        filterGasTypeNegate  = false
-        filterMinDepth       = 0
-        filterMaxDepth       = 0
-        filterMinRating      = 0
-        filterCountry        = nil
-        filterCountryNegate  = false
-        filterDiveType       = nil
-        filterDiveTypeNegate = false
-        filterTag            = nil
-        filterMarineLife     = []
-        filterMarineLifeMode = .any
-        sortOrder            = .dateDesc
-    }
-
     private func deleteItems(offsets: IndexSet) {
         diveToDelete = offsets
         showDeleteConfirmation = true
     }
     
     private func confirmDeleteItems(offsets: IndexSet) {
-        // Use filteredAndSortedDives — IndexSet is relative to the displayed list, not the raw query.
-        let displayed = filteredAndSortedDives
+        // Use store.cachedFilteredDives — IndexSet is relative to the displayed list, not the raw query.
+        let displayed = store.cachedFilteredDives
         withAnimation {
-            for index in offsets {
+            for index in offsets where index < displayed.count {
                 modelContext.delete(displayed[index])
             }
             try? modelContext.save()

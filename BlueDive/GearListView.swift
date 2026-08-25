@@ -9,12 +9,12 @@ struct GearListView: View {
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \GearGroup.name) private var allGearGroups: [GearGroup]
     @Query(sort: \TankTemplate.name) private var allTankTemplates: [TankTemplate]
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesForFilter: [Dive]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertificationsForFilter: [Certification]
     @Query private var allInsurances: [DivingInsurance]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.locale) private var locale
     @Environment(FileImportCoordinator.self) private var importCoordinator
+    @Environment(DiveStore.self) private var store
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     @State private var showAddGear = false
@@ -58,7 +58,7 @@ struct GearListView: View {
     // MARK: - Computed Properties
 
     private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: allDivesForFilter, gear: allGear, certifications: allCertificationsForFilter, insurances: allInsurances)
+        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertificationsForFilter, insurances: allInsurances)
     }
 
     /// Équipement filtré par recherche et catégorie

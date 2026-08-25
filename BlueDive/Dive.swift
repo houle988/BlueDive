@@ -43,7 +43,7 @@ enum DiveProfileEvent: Codable, Hashable, Sendable {
 struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
     let time: Double  // Time in minutes
-    let depth: Double // Depth in meters
+    let depth: Double // Depth in importDistanceUnit (feet or meters, as imported)
     let temperature: Double? // Temperature in Celsius
     let tankPressure: Double? // Tank pressure in bar (single / primary tank)
     let tankPressures: [Int: Double]? // Per-tank pressure readings {tankIndex: bar}
@@ -449,82 +449,89 @@ final class Dive {
     var usedGear: [Gear]? = []
 
     // MARK: - JSON Decode Caches
-    // @Transient properties are not persisted; they are initialised to their defaults
-    // each time the model is loaded from the store. hashValue of the raw Data blob is
-    // used as the cache key so that external updates (e.g. iCloud sync writing to the
-    // backing Data property directly) are detected and force a re-decode.
+    // @Transient properties are not persisted; SwiftData resets them to their defaults
+    // whenever an object is re-faulted (e.g. after iCloud sync).
+    // Cache key = backing Data.count (O(1), no full-blob hash):
+    //   nil  → not yet decoded (@Transient initial / post-refault) → always decode
+    //   -1   → decoded when Data was nil → return []
+    //   n≥0  → decoded when Data had n bytes → return cached if count unchanged
+    // A CloudKit sync that replaces the blob with a different profile will almost
+    // certainly change the byte count, forcing a re-decode.
 
     @Transient private var _cachedProfileSamples: [DiveProfilePoint] = []
-    @Transient private var _cachedProfileKey: Int? = nil
+    @Transient private var _profileCacheKey: Int? = nil
 
     @Transient private var _cachedTanks: [TankData] = []
-    @Transient private var _cachedTanksKey: Int? = nil
+    @Transient private var _tanksCacheKey: Int? = nil
 
     @Transient private var _cachedDecoStops: [DecoStop] = []
-    @Transient private var _cachedDecoStopsKey: Int? = nil
+    @Transient private var _decoStopsCacheKey: Int? = nil
 
     // MARK: Computed Properties
 
     /// Accès au profil de plongée
     var profileSamples: [DiveProfilePoint] {
         get {
-            let key = profileData?.hashValue
-            if key == _cachedProfileKey { return _cachedProfileSamples }
+            let currentKey = profileData?.count ?? -1
+            if let k = _profileCacheKey, k == currentKey { return _cachedProfileSamples }
             guard let data = profileData else {
-                _cachedProfileSamples = []; _cachedProfileKey = nil; return []
+                _cachedProfileSamples = []; _profileCacheKey = -1; return []
             }
             let decoded = (try? JSONDecoder().decode([DiveProfilePoint].self, from: data)) ?? []
             _cachedProfileSamples = decoded
-            _cachedProfileKey = key
+            _profileCacheKey = data.count
             return decoded
         }
         set {
+            _profileCacheKey = nil
             let encoded = try? JSONEncoder().encode(newValue)
             profileData = encoded
             _cachedProfileSamples = newValue
-            _cachedProfileKey = encoded?.hashValue
+            _profileCacheKey = encoded?.count ?? -1
         }
     }
 
     /// Accès aux bouteilles
     var tanks: [TankData] {
         get {
-            let key = tanksData?.hashValue
-            if key == _cachedTanksKey { return _cachedTanks }
+            let currentKey = tanksData?.count ?? -1
+            if let k = _tanksCacheKey, k == currentKey { return _cachedTanks }
             guard let data = tanksData else {
-                _cachedTanks = []; _cachedTanksKey = nil; return []
+                _cachedTanks = []; _tanksCacheKey = -1; return []
             }
             let decoded = (try? JSONDecoder().decode([TankData].self, from: data)) ?? []
             _cachedTanks = decoded
-            _cachedTanksKey = key
+            _tanksCacheKey = data.count
             return decoded
         }
         set {
+            _tanksCacheKey = nil
             let encoded = try? JSONEncoder().encode(newValue)
             tanksData = encoded
             _cachedTanks = newValue
-            _cachedTanksKey = encoded?.hashValue
+            _tanksCacheKey = encoded?.count ?? -1
         }
     }
 
     /// Arrêts de décompression
     var decoStops: [DecoStop] {
         get {
-            let key = decoStopsData?.hashValue
-            if key == _cachedDecoStopsKey { return _cachedDecoStops }
+            let currentKey = decoStopsData?.count ?? -1
+            if let k = _decoStopsCacheKey, k == currentKey { return _cachedDecoStops }
             guard let data = decoStopsData else {
-                _cachedDecoStops = []; _cachedDecoStopsKey = nil; return []
+                _cachedDecoStops = []; _decoStopsCacheKey = -1; return []
             }
             let decoded = (try? JSONDecoder().decode([DecoStop].self, from: data)) ?? []
             _cachedDecoStops = decoded
-            _cachedDecoStopsKey = key
+            _decoStopsCacheKey = data.count
             return decoded
         }
         set {
+            _decoStopsCacheKey = nil
             let encoded = try? JSONEncoder().encode(newValue)
             decoStopsData = encoded
             _cachedDecoStops = newValue
-            _cachedDecoStopsKey = encoded?.hashValue
+            _decoStopsCacheKey = encoded?.count ?? -1
         }
     }
     
@@ -1469,9 +1476,13 @@ extension Dive {
         return totalLiters
     }
 
-    static func recalculateSurfaceIntervals(in context: ModelContext, diverName diverFilter: String? = nil) {
+    // Returns a map of dive ID → new surfaceInterval string so callers can patch
+    // DiveStore's summary caches directly, bypassing the main-context merge delay.
+    @discardableResult
+    static func recalculateSurfaceIntervals(in context: ModelContext, diverName diverFilter: String? = nil) -> [UUID: String] {
         let allDives = (try? context.fetch(FetchDescriptor<Dive>())) ?? []
         let grouped = Dictionary(grouping: allDives) { $0.diverName }
+        var result: [UUID: String] = [:]
         for (diver, diverDives) in grouped {
             if let diverFilter, diver != diverFilter { continue }
             if diverFilter == nil, diver.trimmingCharacters(in: .whitespaces).isEmpty { continue }
@@ -1480,6 +1491,7 @@ extension Dive {
                 if index == 0 {
                     dive.surfaceInterval = "0h 00m"
                     dive.isRepetitiveDive = false
+                    result[dive.id] = "0h 00m"
                 } else {
                     let prev = sorted[index - 1]
                     let prevEnd = prev.timestamp.addingTimeInterval(TimeInterval(prev.duration * 60))
@@ -1487,21 +1499,26 @@ extension Dive {
                     guard gap > 0 else {
                         dive.surfaceInterval = "0h 00m"
                         dive.isRepetitiveDive = true
+                        result[dive.id] = "0h 00m"
                         continue
                     }
                     let totalMinutes = Int(gap / 60)
                     let days = totalMinutes / (24 * 60)
                     let hours = (totalMinutes % (24 * 60)) / 60
                     let minutes = totalMinutes % 60
+                    let si: String
                     if days > 0 {
-                        dive.surfaceInterval = String(format: "%dd %dh %02dm", days, hours, minutes)
+                        si = String(format: "%dd %dh %02dm", days, hours, minutes)
                     } else {
-                        dive.surfaceInterval = String(format: "%dh %02dm", hours, minutes)
+                        si = String(format: "%dh %02dm", hours, minutes)
                     }
+                    dive.surfaceInterval = si
                     dive.isRepetitiveDive = totalMinutes < 1440
+                    result[dive.id] = si
                 }
             }
         }
         try? context.save()
+        return result
     }
 }
