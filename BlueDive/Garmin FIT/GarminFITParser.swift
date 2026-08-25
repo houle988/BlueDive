@@ -476,18 +476,25 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 return tsDate <= startDate
             }.last ?? diveSettings.first
 
-            // Deco model string: "Bühlmann ZH-L16C GF lo/hi" or just the model name.
+            // Deco model string: "Bühlmann ZH-L16C GF lo/hi", "Bühlmann ZH-L16C", or "GF lo/hi".
+            // Suunto omits the model enum but still exports gf_low/gf_high, so fall back to a
+            // bare GF string when the model is absent.
             let decoModel: String? = {
-                guard let s = settings, let model = s.getModel() else { return nil }
-                let base: String
-                switch model {
-                case .zhl16c:  base = "Bühlmann ZH-L16C"
-                case .invalid: return nil
+                guard let s = settings else { return nil }
+                let lo = s.getGfLow()
+                let hi = s.getGfHigh()
+                let base: String? = s.getModel().flatMap { model in
+                    switch model {
+                    case .zhl16c:  return "Bühlmann ZH-L16C"
+                    case .invalid: return nil
+                    }
                 }
-                if let lo = s.getGfLow(), let hi = s.getGfHigh() {
-                    return "\(base) GF \(lo)/\(hi)"
+                if let b = base {
+                    if let lo = lo, let hi = hi { return "\(b) GF \(lo)/\(hi)" }
+                    return b
                 }
-                return base
+                if let lo = lo, let hi = hi { return "GF \(lo)/\(hi)" }
+                return nil
             }()
 
             // Water type from dive settings (Fresh → "Fresh", Salt → "Salt", EN13319 → "EN13319").
