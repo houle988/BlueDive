@@ -521,16 +521,21 @@ struct SettingsView: View {
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .onChange(of: prefs.appearanceMode) {
                 if previousAppearance == .system || prefs.appearanceMode == .system {
+                    #if os(iOS)
                     dismiss()
+                    #endif
                 }
                 previousAppearance = prefs.appearanceMode
             }
             .onChange(of: prefs.languageMode) {
                 if previousLanguage == .system || prefs.languageMode == .system {
+                    #if os(iOS)
                     dismiss()
+                    #endif
                 }
                 previousLanguage = prefs.languageMode
             }
+            #if os(iOS)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
@@ -538,6 +543,7 @@ struct SettingsView: View {
                         .keyboardShortcut(.escape, modifiers: [])
                 }
             }
+            #endif
             .task {
                 await checkNotificationStatus()
                 if notificationsEnabled {
@@ -675,21 +681,22 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color.primary.opacity(0.03))
                 )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    #if os(macOS)
+                    Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #else
+                    Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #endif
 
                     Text("Switching from or to System will close this window to apply the new setting.")
                         .font(.caption)
@@ -711,21 +718,22 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color.primary.opacity(0.03))
                 )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français or Deutsch.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français or Deutsch.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    #if os(macOS)
+                    Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français or Deutsch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #else
+                    Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français or Deutsch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #endif
 
                     Text("Switching from or to System will close this window to apply the new setting.")
                         .font(.caption)
@@ -734,6 +742,7 @@ struct SettingsView: View {
                 .padding(.horizontal)
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.primary.opacity(0.03))
@@ -751,7 +760,7 @@ struct SettingsView: View {
             SectionHeaderModern(title: "Units of Measure", icon: "ruler", color: .orange)
 
             
-            VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Depth", systemImage: "arrow.down.to.line")
                         .font(.subheadline)
@@ -764,11 +773,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color.primary.opacity(0.03))
                 )
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Tank pressure", systemImage: "gauge.with.dots.needle.bottom.50percent")
                         .font(.subheadline)
@@ -781,11 +791,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color.primary.opacity(0.03))
                 )
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Temperature", systemImage: "thermometer.medium")
                         .font(.subheadline)
@@ -799,11 +810,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color.primary.opacity(0.03))
                 )
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Tank volume", systemImage: "cylinder.fill")
                         .font(.subheadline)
@@ -816,11 +828,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color.primary.opacity(0.03))
                 )
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Weight", systemImage: "scalemass.fill")
                         .font(.subheadline)
@@ -833,6 +846,7 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color.primary.opacity(0.03))
@@ -844,6 +858,7 @@ struct SettingsView: View {
                     .padding(.horizontal)
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.primary.opacity(0.03))
@@ -1715,7 +1730,11 @@ struct SettingsView: View {
             .buttonStyle(.plain)
 
             Button {
+                #if os(iOS)
                 dismiss()
+                #else
+                NSApplication.shared.keyWindow?.close()
+                #endif
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(400))
                     UserDefaults.standard.set(DiveIntroConfig.replayValue, forKey: DiveIntroConfig.versionStorageKey)

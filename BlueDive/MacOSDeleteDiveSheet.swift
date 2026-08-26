@@ -35,7 +35,7 @@ struct MacOSDeleteDiveSheet: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Delete a dive")
+                        Text("Delete dive")
                             .font(.headline)
                             .foregroundStyle(.primary)
                         Text("\(dives.count) dives in logbook")
