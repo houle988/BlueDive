@@ -421,6 +421,17 @@ struct ContentView: View {
             } message: { dive in
                 Text("\"\(dive.siteName)\" will be permanently deleted. All associated data (fish sightings, equipment) will also be deleted.")
             }
+            .navigationDestination(for: DiveNavTarget.self) { target in
+                if let dive = store.diveByID[target.summaryID] {
+                    let rowNumber = dives.count - (store.diveIndexLookup[target.summaryID] ?? 0)
+                    let sortedDives: [Dive] = target.isGrouped
+                        ? (store.cachedGroupedDives.first {
+                               $0.key == dive.diverName.trimmingCharacters(in: .whitespaces)
+                           }?.value ?? [])
+                        : store.cachedFilteredDives
+                    DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: rowNumber)
+                }
+            }
         }
 
         .overlay {
@@ -629,6 +640,11 @@ struct ContentView: View {
         }
     }
     
+    private struct DiveNavTarget: Hashable {
+        let summaryID: UUID
+        let isGrouped: Bool
+    }
+
     private var diveList: some View {
         let displayedSummaries = store.cachedFilteredSummaries
         return Group {
@@ -680,18 +696,16 @@ struct ContentView: View {
                             )) {
                                 ForEach(sectionSummaries) { summary in
                                     let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
-                                    NavigationLink(destination: DiveDetailView(
-                                        dive: store.diveByID[summary.id]!,
-                                        sortedDives: sectionSummaries.compactMap { store.diveByID[$0.id] },
-                                        diveNumber: rowNumber
-                                    )) {
+                                    NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: true)) {
                                         DiveRowView(summary: summary, diveNumber: rowNumber)
                                     }
                                     .listRowBackground(Color.primary.opacity(0.07))
                                     .contextMenu {
                                         Button(role: .destructive) {
-                                            diveToDeleteDirectly = store.diveByID[summary.id]
-                                            showDeleteSingleConfirmation = true
+                                            if let dive = store.diveByID[summary.id] {
+                                                diveToDeleteDirectly = dive
+                                                showDeleteSingleConfirmation = true
+                                            }
                                         } label: {
                                             Label("Delete dive", systemImage: "trash")
                                         }
@@ -700,8 +714,10 @@ struct ContentView: View {
                                 .onDelete { offsets in
                                     if let index = offsets.first {
                                         let summary = sectionSummaries[index]
-                                        diveToDeleteDirectly = store.diveByID[summary.id]
-                                        showDeleteSingleConfirmation = true
+                                        if let dive = store.diveByID[summary.id] {
+                                            diveToDeleteDirectly = dive
+                                            showDeleteSingleConfirmation = true
+                                        }
                                     }
                                 }
                             } header: {
@@ -727,18 +743,16 @@ struct ContentView: View {
                     List {
                         ForEach(displayedSummaries) { summary in
                             let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
-                            NavigationLink(destination: DiveDetailView(
-                                dive: store.diveByID[summary.id]!,
-                                sortedDives: store.cachedFilteredDives,
-                                diveNumber: rowNumber
-                            )) {
+                            NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: false)) {
                                 DiveRowView(summary: summary, diveNumber: rowNumber)
                             }
                             .listRowBackground(Color.primary.opacity(0.07))
                             .contextMenu {
                                 Button(role: .destructive) {
-                                    diveToDeleteDirectly = store.diveByID[summary.id]
-                                    showDeleteSingleConfirmation = true
+                                    if let dive = store.diveByID[summary.id] {
+                                        diveToDeleteDirectly = dive
+                                        showDeleteSingleConfirmation = true
+                                    }
                                 } label: {
                                     Label("Delete dive", systemImage: "trash")
                                 }
