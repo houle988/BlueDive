@@ -353,11 +353,13 @@ extension BluetoothScannerView {
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
                             self.selectedDevice = nil
+                            self.isPartialSync = false
                             self.syncState = .completed(imported: 0, merged: 0, skipped: 0)
                         } else {
                             self.downloadProgressCancellable = nil
                             self.commitPendingSeed()
                             self.downloadedDives = viewModel.dives
+                            self.isPartialSync = viewModel.isPartialSync
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
                             self.showingImportConfirmation = true
@@ -394,7 +396,7 @@ extension BluetoothScannerView {
 
     // MARK: - Seed Lifecycle
 
-    private static let knownSentinelSerials: Set<String> = ["0", "00000000", "unknown", "n/a"]
+    static let knownSentinelSerials: Set<String> = ["0", "00000000", "unknown", "n/a"]
 
     func commitPendingSeed() {
         guard let seed = pendingDeviceStorageSeed else { return }

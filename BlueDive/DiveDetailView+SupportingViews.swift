@@ -12,10 +12,11 @@ import AppKit
 
 struct DiveSlidingPreview: View {
     let dive: Dive
+    let diveNumber: Int
     let initialTab: DiveTab
 
     var body: some View {
-        DiveDetailView(dive: dive, sortedDives: [], isSlidePreview: true, initialTab: initialTab)
+        DiveDetailView(dive: dive, sortedDives: [], isSlidePreview: true, initialTab: initialTab, diveNumber: diveNumber)
             .allowsHitTesting(false)
     }
 }
@@ -148,19 +149,18 @@ struct DetailCard: View {
 struct AddFishView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(DiveStore.self) private var store
     @Bindable var dive: Dive
+    let fishNames: [String]
 
     @State private var fishName = ""
     @State private var quantity = SightingQuantity.single
     @State private var showSuggestions = false
     @FocusState private var isNameFocused: Bool
 
-    @Query private var allFish: [MarineSight]
-
     private var nameSuggestions: [String] {
-        let unique = Set(allFish.map { $0.name }).sorted()
         guard !fishName.isEmpty else { return [] }
-        return unique.filter {
+        return fishNames.filter {
             $0.localizedCaseInsensitiveContains(fishName) && $0.lowercased() != fishName.lowercased()
         }
     }
@@ -384,6 +384,7 @@ struct AddFishView: View {
 
         // Sauvegarder les changements
         try? modelContext.save()
+        store.commit(dive, affects: .rowBadges)
 
         dismiss()
     }
@@ -394,25 +395,25 @@ struct AddFishView: View {
 struct EditFishView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(DiveStore.self) private var store
     @Bindable var fish: MarineSight
+    let fishNames: [String]
 
     @State private var fishName: String
     @State private var quantity: SightingQuantity
     @State private var showSuggestions = false
     @FocusState private var isNameFocused: Bool
 
-    @Query private var allFish: [MarineSight]
-
-    init(fish: MarineSight) {
+    init(fish: MarineSight, fishNames: [String] = []) {
         self.fish = fish
+        self.fishNames = fishNames
         _fishName = State(initialValue: fish.name)
         _quantity = State(initialValue: SightingQuantity.from(count: fish.count))
     }
 
     private var nameSuggestions: [String] {
-        let unique = Set(allFish.map { $0.name }).sorted()
         guard !fishName.isEmpty else { return [] }
-        return unique.filter {
+        return fishNames.filter {
             $0.localizedCaseInsensitiveContains(fishName) && $0.lowercased() != fishName.lowercased()
         }
     }
@@ -627,6 +628,12 @@ struct EditFishView: View {
         fish.name = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
         fish.count = quantity.rawValue
         try? modelContext.save()
+        if let fishDive = fish.dive {
+            store.commit(fishDive, affects: .rowBadges)
+        } else {
+            // fish.dive is orphaned (shouldn't happen); full rebuild covers badges + filter options.
+            store.commitListRebuild()
+        }
         dismiss()
     }
 }

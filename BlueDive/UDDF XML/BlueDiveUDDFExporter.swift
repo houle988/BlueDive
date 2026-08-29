@@ -69,6 +69,57 @@ enum BlueDiveUDDFExporter {
         return lines.joined(separator: "\n")
     }
 
+    // MARK: - Async bulk export with progress
+
+    /// Async variant — shows a spinner during pre-processing (onProgress called with total=0),
+    /// then a progress bar during the per-dive profile loop (total = dives.count).
+    @MainActor
+    static func generateUDDF(
+        for dives: [Dive],
+        onProgress: (Int, Int) -> Void
+    ) async -> String {
+        var lines: [String] = []
+
+        onProgress(0, 0) // spinner phase during pre-processing
+
+        lines.append(#"<?xml version="1.0" encoding="UTF-8"?>"#)
+        lines.append(#"<uddf version="3.2.3" xmlns="http://www.streit.cc/uddf/3.2/">"#)
+
+        lines.append(contentsOf: generatorSection())
+
+        let allMixes = collectGasMixes(from: dives)
+        lines.append(contentsOf: gasDefinitionsSection(mixes: allMixes))
+
+        let allBuddies = collectBuddies(from: dives)
+        let ownerName = dives.first?.diverName ?? ""
+        let computerName = dives.first?.computerName
+        let computerSerial = dives.first?.computerSerialNumber
+        let allGear = collectGear(from: dives)
+        lines.append(contentsOf: diverSection(
+            ownerName: ownerName,
+            computerName: computerName,
+            computerSerial: computerSerial,
+            gear: allGear,
+            buddies: allBuddies
+        ))
+
+        let siteMap = collectSites(from: dives)
+        lines.append(contentsOf: diveSiteSection(sites: siteMap))
+
+        let decoAlgorithm = dives.compactMap(\.decompressionAlgorithm).first(where: { !$0.isEmpty })
+        if let algo = decoAlgorithm {
+            lines.append(contentsOf: decoModelSection(algorithm: algo))
+        }
+
+        lines.append(contentsOf: await profileDataSection(
+            dives: dives, mixes: allMixes, siteMap: siteMap, buddies: allBuddies,
+            onProgress: onProgress
+        ))
+
+        lines.append("</uddf>")
+        return lines.joined(separator: "\n")
+    }
+
     // MARK: - Generator
 
     private static func generatorSection() -> [String] {
@@ -345,159 +396,199 @@ enum BlueDiveUDDFExporter {
         var lines: [String] = []
         lines.append("  <profiledata>")
         lines.append("    <repetitiongroup id=\"rg1\">")
-
         for dive in dives {
-            let diveId = dive.identifier ?? dive.id.uuidString
-            lines.append("      <dive id=\"\(xmlEscape(diveId))\">")
-
-            // ── informationbeforedive ────────────────────────────────────────
-            lines.append("        <informationbeforedive>")
-            lines.append("          <datetime>\(formatISO8601(dive.timestamp))</datetime>")
-            if let num = dive.diveNumber {
-                lines.append("          <divenumber>\(num)</divenumber>")
-            }
-            if dive.isRepetitiveDive {
-                lines.append("          <divenumberofday>2</divenumberofday>")
-            }
-            if let airTemp = dive.airTemperature {
-                lines.append("          <airtemperature>\(formatDouble(celsiusToKelvin(airTemp)))</airtemperature>")
-            }
-            if let entry = dive.entryType, !entry.isEmpty {
-                lines.append("          <platform>\(xmlEscape(entry))</platform>")
-            }
-            // Purpose from dive types
-            if let types = dive.diveTypes, let firstType = types.split(separator: ",").first.map({ $0.trimmingCharacters(in: .whitespaces) }), !firstType.isEmpty {
-                lines.append("          <purpose>\(xmlEscape(mapTypeToPurpose(firstType)))</purpose>")
-            }
-            // Surface interval
-            let siMinutes = parseSurfaceIntervalMinutes(from: dive.surfaceInterval)
-            if let si = siMinutes, si > 0 {
-                lines.append("          <surfaceintervalbeforedive>")
-                lines.append("            <passedtime>\(si * 60)</passedtime>")
-                lines.append("          </surfaceintervalbeforedive>")
-            }
-            // Site link
-            if let siteId = siteMap.first(where: { $0.value.id == dive.id })?.key {
-                lines.append("          <link ref=\"\(xmlEscape(siteId))\"/>")
-            }
-            // Buddy links
-            let buddyList = dive.buddies
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-            for name in buddyList {
-                let buddyId = "buddy_\(name.lowercased().replacingOccurrences(of: " ", with: "_"))"
-                if buddies.keys.contains(buddyId) {
-                    lines.append("          <link ref=\"\(xmlEscape(buddyId))\"/>")
-                }
-            }
-            lines.append("        </informationbeforedive>")
-
-            // ── tankdata ────────────────────────────────────────────────────
-            // Exported before <samples> so parsers can build a ref→index map
-            // before encountering <tankpressure ref="..."> in waypoints.
-            if !dive.tanks.isEmpty {
-                for (index, tank) in dive.tanks.enumerated() {
-                    lines.append("        <tankdata id=\"tank\(index + 1)\">")
-                    // Link to gas mix by composition key
-                    let mixKey = "mix_o2\(tank.o2Percentage)_he\(tank.hePercentage)"
-                    if mixes.keys.contains(mixKey) {
-                        lines.append("          <link ref=\"\(xmlEscape(mixKey))\"/>")
-                    }
-                    if let vol = tank.volume {
-                        lines.append("          <tankvolume>\(formatDouble(litresToCubicMetres(vol)))</tankvolume>")
-                    }
-                    if let sp = tank.startPressure {
-                        lines.append("          <tankpressurebegin>\(formatDouble(barToPascal(sp)))</tankpressurebegin>")
-                    }
-                    if let ep = tank.endPressure {
-                        lines.append("          <tankpressureend>\(formatDouble(barToPascal(ep)))</tankpressureend>")
-                    }
-                    lines.append("        </tankdata>")
-                }
-            }
-
-            // ── samples ─────────────────────────────────────────────────────
-            let samples = dive.profileSamples
-            // CNS: dive-level percentage (0–100) exported as fraction (0–1) on last waypoint
-            let diveCNS = dive.cnsPercentage
-            if !samples.isEmpty {
-                lines.append("        <samples>")
-                let lastIndex = samples.count - 1
-                for (index, sample) in samples.enumerated() {
-                    lines.append("          <waypoint>")
-                    // Time: profile stores minutes, UDDF needs seconds
-                    lines.append("            <divetime>\(formatDouble(sample.time * 60))</divetime>")
-                    lines.append("            <depth>\(formatDouble(sample.depth))</depth>")
-                    if let temp = sample.temperature {
-                        lines.append("            <temperature>\(formatDouble(celsiusToKelvin(temp)))</temperature>")
-                    }
-                    if let tp = sample.tankPressures, !tp.isEmpty {
-                        // Multi-tank: one <tankpressure> per tank, linked by ref
-                        for (tankIdx, pressure) in tp.sorted(by: { $0.key < $1.key }) {
-                            lines.append("            <tankpressure ref=\"tank\(tankIdx + 1)\">\(formatDouble(barToPascal(pressure)))</tankpressure>")
-                        }
-                    } else if let pressure = sample.tankPressure {
-                        lines.append("            <tankpressure>\(formatDouble(barToPascal(pressure)))</tankpressure>")
-                    }
-                    if let ppo2 = sample.ppo2 {
-                        lines.append("            <calculatedpo2>\(formatDouble(barToPascal(ppo2)))</calculatedpo2>")
-                    }
-                    if let ndl = sample.ndl {
-                        // NDL: profile stores minutes, UDDF needs seconds
-                        lines.append("            <nodecotime>\(formatDouble(ndl * 60))</nodecotime>")
-                    }
-                    // Export dive-level CNS on the last waypoint (accumulated value)
-                    if index == lastIndex, let cns = diveCNS, cns > 0 {
-                        lines.append("            <cns>\(formatDouble(cns))</cns>")
-                    }
-                    lines.append("          </waypoint>")
-                }
-                lines.append("        </samples>")
-            }
-
-            // ── informationafterdive ─────────────────────────────────────────
-            lines.append("        <informationafterdive>")
-            lines.append("          <greatestdepth>\(formatDouble(dive.maxDepth))</greatestdepth>")
-            if dive.averageDepth > 0 {
-                lines.append("          <averagedepth>\(formatDouble(dive.averageDepth))</averagedepth>")
-            }
-            lines.append("          <diveduration>\(dive.durationSeconds)</diveduration>")
-
-            if let lowTemp = dive.minTemperature {
-                lines.append("          <lowesttemperature>\(formatDouble(celsiusToKelvin(lowTemp)))</lowesttemperature>")
-            }
-
-            if let vis = dive.visibility, let visVal = Double(vis) {
-                lines.append("          <visibility>\(formatDouble(visVal))</visibility>")
-            }
-
-            if dive.rating > 0 {
-                lines.append("          <rating><ratingvalue>\(dive.rating)</ratingvalue></rating>")
-            }
-
-            if let w = dive.weights, w > 0 {
-                lines.append("          <equipmentused>")
-                lines.append("            <leadquantity>\(formatDouble(w))</leadquantity>")
-                lines.append("          </equipmentused>")
-            }
-
-            // Notes
-            if !dive.notes.isEmpty {
-                lines.append("          <notes>")
-                // Split on newlines to create separate <para> elements
-                for paragraph in dive.notes.components(separatedBy: "\n").filter({ !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
-                    lines.append("            <para>\(xmlEscape(paragraph))</para>")
-                }
-                lines.append("          </notes>")
-            }
-
-            lines.append("        </informationafterdive>")
-            lines.append("      </dive>")
+            lines.append(contentsOf: profileDiveLines(dive: dive, mixes: mixes, siteMap: siteMap, buddies: buddies))
         }
-
         lines.append("    </repetitiongroup>")
         lines.append("  </profiledata>")
+        return lines
+    }
+
+    // MARK: - Async profile section with progress
+
+    /// Async overload — reports per-dive progress. Call `onProgress(0, dives.count)` at the start
+    /// to flip the overlay from spinner to progress bar, then increments after each dive.
+    @MainActor
+    private static func profileDataSection(
+        dives: [Dive],
+        mixes: [String: (o2: Double, he: Double, name: String)],
+        siteMap: [String: Dive],
+        buddies: [String: String],
+        onProgress: (Int, Int) -> Void
+    ) async -> [String] {
+        var lines: [String] = []
+        lines.append("  <profiledata>")
+        lines.append("    <repetitiongroup id=\"rg1\">")
+        onProgress(0, dives.count)
+        var count = 0
+        for dive in dives {
+            lines.append(contentsOf: profileDiveLines(dive: dive, mixes: mixes, siteMap: siteMap, buddies: buddies))
+            count += 1
+            onProgress(count, dives.count)
+            if count % 25 == 0 {
+                await Task.yield()
+            }
+        }
+        lines.append("    </repetitiongroup>")
+        lines.append("  </profiledata>")
+        return lines
+    }
+
+    @MainActor
+    private static func profileDiveLines(
+        dive: Dive,
+        mixes: [String: (o2: Double, he: Double, name: String)],
+        siteMap: [String: Dive],
+        buddies: [String: String]
+    ) -> [String] {
+        var lines: [String] = []
+        let diveId = dive.identifier ?? dive.id.uuidString
+        lines.append("      <dive id=\"\(xmlEscape(diveId))\">")
+
+        // ── informationbeforedive ────────────────────────────────────────
+        lines.append("        <informationbeforedive>")
+        lines.append("          <datetime>\(formatISO8601(dive.timestamp))</datetime>")
+        if let num = dive.diveNumber {
+            lines.append("          <divenumber>\(num)</divenumber>")
+        }
+        if dive.isRepetitiveDive {
+            lines.append("          <divenumberofday>2</divenumberofday>")
+        }
+        if let airTemp = dive.airTemperature {
+            lines.append("          <airtemperature>\(formatDouble(celsiusToKelvin(airTemp)))</airtemperature>")
+        }
+        if let entry = dive.entryType, !entry.isEmpty {
+            lines.append("          <platform>\(xmlEscape(entry))</platform>")
+        }
+        // Purpose from dive types
+        if let types = dive.diveTypes, let firstType = types.split(separator: ",").first.map({ $0.trimmingCharacters(in: .whitespaces) }), !firstType.isEmpty {
+            lines.append("          <purpose>\(xmlEscape(mapTypeToPurpose(firstType)))</purpose>")
+        }
+        // Surface interval
+        let siMinutes = parseSurfaceIntervalMinutes(from: dive.surfaceInterval)
+        if let si = siMinutes, si > 0 {
+            lines.append("          <surfaceintervalbeforedive>")
+            lines.append("            <passedtime>\(si * 60)</passedtime>")
+            lines.append("          </surfaceintervalbeforedive>")
+        }
+        // Site link
+        if let siteId = siteMap.first(where: { $0.value.id == dive.id })?.key {
+            lines.append("          <link ref=\"\(xmlEscape(siteId))\"/>")
+        }
+        // Buddy links
+        let buddyList = dive.buddies
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        for name in buddyList {
+            let buddyId = "buddy_\(name.lowercased().replacingOccurrences(of: " ", with: "_"))"
+            if buddies.keys.contains(buddyId) {
+                lines.append("          <link ref=\"\(xmlEscape(buddyId))\"/>")
+            }
+        }
+        lines.append("        </informationbeforedive>")
+
+        // ── tankdata ────────────────────────────────────────────────────
+        // Exported before <samples> so parsers can build a ref→index map
+        // before encountering <tankpressure ref="..."> in waypoints.
+        if !dive.tanks.isEmpty {
+            for (index, tank) in dive.tanks.enumerated() {
+                lines.append("        <tankdata id=\"tank\(index + 1)\">")
+                // Link to gas mix by composition key
+                let mixKey = "mix_o2\(tank.o2Percentage)_he\(tank.hePercentage)"
+                if mixes.keys.contains(mixKey) {
+                    lines.append("          <link ref=\"\(xmlEscape(mixKey))\"/>")
+                }
+                if let vol = tank.volume {
+                    lines.append("          <tankvolume>\(formatDouble(litresToCubicMetres(vol)))</tankvolume>")
+                }
+                if let sp = tank.startPressure {
+                    lines.append("          <tankpressurebegin>\(formatDouble(barToPascal(sp)))</tankpressurebegin>")
+                }
+                if let ep = tank.endPressure {
+                    lines.append("          <tankpressureend>\(formatDouble(barToPascal(ep)))</tankpressureend>")
+                }
+                lines.append("        </tankdata>")
+            }
+        }
+
+        // ── samples ─────────────────────────────────────────────────────
+        let samples = dive.profileSamples
+        // CNS: dive-level percentage (0–100) exported as fraction (0–1) on last waypoint
+        let diveCNS = dive.cnsPercentage
+        if !samples.isEmpty {
+            lines.append("        <samples>")
+            let lastIndex = samples.count - 1
+            for (index, sample) in samples.enumerated() {
+                lines.append("          <waypoint>")
+                // Time: profile stores minutes, UDDF needs seconds
+                lines.append("            <divetime>\(formatDouble(sample.time * 60))</divetime>")
+                lines.append("            <depth>\(formatDouble(sample.depth))</depth>")
+                if let temp = sample.temperature {
+                    lines.append("            <temperature>\(formatDouble(celsiusToKelvin(temp)))</temperature>")
+                }
+                if let tp = sample.tankPressures, !tp.isEmpty {
+                    // Multi-tank: one <tankpressure> per tank, linked by ref
+                    for (tankIdx, pressure) in tp.sorted(by: { $0.key < $1.key }) {
+                        lines.append("            <tankpressure ref=\"tank\(tankIdx + 1)\">\(formatDouble(barToPascal(pressure)))</tankpressure>")
+                    }
+                } else if let pressure = sample.tankPressure {
+                    lines.append("            <tankpressure>\(formatDouble(barToPascal(pressure)))</tankpressure>")
+                }
+                if let ppo2 = sample.ppo2 {
+                    lines.append("            <calculatedpo2>\(formatDouble(barToPascal(ppo2)))</calculatedpo2>")
+                }
+                if let ndl = sample.ndl {
+                    // NDL: profile stores minutes, UDDF needs seconds
+                    lines.append("            <nodecotime>\(formatDouble(ndl * 60))</nodecotime>")
+                }
+                // Export dive-level CNS on the last waypoint (accumulated value)
+                if index == lastIndex, let cns = diveCNS, cns > 0 {
+                    lines.append("            <cns>\(formatDouble(cns))</cns>")
+                }
+                lines.append("          </waypoint>")
+            }
+            lines.append("        </samples>")
+        }
+
+        // ── informationafterdive ─────────────────────────────────────────
+        lines.append("        <informationafterdive>")
+        lines.append("          <greatestdepth>\(formatDouble(dive.maxDepth))</greatestdepth>")
+        if dive.averageDepth > 0 {
+            lines.append("          <averagedepth>\(formatDouble(dive.averageDepth))</averagedepth>")
+        }
+        lines.append("          <diveduration>\(dive.durationSeconds)</diveduration>")
+
+        if let lowTemp = dive.minTemperature {
+            lines.append("          <lowesttemperature>\(formatDouble(celsiusToKelvin(lowTemp)))</lowesttemperature>")
+        }
+
+        if let vis = dive.visibility, let visVal = Double(vis) {
+            lines.append("          <visibility>\(formatDouble(visVal))</visibility>")
+        }
+
+        if dive.rating > 0 {
+            lines.append("          <rating><ratingvalue>\(dive.rating)</ratingvalue></rating>")
+        }
+
+        if let w = dive.weights, w > 0 {
+            lines.append("          <equipmentused>")
+            lines.append("            <leadquantity>\(formatDouble(w))</leadquantity>")
+            lines.append("          </equipmentused>")
+        }
+
+        // Notes
+        if !dive.notes.isEmpty {
+            lines.append("          <notes>")
+            // Split on newlines to create separate <para> elements
+            for paragraph in dive.notes.components(separatedBy: "\n").filter({ !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                lines.append("            <para>\(xmlEscape(paragraph))</para>")
+            }
+            lines.append("          </notes>")
+        }
+
+        lines.append("        </informationafterdive>")
+        lines.append("      </dive>")
         return lines
     }
 

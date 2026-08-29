@@ -27,16 +27,21 @@ extension BluetoothScannerView {
             // Sort dives chronologically so we can calculate surface intervals
             let sortedDives = downloadedDives.sorted { $0.datetime < $1.datetime }
 
-            // Find the highest dive number in the logbook so new dives continue the sequence
-            let hasNumberPredicate = #Predicate<Dive> { dive in
-                dive.diveNumber != nil
-            }
-            var maxNumberDescriptor = FetchDescriptor<Dive>(
-                predicate: hasNumberPredicate,
+            // Resolve the diver name once for the entire batch — the same computer is used for all dives.
+            let batchDiverName = resolveGearDiverName(forSerial: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial }, in: modelContext)
+
+            // Find the highest dive number for this diver's bucket so new dives continue their own
+            // sequence independently of other divers. Stored diverName values are always trimmed,
+            // so pre-trimming the target lets us use a DB-level predicate — no in-memory scan needed.
+            let targetDiverName = batchDiverName.trimmingCharacters(in: .whitespaces)
+            var diverNumberDescriptor = FetchDescriptor<Dive>(
+                predicate: #Predicate<Dive> { dive in
+                    dive.diveNumber != nil && dive.diverName == targetDiverName
+                },
                 sortBy: [SortDescriptor(\Dive.diveNumber, order: .reverse)]
             )
-            maxNumberDescriptor.fetchLimit = 1
-            let highestDiveNumber = (try? modelContext.fetch(maxNumberDescriptor).first?.diveNumber) ?? 0
+            diverNumberDescriptor.fetchLimit = 1
+            let highestDiveNumber = (try? modelContext.fetch(diverNumberDescriptor).first?.diveNumber) ?? 0
             var nextDiveNumber = highestDiveNumber + 1
 
             // Find the most recent existing dive before the first downloaded dive
@@ -58,20 +63,59 @@ extension BluetoothScannerView {
                 }
             }
 
-            // Resolve the diver name once for the entire batch — the same computer is used for all dives.
-            let batchDiverName = resolveDiverName(forSerial: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial })
+            // Build a fingerprint → Dive index once for the whole batch.
+            // Serial is constant across all dives in this sync (same device), so one fetch covers all.
+            // #Predicate can't do case-insensitive comparison, so fetch dives with a serial+fingerprint
+            // and filter in memory — same pattern as resolveDiverName and the XML import path.
+            // The fetch is bounded by the oldest/newest incoming dive ±deduplicationHighConfidenceWindow:
+            // any DB dive outside that range cannot match (the dedup window is 24h), so it is safe to
+            // exclude. This keeps the fetch small even for logbooks with thousands of dives.
+            let normalizedSerial: String? = selectedDevice
+                .flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial }
+                .flatMap { $0.normalizedComputerSerial() }
+            let existingDivesByFingerprint: [Data: Dive]
+            if let normalizedSerial {
+                let lowerBound = sortedDives.first.map { $0.datetime.addingTimeInterval(-deduplicationHighConfidenceWindow) }
+                let upperBound = sortedDives.last.map { $0.datetime.addingTimeInterval(deduplicationHighConfidenceWindow) }
+                let predicate: Predicate<Dive>
+                if let lower = lowerBound, let upper = upperBound {
+                    predicate = #Predicate<Dive> {
+                        $0.computerSerialNumber != nil &&
+                        $0.fingerprintData != nil &&
+                        $0.timestamp >= lower &&
+                        $0.timestamp <= upper
+                    }
+                } else {
+                    predicate = #Predicate<Dive> {
+                        $0.computerSerialNumber != nil &&
+                        $0.fingerprintData != nil
+                    }
+                }
+                let candidates = (try? modelContext.fetch(FetchDescriptor<Dive>(predicate: predicate))) ?? []
+                existingDivesByFingerprint = Dictionary(
+                    candidates.compactMap { d -> (Data, Dive)? in
+                        guard d.computerSerialNumber?.normalizedComputerSerial() == normalizedSerial,
+                              let fp = d.fingerprintData, !fp.isEmpty else { return nil }
+                        return (fp, d)
+                    },
+                    uniquingKeysWith: { first, _ in first }
+                )
+            } else {
+                existingDivesByFingerprint = [:]
+            }
 
             for (index, diveData) in sortedDives.enumerated() {
-                // Check if the dive already exists (by date and depth)
-                let existingMatch = checkExistingDive(diveData)
+                let existingDive: Dive? = diveData.fingerprint.flatMap { fp in
+                    fp.isEmpty ? nil : existingDivesByFingerprint[fp]
+                }
 
-                if let (existingDive, matchReason) = existingMatch {
+                if let existingDive {
                     if downloadAllDives {
                         // Re-download mode: merge data from the computer
-                        mergeComputerData(from: diveData, into: existingDive, matchReason: matchReason)
+                        mergeComputerData(from: diveData, into: existingDive, matchReason: "fingerprint + serial")
                         mergedCount += 1
                     } else {
-                        Self.logger.info("Dive from \(diveData.datetime) skipped — already in logbook (matched by: \(matchReason))")
+                        Self.logger.info("Dive from \(diveData.datetime) skipped — already in logbook (matched by: fingerprint + serial)")
                         skippedCount += 1
                     }
                 } else {
@@ -285,74 +329,6 @@ extension BluetoothScannerView {
         Self.logger.info("Cleared DeviceFingerprint record for serial \(serial)")
     }
 
-    // MARK: - Duplicate Check
-
-    /// Checks if a dive already exists in the logbook.
-    /// Matches by timestamp (±1 minute), max depth (±0.5), and fingerprint data record.
-    /// Returns the matched dive and a human-readable reason for the match, or nil if no match.
-    private func checkExistingDive(_ diveData: DiveData) -> (dive: Dive, reason: String)? {
-        let timestamp = diveData.datetime
-        let maxDepth = diveData.maxDepth
-
-        // Get the current device's serial number
-        let deviceSerial = selectedDevice.flatMap { peripheral in
-            DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString)?.serial
-        }
-
-        // Look for a dive with the same date (within 1 minute) and similar depth
-        let calendar = Calendar.current
-        let startOfMinute = calendar.date(byAdding: .minute, value: -1, to: timestamp) ?? timestamp
-        let endOfMinute = calendar.date(byAdding: .minute, value: 1, to: timestamp) ?? timestamp
-        let depthLow = maxDepth - 0.5
-        let depthHigh = maxDepth + 0.5
-
-        let predicate = #Predicate<Dive> { dive in
-            dive.timestamp >= startOfMinute &&
-            dive.timestamp <= endOfMinute &&
-            dive.maxDepth >= depthLow &&
-            dive.maxDepth <= depthHigh
-        }
-
-        let descriptor = FetchDescriptor<Dive>(predicate: predicate)
-
-        do {
-            let results = try modelContext.fetch(descriptor)
-
-            for existingDive in results {
-                let fingerprintMatches = existingDive.fingerprintData != nil &&
-                                         diveData.fingerprint != nil &&
-                                         existingDive.fingerprintData == diveData.fingerprint
-                let serialMatches = deviceSerial != nil &&
-                                    existingDive.computerSerialNumber == deviceSerial
-                // Dives with no device identity (e.g. file imports without serial/fingerprint)
-                // are matched on timestamp+depth alone — it's the only signal available.
-                // This prevents false duplicates when syncing dives previously imported via XML.
-                // The two-diver protection still applies: a Bluetooth-imported dive always has
-                // a serial, so noDeviceIdentity is false for it and the strict check applies.
-                let noDeviceIdentity = existingDive.fingerprintData == nil &&
-                                       (existingDive.computerSerialNumber == nil ||
-                                        existingDive.computerSerialNumber?.isEmpty == true)
-
-                if fingerprintMatches {
-                    return (existingDive, "fingerprint")
-                } else if serialMatches {
-                    return (existingDive, "serial number")
-                } else if noDeviceIdentity {
-                    return (existingDive, "timestamp+depth (no device identity on existing dive)")
-                }
-            }
-
-            if !results.isEmpty {
-                Self.logger.debug("checkExistingDive: \(results.count) timestamp/depth match(es) rejected by identity check — inserting as new dive")
-            }
-
-            return nil
-        } catch {
-            Self.logger.error("Error searching for existing dive: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
     // MARK: - Merge
 
     /// Merges dive computer data into an existing dive.
@@ -527,42 +503,4 @@ extension BluetoothScannerView {
 
     // MARK: - Diver Name
 
-    /// Returns the diver name to stamp on a Bluetooth-downloaded dive.
-    ///
-    /// Looks for a gear item of category "Computer" whose serial number matches the connected device.
-    /// Serial comparison is whitespace-trimmed and case-insensitive to handle firmware padding and
-    /// user-entry differences. If multiple computers share the same serial but disagree on the diver
-    /// name (ambiguous ownership), falls back to the profile name. Falls back to the profile name
-    /// when no matching gear is found or the fetch fails.
-    private func resolveDiverName(forSerial computerSerial: String?) -> String {
-        let profileName = (UserDefaults.standard.string(forKey: "userName") ?? "").trimmingCharacters(in: .whitespaces)
-        guard let rawSerial = computerSerial else { return profileName }
-        let serial = rawSerial.trimmingCharacters(in: .whitespaces)
-        guard !serial.isEmpty else { return profileName }
-
-        let computerCategory = GearCategory.computer.rawValue
-        // #Predicate cannot call instance methods, so fetch all computers and filter in-memory
-        // to apply trimmed case-insensitive serial comparison.
-        let predicate = #Predicate<Gear> { gear in
-            gear.category == computerCategory && gear.serialNumber != nil
-        }
-        do {
-            let computers = try modelContext.fetch(FetchDescriptor<Gear>(predicate: predicate))
-            let matches = computers.filter {
-                ($0.serialNumber ?? "").trimmingCharacters(in: .whitespaces)
-                    .caseInsensitiveCompare(serial) == .orderedSame
-                    && !$0.diverName.trimmingCharacters(in: .whitespaces).isEmpty
-            }
-            let distinctNames = Set(matches.map { $0.diverName.trimmingCharacters(in: .whitespaces) })
-            if distinctNames.count == 1, let name = distinctNames.first {
-                return name
-            }
-            if distinctNames.count > 1 {
-                Self.logger.warning("Multiple gear computers match serial \(serial) with different diver names — falling back to profile name")
-            }
-        } catch {
-            Self.logger.error("Failed to look up gear for computer serial \(serial): \(error.localizedDescription)")
-        }
-        return profileName
-    }
 }

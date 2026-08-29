@@ -8,7 +8,7 @@ private enum MapCoordinateMode: CaseIterable {
 }
 
 struct DiveMapView: View {
-    @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
+    @Environment(DiveStore.self) private var store
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -35,126 +35,32 @@ struct DiveMapView: View {
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
-
-    private func coordinate(for dive: Dive, mode: MapCoordinateMode) -> CLLocationCoordinate2D? {
-        let lat: Double?
-        let lon: Double?
-        switch mode {
-        case .entry:
-            lat = dive.siteLatitude
-            lon = dive.siteLongitude
-        case .exit:
-            lat = dive.exitLatitude
-            lon = dive.exitLongitude
-        }
-        guard let lat, let lon,
-              !(lat == 0 && lon == 0),
-              CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: lat, longitude: lon)) else {
-            return nil
-        }
-        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
-    }
-    
-    // MARK: - Available Filter Options (only from dives with coordinates)
-
-    private var geolocatedDives: [Dive] {
-        dives.filter { coordinate(for: $0, mode: coordinateMode) != nil }
-    }
-
-    private var availableYears: [Int] {
-        let years = geolocatedDives.compactMap { Calendar.current.dateComponents([.year], from: $0.timestamp).year }
-        return Array(Set(years)).sorted(by: >)
-    }
-
-    private var availableGasTypes: [String] {
-        let types = geolocatedDives.map { $0.gasType }
-        return Array(Set(types)).sorted()
-    }
-
-    private var availableCountries: [String] {
-        let countries = geolocatedDives.compactMap { $0.siteCountry }.filter { !$0.isEmpty }
-        return Array(Set(countries)).sorted()
-    }
-
-    private var availableDiveTypes: [String] {
-        var types = Set<String>()
-        for dive in geolocatedDives {
-            dive.diveTypes?
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-                .forEach { types.insert($0) }
-        }
-        return types.sorted()
-    }
-
-    private var availableTags: [String] {
-        var tags = Set<String>()
-        for dive in geolocatedDives {
-            dive.tags?
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-                .forEach { tags.insert($0) }
-        }
-        return tags.sorted()
-    }
-
-    private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
-    }
-
-    private var availableMarineLife: [String] {
-        var species = Set<String>()
-        for dive in geolocatedDives {
-            dive.seenFish?.forEach { sight in
-                let name = sight.name.trimmingCharacters(in: .whitespaces)
-                if !name.isEmpty { species.insert(name) }
-            }
-        }
-        return species.sorted()
-    }
+    @State private var prefs = UserPreferences.shared
 
     private var activeFilterCount: Int {
         var count = 0
-        if filterYear != nil            { count += 1 }
-        if filterGasType != nil         { count += 1 }
-        if filterMinDepth > 0 || filterMaxDepth > 0 { count += 1 }
-        if filterMinRating > 0          { count += 1 }
-        if filterCountry != nil         { count += 1 }
-        if filterDiveType != nil        { count += 1 }
-        if filterTag != nil             { count += 1 }
-        if !filterMarineLife.isEmpty    { count += 1 }
+        if filterYear != nil                         { count += 1 }
+        if filterGasType != nil                      { count += 1 }
+        if filterMinDepth > 0 || filterMaxDepth > 0  { count += 1 }
+        if filterMinRating > 0                       { count += 1 }
+        if filterCountry != nil                      { count += 1 }
+        if filterDiveType != nil                     { count += 1 }
+        if filterTag != nil                          { count += 1 }
+        if !filterMarineLife.isEmpty                 { count += 1 }
         return count
     }
-    
-    private var filteredDives: [Dive] {
-        DiverFilter.applyDiveFilters(
-            to: DiverFilter.apply(selectedDiver, to: dives),
-            year: filterYear, yearNegate: filterYearNegate,
-            gasType: filterGasType, gasTypeNegate: filterGasTypeNegate,
-            minDepth: filterMinDepth, maxDepth: filterMaxDepth,
-            minRating: filterMinRating,
-            country: filterCountry, countryNegate: filterCountryNegate,
-            diveType: filterDiveType, diveTypeNegate: filterDiveTypeNegate,
-            tag: filterTag,
-            marineLife: filterMarineLife, marineLifeMode: filterMarineLifeMode
-        )
-    }
 
-    private var divesWithCoordinates: [(dive: Dive, coordinate: CLLocationCoordinate2D)] {
-        filteredDives.compactMap { dive in
-            if let coord = coordinate(for: dive, mode: coordinateMode) {
-                return (dive, coord)
-            }
-            return nil
-        }
-    }
-
-    // MARK: - Clustering
+    // MARK: - Clustering & Snapshot Cache
 
     @State private var currentSpan: MKCoordinateSpan = MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
     @State private var clusterDives: [Dive]? = nil
+    @State private var cachedClusters: [DiveCluster] = []
+    @State private var cachedUniqueDivers: [String] = []
+    @State private var clusteringTask: Task<Void, Never>? = nil
+    @State private var isFilterTaskActive = false
+    @State private var filterOptions = MapFilterOptions()
+    // Cached result of the last filter pass; camera zoom re-clusters from here.
+    @State private var filteredCoordPoints: [DiveCoordPoint] = []
 
     private struct DiveCluster: Identifiable {
         let id: String
@@ -171,68 +77,384 @@ struct DiveMapView: View {
         return l
     }
 
-    private var clusters: [DiveCluster] {
-        // Overlap radius scales with visible span so the clustering threshold
-        // matches the pin's screen-space footprint (~1/20th of the visible span).
-        let radiusLat = max(currentSpan.latitudeDelta, 0.00001) / 20.0
-        let baseLonRadius = max(currentSpan.longitudeDelta, 0.00001) / 20.0
+    // MARK: - Cached Filter Options
 
-        // Greedy distance-based clustering. Unlike a fixed grid, this has no
-        // cell-edge artifact: two visually overlapping pins always merge.
-        // Centroid is recomputed as members are added to keep assignments stable.
+    private struct MapFilterOptions {
+        var years: [Int] = []
+        var gasTypes: [String] = []
+        var countries: [String] = []
+        var diveTypes: [String] = []
+        var tags: [String] = []
+        var marineLife: [String] = []
+    }
+
+    // MARK: - Background Clustering Support
+
+    private struct DiveCoordPoint: Sendable {
+        let id: UUID
+        let lat: Double
+        let lon: Double
+    }
+
+    private struct RawClusterResult: Sendable {
+        let memberIDs: [UUID]
+        let centroidLat: Double
+        let centroidLon: Double
+    }
+
+    // MARK: - State Rebuilders
+
+    private func rebuildUniqueDivers() {
+        cachedUniqueDivers = DiverFilter.uniqueDivers(
+            in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances
+        )
+    }
+
+    // Builds filter sheet options from the store's cached summaries (no SwiftData access).
+    // Only includes dives that have valid coordinates in the current mode.
+    private func rebuildFilterOptions() {
+        var years = Set<Int>()
+        var gasTypes = Set<String>()
+        var countries = Set<String>()
+        var diveTypes = Set<String>()
+        var tags = Set<String>()
+        var marineLife = Set<String>()
+        for snap in store.cachedSummaries {
+            let lat: Double?
+            let lon: Double?
+            switch coordinateMode {
+            case .entry: (lat, lon) = (snap.siteLatitude, snap.siteLongitude)
+            case .exit:  (lat, lon) = (snap.exitLatitude,  snap.exitLongitude)
+            }
+            guard let lat, let lon, !(lat == 0 && lon == 0),
+                  CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: lat, longitude: lon))
+            else { continue }
+            years.insert(snap.year)
+            gasTypes.insert(snap.gasType)
+            if let c = snap.siteCountry, !c.isEmpty { countries.insert(c) }
+            snap.diveTypes.forEach    { diveTypes.insert($0) }
+            snap.tags.forEach         { tags.insert($0) }
+            snap.seenFishNames.forEach { marineLife.insert($0) }
+        }
+        filterOptions = MapFilterOptions(
+            years: Array(years).sorted(by: >),
+            gasTypes: Array(gasTypes).sorted(),
+            countries: Array(countries).sorted(),
+            diveTypes: Array(diveTypes).sorted(),
+            tags: Array(tags).sorted(),
+            marineLife: Array(marineLife).sorted()
+        )
+    }
+
+    // Full rebuild triggered by dives changes. Gear/cert/insurance changes use
+    // rebuildUniqueDivers() only — they don't affect the map pins.
+    private func rebuildMapState() {
+        rebuildUniqueDivers()
+        rebuildFilterOptions()
+        scheduleFilterAndCluster()
+    }
+
+    // MARK: - Scheduling
+
+    // Re-filters the snapshot array on a background thread, then clusters.
+    // Call this when dives data or any filter parameter changes.
+    private func scheduleFilterAndCluster() {
+        clusteringTask?.cancel()
+        let snapshots = store.cachedSummaries
+        guard !snapshots.isEmpty else {
+            filteredCoordPoints = []
+            cachedClusters = []
+            isFilterTaskActive = false
+            return
+        }
+        let mode        = coordinateMode
+        let diver       = selectedDiver
+        let fYear       = filterYear
+        let fYearNeg    = filterYearNegate
+        let fGas        = filterGasType
+        let fGasNeg     = filterGasTypeNegate
+        let fMinDepth   = filterMinDepth
+        let fMaxDepth   = filterMaxDepth
+        let fRating     = filterMinRating
+        let fCountry    = filterCountry
+        let fCountryNeg = filterCountryNegate
+        let fDiveType   = filterDiveType
+        let fDiveTypeNeg = filterDiveTypeNegate
+        let fTag        = filterTag
+        let fMarineLife = filterMarineLife
+        let fMarineLifeMode = filterMarineLifeMode
+        let span        = currentSpan
+        let byID        = store.diveByID
+        let displayInFeet = prefs.depthUnit == .feet
+        let depthFactor = DepthUnit.metersToFeetFactor   // capture on MainActor
+
+        isFilterTaskActive = true
+        clusteringTask = Task {
+            let (points, rawResults) = await Task.detached(priority: .userInitiated) {
+                let filtered = DiveMapView.filterSnapshots(
+                    snapshots,
+                    coordinateMode: mode,
+                    selectedDiver: diver,
+                    filterYear: fYear, filterYearNegate: fYearNeg,
+                    filterGasType: fGas, filterGasTypeNegate: fGasNeg,
+                    filterMinDepth: fMinDepth, filterMaxDepth: fMaxDepth,
+                    filterMinRating: fRating,
+                    filterCountry: fCountry, filterCountryNegate: fCountryNeg,
+                    filterDiveType: fDiveType, filterDiveTypeNegate: fDiveTypeNeg,
+                    filterTag: fTag,
+                    filterMarineLife: fMarineLife, filterMarineLifeMode: fMarineLifeMode,
+                    displayInFeet: displayInFeet,
+                    depthFactor: depthFactor
+                )
+                let raw = DiveMapView.computeRawClusters(points: filtered, span: span)
+                return (filtered, raw)
+            }.value
+            guard !Task.isCancelled else { return }
+            filteredCoordPoints = points
+            cachedClusters = rawResults.compactMap { raw in
+                let dives = raw.memberIDs.compactMap { byID[$0] }
+                guard !dives.isEmpty else { return nil }
+                let minID = raw.memberIDs.min(by: { $0.uuidString < $1.uuidString })?.uuidString ?? ""
+                return DiveCluster(
+                    id: "\(minID)_\(raw.memberIDs.count)",
+                    coordinate: CLLocationCoordinate2D(latitude: raw.centroidLat, longitude: raw.centroidLon),
+                    dives: dives
+                )
+            }.sorted { $0.id < $1.id }
+            isFilterTaskActive = false
+            // If the camera span changed while filtering, recluster immediately so
+            // pins reflect the current zoom level without waiting for the next event.
+            if currentSpan.latitudeDelta != span.latitudeDelta
+                || currentSpan.longitudeDelta != span.longitudeDelta {
+                scheduleRecluster()
+            }
+        }
+    }
+
+    // Re-clusters the already-filtered coord points when the camera span changes.
+    // Skips the O(n) filter pass — only the O(k²) cluster pass re-runs (k ≤ n).
+    // Defers to the in-flight filter task if one is active: the filter task will
+    // call scheduleRecluster() itself after it completes with the latest span.
+    private func scheduleRecluster() {
+        guard !isFilterTaskActive else { return }
+        let points = filteredCoordPoints
+        guard !points.isEmpty else { return }
+        clusteringTask?.cancel()
+        let span = currentSpan
+        let byID = store.diveByID
+
+        clusteringTask = Task {
+            let rawResults = await Task.detached(priority: .userInitiated) {
+                DiveMapView.computeRawClusters(points: points, span: span)
+            }.value
+            guard !Task.isCancelled else { return }
+            cachedClusters = rawResults.compactMap { raw in
+                let dives = raw.memberIDs.compactMap { byID[$0] }
+                guard !dives.isEmpty else { return nil }
+                let minID = raw.memberIDs.min(by: { $0.uuidString < $1.uuidString })?.uuidString ?? ""
+                return DiveCluster(
+                    id: "\(minID)_\(raw.memberIDs.count)",
+                    coordinate: CLLocationCoordinate2D(latitude: raw.centroidLat, longitude: raw.centroidLon),
+                    dives: dives
+                )
+            }.sorted { $0.id < $1.id }
+        }
+    }
+
+    // MARK: - Pure Background Functions
+
+    // Filters a Sendable snapshot array for coordinates and all filter parameters.
+    // No SwiftData access — safe to call from background threads.
+    private nonisolated static func filterSnapshots(
+        _ snapshots: [DiveSummary],
+        coordinateMode: MapCoordinateMode,
+        selectedDiver: String,
+        filterYear: Int?, filterYearNegate: Bool,
+        filterGasType: String?, filterGasTypeNegate: Bool,
+        filterMinDepth: Double, filterMaxDepth: Double,
+        filterMinRating: Int,
+        filterCountry: String?, filterCountryNegate: Bool,
+        filterDiveType: String?, filterDiveTypeNegate: Bool,
+        filterTag: String?,
+        filterMarineLife: [String], filterMarineLifeMode: FilterMarineLifeMode,
+        displayInFeet: Bool,
+        depthFactor: Double
+    ) -> [DiveCoordPoint] {
+        let marineLifeLowercased = filterMarineLife.map { $0.lowercased() }
+        return snapshots.compactMap { snap in
+            let lat: Double?
+            let lon: Double?
+            switch coordinateMode {
+            case .entry: (lat, lon) = (snap.siteLatitude, snap.siteLongitude)
+            case .exit:  (lat, lon) = (snap.exitLatitude,  snap.exitLongitude)
+            }
+            guard let lat, let lon, !(lat == 0 && lon == 0),
+                  CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: lat, longitude: lon))
+            else { return nil }
+
+            if !selectedDiver.isEmpty, snap.diverName != selectedDiver { return nil }
+
+            if let year = filterYear {
+                if filterYearNegate { if snap.year == year { return nil } }
+                else                { if snap.year != year { return nil } }
+            }
+            if let gas = filterGasType {
+                if gas.isEmpty          { if !snap.gasType.isEmpty { return nil } }
+                else if filterGasTypeNegate { if snap.gasType == gas { return nil } }
+                else                    { if snap.gasType != gas { return nil } }
+            }
+            if filterMinDepth > 0 || filterMaxDepth > 0 {
+                let storedInFeet = snap.importDistanceUnit == "feet"
+                let depth: Double
+                if displayInFeet {
+                    depth = storedInFeet ? snap.maxDepth : snap.maxDepth * depthFactor
+                } else {
+                    depth = storedInFeet ? snap.maxDepth / depthFactor : snap.maxDepth
+                }
+                if filterMinDepth > 0, filterMaxDepth > 0 {
+                    let lo = Swift.min(filterMinDepth, filterMaxDepth)
+                    let hi = Swift.max(filterMinDepth, filterMaxDepth)
+                    if depth < lo || depth > hi { return nil }
+                } else if filterMinDepth > 0 { if depth < filterMinDepth { return nil } }
+                else if filterMaxDepth > 0   { if depth > filterMaxDepth { return nil } }
+            }
+            if filterMinRating > 0, snap.rating < filterMinRating { return nil }
+            if let country = filterCountry {
+                if country.isEmpty    { if let c = snap.siteCountry, !c.isEmpty { return nil } }
+                else if filterCountryNegate { if let c = snap.siteCountry, c == country { return nil } }
+                else                  { guard let c = snap.siteCountry, c == country else { return nil } }
+            }
+            if let diveType = filterDiveType {
+                if diveType.isEmpty        { if !snap.diveTypes.isEmpty { return nil } }
+                else if filterDiveTypeNegate { if snap.diveTypes.contains(diveType) { return nil } }
+                else                       { if !snap.diveTypes.contains(diveType) { return nil } }
+            }
+            if let tag = filterTag {
+                if tag.isEmpty { if !snap.tags.isEmpty { return nil } }
+                else           { if !snap.tags.contains(tag) { return nil } }
+            }
+            if !marineLifeLowercased.isEmpty {
+                switch filterMarineLifeMode {
+                case .any:
+                    if !marineLifeLowercased.contains(where: { ml in
+                        snap.seenFishNames.contains { $0.lowercased() == ml }
+                    }) { return nil }
+                case .all:
+                    if !marineLifeLowercased.allSatisfy({ ml in
+                        snap.seenFishNames.contains { $0.lowercased() == ml }
+                    }) { return nil }
+                }
+            }
+
+            var normLon = lon.truncatingRemainder(dividingBy: 360.0)
+            if normLon >= 180.0  { normLon -= 360.0 }
+            if normLon < -180.0  { normLon += 360.0 }
+            return DiveCoordPoint(id: snap.id, lat: lat, lon: normLon)
+        }
+    }
+
+    // Pure function — no SwiftData access, safe to call from background tasks.
+    private nonisolated static func computeRawClusters(
+        points: [DiveCoordPoint], span: MKCoordinateSpan
+    ) -> [RawClusterResult] {
+        let radiusLat = max(span.latitudeDelta, 0.00001) / 20.0
+        let baseLonRadius = max(span.longitudeDelta, 0.00001) / 20.0
         struct WorkingCluster {
             var sumLat: Double
             var sumLon: Double
-            var dives: [Dive]
-            var coords: [CLLocationCoordinate2D]
-            var centroid: CLLocationCoordinate2D {
-                let n = Double(dives.count)
-                return CLLocationCoordinate2D(latitude: sumLat / n, longitude: sumLon / n)
-            }
+            var ids: [UUID]
+            var centroidLat: Double { sumLat / Double(ids.count) }
+            var centroidLon: Double { sumLon / Double(ids.count) }
         }
-
         var working: [WorkingCluster] = []
-        // Process in deterministic order so cluster identity is stable across
-        // recomputes (filteredDives is already sorted by timestamp desc).
-        for item in divesWithCoordinates {
-            let lat = item.coordinate.latitude
-            let lon = normalizedLongitude(item.coordinate.longitude)
-            // Compensate longitude radius by cos(latitude) so the cluster
-            // threshold is roughly isotropic in on-screen distance at any latitude.
-            let latCos = max(cos(lat * .pi / 180.0), 0.01)
+        for point in points {
+            let latCos = max(cos(point.lat * .pi / 180.0), 0.01)
             let radiusLon = baseLonRadius / latCos
             var merged = false
             for i in working.indices {
-                let c = working[i].centroid
-                if abs(lat - c.latitude) <= radiusLat && abs(lon - c.longitude) <= radiusLon {
-                    working[i].sumLat += lat
-                    working[i].sumLon += lon
-                    working[i].dives.append(item.dive)
-                    working[i].coords.append(CLLocationCoordinate2D(latitude: lat, longitude: lon))
+                if abs(point.lat - working[i].centroidLat) <= radiusLat &&
+                   abs(point.lon - working[i].centroidLon) <= radiusLon {
+                    working[i].sumLat += point.lat
+                    working[i].sumLon += point.lon
+                    working[i].ids.append(point.id)
                     merged = true
                     break
                 }
             }
             if !merged {
-                working.append(WorkingCluster(
-                    sumLat: lat, sumLon: lon,
-                    dives: [item.dive],
-                    coords: [CLLocationCoordinate2D(latitude: lat, longitude: lon)]
-                ))
+                working.append(WorkingCluster(sumLat: point.lat, sumLon: point.lon, ids: [point.id]))
             }
         }
-        return working.map { entry -> DiveCluster in
-            // Stable id = sorted member ids, so SwiftUI keeps the same annotation
-            // identity across re-renders with the same membership.
-            let ids = entry.dives.map { $0.id.uuidString }.sorted().joined(separator: "_")
-            return DiveCluster(
-                id: ids,
-                coordinate: entry.centroid,
-                dives: entry.dives
+        return working.map { cluster in
+            RawClusterResult(
+                memberIDs: cluster.ids,
+                centroidLat: cluster.sumLat / Double(cluster.ids.count),
+                centroidLon: cluster.sumLon / Double(cluster.ids.count)
             )
         }
-        // Deterministic order (independent of dictionary iteration).
-        .sorted { $0.id < $1.id }
+    }
+
+    // MARK: - Change Observers (split to avoid Swift type-checker timeouts)
+
+    @ViewBuilder
+    private var mapObserversA: some View {
+        Color.clear
+            .onChange(of: store.cachedSummaries, initial: true) { _, _ in rebuildMapState() }
+            // Gear/cert/insurance only affect the diver picker, not map pins.
+            .onChange(of: allGear)           { _, _ in rebuildUniqueDivers() }
+            .onChange(of: allCertifications) { _, _ in rebuildUniqueDivers() }
+            .onChange(of: allInsurances)     { _, _ in rebuildUniqueDivers() }
+    }
+
+    @ViewBuilder
+    private var mapObserversB: some View {
+        Color.clear
+            .onChange(of: coordinateMode) { _, _ in
+                // Coordinate mode switches which lat/lon pair is used; rebuild
+                // filter options (geolocated set may change) and re-filter.
+                rebuildFilterOptions()
+                scheduleFilterAndCluster()
+            }
+            .onChange(of: prefs.depthUnit) { _, _ in
+                scheduleFilterAndCluster()
+            }
+    }
+
+    @ViewBuilder
+    private var mapObservers: some View {
+        mapObserversA
+        mapObserversB
+    }
+
+    @ViewBuilder
+    private var filterObserversA: some View {
+        Color.clear
+            .onChange(of: selectedDiver)       { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterYear)          { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterYearNegate)    { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterGasType)       { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterGasTypeNegate) { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterMinDepth)      { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterMaxDepth)      { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterMinRating)     { _, _ in scheduleFilterAndCluster() }
+    }
+
+    @ViewBuilder
+    private var filterObserversB: some View {
+        Color.clear
+            .onChange(of: filterCountry)        { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterCountryNegate)  { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterDiveType)       { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterDiveTypeNegate) { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterTag)            { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterMarineLife)     { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterMarineLifeMode) { _, _ in scheduleFilterAndCluster() }
+    }
+
+    @ViewBuilder
+    private var filterObservers: some View {
+        filterObserversA
+        filterObserversB
     }
 
     private func handleClusterTap(_ cluster: DiveCluster) {
@@ -281,7 +503,7 @@ struct DiveMapView: View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 Map(position: $cameraPosition, selection: $selectedDive) {
-                    ForEach(clusters) { cluster in
+                    ForEach(cachedClusters) { cluster in
                         if cluster.dives.count == 1, let dive = cluster.dives.first {
                             Annotation(
                                 dive.siteName,
@@ -317,6 +539,7 @@ struct DiveMapView: View {
                     let ratio = newSpan.latitudeDelta / max(currentSpan.latitudeDelta, 0.00001)
                     if ratio < 0.7 || ratio > 1.4 {
                         currentSpan = newSpan
+                        scheduleRecluster()
                     }
                 }
                 .onChange(of: selectedDive) { _, newValue in
@@ -331,10 +554,10 @@ struct DiveMapView: View {
                     MapCompass()
                     MapScaleView()
                 }
-                
+
                 // Detail card when a dive is selected
                 if let selected = selectedDive {
-                    DiveMapCard(dive: selected, onClose: {
+                    DiveMapCard(dive: selected, diveNumber: store.dives.firstIndex(where: { $0.persistentModelID == selected.persistentModelID }).map { store.dives.count - $0 } ?? 0, onClose: {
                         withAnimation(.easeInOut(duration: 0.35)) {
                             selectedDive = nil
                         }
@@ -365,12 +588,12 @@ struct DiveMapView: View {
             }
             .sheet(isPresented: $showFilterSheet) {
                 DiveFilterSheet(
-                    availableYears: availableYears,
-                    availableGasTypes: availableGasTypes,
-                    availableCountries: availableCountries,
-                    availableDiveTypes: availableDiveTypes,
-                    availableTags: availableTags,
-                    availableMarineLife: availableMarineLife,
+                    availableYears: filterOptions.years,
+                    availableGasTypes: filterOptions.gasTypes,
+                    availableCountries: filterOptions.countries,
+                    availableDiveTypes: filterOptions.diveTypes,
+                    availableTags: filterOptions.tags,
+                    availableMarineLife: filterOptions.marineLife,
                     showSort: false,
                     filterYear: $filterYear,
                     filterYearNegate: $filterYearNegate,
@@ -392,9 +615,11 @@ struct DiveMapView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: cachedUniqueDivers, selectedDiver: $selectedDiver)
+            .background(mapObservers)
+            .background(filterObservers)
             .toolbar {
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: cachedUniqueDivers, selectedDiver: $selectedDiver)
                 ToolbarItem(placement: .principal) {
                     Picker("Coordinate Mode", selection: $coordinateMode) {
                         Text("Entry").tag(MapCoordinateMode.entry)
@@ -409,7 +634,7 @@ struct DiveMapView: View {
                             Image(systemName: "line.3.horizontal.decrease.circle.fill")
                                 .font(.title3)
                                 .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
-                            
+
                             if activeFilterCount > 0 {
                                 Text("\(activeFilterCount)")
                                     .font(.system(size: 9, weight: .bold))
@@ -428,7 +653,7 @@ struct DiveMapView: View {
                         } label: {
                             Label("Global View", systemImage: "globe")
                         }
-                        
+
                         Button {
                             cameraPosition = .region(MKCoordinateRegion(
                                 center: CLLocationCoordinate2D(latitude: 20, longitude: 0),
@@ -437,22 +662,22 @@ struct DiveMapView: View {
                         } label: {
                             Label("Reset", systemImage: "arrow.counterclockwise")
                         }
-                        
+
                         Divider()
-                        
+
                         Section("Map Style") {
                             Button {
                                 mapStyle = .standard(elevation: .realistic)
                             } label: {
                                 Label("Standard Map", systemImage: "map")
                             }
-                            
+
                             Button {
                                 mapStyle = .hybrid(elevation: .realistic)
                             } label: {
                                 Label("Hybrid View", systemImage: "map.fill")
                             }
-                            
+
                             Button {
                                 mapStyle = .imagery(elevation: .realistic)
                             } label: {
@@ -487,12 +712,12 @@ struct DiveMapPin: View {
                             .stroke(.white, lineWidth: isSelected ? 3 : 2)
                     )
                     .shadow(radius: 5)
-                
+
                 Image(systemName: "flag.fill")
                     .font(isSelected ? .title3 : .caption)
                     .foregroundStyle(.primary)
             }
-            
+
             // Triangle pointer
             Path { path in
                 path.move(to: CGPoint(x: 0, y: 0))
@@ -608,7 +833,7 @@ struct DiveClusterListCard: View {
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.primary)
                                     HStack(spacing: 8) {
-                                        Label(prefs.depthUnit.formatted(dive.maxDepth), systemImage: "arrow.down")
+                                        Label(dive.displayMaxDepth.localizedString(decimals: 1) + prefs.depthUnit.symbol, systemImage: "arrow.down")
                                             .font(.caption2)
                                             .foregroundStyle(.cyan)
                                         Label(dive.shortFormattedDuration, systemImage: "clock")
@@ -648,6 +873,7 @@ struct DiveClusterListCard: View {
 
 struct DiveMapCard: View {
     let dive: Dive
+    let diveNumber: Int
     let onClose: () -> Void
     @Environment(\.locale) private var locale
     @State private var prefs = UserPreferences.shared
@@ -670,7 +896,7 @@ struct DiveMapCard: View {
         }
         return parts.isEmpty ? Text("Unknown location") : Text(verbatim: parts.joined(separator: ", "))
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -678,7 +904,7 @@ struct DiveMapCard: View {
                     Text(verbatim: dive.siteName)
                         .font(.headline)
                         .foregroundStyle(.primary)
-                    
+
                     // Location + Country
                     HStack(spacing: 4) {
                         if dive.hasGPSCoordinates {
@@ -692,7 +918,7 @@ struct DiveMapCard: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                
+
                 Spacer()
 
                 if !(dive.seenFish?.isEmpty ?? true) {
@@ -713,20 +939,20 @@ struct DiveMapCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Label(prefs.depthUnit.formatted(dive.maxDepth), systemImage: "arrow.down.circle.fill")
+                    Label(dive.displayMaxDepth.localizedString(decimals: 1) + prefs.depthUnit.symbol, systemImage: "arrow.down.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.cyan)
                     Text("Max Depth")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Divider()
                     .frame(height: 30)
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Label(dive.shortFormattedDuration, systemImage: "clock.fill")
                         .font(.caption)
@@ -735,10 +961,10 @@ struct DiveMapCard: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Divider()
                     .frame(height: 30)
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Label(formattedDate(dive.timestamp), systemImage: "calendar")
                         .font(.caption)
@@ -748,8 +974,8 @@ struct DiveMapCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
-            NavigationLink(destination: DiveDetailView(dive: dive)) {
+
+            NavigationLink(destination: DiveDetailView(dive: dive, diveNumber: diveNumber)) {
                 HStack {
                     Text("View Details")
                         .font(.subheadline)

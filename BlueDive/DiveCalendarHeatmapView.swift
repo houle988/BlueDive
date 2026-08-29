@@ -6,7 +6,7 @@ import SwiftData
 struct DiveCalendarHeatmapView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -36,10 +36,11 @@ struct DiveCalendarHeatmapView: View {
     @State private var cachedYearUniqueSites: Int = 0
     @State private var cachedMonthDiveCounts: [Int: Int] = [:]
     @State private var statsReady = false
+    @State private var statsVersion: Int = 0
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
-    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
+    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
 
     private func recomputeAllStats(_ dives: [Dive]) {
         // Build divesByDay once
@@ -120,7 +121,7 @@ struct DiveCalendarHeatmapView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if !allDives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
+                if !store.dives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
                     NoEntriesForDiverView(
                         title: "No Dives for Diver",
                         description: "No dives were found for the selected diver."
@@ -168,8 +169,11 @@ struct DiveCalendarHeatmapView: View {
                 }
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
-            .task(id: "\(allDives.count):\(selectedDiver):\(allDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
+            .task(id: "\(store.dives.count):\(selectedDiver):\(statsVersion):\(store.dives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
                 recomputeAllStats(filteredDives)
+            }
+            .onChange(of: store.cachedSummaries) { _, _ in
+                statsVersion += 1
             }
             .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             .onChange(of: selectedYear) {
@@ -425,7 +429,7 @@ struct DiveCalendarHeatmapView: View {
 struct DayDivesSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
 
     let day: Date
     let dives: [Dive]
@@ -433,8 +437,8 @@ struct DayDivesSheetView: View {
 
     private var numberMap: [PersistentIdentifier: Int] {
         let numbering = diverFilter.isEmpty
-            ? allDives
-            : allDives.filter { $0.diverName == diverFilter }
+            ? store.dives
+            : store.dives.filter { $0.diverName == diverFilter }
         let total = numbering.count
         return Dictionary(uniqueKeysWithValues: numbering.enumerated().map {
             ($0.element.persistentModelID, total - $0.offset)
@@ -452,9 +456,9 @@ struct DayDivesSheetView: View {
         NavigationStack {
             List {
                 ForEach(dives) { dive in
-                    NavigationLink(destination: DiveDetailView(dive: dive)) {
+                    NavigationLink(destination: DiveDetailView(dive: dive, diveNumber: numberMap[dive.persistentModelID] ?? 0)) {
                         DiveRowView(
-                            dive: dive,
+                            summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
                             diveNumber: numberMap[dive.persistentModelID] ?? 0
                         )
                     }

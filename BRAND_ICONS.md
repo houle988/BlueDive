@@ -1,12 +1,10 @@
-# Dive Gear Icon Processing Guide
+# Brand Icon Processing Guide
 
-This document describes the complete workflow for adding or updating gear manufacturer brand images in the Gear tab's icon system.
+This document describes the complete workflow for adding or updating brand logo images across all three icon systems: Gear, Certifications, and Insurance.
 
 ---
 
 ## Overview
-
-Each gear item shows a brand logo tile at multiple sizes throughout the app:
 
 | Context | Size | Shape |
 |---|---|---|
@@ -14,33 +12,34 @@ Each gear item shows a brand logo tile at multiple sizes throughout the app:
 | Manufacturer autocomplete suggestion | 28 pt | Rounded-square tile |
 | Add / Edit Gear header | 80 pt | Rounded-square tile |
 | Gear detail hero | 100 pt | Rounded-square tile |
+| Certification card | 60 pt | Rounded-square tile |
+| Certification detail | 64 pt | Rounded-square tile |
+| Insurance card | 60 pt | Rounded-square tile |
+| Insurance detail | 64 pt | Rounded-square tile |
 
-When the item's `manufacturer` field matches a known brand, a brand logo image is shown on a white tile with a subtle border. Otherwise the icon falls back to the category SF Symbol (e.g. a cylinder for tanks, a wetsuit figure for suits) on a tinted background. Icons are stored as 132×132 px universal PNG imagesets in the Xcode asset catalog. A `UIImage(named:)` existence check ensures that placeholder imagesets (no image yet) transparently fall back to the SF Symbol rather than showing a blank tile.
+When a matching brand asset exists, a brand logo is shown on a white tile with a subtle border. Otherwise the icon falls back to a category SF Symbol (gear) or tinted text/symbol tile (cert/insurance). Icons are stored as 132×132 px universal PNG imagesets in the Xcode asset catalog. A `UIImage(named:)` existence check ensures that placeholder imagesets (no image yet) transparently fall back to the SF Symbol / text rather than showing a blank tile.
 
 ---
 
-## Asset Catalog Location
+## Asset Catalog Locations
 
 ```
-BlueDive/Assets.xcassets/GearIcons/
+BlueDive/Assets.xcassets/GearIcons/        ← gear manufacturer logos
+BlueDive/Assets.xcassets/CertIcons/        ← certification organization logos
+BlueDive/Assets.xcassets/InsuranceIcons/   ← dive insurance provider logos
 ```
 
-Each brand has its own `.imageset` folder inside `GearIcons/`.
+Each brand has its own `.imageset` folder inside the appropriate subfolder.
 
 ---
 
 ## Asset Naming Convention
 
-Asset names follow the pattern `GearIcon_<Brand>` — brand-level only, no model suffixes:
-
-| Brand | Asset name |
-|---|---|
-| Scubapro | `GearIcon_Scubapro` |
-| Aqualung | `GearIcon_Aqualung` |
-| Atomic Aquatics | `GearIcon_AtomicAquatics` |
-| Heinrichs Weikamp | `GearIcon_HeinrichsWeikamp` |
-| Light & Motion | `GearIcon_LightAndMotion` |
-| Sea & Sea | `GearIcon_SeaAndSea` |
+| System | Pattern | Example |
+|---|---|---|
+| Gear | `GearIcon_<Brand>` | `GearIcon_Scubapro` |
+| Certifications | `CertIcon_<Org>` | `CertIcon_PADI` |
+| Insurance | `InsuranceIcon_<Provider>` | `InsuranceIcon_DAN` |
 
 General rule: remove spaces and special characters, concatenate words in PascalCase.
 
@@ -48,7 +47,7 @@ General rule: remove spaces and special characters, concatenate words in PascalC
 
 ## Icon Display in SwiftUI
 
-`GearIconView` renders a logo tile when the manufacturer matches a known brand, or a tinted SF Symbol tile otherwise:
+`GearIconView`, `CertificationIconView`, and `InsuranceIconView` all share the same rendering pattern:
 
 ```swift
 // Logo tile (brand asset found)
@@ -67,13 +66,33 @@ ZStack {
 .frame(width: size, height: size)
 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
 
-// SF Symbol fallback (no brand match, or placeholder imageset)
+// SF Symbol fallback (GearIconView only)
 ZStack {
     RoundedRectangle(cornerRadius: cornerRadius)
         .fill(iconColor.opacity(0.15))
     Image(systemName: categoryIcon)
         .font(.system(size: symbolSize))
         .foregroundStyle(iconColor)
+}
+.frame(width: size, height: size)
+
+// Symbol fallback (InsuranceIconView with fallbackSymbol:)
+ZStack {
+    RoundedRectangle(cornerRadius: cornerRadius)
+        .fill(fallbackColor.opacity(fillOpacity))
+    Image(systemName: symbol)
+        .font(.system(size: size * 18 / 44))
+        .foregroundStyle(fallbackColor)
+}
+.frame(width: size, height: size)
+
+// Text fallback (CertificationIconView / InsuranceIconView with no symbol)
+ZStack {
+    RoundedRectangle(cornerRadius: cornerRadius)
+        .fill(color.opacity(fillOpacity))
+    Text(verbatim: label)
+        .font(.caption).fontWeight(.bold).foregroundStyle(color)
+        .lineLimit(1).minimumScaleFactor(0.6).padding(4)
 }
 .frame(width: size, height: size)
 ```
@@ -101,7 +120,7 @@ The image fits inside the tile with proportional padding. At 3× scale a 44 pt t
 }
 ```
 
-### Placeholder imageset (no image yet — falls back to SF Symbol)
+### Placeholder imageset (no image yet — falls back to SF Symbol / text)
 
 ```json
 {
@@ -113,7 +132,7 @@ The image fits inside the tile with proportional padding. At 3× scale a 44 pt t
 }
 ```
 
-Placeholder imagesets cause `UIImage(named:)` to return `nil`, which the `UIImage(named:) != nil` check in `GearIconView.init` detects, keeping the category SF Symbol active until a real logo is added.
+Placeholder imagesets cause `UIImage(named:)` to return `nil`, which the `UIImage(named:) != nil` check in each view's `init` detects, keeping the fallback active until a real logo is added.
 
 ---
 
@@ -123,6 +142,8 @@ All source images — regardless of format or size — must go through this pipe
 
 > **Why not flood-fill?** Flood-fill from corners cannot reach enclosed letter counters (e.g. inside B, A, R, P, O). Use the colour-key approach below instead — it removes white everywhere in the image, not just connected to the edges. The RGB of transparent pixels is also zeroed to prevent white bleed on dark backgrounds.
 
+> **SVG-derived PNGs:** An SVG exported to PNG often already has a transparent background (alpha = 0) with black RGB values underneath. The pipeline must check the source alpha channel first — otherwise those transparent-black pixels are treated as opaque logo content and produce a black background artifact. The script below handles this correctly.
+
 ### Step 2 — Remove white background (colour-key, distance from white)
 
 ```python
@@ -131,14 +152,17 @@ import numpy as np
 
 img = Image.open("source.png").convert("RGBA")
 data = np.array(img, dtype=np.float32)
-r, g, b = data[:,:,0], data[:,:,1], data[:,:,2]
+r, g, b, a = data[:,:,0], data[:,:,1], data[:,:,2], data[:,:,3]
 
 # Euclidean distance from pure white (255,255,255)
 dist = np.sqrt((r - 255)**2 + (g - 255)**2 + (b - 255)**2)
 
-# Hard cut: pixels within dist 80 of white → fully transparent.
-# Zero out RGB of transparent pixels to prevent white bleed on dark backgrounds.
-is_logo = dist >= 80
+# A pixel is logo content only if it was opaque in the source AND not white.
+# The source-alpha guard is critical for SVG-derived PNGs: transparent-black
+# pixels (RGBA 0,0,0,0) score far from white and would otherwise be promoted
+# to solid black, creating a black background artifact.
+is_logo = (a > 0) & (dist >= 80)
+
 result = np.zeros((data.shape[0], data.shape[1], 4), dtype=np.uint8)
 result[:,:,0] = np.where(is_logo, data[:,:,0], 0).astype(np.uint8)
 result[:,:,1] = np.where(is_logo, data[:,:,1], 0).astype(np.uint8)
@@ -182,16 +206,16 @@ final.save("output.png", "PNG")
 from PIL import Image
 import numpy as np
 
-src = "/path/to/source.webp"   # or .png, .jpg
+src = "/path/to/source.webp"   # or .png, .jpg, .svg-exported .png
 dst = "/path/to/output.png"
 
 img = Image.open(src).convert("RGBA")
 data = np.array(img, dtype=np.float32)
-r, g, b = data[:,:,0], data[:,:,1], data[:,:,2]
+r, g, b, a = data[:,:,0], data[:,:,1], data[:,:,2], data[:,:,3]
 
-# Step 2: colour-key white background
+# Step 2: colour-key white background (respecting source alpha)
 dist = np.sqrt((r - 255)**2 + (g - 255)**2 + (b - 255)**2)
-is_logo = dist >= 80
+is_logo = (a > 0) & (dist >= 80)
 result = np.zeros((data.shape[0], data.shape[1], 4), dtype=np.uint8)
 result[:,:,0] = np.where(is_logo, data[:,:,0], 0).astype(np.uint8)
 result[:,:,1] = np.where(is_logo, data[:,:,1], 0).astype(np.uint8)
@@ -216,47 +240,70 @@ print(f"Done: {w}x{h} source → {cw}x{ch} cropped → {side}x{side} padded → 
 
 ## Installing a New Image
 
+### Gear
+
 1. Process the source with the pipeline above.
 2. Copy the resulting PNG into the imageset folder:
    ```bash
    cp output.png "BlueDive/Assets.xcassets/GearIcons/GearIcon_Hollis.imageset/Hollis.png"
    ```
-3. Remove any existing SVG placeholder if present:
-   ```bash
-   rm "BlueDive/Assets.xcassets/GearIcons/GearIcon_Hollis.imageset/*.svg"
-   ```
-4. Update `Contents.json` to reference the PNG:
-   ```json
-   {
-     "images" : [
-       { "filename" : "Hollis.png", "idiom" : "universal" }
-     ],
-     "info" : { "author" : "xcode", "version" : 1 }
-   }
-   ```
+3. Update `Contents.json` to reference the PNG.
 
 No code changes are needed — `GearIconView` detects the new image automatically via `UIImage(named:)`.
 
+### Certifications
+
+1. Process the source with the pipeline above.
+2. Copy the resulting PNG into the imageset folder:
+   ```bash
+   cp output.png "BlueDive/Assets.xcassets/CertIcons/CertIcon_PADI.imageset/PADI.png"
+   ```
+3. Update `Contents.json` to reference the PNG.
+
+No code changes needed — `CertificationIconView` detects it automatically.
+
+### Insurance
+
+1. Process the source with the pipeline above.
+2. Copy the resulting PNG into the imageset folder:
+   ```bash
+   cp output.png "BlueDive/Assets.xcassets/InsuranceIcons/InsuranceIcon_DAN.imageset/DAN.png"
+   ```
+3. Update `Contents.json` to reference the PNG.
+
+No code changes needed — `InsuranceIconView` detects it automatically.
+
 ---
 
-## Adding a Brand New Manufacturer
+## Adding a Brand New Entry
 
-1. Create the imageset folder:
-   ```bash
-   mkdir "BlueDive/Assets.xcassets/GearIcons/GearIcon_NewBrand.imageset"
-   ```
-2. Add a placeholder `Contents.json` (brand shows SF Symbol fallback until image is added):
-   ```json
-   { "images" : [], "info" : { "author" : "xcode", "version" : 1 } }
-   ```
-3. Add one entry to `GearIconView.brandTable` in `GearIconView.swift`:
+### Gear
+
+1. Create the imageset folder and placeholder `Contents.json`.
+2. Add one entry to `GearIconView.brandTable` in `GearIconView.swift`:
    ```swift
    Brand(name: "New Brand", tokens: ["newbrand"], asset: "GearIcon_NewBrand"),
    ```
-   Tokens must be **complete lowercase strings** the user might store as manufacturer (e.g. abbreviations or alternate spellings). Entry order does not affect resolution — each lookup is an exact equality check.
-   `knownManufacturers` (autocomplete list) and `assetName(forManufacturer:)` (resolver) are both automatically derived from `brandTable` — no other Swift code changes needed.
-4. Add a row for the brand to the inventory table in `DIVE_GEAR_ICONS.md` under the appropriate category heading.
-5. When the logo image is ready, install it following the steps above.
+   Tokens must be **complete lowercase strings** the user might store as manufacturer. `knownManufacturers` and `assetName(forManufacturer:)` are both automatically derived from `brandTable` — no other Swift code changes needed.
+3. Add a row to the inventory table below.
+4. Install the logo image when ready.
+
+### Certifications
+
+Certifications use a **finite `CertificationOrganization` enum** (PADI, SSI, CMAS, NAUI, SDI, TDI, BSAC, GUE, Other). To add logo support for an existing organization:
+1. Add the imageset folder under `CertIcons/`.
+2. Add a `case` in `CertificationIconView.assetName(for:)` returning the asset name.
+3. Add a row to the inventory table below.
+
+To add a brand-new organization requires a data model change — coordinate with the project owner.
+
+### Insurance
+
+Insurance uses free-form `insurerName` text resolved via keyword matching in `InsuranceIconView.assetName(for:)`. To add a new provider:
+1. Add the imageset folder under `InsuranceIcons/`.
+2. Add a keyword match line in `InsuranceIconView.assetName(for:)` — more specific tokens must appear **before** shorter ones (e.g. `"diveassure"` before a hypothetical `"dive"` match).
+3. Add a row to the inventory table below.
+4. Install the logo image when ready.
 
 ---
 
@@ -268,36 +315,50 @@ No code changes are needed — `GearIconView` detects the new image automaticall
 | Logo appears squished | Landscape/portrait source scaled to square without padding | Ensure Step 4 (pad to square) ran |
 | Light-coloured logo parts clipped | Threshold too aggressive for a pale logo | Increase `dist` threshold from 80 to 100–120 |
 | Grey/white rectangle visible on dark backgrounds | Soft-ramp or non-zeroed RGB on transparent pixels | Use hard threshold and zero out RGB of transparent pixels (see script above) |
+| Black background on SVG-derived PNG | Source alpha ignored — transparent-black pixels promoted to opaque | Add `(a > 0) &` guard to `is_logo` condition (already in script above) |
 | Blank tile shown | Placeholder imageset in catalog, image not yet added | Install PNG and update `Contents.json` |
-| SF Symbol shown despite image file present | `Contents.json` still has empty `images` array | Update `Contents.json` to reference the filename |
-| SF Symbol shown despite correct `Contents.json` | Asset name in `brandTable` doesn't match folder name | Verify the `asset:` field in the `brandTable` entry matches the exact imageset folder name |
+| SF Symbol / text shown despite image file present | `Contents.json` still has empty `images` array | Update `Contents.json` to reference the filename |
+| SF Symbol / text shown despite correct `Contents.json` | Asset name doesn't match folder name | Verify the asset name in Swift code matches the exact imageset folder name |
 
 ---
 
 ## Lookup Architecture
 
-Defined in `BlueDive/BlueDive/GearIconView.swift`. All brand data lives in a single `private static let brandTable: [Brand]`. Both the autocomplete list and the asset resolver are derived from it automatically.
+### Gear — `GearIconView.swift`
+
+All brand data lives in a single `private static let brandTable: [Brand]`. Both the autocomplete list and the asset resolver are derived from it automatically.
 
 ```
 brandTable  ──►  knownManufacturers   (static let, drives manufacturer autocomplete)
             ──►  assetName(for:)      (static func, drives logo resolution)
 ```
 
-### Resolution steps at runtime
+Resolution: `gear.manufacturer` is trimmed, lowercased, and apostrophe-normalised, then looked up in two precomputed dictionaries (canonical name and tokens). First hit returns the asset name.
 
-1. **Exact brand match** — `gear.manufacturer` is trimmed, lowercased, and apostrophe-normalised (typographic apostrophes → ASCII `'`), then looked up in two precomputed dictionaries: one keyed by canonical name (lowercased) and one keyed by token. The first dictionary hit returns the `asset` name. For example `"DUI"` matches via the token `"dui"`; `"Diving Unlimited International"` matches via its canonical name. A string like `"Bare asdasd"` matches neither and falls back to the SF Symbol.
-2. **Image existence check** — `UIImage(named:)` confirms the asset actually contains image data. Placeholder imagesets (empty `images` array in `Contents.json`) return `nil` here, activating the SF Symbol fallback.
-3. **SF Symbol fallback** — the category icon from `GearCategory.icon` (e.g. `cylinder.fill` for tanks) on a tinted background. Falls back to `building.2` for autocomplete suggestion rows (where no category context is available) or `wrench.and.screwdriver.fill` for real gear items with an unresolvable category.
+### Certifications — `CertificationIconView.swift`
 
-### Autocomplete casing
+Asset resolution uses `CertificationOrganization(rawValue:)` via a `switch` in `assetName(for:)`. Finite enum — no ambiguity.
 
-The `name:` field in each `brandTable` entry is the canonical spelling shown in the manufacturer autocomplete dropdown (e.g. `"ScubaPro"`, `"O'Three"`). A user-entered manufacturer that lowercases to the same value as a canonical name is silently shadowed by the canonical spelling in the suggestion list. No stored data is altered — only the suggestion display is affected. If you need to change how a brand appears in autocomplete, update the `name:` field.
+### Insurance — `InsuranceIconView.swift`
+
+Asset resolution uses ordered keyword `contains` matching on the lowercased `insurerName`. More-specific tokens appear first to prevent partial matches (e.g. `"diveassure"` before a hypothetical `"dive"` match).
+
+---
+
+## Source File Formats Accepted
+
+The Python Pillow pipeline accepts any format Pillow can open: `.webp`, `.png`, `.jpg`, `.jpeg`. The output is always `.png` with an RGBA channel.
+
+Install Pillow if not present:
+```bash
+pip3 install Pillow
+```
 
 ---
 
 ## Complete Brand Inventory
 
-### Dive Computers / Multi-category
+### Gear — Dive Computers / Multi-category
 
 | Asset name | Display name | Match tokens |
 |---|---|---|
@@ -314,7 +375,7 @@ The `name:` field in each `brandTable` entry is the canonical spelling shown in 
 | `GearIcon_Tusa` | Tusa | `tusa` |
 | `GearIcon_Garmin` | Garmin | `garmin` |
 
-### Accessories / Knives / Safety
+### Gear — Accessories / Knives / Safety
 
 | Asset name | Display name | Match tokens |
 |---|---|---|
@@ -336,7 +397,7 @@ The `name:` field in each `brandTable` entry is the canonical spelling shown in 
 | `GearIcon_Storm` | Storm | `storm` |
 | `GearIcon_YRVA` | YRVA | `yrva` |
 
-### Tanks / Cylinders
+### Gear — Tanks / Cylinders
 
 | Asset name | Display name | Match tokens |
 |---|---|---|
@@ -346,7 +407,7 @@ The `name:` field in each `brandTable` entry is the canonical spelling shown in 
 | `GearIcon_Worthington` | Worthington | `worthington` |
 | `GearIcon_Eurocylinder` | Eurocylinder | `eurocylinder` |
 
-### Wetsuits / Drysuits / Thermal
+### Gear — Wetsuits / Drysuits / Thermal
 
 | Asset name | Display name | Match tokens |
 |---|---|---|
@@ -362,7 +423,7 @@ The `name:` field in each `brandTable` entry is the canonical spelling shown in 
 | `GearIcon_Camaro` | Camaro | `camaro` |
 | `GearIcon_Ursuit` | Ursuit | `ursuit` |
 
-### Regulators / BCDs / Wings
+### Gear — Regulators / BCDs / Wings
 
 | Asset name | Display name | Match tokens |
 |---|---|---|
@@ -375,14 +436,14 @@ The `name:` field in each `brandTable` entry is the canonical spelling shown in 
 | `GearIcon_Eezycut` | Eezycut | `eezycut` |
 | `GearIcon_Tecline` | Tecline | `tecline` |
 
-### Masks / Fins
+### Gear — Masks / Fins
 
 | Asset name | Display name | Match tokens |
 |---|---|---|
 | `GearIcon_Beuchat` | Beuchat | `beuchat` |
 | `GearIcon_ISTSports` | IST Sports | `ist sports`, `ist pro`, `ists` |
 
-### Lights / Imaging
+### Gear — Lights / Imaging
 
 | Asset name | Display name | Match tokens |
 |---|---|---|
@@ -399,11 +460,29 @@ The `name:` field in each `brandTable` entry is the canonical spelling shown in 
 
 ---
 
-## Source File Formats Accepted
+### Certifications
 
-The Python Pillow pipeline accepts any format Pillow can open: `.webp`, `.png`, `.jpg`, `.jpeg`. The output is always `.png` with an RGBA channel.
+Resolution: `CertificationOrganization(rawValue: organization)` enum switch in `CertificationIconView.assetName(for:)`.
 
-Install Pillow if not present:
-```bash
-pip3 install Pillow
-```
+| Asset name | Organization | Status |
+|---|---|---|
+| `CertIcon_PADI` | PADI | ✅ logo installed |
+| `CertIcon_SSI` | SSI | ✅ logo installed |
+| `CertIcon_CMAS` | CMAS | ✅ logo installed |
+| `CertIcon_NAUI` | NAUI | ✅ logo installed |
+| `CertIcon_SDI` | SDI | ✅ logo installed |
+| `CertIcon_TDI` | TDI | ✅ logo installed |
+| `CertIcon_BSAC` | BSAC | ✅ logo installed |
+| `CertIcon_GUE` | GUE | ✅ logo installed |
+
+---
+
+### Insurance
+
+Resolution: ordered keyword `contains` matching in `InsuranceIconView.assetName(for:)`. More-specific tokens must remain above shorter ones.
+
+| Asset name | Provider | Match keywords | Status |
+|---|---|---|---|
+| `InsuranceIcon_DAN` | DAN / DAN Europe | `divers alert`, `dan europe`, exact `dan`, `dan `, ` dan`, ` dan `, `dan(` | ✅ logo installed |
+| `InsuranceIcon_DiveAssure` | DiveAssure | `diveassure`, `dive assure` | ✅ logo installed |
+| `InsuranceIcon_Nautilus` | Nautilus | `nautilus` | ✅ logo installed |

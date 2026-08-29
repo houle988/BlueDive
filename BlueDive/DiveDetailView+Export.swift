@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
@@ -32,12 +33,12 @@ extension DiveDetailView {
     func exportToXML() {
         let xmlString = BlueDiveXMLExporter.generateXML(for: dive)
         guard let data = xmlString.data(using: .utf8) else { return }
-        let fileName = makeExportFileName(extension: "xml")
+        let fileName = makeExportFileName(extension: "bluedive")
 
         #if os(macOS)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = fileName
-        panel.allowedContentTypes = [.xml]
+        panel.allowedContentTypes = [.blueDiveXML]
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
@@ -46,7 +47,7 @@ extension DiveDetailView {
         #else
         exportDocument = ExportableFileDocument(data: data)
         exportFileName = fileName
-        exportContentType = .xml
+        exportContentType = .blueDiveXML
         showFileExporter = true
         #endif
     }
@@ -74,7 +75,8 @@ extension DiveDetailView {
     }
 
     func exportToPDF() {
-        guard let data = PDFDiveLogbook.generatePDF(for: dive, allDives: allDives) else { return }
+        // store.dives is already sorted by timestamp desc (same order ContentView's @Query delivers)
+        guard let data = PDFDiveLogbook.generatePDF(for: dive, allDives: store.dives) else { return }
         let fileName = makeExportFileName(extension: "pdf")
 
         #if os(macOS)

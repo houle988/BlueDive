@@ -15,23 +15,67 @@ struct DuplicateImportMatch: Identifiable {
 }
 
 enum DuplicateMatchReason: Sendable {
-    case sameIdentifier
+    /// BlueDive SwiftData UUID matched via <id> tag (Path A).
+    case sameRecord
+    /// BlueDive SwiftData UUID matched via legacy <identifier> fallback — old exports without <id> tag.
+    case sameRecordLegacy
+    /// Dive computer serial + libdcswift fingerprint both matched (Path B).
+    case sameComputerAndFingerprint
+    /// Dive computer identifier matched and both device serials confirmed equal (Path C).
+    case sameComputerDiveID
+    /// Dive computer identifier matched; profile (depth + duration) corroborated it; serial unconfirmed on one side (Path D).
+    case sameIdentifierAndProfile
+    /// Heuristic: date, depth, and duration all within tolerance; no identifier available.
     case sameDateAndProfile
 
     var label: String {
         let bundle = Bundle.forAppLanguage()
         switch self {
-        case .sameIdentifier:
-            return NSLocalizedString("Same dive computer ID", bundle: bundle, comment: "Duplicate match reason: same dive computer identifier")
+        case .sameRecord:
+            return NSLocalizedString("BlueDive ID", bundle: bundle, value: "BlueDive ID", comment: "Duplicate match reason: BlueDive SwiftData UUID matched via <id> tag")
+        case .sameRecordLegacy:
+            return NSLocalizedString("Same logbook record (Legacy)", bundle: bundle, value: "Same logbook record (Legacy)", comment: "Duplicate match reason: BlueDive UUID matched via legacy identifier field in old export format")
+        case .sameComputerAndFingerprint:
+            return NSLocalizedString("Same dive computer & fingerprint", bundle: bundle, value: "Same dive computer & fingerprint", comment: "Duplicate match reason: dive computer serial and dive fingerprint both matched")
+        case .sameComputerDiveID:
+            return NSLocalizedString("Same dive ID & serial", bundle: bundle, value: "Same dive ID & serial", comment: "Duplicate match reason: dive identifier matched and both device serials confirmed equal")
+        case .sameIdentifierAndProfile:
+            return NSLocalizedString("Same dive ID & profile", bundle: bundle, value: "Same dive ID & profile", comment: "Duplicate match reason: dive identifier matched and depth/duration profile corroborated it")
         case .sameDateAndProfile:
-            return NSLocalizedString("Same date, depth and duration", bundle: bundle, comment: "Duplicate match reason: heuristic match on date, depth and duration")
+            return NSLocalizedString("Same date, depth and duration", bundle: bundle, value: "Same date, depth and duration", comment: "Duplicate match reason: heuristic match on date, depth and duration")
         }
     }
 
     var icon: String {
         switch self {
-        case .sameIdentifier:     return "barcode.viewfinder"
-        case .sameDateAndProfile: return "calendar.badge.clock"
+        case .sameRecord:                 return "doc.badge.checkmark"
+        case .sameRecordLegacy:           return "clock.badge.checkmark"
+        case .sameComputerAndFingerprint: return "wave.3.right.circle"
+        case .sameComputerDiveID:         return "barcode.viewfinder"
+        case .sameIdentifierAndProfile:   return "number.square"
+        case .sameDateAndProfile:         return "calendar.badge.clock"
+        }
+    }
+}
+
+// MARK: - Match Confidence
+
+extension DuplicateMatchReason {
+    enum Confidence { case high, medium, low }
+
+    var confidence: Confidence {
+        switch self {
+        case .sameRecord, .sameRecordLegacy, .sameComputerAndFingerprint: return .high
+        case .sameComputerDiveID, .sameIdentifierAndProfile:              return .medium
+        case .sameDateAndProfile:                                          return .low
+        }
+    }
+
+    var tintColor: Color {
+        switch confidence {
+        case .high:   return .green
+        case .medium: return .orange
+        case .low:    return .red
         }
     }
 }
@@ -42,6 +86,7 @@ struct DuplicateImportSheet: View {
 
     let totalCount: Int
     let duplicates: [DuplicateImportMatch]
+    let parsedDives: [BlueDiveGlobalData]
     let fileName: String
 
     var onSkipDuplicates: () -> Void
@@ -50,10 +95,18 @@ struct DuplicateImportSheet: View {
 
     @Environment(\.locale) private var locale
     @State private var showAllDuplicates = false
+    @State private var activeFilter: FilterMode = .duplicates
+
+    private enum FilterMode { case duplicates, new }
 
     private let collapsedRowLimit = 5
 
     private var uniqueCount: Int { totalCount - duplicates.count }
+
+    private var newDives: [BlueDiveGlobalData] {
+        let dupIndices = Set(duplicates.map(\.parsedIndex))
+        return parsedDives.indices.filter { !dupIndices.contains($0) }.map { parsedDives[$0] }
+    }
 
     private var visibleDuplicates: [DuplicateImportMatch] {
         if showAllDuplicates || duplicates.count <= collapsedRowLimit {
@@ -73,7 +126,7 @@ struct DuplicateImportSheet: View {
                 VStack(spacing: 20) {
                     headerCard
                     summaryCard
-                    duplicatesList
+                    diveList
                     actionButtons
                 }
                 .padding(.horizontal)
@@ -128,21 +181,33 @@ struct DuplicateImportSheet: View {
                 summaryStat(
                     icon: "doc.fill",
                     color: .cyan,
-                    value: "\(totalCount)",
+                    value: Double(totalCount).localizedString(decimals: 0),
                     label: NSLocalizedString("In file", bundle: .forAppLanguage(), comment: "Stat tile: total dives in the imported file")
                 )
-                summaryStat(
-                    icon: "exclamationmark.triangle.fill",
-                    color: .orange,
-                    value: "\(duplicates.count)",
-                    label: NSLocalizedString("Duplicates", bundle: .forAppLanguage(), comment: "Stat tile: number of duplicate dives detected")
-                )
-                summaryStat(
-                    icon: "sparkles",
-                    color: .green,
-                    value: "\(uniqueCount)",
-                    label: NSLocalizedString("New", bundle: .forAppLanguage(), comment: "Stat tile: number of new dives that are not duplicates")
-                )
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { activeFilter = .duplicates }
+                } label: {
+                    summaryStat(
+                        icon: "exclamationmark.triangle.fill",
+                        color: .orange,
+                        value: Double(duplicates.count).localizedString(decimals: 0),
+                        label: NSLocalizedString("Duplicates", bundle: .forAppLanguage(), comment: "Stat tile: number of duplicate dives detected"),
+                        isSelected: activeFilter == .duplicates
+                    )
+                }
+                .buttonStyle(.plain)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { activeFilter = .new }
+                } label: {
+                    summaryStat(
+                        icon: "sparkles",
+                        color: .green,
+                        value: Double(uniqueCount).localizedString(decimals: 0),
+                        label: NSLocalizedString("New", bundle: .forAppLanguage(), comment: "Stat tile: number of new dives that are not duplicates"),
+                        isSelected: activeFilter == .new
+                    )
+                }
+                .buttonStyle(.plain)
             }
             if !fileName.isEmpty {
                 HStack(spacing: 6) {
@@ -165,7 +230,7 @@ struct DuplicateImportSheet: View {
         )
     }
 
-    private func summaryStat(icon: String, color: Color, value: String, label: String) -> some View {
+    private func summaryStat(icon: String, color: Color, value: String, label: String, isSelected: Bool = false) -> some View {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
@@ -182,7 +247,12 @@ struct DuplicateImportSheet: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.10))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(color.opacity(isSelected ? 0.20 : 0.10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(isSelected ? color.opacity(0.7) : Color.clear, lineWidth: 1.5)
+                )
         )
     }
 
@@ -274,7 +344,7 @@ struct DuplicateImportSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: match.reason.icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(match.reason.tintColor)
                     .frame(width: 20)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(match.incomingSiteName.isEmpty
@@ -307,9 +377,9 @@ struct DuplicateImportSheet: View {
                 }
             }
             HStack(spacing: 6) {
-                Image(systemName: "link")
+                Image(systemName: match.reason.icon)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(match.reason.tintColor.opacity(0.8))
                 Text(verbatim: match.reason.label)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -319,8 +389,104 @@ struct DuplicateImportSheet: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.orange.opacity(0.08))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.orange.opacity(0.25), lineWidth: 1))
+                .fill(match.reason.tintColor.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(match.reason.tintColor.opacity(0.25), lineWidth: 1))
+        )
+    }
+
+    // MARK: - List Switcher
+
+    @ViewBuilder
+    private var diveList: some View {
+        if activeFilter == .duplicates {
+            duplicatesList
+        } else {
+            newDivesList
+        }
+    }
+
+    // MARK: - New Dives List
+
+    private var newDivesList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.subheadline)
+                    .foregroundStyle(.green)
+                Text(verbatim: NSLocalizedString("New dives to import", bundle: .forAppLanguage(), comment: "Section header for the list of new dives that are not yet in the logbook"))
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text(verbatim: Double(uniqueCount).localizedString(decimals: 0))
+                    .font(.caption.bold())
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.green.opacity(0.18)))
+            }
+            .padding(.horizontal, 4)
+
+            if newDives.isEmpty {
+                Text(verbatim: NSLocalizedString("No new dives in this file.", bundle: .forAppLanguage(), comment: "Empty state when all dives in the file are already in the logbook"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(newDives.indices, id: \.self) { i in
+                        newDiveRow(newDives[i])
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.primary.opacity(0.05))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+        )
+    }
+
+    private func newDiveRow(_ dive: BlueDiveGlobalData) -> some View {
+        let depthUnit = (dive.distanceFormat == "feet" ? DepthUnit.feet : DepthUnit.meters).symbol
+        let depthString = dive.maxDepth.localizedString(decimals: 1) + " \(depthUnit)"
+        let durationMin = Int(dive.duration / 60)
+        let durationString: String = {
+            let fmt = NSLocalizedString("%lld min", bundle: .forAppLanguage(), comment: "Duration in minutes")
+            return String(format: fmt, durationMin)
+        }()
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.green)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: dive.site?.name.isEmpty == false ? dive.site!.name : NSLocalizedString("Unknown site", bundle: .forAppLanguage(), comment: "Fallback site name when an imported dive has no site name"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    HStack(spacing: 5) {
+                        if let date = dive.date {
+                            Text(date, format: .dateTime.day().month().year().hour().minute().locale(locale))
+                        }
+                        Text(verbatim: "•")
+                        Text(verbatim: depthString)
+                        Text(verbatim: "•")
+                        Text(verbatim: durationString)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                }
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.green.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.green.opacity(0.25), lineWidth: 1))
         )
     }
 

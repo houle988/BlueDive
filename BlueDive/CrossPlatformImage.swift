@@ -267,3 +267,25 @@ func parseFlexibleDouble(_ text: String) -> Double? {
 /// Dive computers emit values at or above this threshold to signal "no decompression limit required".
 /// Profile samples with NDL ≥ ndlSentinel must be excluded from display and charting.
 let ndlSentinel: Double = 999
+
+// MARK: - Deduplication Windows
+
+/// 24 h: both serials confirmed equal (or serial + fingerprint match); tolerates clock drift
+/// and timezone corrections on the same device.
+let deduplicationHighConfidenceWindow: TimeInterval = 86_400
+
+/// 2 h: serial compatible but not both confirmed (e.g. MacDive sequential identifiers like "42");
+/// narrower window reduces cross-diver false positives.
+let deduplicationLowConfidenceWindow: TimeInterval = 7_200
+
+// MARK: - Computer Serial Normalization
+
+extension String {
+    /// Trims whitespace, lowercases, and returns nil for empty or sentinel computer serial values.
+    /// Used by both the BLE and file-import duplicate-detection paths so normalisation stays consistent.
+    func normalizedComputerSerial() -> String? {
+        let s = trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !s.isEmpty, !BluetoothScannerView.knownSentinelSerials.contains(s) else { return nil }
+        return s
+    }
+}

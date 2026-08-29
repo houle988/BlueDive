@@ -72,8 +72,16 @@ struct DiveDetailView: View {
     @Environment(\.modelContext) var modelContext
     @Environment(\.locale) var locale
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Dive.timestamp, order: .reverse) var allDives: [Dive]
+    @Environment(DiveStore.self) var store
     @Query(sort: \GearGroup.name) var gearGroups: [GearGroup]
+    // Kept here (not in AddFishView/EditFishView) so the query stays active while DiveDetailView
+    // is on screen and does not activate/deactivate with the sheet, avoiding a re-fetch on dismiss.
+    @Query(sort: \MarineSight.name) private var allFish: [MarineSight]
+
+    private var existingFishNames: [String] {
+        var seen = Set<String>()
+        return allFish.compactMap { seen.insert($0.name).inserted ? $0.name : nil }
+    }
 
     @State var showEditSheet = false
     @State var showAddFish = false
@@ -106,6 +114,7 @@ struct DiveDetailView: View {
     @State private var isNavigating: Bool = false
     @State private var cachedDiveNumber: Int = 0
     @State private var cachedCurrentIndex: Int? = nil
+    @State var profileSamplesLoaded = false
     @Environment(\.layoutDirection) private var layoutDirection
 
     // Swipe navigation tuning
@@ -127,11 +136,12 @@ struct DiveDetailView: View {
     }()
     #endif
 
-    init(dive: Dive, sortedDives: [Dive] = [], isSlidePreview: Bool = false, initialTab: DiveTab = .menu) {
+    init(dive: Dive, sortedDives: [Dive] = [], isSlidePreview: Bool = false, initialTab: DiveTab = .menu, diveNumber: Int = 0) {
         self._dive = State(initialValue: dive)
         self.sortedDives = sortedDives
         self.isSlidePreview = isSlidePreview
         self._selectedTab = State(initialValue: initialTab)
+        self._cachedDiveNumber = State(initialValue: diveNumber)
     }
 
     // Export state
@@ -157,8 +167,9 @@ struct DiveDetailView: View {
     var diveNumber: Int { cachedDiveNumber }
 
     private func pendingDiveNumber(for d: Dive) -> Int {
-        // Only evaluated for the transient preview during a swipe.
-        allDives.count - (allDives.firstIndex(of: d) ?? 0)
+        // Relative position in the sorted list — used only as a fallback in the swipe preview title.
+        let idx = sortedDives.firstIndex(of: d) ?? 0
+        return sortedDives.count - idx
     }
 
     /// True when the detail view is configured to support swipe-based dive navigation.
@@ -167,7 +178,6 @@ struct DiveDetailView: View {
     }
 
     private func refreshCaches(for d: Dive) {
-        cachedDiveNumber = allDives.count - (allDives.firstIndex(of: d) ?? 0)
         cachedCurrentIndex = sortedDives.isEmpty ? nil : sortedDives.firstIndex(of: d)
     }
 
@@ -214,7 +224,7 @@ struct DiveDetailView: View {
             ZStack(alignment: .top) {
                 // Incoming dive preview — slides in from the side during navigation
                 if let pending = pendingDive {
-                    DiveSlidingPreview(dive: pending, initialTab: selectedTab)
+                    DiveSlidingPreview(dive: pending, diveNumber: pending.diveNumber ?? pendingDiveNumber(for: pending), initialTab: selectedTab)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .offset(x: dragOffset < 0
                             ? dragOffset + geo.size.width
@@ -423,13 +433,13 @@ struct DiveDetailView: View {
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAddFish) {
-            AddFishView(dive: dive)
+            AddFishView(dive: dive, fishNames: existingFishNames)
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(item: $fishToEdit) { fish in
-            EditFishView(fish: fish)
+            EditFishView(fish: fish, fishNames: existingFishNames)
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -458,6 +468,7 @@ struct DiveDetailView: View {
         #endif
         .onChange(of: dive) { oldValue, newValue in
             guard oldValue != newValue else { return }
+            cachedDiveNumber = newValue.diveNumber ?? pendingDiveNumber(for: newValue)
             refreshCaches(for: newValue)
             // Reset per-dive UI state when navigating to a different dive
             selectedTankIndex = 0
@@ -489,10 +500,6 @@ struct DiveDetailView: View {
             let announcement = String(format: NSLocalizedString("Dive %@, %@", bundle: Bundle.forAppLanguage(), comment: "VoiceOver screen-change announcement when navigating to a dive. First argument is the dive number (e.g. 1140), second is the site name."), "\(number)", newValue.siteName)
             UIAccessibility.post(notification: .screenChanged, argument: announcement)
             #endif
-        }
-        .onChange(of: allDives.count) { _, _ in
-            // Keep the cached dive number correct if dives are added/removed elsewhere.
-            refreshCaches(for: dive)
         }
         .onDisappear {
             // Invalidate any pending async reset so it can't fire after the view leaves.
@@ -637,7 +644,9 @@ struct DiveDetailView: View {
         case .conditions:
             EditConditionsView(dive: dive)
         case .gaz:
-            EditGazView(dive: dive, tankIndex: selectedTankIndex)
+            EditGazView(dive: dive, tankIndex: selectedTankIndex) { newIndex in
+                selectedTankIndex = newIndex
+            }
         case .samples:
             // Samples come from a dive computer — no manual editing
             noEditAvailableView(title: DiveTab.samples.localizedName,

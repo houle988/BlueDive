@@ -3,7 +3,7 @@ import SwiftData
 import Charts
 
 struct StatisticsView: View {
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -39,7 +39,7 @@ struct StatisticsView: View {
     @State private var filterTag: String? = nil
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
-    @State private var filterSortOrder: ContentView.DiveSortOrder = .dateDesc
+    @State private var filterSortOrder: DiveSortOrder = .dateDesc
     @State private var cachedDeepestDive: Dive? = nil
     @State private var cachedWarmestDive: Dive? = nil
     @State private var cachedColdestDive: Dive? = nil
@@ -62,6 +62,7 @@ struct StatisticsView: View {
     @State private var cachedAvgSAC: String = "—"
     @State private var cachedBestSACDive: Dive? = nil
     @State private var cachedWorstSACDive: Dive? = nil
+    @State private var statsVersion: Int = 0
     @State private var cachedDiveCount: Int = 0
     @State private var cachedTotalTimeFormatted: String = "—"
     @State private var cachedUniqueSites: Int = 0
@@ -71,11 +72,11 @@ struct StatisticsView: View {
 
     @Environment(\.locale) private var locale
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
 
     private var filteredDives: [Dive] {
         DiverFilter.applyDiveFilters(
-            to: DiverFilter.apply(selectedDiver, to: allDives),
+            to: DiverFilter.apply(selectedDiver, to: store.dives),
             year: filterYear, yearNegate: filterYearNegate,
             gasType: filterGasType, gasTypeNegate: filterGasTypeNegate,
             minDepth: filterMinDepth, maxDepth: filterMaxDepth,
@@ -87,7 +88,7 @@ struct StatisticsView: View {
         )
     }
 
-    private var diverDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
+    private var diverDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
 
     private var availableYears: [Int] {
         Array(Set(diverDives.compactMap { Calendar.current.dateComponents([.year], from: $0.timestamp).year })).sorted(by: >)
@@ -129,7 +130,7 @@ struct StatisticsView: View {
     }
 
     private var filterTaskId: String {
-        "\(allDives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(allDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
+        "\(store.dives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(statsVersion):\(store.dives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
     }
 
     private func computeStats(_ dives: [Dive], locale: Locale) async {
@@ -143,7 +144,8 @@ struct StatisticsView: View {
         timeFormatter.calendar = timeFormatterCal
         let totalTimeFormatted = timeFormatter.string(from: TimeInterval(totalMin * 60)) ?? "\(totalMin)m"
         let maxDepthEver = dives.map(\.displayMaxDepth).max() ?? 0
-        let avgDepth = dives.isEmpty ? 0 : dives.map(\.displayAverageDepth).reduce(0, +) / Double(dives.count)
+        let depthDives = dives.filter { $0.averageDepth > 0 }
+        let avgDepth = depthDives.isEmpty ? 0 : depthDives.map(\.displayAverageDepth).reduce(0, +) / Double(depthDives.count)
         let sortedDives = dives.sorted { $0.timestamp > $1.timestamp }
 
         let grouped = Dictionary(grouping: dives) { $0.siteName }
@@ -207,22 +209,31 @@ struct StatisticsView: View {
         // --- Temperature extremes ---
         let tempSymbol = prefs.temperatureUnit.symbol
         let warmDives = dives.filter { $0.waterTemperature != nil }
+
+        // Warmest/coldest consider both min and max temperature fields across all dives
+        let allDiveDisplayTemps: (Dive) -> [Double] = { dive in
+            [dive.displayMinTemperature, dive.displayMaxTemperature].compactMap { $0 }
+        }
+        let allTemps = dives.flatMap { allDiveDisplayTemps($0) }
         let maxTempStr: String
-        if let maxTemp = warmDives.compactMap({ $0.displayWaterTemperature }).max() {
+        if let maxTemp = allTemps.max() {
             maxTempStr = maxTemp.localizedString(decimals: 0) + tempSymbol
         } else {
             maxTempStr = "—"
         }
-        let coldDives = dives.filter { $0.minTemperature != nil }
         let minTempStr: String
-        if let minTemp = coldDives.compactMap({ $0.displayMinTemperature }).min() {
+        if let minTemp = allTemps.min() {
             minTempStr = minTemp.localizedString(decimals: 0) + tempSymbol
         } else {
             minTempStr = "—"
         }
         let deepestDive = dives.max(by: { $0.displayMaxDepth < $1.displayMaxDepth })
-        let warmestDive = warmDives.max(by: { ($0.displayWaterTemperature ?? -.infinity) < ($1.displayWaterTemperature ?? -.infinity) })
-        let coldestDive = coldDives.min(by: { ($0.displayMinTemperature ?? .infinity) < ($1.displayMinTemperature ?? .infinity) })
+        let warmestDive = dives
+            .filter { !allDiveDisplayTemps($0).isEmpty }
+            .max(by: { (allDiveDisplayTemps($0).max() ?? -.infinity) < (allDiveDisplayTemps($1).max() ?? -.infinity) })
+        let coldestDive = dives
+            .filter { !allDiveDisplayTemps($0).isEmpty }
+            .min(by: { (allDiveDisplayTemps($0).min() ?? .infinity) < (allDiveDisplayTemps($1).min() ?? .infinity) })
 
         // --- Average / longest / shortest duration ---
         let avgDuration = dives.isEmpty ? 0 : totalMin / dives.count
@@ -365,7 +376,7 @@ struct StatisticsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if allDives.isEmpty {
+                if store.dives.isEmpty {
                     NoEntriesForDiverView(
                         title: "No Dives Recorded",
                         description: "Add your first dive to see your statistics."
@@ -461,6 +472,9 @@ struct StatisticsView: View {
                     appeared = true
                 }
             }
+            .onChange(of: store.cachedSummaries) { _, _ in
+                statsVersion += 1
+            }
             .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             .sheet(isPresented: $showFilterSheet) {
                 DiveFilterSheet(
@@ -507,7 +521,8 @@ struct StatisticsView: View {
             }
             .sheet(item: $selectedDive) { dive in
                 NavigationStack {
-                    DiveDetailView(dive: dive, sortedDives: cachedSortedDives)
+                    DiveDetailView(dive: dive, sortedDives: cachedSortedDives,
+                                   diveNumber: dive.diveNumber ?? (cachedSortedDives.firstIndex(where: { $0.id == dive.id }).map { cachedSortedDives.count - $0 } ?? 0))
                 }
                 .presentationSizing(.page)
                 .presentationDetents([.large])
@@ -1536,15 +1551,15 @@ struct SiteDivesSheet: View {
     let siteName: String
     let dives: [Dive]
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     private var sortedDives: [Dive] { dives.sorted { $0.timestamp > $1.timestamp } }
 
     private var numberMap: [PersistentIdentifier: Int] {
         let numbering = selectedDiver.isEmpty
-            ? allDives
-            : allDives.filter { $0.diverName == selectedDiver }
+            ? store.dives
+            : store.dives.filter { $0.diverName == selectedDiver }
         let total = numbering.count
         return Dictionary(uniqueKeysWithValues: numbering.enumerated().map {
             ($0.element.persistentModelID, total - $0.offset)
@@ -1555,9 +1570,9 @@ struct SiteDivesSheet: View {
         NavigationStack {
             List {
                 ForEach(sortedDives) { dive in
-                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives)) {
+                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0)) {
                         DiveRowView(
-                            dive: dive,
+                            summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
                             diveNumber: numberMap[dive.persistentModelID] ?? 0
                         )
                     }

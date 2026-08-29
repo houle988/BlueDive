@@ -32,7 +32,7 @@ struct XMLExportTabView: View {
         .fileExporter(
             isPresented: $showFileExporter,
             document: exportDocument,
-            contentType: .xml,
+            contentType: .blueDiveXML,
             defaultFilename: exportFileName
         ) { result in
             exportDocument = nil
@@ -195,12 +195,12 @@ struct XMLExportTabView: View {
             .components(separatedBy: .init(charactersIn: "/\\:*?\"<>|"))
             .joined(separator: "-")
             .trimmingCharacters(in: .whitespaces)
-        let fileName = "BlueDive_\(datePart)_\(safeSite).xml"
+        let fileName = "BlueDive_\(datePart)_\(safeSite).bluedive"
 
         #if os(macOS)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = fileName
-        panel.allowedContentTypes = [.xml]
+        panel.allowedContentTypes = [.blueDiveXML]
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }

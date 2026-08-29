@@ -30,6 +30,9 @@ extension DiveDetailView {
             marineSightingsSection
             notesSection
         }
+        .task(id: dive.id) {
+            profileSamplesLoaded = true
+        }
     }
 
     // MARK: - View Components
@@ -145,8 +148,8 @@ extension DiveDetailView {
                 RatingStarsView(rating: dive.rating)
             }
 
-            // Nouveau graphique unifié interactif
-            if !dive.profileSamples.isEmpty {
+            // Nouveau graphique unifié interactif (guarded until after first render to avoid blocking open)
+            if profileSamplesLoaded && !dive.profileSamples.isEmpty {
                 UnifiedDiveChartOptimized(dive: dive)
             }
         }
@@ -569,7 +572,11 @@ extension DiveDetailView {
             PhotoPreviewSheet(
                 photos: Binding(
                     get: { dive.photosData ?? [] },
-                    set: { dive.photosData = $0; try? modelContext.save() } // Safety net; in-app deletes go through deletePhoto(at:)
+                    set: {
+                        dive.photosData = $0
+                        try? modelContext.save()
+                        store.commit(dive, affects: .rowBadges)
+                    }
                 ),
                 initialIndex: item.index,
                 onDelete: { index in
@@ -630,6 +637,7 @@ extension DiveDetailView {
         }
         selectedPhotos.removeAll()
         try? modelContext.save()
+        store.commit(dive, affects: .rowBadges)
     }
 
     @MainActor
@@ -669,6 +677,7 @@ extension DiveDetailView {
             return
         }
         try? modelContext.save()
+        store.commit(dive, affects: .rowBadges)
         if wasTruncated {
             showFileTruncationAlert = true
         }
@@ -679,6 +688,7 @@ extension DiveDetailView {
         guard dive.photosData?.indices.contains(index) == true else { return }
         dive.photosData?.remove(at: index)
         try? modelContext.save()
+        store.commit(dive, affects: .rowBadges)
     }
 
     @MainActor
@@ -695,6 +705,7 @@ extension DiveDetailView {
     func removeFishFromDive(_ fish: MarineSight) {
         modelContext.delete(fish)
         try? modelContext.save()
+        store.commit(dive, affects: .rowBadges)
         // Exit edit mode if no marine life left
         if (dive.seenFish ?? []).isEmpty {
             isEditingMarineLife = false
@@ -1117,17 +1128,10 @@ extension DiveDetailView {
                     Text("Dive #")
                         .font(.caption)
                         .foregroundStyle(.gray)
-                    if let diveNumber = dive.diveNumber {
-                        Text(verbatim: "\(diveNumber)")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-                    } else {
-                        Text("—")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(verbatim: "\(dive.diveNumber ?? diveNumber)")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
                 }
 
                 Spacer()
