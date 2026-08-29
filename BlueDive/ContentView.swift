@@ -37,6 +37,7 @@ struct ContentView: View {
     @State private var diveToDeleteDirectly: Dive?
     @State private var showDeleteSingleConfirmation = false
     @State private var showDeleteSheet = false
+    @State private var diveToMove: Dive?
     @State var isImporting = false
     @State var importProgressFileName: String = ""
     @State var importProgressCurrent: Int = 0
@@ -106,6 +107,16 @@ struct ContentView: View {
         )
     }
     
+    @ViewBuilder
+    private func moveButton(for summaryID: UUID) -> some View {
+        Button {
+            diveToMove = store.diveByID[summaryID]
+        } label: {
+            Label("Move", systemImage: "person.fill")
+        }
+        .tint(.blue)
+    }
+
     // MARK: - Body
     
     var body: some View {
@@ -250,6 +261,12 @@ struct ContentView: View {
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $diveToMove) { dive in
+                MoveDiverSheet(dive: dive)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             #if os(iOS)
             .fileExporter(
@@ -700,6 +717,9 @@ struct ContentView: View {
                                         DiveRowView(summary: summary, diveNumber: rowNumber)
                                     }
                                     .listRowBackground(Color.primary.opacity(0.07))
+                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                        moveButton(for: summary.id)
+                                    }
                                     .contextMenu {
                                         Button(role: .destructive) {
                                             if let dive = store.diveByID[summary.id] {
@@ -747,6 +767,9 @@ struct ContentView: View {
                                 DiveRowView(summary: summary, diveNumber: rowNumber)
                             }
                             .listRowBackground(Color.primary.opacity(0.07))
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                moveButton(for: summary.id)
+                            }
                             .contextMenu {
                                 Button(role: .destructive) {
                                     if let dive = store.diveByID[summary.id] {

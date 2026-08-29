@@ -1295,6 +1295,7 @@ struct EditMenuStatsView: View {
         dive.weights      = workingWeights
         let originalDiverName = dive.diverName
         dive.diverName    = workingDiverName.trimmingCharacters(in: .whitespaces)
+        let diverNameDidChange = dive.diverName != originalDiverName
         dive.buddies      = workingBuddies.trimmingCharacters(in: .whitespaces)
 
         // Save dive types
@@ -1346,33 +1347,18 @@ struct EditMenuStatsView: View {
             }
         }
 #endif
-        if timestampDidChange {
-            // Flush the timestamp change to the persistent store so the background
-            // context sees the new value when it fetches all dives for recalculation.
+        if timestampDidChange || diverNameDidChange {
+            // Flush changes to the persistent store so the background context sees
+            // the updated values when it fetches all dives for recalculation.
             try? modelContext.save()
-            let container = modelContext.container
-            let newDiverName = dive.diverName
-            let oldDiverName = originalDiverName
-            let diverNameChanged = newDiverName != oldDiverName
-            Task.detached(priority: .utility) {
-                let bgContext = ModelContext(container)
-                var updates = Dive.recalculateSurfaceIntervals(in: bgContext, diverName: newDiverName)
-                if diverNameChanged {
-                    let extra = Dive.recalculateSurfaceIntervals(in: bgContext, diverName: oldDiverName)
-                    updates.merge(extra) { _, new in new }
-                }
-                // Capture as immutable before crossing the concurrency boundary.
-                // Patches summary caches directly with the computed values so the list
-                // reflects fresh surface intervals immediately, bypassing the main-context
-                // merge delay that would otherwise leave rows stale until app restart.
-                let finalUpdates = updates
-                await MainActor.run {
-                    store.commitSurfaceIntervals(finalUpdates)
-                }
-            }
+            store.recalcSurfaceIntervalsInBackground(
+                container: modelContext.container,
+                newDiverName: dive.diverName,
+                originalDiverName: originalDiverName
+            )
         }
-        // First commit triggers an immediate rebuild with the updated timestamp;
-        // surface intervals update via the second commit from the background task.
+        // First commit triggers an immediate list rebuild; surface intervals update
+        // via the second commit from the background task when applicable.
         store.commit(dive, affects: .list)
         dismiss()
     }

@@ -189,9 +189,10 @@ final class DiveStore {
     }
 
     // Patches surfaceInterval in all three summary caches without a full rebuild.
-    // Called from the background surface-interval recalculation task in EditSheets
-    // after bgContext.save() — eliminates the main-context merge race by delivering
-    // the computed values directly rather than waiting for @Query to re-deliver.
+    // Called on the MainActor from recalcSurfaceIntervalsInBackground after the
+    // background context's recalculation completes — eliminates the main-context
+    // merge race by delivering computed values directly rather than waiting for
+    // @Query to re-deliver.
     func commitSurfaceIntervals(_ updates: [UUID: String]) {
         for idx in cachedSummaries.indices {
             if let si = updates[cachedSummaries[idx].id] {
@@ -206,6 +207,32 @@ final class DiveStore {
         cachedFilteredSummaries = cachedFilteredDives.compactMap { summaryByID[$0.id] }
         cachedGroupedSummaries = cachedGroupedDives.map { group in
             (key: group.key, value: group.value.compactMap { summaryByID[$0.id] })
+        }
+    }
+
+    // Spawns a background task that recalculates surface intervals for the diver
+    // group(s) affected by an edit, then patches cachedSummaries via
+    // commitSurfaceIntervals on the MainActor. Recalculates newDiverName's group,
+    // and additionally originalDiverName's group when the two differ (a diver move).
+    // For a timestamp-only edit, pass the same name for both parameters to recalc
+    // that single diver's sequence. Must be called after modelContext.save() so the
+    // background context reads the already-persisted state.
+    func recalcSurfaceIntervalsInBackground(
+        container: ModelContainer,
+        newDiverName: String,
+        originalDiverName: String
+    ) {
+        Task.detached(priority: .utility) { [weak self] in
+            let bgContext = ModelContext(container)
+            var updates = Dive.recalculateSurfaceIntervals(in: bgContext, diverName: newDiverName)
+            if newDiverName != originalDiverName {
+                let extra = Dive.recalculateSurfaceIntervals(in: bgContext, diverName: originalDiverName)
+                updates.merge(extra) { _, new in new }
+            }
+            let finalUpdates = updates
+            await MainActor.run { [weak self] in
+                self?.commitSurfaceIntervals(finalUpdates)
+            }
         }
     }
 
