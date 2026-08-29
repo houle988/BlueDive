@@ -1374,6 +1374,15 @@ struct PhotoPreviewSheet: View {
                 if photos.isEmpty {
                     Color.platformBackground.ignoresSafeArea()
                 } else {
+                    #if os(macOS)
+                    // macOS has no swipe gesture — show one photo at a time driven by currentIndex.
+                    // No UIPageViewController seeding dance needed; index changes are instantaneous.
+                    if let photo = currentPhoto {
+                        PhotoPageView(data: photo)
+                            .id(currentIndex)
+                            .animation(.easeInOut(duration: 0.15), value: currentIndex)
+                    }
+                    #else
                     TabView(selection: $currentIndex) {
                         ForEach(photos.indices, id: \.self) { index in
                             PhotoPageView(data: photos[index])
@@ -1383,11 +1392,13 @@ struct PhotoPreviewSheet: View {
                     .tabViewStyle(.page(indexDisplayMode: .never))
                     .opacity(isPageSeeded ? 1 : 0)
                     .animation(.easeIn(duration: 0.15), value: isPageSeeded)
+                    #endif
                 }
             }
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
                 if photos.count > 1 {
+                    #if os(iOS)
                     ToolbarItem(placement: .bottomBar) {
                         Button {
                             currentIndex -= 1
@@ -1410,6 +1421,30 @@ struct PhotoPreviewSheet: View {
                         }
                         .disabled(currentIndex == photos.count - 1)
                     }
+                    #else
+                    ToolbarItem(placement: .automatic) {
+                        Button {
+                            currentIndex -= 1
+                        } label: {
+                            Label("Previous Photo", systemImage: "chevron.left")
+                        }
+                        .disabled(currentIndex == 0)
+                    }
+                    ToolbarItem(placement: .automatic) {
+                        Text(verbatim: "\(currentIndex + 1) / \(photos.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    ToolbarItem(placement: .automatic) {
+                        Button {
+                            currentIndex += 1
+                        } label: {
+                            Label("Next Photo", systemImage: "chevron.right")
+                        }
+                        .disabled(currentIndex == photos.count - 1)
+                    }
+                    #endif
                 }
             }
             .toolbar {
@@ -1578,6 +1613,9 @@ struct PhotoPreviewSheet: View {
                 }
             }
         }
+        #if os(macOS)
+        .frame(minWidth: 800, idealWidth: 1240, maxWidth: .infinity, minHeight: 600, idealHeight: 800, maxHeight: .infinity)
+        #endif
     }
 
     private static let exportDateFormatter: DateFormatter = {

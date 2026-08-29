@@ -168,6 +168,15 @@ struct BlueDiveApp: App {
             }
         }
         #endif
+        #if os(macOS)
+        Settings {
+            SettingsView()
+                .modelContainer(Self.sharedModelContainer)
+                .environment(syncMonitor)
+                .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
+                .preferredColorScheme(prefs.appearanceMode.colorScheme)
+        }
+        #endif
     }
     
     // MARK: - Schema

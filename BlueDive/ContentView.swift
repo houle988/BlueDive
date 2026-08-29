@@ -45,6 +45,7 @@ struct ContentView: View {
     @State var exportProgressCurrent: Int = 0
     @State var exportProgressTotal: Int = 0
     @State private var showExportMenu = false
+
     @State var exportDocument: ExportableFileDocument?
     @State var exportFileName: String = ""
     @State var showFileExporter = false
@@ -155,12 +156,14 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+            #if os(iOS)
             .sheet(isPresented: $showSettings) {
                 SettingsView()
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
+            #endif
             .sheet(isPresented: $showMinimumGasPlanning) {
                 MinimumGasCalculatorView()
                     .presentationSizing(.page)
@@ -700,6 +703,10 @@ struct ContentView: View {
                                         DiveRowView(summary: summary, diveNumber: rowNumber)
                                     }
                                     .listRowBackground(Color.primary.opacity(0.07))
+                                    #if os(macOS)
+                                    .listRowSeparator(.visible)
+                                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                                    #endif
                                     .contextMenu {
                                         Button(role: .destructive) {
                                             if let dive = store.diveByID[summary.id] {
@@ -747,6 +754,10 @@ struct ContentView: View {
                                 DiveRowView(summary: summary, diveNumber: rowNumber)
                             }
                             .listRowBackground(Color.primary.opacity(0.07))
+                            #if os(macOS)
+                            .listRowSeparator(.visible)
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                            #endif
                             .contextMenu {
                                 Button(role: .destructive) {
                                     if let dive = store.diveByID[summary.id] {
@@ -809,11 +820,18 @@ struct ContentView: View {
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         ToolbarItem(placement: .navigation) {
+            #if os(iOS)
             Button(action: { showSettings = true }) {
                 Image(systemName: "gearshape.fill")
                     .foregroundStyle(.cyan)
             }
             .help("Settings")
+            #else
+            SettingsLink {
+                Label("Settings", systemImage: "gearshape.fill")
+            }
+            .help("Settings")
+            #endif
         }
         ToolbarItem(placement: .navigation) {
             cloudSyncToolbarItem
@@ -827,42 +845,24 @@ struct ContentView: View {
 
         #if os(macOS)
         ToolbarItemGroup(placement: .primaryAction) {
-            Button(action: { showProfile = true }) {
-                Image(systemName: "person.circle.fill")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Diver Profile")
-
-            Button(action: { showFileImporter = true }) {
-                Image(systemName: "doc.badge.plus")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Import Dives")
-
-            Button(action: addManualDive) {
+            // + menu: Add / Bluetooth / Import
+            Menu {
+                Button(action: addManualDive) {
+                    Label("Add a dive (Manual)", systemImage: "plus.circle")
+                }
+                Button(action: { showScannerSheet = true }) {
+                    Label("Add a dive (Bluetooth)", systemImage: "antenna.radiowaves.left.and.right")
+                }
+                Button(action: { showFileImporter = true }) {
+                    Label("Import", systemImage: "doc.badge.plus")
+                }
+            } label: {
                 Image(systemName: "plus.circle.fill")
                     .foregroundStyle(.cyan)
             }
-            .help("Add Dive Manually")
+            .help("Add or Import Dives")
 
-            Button(action: { showScannerSheet = true }) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Sync Bluetooth Dive Computer")
-
-            if !dives.isEmpty {
-                exportMenuButton
-                    .help("Export")
-            }
-
-            Button(action: { showMergeDivesSheet = true }) {
-                Image(systemName: "arrow.triangle.merge")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Merge two dives")
-            .disabled(dives.count < 2)
-
+            // Filter
             Button(action: { showFilterSheet = true }) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
@@ -879,13 +879,51 @@ struct ContentView: View {
             }
             .help("Filter Dives")
 
-            if !dives.isEmpty {
-                Button(action: { showDeleteSheet = true }) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red)
+            // … overflow
+            Menu {
+                Button(action: { showProfile = true }) {
+                    Label("Profile", systemImage: "person.circle.fill")
                 }
-                .help("Delete a dive")
+                Divider()
+                Menu("Stats & Explore") {
+                    Button(action: { showDashboard = true }) {
+                        Label("Stats", systemImage: "chart.bar.fill")
+                    }
+                    Button(action: { showDiveTrips = true }) {
+                        Label("My Trips", systemImage: "map.fill")
+                    }
+                    Button(action: { showCalendarHeatmap = true }) {
+                        Label("Calendar", systemImage: "calendar")
+                    }
+                    Button(action: { showMarineLife = true }) {
+                        Label("Marine Life", systemImage: "fish.fill")
+                    }
+                }
+                if !dives.isEmpty {
+                    Divider()
+                    Button(action: exportAllDivesToXML) {
+                        Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                    Button(action: exportAllDivesToUDDF) {
+                        Label("Export All Dives to UDDF", systemImage: "water.waves")
+                    }
+                }
+                if dives.count >= 2 {
+                    Button(action: { showMergeDivesSheet = true }) {
+                        Label("Merge Dives", systemImage: "arrow.triangle.merge")
+                    }
+                }
+                if !dives.isEmpty {
+                    Divider()
+                    Button(role: .destructive, action: { showDeleteSheet = true }) {
+                        Label("Delete dive", systemImage: "trash")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle.fill")
+                    .foregroundStyle(.cyan)
             }
+            .help("More Options")
         }
         #else
         // iOS: + menu (Add/Import/Bluetooth) + Filter + overflow menu.
@@ -1006,56 +1044,6 @@ struct ContentView: View {
             }
         } label: {
             Image(systemName: "wrench.and.screwdriver.fill")
-                .foregroundStyle(.cyan)
-        }
-        #endif
-    }
-
-    private var exportMenuButton: some View {
-        #if os(macOS)
-        Button(action: { showExportMenu = true }) {
-            Image(systemName: "square.and.arrow.up")
-                .foregroundStyle(.cyan)
-        }
-        .popover(isPresented: $showExportMenu, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 0) {
-                Button(action: {
-                    showExportMenu = false
-                    exportAllDivesToXML()
-                }) {
-                    Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                Divider()
-                Button(action: {
-                    showExportMenu = false
-                    exportAllDivesToUDDF()
-                }) {
-                    Label("Export All Dives to UDDF", systemImage: "water.waves")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(width: 240)
-            .padding(.vertical, 4)
-        }
-        #else
-        Menu {
-            Button(action: exportAllDivesToXML) {
-                Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
-            }
-            Button(action: exportAllDivesToUDDF) {
-                Label("Export All Dives to UDDF", systemImage: "water.waves")
-            }
-        } label: {
-            Image(systemName: "square.and.arrow.up")
                 .foregroundStyle(.cyan)
         }
         #endif
