@@ -26,7 +26,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     // MARK: - Current Dive State
 
     private var currentDate: Date?
+    private var currentSourceImport: String?
     private var currentIdentifier: String?
+    private var currentRecordID: String?
     private var currentDiveNumber: Int?
     private var currentRating: Int?
     private var currentRepetitiveDive: Int?
@@ -56,7 +58,6 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private var currentSurfaceInterval: Int?
     private var currentNotes: String?
     private var currentTags: String?
-    private var currentSourceImport: String?
     private var currentSite: BlueDiveSiteData?
     private var currentTypes: [String] = []
     private var currentBuddies: [String] = []
@@ -616,6 +617,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private func parseDiveElement(_ elementName: String, text: String) {
         switch elementName {
         case "date":             currentDate = dateFormatter.date(from: text)
+        case "sourceImport":     currentSourceImport = text.nilIfEmpty
+        case "id":               currentRecordID   = text.nilIfEmpty
         case "identifier":       currentIdentifier = text.nilIfEmpty
         case "diveNumber":       currentDiveNumber = Int(text)
         case "rating":           currentRating = Int(text)
@@ -645,7 +648,6 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         case "boat":             currentBoat = text.nilIfEmpty
         case "notes":            currentNotes = text.nilIfEmpty
         case "tags":             currentTags = text.nilIfEmpty
-        case "sourceImport":     currentSourceImport = text.nilIfEmpty
         // Unit format metadata (written by exporter, re-read for round-trip fidelity)
         case "distanceFormat":    distanceFormat    = text.nilIfEmpty ?? distanceFormat
         case "temperatureFormat": temperatureFormat = text.nilIfEmpty ?? temperatureFormat
@@ -663,9 +665,14 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
                 pressureFormat: pressureFormat,
                 volumeFormat: volumeFormat,
                 weightFormat: weightFormat,
-                sourceImport: "BlueDive",
+                // Fallback to "BlueDive" for old exports that predate the <sourceImport> tag.
+                // Path A in findExistingDuplicate now gates on recordID (not sourceImport), so
+                // preserving the true original source here has no negative effect on dedup.
+                sourceImport: currentSourceImport ?? "BlueDive",
+                isBlueDiveXMLImport: true,
                 date: currentDate,
                 identifier: currentIdentifier,
+                recordID: currentRecordID,
                 diveNumber: currentDiveNumber,
                 rating: currentRating,
                 repetitiveDive: currentRepetitiveDive,
@@ -716,7 +723,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
 
     private func resetCurrentDive() {
         currentDate = nil
+        currentSourceImport = nil
         currentIdentifier = nil
+        currentRecordID = nil
         currentDiveNumber = nil
         currentRating = nil
         currentRepetitiveDive = nil
@@ -746,7 +755,6 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         currentSurfaceInterval = nil
         currentNotes = nil
         currentTags = nil
-        currentSourceImport = nil
         currentSite = nil
         currentTypes = []
         currentBuddies = []

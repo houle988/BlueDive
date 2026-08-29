@@ -1,3 +1,5 @@
+import OSLog
+import SwiftData
 import SwiftUI
 
 // MARK: - Diver Filter
@@ -103,6 +105,48 @@ enum DiverFilter {
     }
 }
 
+// MARK: - Gear Diver Resolution
+
+private let gearDiverResolverLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "BlueDive", category: "GearDiverResolver")
+
+/// Returns the diver name associated with the gear computer whose serial matches `computerSerial`.
+///
+/// Looks up gear items of category "Computer" in `context`. Serial comparison is whitespace-trimmed
+/// and case-insensitive to handle firmware padding and user-entry differences. If multiple computers
+/// share the same serial but disagree on the diver name (ambiguous ownership), falls back to empty
+/// string (unnamed bucket). Also returns empty string when no serial is provided, no match is found,
+/// or the fetch fails.
+func resolveGearDiverName(forSerial computerSerial: String?, in context: ModelContext) -> String {
+    guard let rawSerial = computerSerial else { return "" }
+    let serial = rawSerial.trimmingCharacters(in: .whitespaces)
+    guard !serial.isEmpty else { return "" }
+
+    let computerCategory = GearCategory.computer.rawValue
+    // #Predicate cannot call instance methods, so fetch all computers and filter in-memory
+    // to apply trimmed case-insensitive serial comparison.
+    let predicate = #Predicate<Gear> { gear in
+        gear.category == computerCategory && gear.serialNumber != nil
+    }
+    do {
+        let computers = try context.fetch(FetchDescriptor<Gear>(predicate: predicate))
+        let matches = computers.filter {
+            ($0.serialNumber ?? "").trimmingCharacters(in: .whitespaces)
+                .caseInsensitiveCompare(serial) == .orderedSame
+                && !$0.diverName.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+        let distinctNames = Set(matches.map { $0.diverName.trimmingCharacters(in: .whitespaces) })
+        if distinctNames.count == 1, let name = distinctNames.first {
+            return name
+        }
+        if distinctNames.count > 1 {
+            gearDiverResolverLogger.warning("Multiple gear computers match serial \(serial) with different diver names — falling back to unnamed")
+        }
+    } catch {
+        gearDiverResolverLogger.error("Failed to look up gear for computer serial \(serial): \(error.localizedDescription)")
+    }
+    return ""
+}
+
 // MARK: - Toolbar Picker
 
 /// Drop-in toolbar item that exposes the diver filter on iOS and macOS.
@@ -110,20 +154,27 @@ enum DiverFilter {
 struct DiverFilterToolbar: ToolbarContent {
     let uniqueDivers: [String]
     @Binding var selectedDiver: String
+    var hasUnnamedDives: Bool = false
 
     var body: some ToolbarContent {
         #if os(iOS)
         ToolbarItem(placement: .topBarLeading) {
-            if uniqueDivers.count > 1 { picker }
+            if uniqueDivers.count > 1 || (!uniqueDivers.isEmpty && hasUnnamedDives) { picker }
         }
         #else
         ToolbarItem(placement: .navigation) {
-            if uniqueDivers.count > 1 { picker }
+            if uniqueDivers.count > 1 || (!uniqueDivers.isEmpty && hasUnnamedDives) { picker }
         }
         #endif
     }
 
     private var isActive: Bool { !selectedDiver.isEmpty }
+
+    private func initials(for name: String) -> String {
+        let words = name.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        let letters = words.prefix(2).compactMap { $0.first.map { String($0).uppercased() } }
+        return letters.isEmpty ? "?" : letters.joined()
+    }
 
     private var picker: some View {
         Menu {
@@ -149,11 +200,23 @@ struct DiverFilterToolbar: ToolbarContent {
                 }
             }
         } label: {
-            Image(systemName: isActive ? "person.fill.checkmark" : "person.2")
-                .foregroundStyle(isActive ? Color.cyan : Color.secondary)
+            if isActive {
+                ZStack {
+                    Circle()
+                        .fill(Color.cyan)
+                        .frame(width: 24, height: 24)
+                    Text(initials(for: selectedDiver))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.black)
+                }
+                .accessibilityHidden(true)
+            } else {
+                Image(systemName: "person.2")
+                    .foregroundStyle(Color.secondary)
+            }
         }
         .accessibilityLabel(isActive
-            ? Text("Filter by diver: \(selectedDiver)")
+            ? Text(NSLocalizedString("Filter by diver: ", bundle: Bundle.forAppLanguage(), comment: "") + selectedDiver)
             : Text("Filter by diver"))
         .help(isActive
             ? NSLocalizedString("Diver: ", bundle: Bundle.forAppLanguage(), comment: "") + selectedDiver

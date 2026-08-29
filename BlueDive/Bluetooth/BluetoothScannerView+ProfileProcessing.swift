@@ -733,7 +733,10 @@ extension BluetoothScannerView {
             surfaceIntervalString = "0h 00m"
         }
 
-        let computerSerial = selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial }
+        let computerSerial = selectedDevice
+            .flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : $0 }
 
         // Create the dive
         let dive = Dive(

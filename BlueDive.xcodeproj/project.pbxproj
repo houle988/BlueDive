@@ -10,7 +10,7 @@
 		0C60FC722F89C6E500C1F9A2 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 0C60FC712F89C6DC00C1F9A2 /* LICENSE */; };
 		0C63B1762F8AC30B005F2A89 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C63B1752F8AC307005F2A89 /* README.md */; };
 		0C63B1782F8AC337005F2A89 /* CONTRIBUTING.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */; };
-		0C810B92302632060098790D /* DocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C810B91302632060098790D /* DocumentsView.swift */; };
+		0C75EEE930377D1F006254F6 /* FITSwiftSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 0C75EEE830377D1F006254F6 /* FITSwiftSDK */; };
 		0C89AA682F49ECBC00B7EEBE /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C89AA672F49ECB100B7EEBE /* CLAUDE.md */; };
 		0C89AA6C2F49EF2400B7EEBE /* LibDCSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 0C89AA6B2F49EF2400B7EEBE /* LibDCSwift */; };
 		0CF0DA742FB24469008E0330 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CF0DA732FB24469008E0330 /* WidgetKit.framework */; };
@@ -46,7 +46,6 @@
 		0C60FC712F89C6DC00C1F9A2 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		0C63B1752F8AC307005F2A89 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTRIBUTING.md; sourceTree = "<group>"; };
-		0C810B91302632060098790D /* DocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsView.swift; sourceTree = "<group>"; };
 		0C89AA672F49ECB100B7EEBE /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 		0CF0DA722FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BlueDiveWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0CF0DA732FB24469008E0330 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
@@ -106,6 +105,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0C89AA6C2F49EF2400B7EEBE /* LibDCSwift in Frameworks */,
+				0C75EEE930377D1F006254F6 /* FITSwiftSDK in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -132,7 +132,6 @@
 				0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */,
 				0C89AA6A2F49EF2400B7EEBE /* Frameworks */,
 				57EA9D4B2F42108A00486B7A /* Products */,
-				0C810B91302632060098790D /* DocumentsView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -197,6 +196,7 @@
 			name = BlueDive;
 			packageProductDependencies = (
 				0C89AA6B2F49EF2400B7EEBE /* LibDCSwift */,
+				0C75EEE830377D1F006254F6 /* FITSwiftSDK */,
 			);
 			productName = BlueDive;
 			productReference = 57EA9D4A2F42108A00486B7A /* BlueDive.app */;
@@ -233,6 +233,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				0C89AA692F49EEBF00B7EEBE /* XCRemoteSwiftPackageReference "libdc-swift" */,
+				0C75EEE730377D1F006254F6 /* XCRemoteSwiftPackageReference "fit-swift-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 57EA9D4B2F42108A00486B7A /* Products */;
@@ -284,7 +285,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0C810B92302632060098790D /* DocumentsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -306,7 +306,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = BlueDiveWidgetExtension/BlueDiveWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 108;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueDiveWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BlueDiveWidgetExtension;
@@ -317,7 +317,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 1.12;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -341,7 +341,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = BlueDiveWidgetExtension/BlueDiveWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 108;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueDiveWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BlueDiveWidgetExtension;
@@ -352,7 +352,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 1.12;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -378,7 +378,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = BlueDive/BlueDive.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 108;
+				CURRENT_PROJECT_VERSION = 117;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -416,7 +416,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 1.12;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -445,7 +445,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = BlueDive/BlueDive.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 108;
+				CURRENT_PROJECT_VERSION = 117;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -483,7 +483,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 1.12;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -661,17 +661,30 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		0C75EEE730377D1F006254F6 /* XCRemoteSwiftPackageReference "fit-swift-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/garmin/fit-swift-sdk";
+			requirement = {
+				kind = exactVersion;
+				version = 21.213.0;
+			};
+		};
 		0C89AA692F49EEBF00B7EEBE /* XCRemoteSwiftPackageReference "libdc-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/houle988/libdc-swift";
 			requirement = {
-				branch = main;
+				branch = working;
 				kind = branch;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0C75EEE830377D1F006254F6 /* FITSwiftSDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0C75EEE730377D1F006254F6 /* XCRemoteSwiftPackageReference "fit-swift-sdk" */;
+			productName = FITSwiftSDK;
+		};
 		0C89AA6B2F49EF2400B7EEBE /* LibDCSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 0C89AA692F49EEBF00B7EEBE /* XCRemoteSwiftPackageReference "libdc-swift" */;

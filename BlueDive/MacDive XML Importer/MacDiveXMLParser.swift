@@ -13,10 +13,18 @@ struct BlueDiveGlobalData: Sendable {
 
     // MARK: Import Source
     let sourceImport: String?         // "Bluetooth", "MacDive", or "BlueDive"
+    // True when parsed by BlueDiveXMLParser; false for MacDiveXMLParser and UDDFXMLParser.
+    // Used by gear naming and repetitive-dive gates to distinguish a BlueDive XML round-trip
+    // (gear names already fully-formed, repetitiveDive is boolean 0/1) from a direct external
+    // import. Cannot use sourceImport for this — the new parser preserves the original value
+    // (e.g. "MacDive"), breaking the old invariant that sourceImport == "BlueDive" meant
+    // "came from BlueDiveXMLParser".
+    let isBlueDiveXMLImport: Bool
 
     // MARK: Basic Info
     let date: Date?
-    let identifier: String?
+    let identifier: String?  // computer-assigned ID from dive computer or external source
+    let recordID: String?    // BlueDive SwiftData UUID parsed from <id> tag; nil for external imports
     let diveNumber: Int?
     let rating: Int?
     let repetitiveDive: Int?
@@ -137,6 +145,15 @@ struct BlueDiveTankData: Sendable {
         self.tankType = tankType
         self.usageStartTime = usageStartTime
         self.usageEndTime = usageEndTime
+    }
+
+    func withUsageTimes(start: Double, end: Double) -> BlueDiveTankData {
+        BlueDiveTankData(
+            id: id, oxygen: oxygen, helium: helium, double: double,
+            volume: volume, startPressure: startPressure, endPressure: endPressure,
+            workingPressure: workingPressure, tankMaterial: tankMaterial, tankType: tankType,
+            usageStartTime: start, usageEndTime: end
+        )
     }
 }
 
@@ -631,8 +648,10 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                 volumeFormat: volumeFormat,
                 weightFormat: weightFormat,
                 sourceImport: "MacDive",
+                isBlueDiveXMLImport: false,
                 date: currentDate,
                 identifier: currentIdentifier,
+                recordID: nil,
                 diveNumber: currentDiveNumber,
                 rating: currentRating,
                 repetitiveDive: currentRepetitiveDive,

@@ -114,7 +114,7 @@ struct TripBuilder {
 
 struct DiveTripsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -123,15 +123,16 @@ struct DiveTripsView: View {
     @State private var tripsAppeared = false
     @State private var cachedTrips: [DiveTrip] = []
     @State private var tripsReady = false
+    @State private var tripsVersion: Int = 0
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
-    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
+    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
 
     var body: some View {
         NavigationStack {
             Group {
-                if allDives.isEmpty {
+                if store.dives.isEmpty {
                     ContentUnavailableView(
                         "No Trips",
                         systemImage: "airplane.departure",
@@ -195,13 +196,16 @@ struct DiveTripsView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .task(id: "\(allDives.count):\(selectedDiver):\(allDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
+            .task(id: "\(store.dives.count):\(selectedDiver):\(tripsVersion):\(store.dives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
                 tripsAppeared = false
                 cachedTrips = TripBuilder.buildTrips(from: Array(filteredDives))
                 tripsReady = true
                 withAnimation(.easeOut(duration: 0.5)) {
                     tripsAppeared = true
                 }
+            }
+            .onChange(of: store.cachedSummaries) { _, _ in
+                tripsVersion += 1
             }
             .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
         }
@@ -403,13 +407,13 @@ struct TripDetailSheet: View {
     let prefs: UserPreferences
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
     private var numberMap: [PersistentIdentifier: Int] {
         let numbering = selectedDiver.isEmpty
-            ? allDives
-            : allDives.filter { $0.diverName == selectedDiver }
+            ? store.dives
+            : store.dives.filter { $0.diverName == selectedDiver }
         let total = numbering.count
         return Dictionary(uniqueKeysWithValues: numbering.enumerated().map {
             ($0.element.persistentModelID, total - $0.offset)
@@ -503,9 +507,9 @@ struct TripDetailSheet: View {
                 .padding(.bottom, 4)
 
             ForEach(sortedDives) { dive in
-                NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives)) {
+                NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0)) {
                     DiveRowView(
-                        dive: dive,
+                        summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
                         diveNumber: numberMap[dive.persistentModelID] ?? 0
                     )
                 }

@@ -40,7 +40,6 @@ extension Color {
 // MARK: - Diver Profile View
 
 struct DiverProfileView: View {
-    @Query(sort: \Dive.timestamp, order: .reverse) private var dives: [Dive]
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     @Query(sort: \DivingInsurance.endDate, order: .reverse) private var insurances: [DivingInsurance]
     @Query(sort: \Gear.name) private var allGear: [Gear]
@@ -49,6 +48,7 @@ struct DiverProfileView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
+    @Environment(DiveStore.self) private var store
 
     @State private var prefs = UserPreferences.shared
 
@@ -62,11 +62,11 @@ struct DiverProfileView: View {
     // MARK: - Diver Filter
 
     private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: dives, gear: allGear, certifications: certifications, insurances: insurances)
+        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: certifications, insurances: insurances)
     }
 
     private var filteredDives: [Dive] {
-        DiverFilter.apply(selectedDiver, to: dives)
+        DiverFilter.apply(selectedDiver, to: store.dives)
     }
 
     private var filteredCertifications: [Certification] {
@@ -970,18 +970,8 @@ struct InsuranceCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(statusColor.opacity(0.2))
-                    .frame(width: 60, height: 60)
-                Text(insurance.insurerName.isEmpty ? "?" : String(insurance.insurerName.prefix(4)))
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(statusColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .padding(4)
-            }
+            InsuranceIconView(insurerName: insurance.insurerName, size: 60,
+                             fallbackColor: statusColor, fillOpacity: 0.2)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(insurance.insurerName)
@@ -1060,14 +1050,13 @@ struct InsuranceDetailView: View {
                     VStack(spacing: 24) {
                         // Icon header
                         VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(statusColor.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: insurance.isExpired ? "exclamationmark.shield.fill" : "shield.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(statusColor)
-                            }
+                            InsuranceIconView(
+                                insurerName: insurance.insurerName,
+                                size: 64,
+                                fallbackColor: statusColor,
+                                fillOpacity: 0.12,
+                                fallbackSymbol: insurance.isExpired ? "exclamationmark.shield.fill" : "shield.fill"
+                            )
 
                             // Status badge
                             HStack(spacing: 6) {
@@ -1200,8 +1189,8 @@ struct InsuranceDetailView: View {
 struct AddInsuranceView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(DiveStore.self) private var store
 
-    @Query(sort: \Dive.timestamp) private var allDives: [Dive]
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -1212,7 +1201,7 @@ struct AddInsuranceView: View {
     private var isEditing: Bool { insuranceToEdit != nil }
 
     private var diverNameSuggestions: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
+        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     @State private var diverName = ""
@@ -1237,14 +1226,7 @@ struct AddInsuranceView: View {
                     VStack(spacing: 24) {
                         // Icon header
                         VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(.blue.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: "shield.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(.blue)
-                            }
+                            InsuranceIconView(insurerName: insurerName, size: 64, fallbackColor: .blue, fillOpacity: 0.12, fallbackSymbol: "shield.fill")
                         }
                         .padding(.top, 20)
 

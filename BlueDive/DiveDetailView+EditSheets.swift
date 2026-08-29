@@ -9,7 +9,7 @@ struct EditMenuStatsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Dive.siteName) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -142,7 +142,7 @@ struct EditMenuStatsView: View {
 
     private func uniqueOptionalValues(for keyPath: KeyPath<Dive, String?>) -> [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             guard let val = d[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces),
                   !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -153,7 +153,7 @@ struct EditMenuStatsView: View {
 
     private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             let val = d[keyPath: keyPath].trimmingCharacters(in: .whitespaces)
             guard !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -163,12 +163,12 @@ struct EditMenuStatsView: View {
     }
 
     private var uniqueDiverNames: [String] {
-        DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
+        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     private var uniqueBuddyNames: [String] {
         var seen = Set<String>()
-        return allDives.flatMap { d -> [String] in
+        return store.dives.flatMap { d -> [String] in
             d.buddies
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -182,7 +182,7 @@ struct EditMenuStatsView: View {
 
     private var uniqueDiveTypeNames: [String] {
         var seen = Set<String>()
-        return allDives.flatMap { d -> [String] in
+        return store.dives.flatMap { d -> [String] in
             (d.diveTypes ?? "")
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -1347,11 +1347,33 @@ struct EditMenuStatsView: View {
         }
 #endif
         if timestampDidChange {
-            Dive.recalculateSurfaceIntervals(in: modelContext, diverName: dive.diverName)
-            if dive.diverName != originalDiverName {
-                Dive.recalculateSurfaceIntervals(in: modelContext, diverName: originalDiverName)
+            // Flush the timestamp change to the persistent store so the background
+            // context sees the new value when it fetches all dives for recalculation.
+            try? modelContext.save()
+            let container = modelContext.container
+            let newDiverName = dive.diverName
+            let oldDiverName = originalDiverName
+            let diverNameChanged = newDiverName != oldDiverName
+            Task.detached(priority: .utility) {
+                let bgContext = ModelContext(container)
+                var updates = Dive.recalculateSurfaceIntervals(in: bgContext, diverName: newDiverName)
+                if diverNameChanged {
+                    let extra = Dive.recalculateSurfaceIntervals(in: bgContext, diverName: oldDiverName)
+                    updates.merge(extra) { _, new in new }
+                }
+                // Capture as immutable before crossing the concurrency boundary.
+                // Patches summary caches directly with the computed values so the list
+                // reflects fresh surface intervals immediately, bypassing the main-context
+                // merge delay that would otherwise leave rows stale until app restart.
+                let finalUpdates = updates
+                await MainActor.run {
+                    store.commitSurfaceIntervals(finalUpdates)
+                }
             }
         }
+        // First commit triggers an immediate rebuild with the updated timestamp;
+        // surface intervals update via the second commit from the background task.
+        store.commit(dive, affects: .list)
         dismiss()
     }
 }
@@ -1359,8 +1381,9 @@ struct EditMenuStatsView: View {
 struct EditSiteDetailsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Dive.siteName) private var allDives: [Dive]
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDivesByDate: [Dive]
+    @Environment(DiveStore.self) private var store
+    // store.dives is sorted by timestamp desc (same order ContentView's @Query delivers)
+    private var allDivesByDate: [Dive] { store.dives }
 
     @State private var selectedSite: Dive? = nil
     @State private var copyGPSCoordinates: Bool = true
@@ -1407,13 +1430,13 @@ struct EditSiteDetailsView: View {
 
     private var uniqueSites: [Dive] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> Dive? in
+        return store.dives.compactMap { d -> Dive? in
             guard d.id != dive.id,
                   !d.siteName.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
             let key = d.siteName.trimmingCharacters(in: .whitespaces).lowercased()
             guard seen.insert(key).inserted else { return nil }
             return d
-        }
+        }.sorted { $0.siteName.localizedCaseInsensitiveCompare($1.siteName) == .orderedAscending }
     }
 
     /// The 3 most recently dived sites (by date, unique by name)
@@ -1433,7 +1456,7 @@ struct EditSiteDetailsView: View {
 
     private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             let val = d[keyPath: keyPath].trimmingCharacters(in: .whitespaces)
             guard !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -1444,7 +1467,7 @@ struct EditSiteDetailsView: View {
 
     private func uniqueOptionalValues(for keyPath: KeyPath<Dive, String?>) -> [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             guard let val = d[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces),
                   !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -2110,6 +2133,9 @@ struct EditSiteDetailsView: View {
         dive.siteDifficulty = trimmedDifficulty.isEmpty ? nil : trimmedDifficulty
         dive.exitLatitude   = parseFlexibleDouble(workingExitLatitude)
         dive.exitLongitude  = parseFlexibleDouble(workingExitLongitude)
+        // Site fields do not affect sort order, list grouping, or widget fingerprint.
+        // cachedAvailableCountries refreshes lazily when the filter sheet opens.
+        store.commit(dive, affects: .rowFields)
         dismiss()
     }
 }
@@ -2118,7 +2144,7 @@ struct EditSiteDetailsView: View {
 struct EditConditionsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Dive.siteName) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
 
     @State private var workingWaterTemp: Double?
     @State private var workingMinTemp: String
@@ -2135,7 +2161,7 @@ struct EditConditionsView: View {
 
     private var visibilitySuggestions: [String] {
         var seen = Set<String>()
-        return allDives.compactMap { d -> String? in
+        return store.dives.compactMap { d -> String? in
             guard let val = d.visibility?.trimmingCharacters(in: .whitespaces),
                   !val.isEmpty else { return nil }
             let key = val.lowercased()
@@ -2502,6 +2528,9 @@ struct EditConditionsView: View {
         dive.current           = trimmedCurrent.isEmpty    ? nil : trimmedCurrent
         let trimmedVisibility  = workingVisibility.trimmingCharacters(in: .whitespaces)
         dive.visibility        = trimmedVisibility.isEmpty ? nil : trimmedVisibility
+        // Conditions fields do not affect sort order, list grouping, or widget fingerprint.
+        // @Observable handles row display updates automatically.
+        store.commit(dive, affects: .rowFields)
         dismiss()
     }
 }
@@ -2510,7 +2539,9 @@ struct EditConditionsView: View {
 struct EditGazView: View {
     @Bindable var dive: Dive
     let tankIndex: Int
+    var onSlotChanged: ((Int) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(DiveStore.self) private var store
     @Query(sort: \TankTemplate.name) private var templates: [TankTemplate]
     @State private var selectedTemplateName: String = ""
 
@@ -2566,6 +2597,8 @@ struct EditGazView: View {
     }
 
     @State private var usageTimeUnit: UsageTimeUnit = .seconds
+    @State private var workingSlot: Int = 1
+    @State private var rewriteSamples: Bool = true
 
     /// Validation: si le volume saisi semble hors limites selon l'unité stockée.
     private var cylinderSizeIsValid: Bool {
@@ -2599,9 +2632,10 @@ struct EditGazView: View {
     private let materialOptions = ["Steel", "Galvanized Steel", "Aluminium", "Carbon"]
     private let typeOptions     = ["Single tank", "Twinset", "Sidemount", "Pony", "Rebreather", "Other"]
 
-    init(dive: Dive, tankIndex: Int = 0) {
+    init(dive: Dive, tankIndex: Int = 0, onSlotChanged: ((Int) -> Void)? = nil) {
         self.dive = dive
         self.tankIndex = tankIndex
+        self.onSlotChanged = onSlotChanged
         let tanks = dive.tanks
         let tank = tankIndex < tanks.count ? tanks[tankIndex] : nil
         let rawO2 = max(1, tank?.o2Percentage ?? 21)
@@ -2624,6 +2658,7 @@ struct EditGazView: View {
         _usageStartTimeText      = State(initialValue: Self.formatDouble(tank?.usageStartTime))
         _workingUsageEndTime     = State(initialValue: tank?.usageEndTime)
         _usageEndTimeText        = State(initialValue: Self.formatDouble(tank?.usageEndTime))
+        _workingSlot             = State(initialValue: tankIndex < tanks.count ? tankIndex + 1 : tanks.count + 1)
     }
 
     /// Copy physical tank properties from a template into the working state variables.
@@ -2732,6 +2767,28 @@ struct EditGazView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    // Tank Slot — reorder tanks when multiple tanks exist
+                    if dive.tanks.count > 1 && tankIndex < dive.tanks.count {
+                        gazMacOSGroup("Tank Slot", icon: "number.circle.fill", color: .orange) {
+                            gazMacOSRow("Tank Number") {
+                                Picker("Tank Number", selection: $workingSlot) {
+                                    ForEach(1...dive.tanks.count, id: \.self) { slot in
+                                        Text(verbatim: "\(slot)").tag(slot)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                            }
+                            Divider()
+                            gazMacOSRow("Update Samples") {
+                                Toggle("Update Samples", isOn: $rewriteSamples)
+                                    .labelsHidden()
+                            }
+                            Text("Update Samples remaps tank pressures and the active-gas assignment in the dive profile to match the new slot order.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
                     // Copy from Tank Template
                     if !templates.isEmpty {
                         gazMacOSGroup("Copy from Tank Template", icon: "doc.on.doc.fill", color: .orange) {
@@ -3026,7 +3083,7 @@ struct EditGazView: View {
                 .padding(24)
             }
         }
-        .frame(width: 600, height: 550)
+        .frame(width: 600, minHeight: 640)
         .background(Color.platformBackground)
 
 #else
@@ -3035,6 +3092,27 @@ struct EditGazView: View {
                 Color.platformBackground.ignoresSafeArea()
 
                 Form {
+                    // Tank Slot — reorder tanks when multiple tanks exist
+                    if dive.tanks.count > 1 && tankIndex < dive.tanks.count {
+                        Section {
+                            Picker("Tank Number", selection: $workingSlot) {
+                                ForEach(1...dive.tanks.count, id: \.self) { slot in
+                                    Text(verbatim: "\(slot)").tag(slot)
+                                }
+                            }
+                            Toggle("Update Samples", isOn: $rewriteSamples)
+                        } header: {
+                            Label("Tank Slot", systemImage: "number.circle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .textCase(nil)
+                        } footer: {
+                            Text("Update Samples remaps tank pressures and the active-gas assignment in the dive profile to match the new slot order.")
+                                .font(.caption2)
+                        }
+                    }
+
                     // Copy from Tank Template
                     if !templates.isEmpty {
                         Section {
@@ -3372,6 +3450,47 @@ struct EditGazView: View {
     }
     #endif
 
+    // MARK: - Sample remapping helpers
+
+    /// Returns the new index for an element that was at `old` after moving the
+    /// element at `from` to `to` via remove-then-insert (no swap).
+    private func remappedIndex(_ old: Int, from: Int, to: Int) -> Int {
+        if old == from { return to }
+        if from < to {
+            // Moving forward: elements in (from, to] shift one position earlier.
+            if old > from && old <= to { return old - 1 }
+        } else {
+            // Moving backward: elements in [to, from) shift one position later.
+            if old >= to && old < from { return old + 1 }
+        }
+        return old
+    }
+
+    /// Rebuilds profile points so that `tankPressures` keys and `currentGas`
+    /// values reflect the new tank order after moving the element at `from` to `to`.
+    private func remapSamples(_ points: [DiveProfilePoint], from: Int, to: Int) -> [DiveProfilePoint] {
+        points.map { point in
+            let newCurrentGas = point.currentGas.map { remappedIndex($0, from: from, to: to) }
+            let newTankPressures = point.tankPressures.map { dict in
+                Dictionary(uniqueKeysWithValues: dict.map { (remappedIndex($0.key, from: from, to: to), $0.value) })
+            }
+            let newTankPressure = newTankPressures.flatMap { $0[0] ?? $0.min(by: { $0.key < $1.key })?.value } ?? point.tankPressure
+            return DiveProfilePoint(
+                id: point.id,
+                time: point.time,
+                depth: point.depth,
+                temperature: point.temperature,
+                tankPressure: newTankPressure,
+                tankPressures: newTankPressures,
+                ndl: point.ndl,
+                ppo2: point.ppo2,
+                sensorPPO2: point.sensorPPO2,
+                events: point.events,
+                currentGas: newCurrentGas
+            )
+        }
+    }
+
     private func save() {
         let o2Fraction = Double(workingO2) / 100.0
         let heFraction = Double(workingHe) / 100.0
@@ -3383,6 +3502,7 @@ struct EditGazView: View {
         let type = trimmedType.isEmpty ? nil : trimmedType
 
         var tanks = dive.tanks
+        var targetIndex = tankIndex  // updated below if a slot move is requested
 
         if tankIndex < tanks.count {
             let existingTank = tanks[tankIndex]
@@ -3403,6 +3523,11 @@ struct EditGazView: View {
                 usageStartTime: workingUsageStartTime,
                 usageEndTime: workingUsageEndTime
             )
+            targetIndex = min(max(workingSlot - 1, 0), tanks.count - 1)
+            if targetIndex != tankIndex {
+                let moved = tanks.remove(at: tankIndex)
+                tanks.insert(moved, at: targetIndex)
+            }
         } else {
             tanks.append(TankData(
                 o2: o2Fraction,
@@ -3417,8 +3542,22 @@ struct EditGazView: View {
                 usageEndTime: workingUsageEndTime
             ))
         }
-        dive.tanks = tanks
 
+        // Write all dive mutations before notifying the parent so selectedTankIndex
+        // always refers to the already-reordered array.
+        dive.tanks = tanks
+        if targetIndex != tankIndex {
+            if rewriteSamples {
+                dive.profileSamples = remapSamples(dive.profileSamples, from: tankIndex, to: targetIndex)
+            }
+            onSlotChanged?(targetIndex)
+        }
+
+        // Gas/tank fields do not affect sort order, list grouping, or widget fingerprint.
+        // cachedAvailableGasTypes refreshes lazily when the filter sheet opens.
+        // If filterGasType is active, rebuildFilteredDives() reads gasType live and
+        // correctly includes/excludes this dive without a full rebuild.
+        store.commit(dive, affects: .rowFields)
         dismiss()
     }
 }

@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - Dive Row View
 
 struct DiveRowView: View {
-    let dive: Dive
-    let diveNumber: Int
+    let summary: DiveSummary
+    let diveNumber: Int   // fallback when diveNumber is nil
     private let prefs = UserPreferences.shared
     @Environment(\.locale) private var locale
     
@@ -25,7 +25,7 @@ struct DiveRowView: View {
     private var diveIcon: some View {
         let resolved = resolvedFlag
         return VStack(spacing: 4) {
-            Text(verbatim: "#\(dive.diveNumber ?? diveNumber)")
+            Text(verbatim: "#\(summary.diveNumber ?? diveNumber)")
                 .font(.system(.caption, design: .monospaced))
                 .fontWeight(.bold)
                 .padding(.horizontal, 6)
@@ -44,12 +44,12 @@ struct DiveRowView: View {
             }
 
             HStack(spacing: 4) {
-                if !(dive.seenFish?.isEmpty ?? true) {
+                if summary.hasFish {
                     Image(systemName: "fish.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(.teal)
                 }
-                if !(dive.photosData?.isEmpty ?? true) {
+                if summary.hasPhotos {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(.red)
@@ -60,11 +60,11 @@ struct DiveRowView: View {
     
     /// Returns the emoji flag and accent colour for the dive's country
     private var resolvedFlag: (flag: String, color: Color) {
-        CountryLookup.resolve(dive.siteCountry)
+        CountryLookup.resolve(summary.siteCountry)
     }
-    
+
     private var diveTitle: some View {
-        Text(dive.siteName)
+        Text(summary.siteName)
             .font(.headline)
             .foregroundStyle(.primary)
             .lineLimit(2)
@@ -74,7 +74,7 @@ struct DiveRowView: View {
         VStack(alignment: .leading, spacing: 4) {
             // Duration + surface interval badges
             HStack(spacing: 6) {
-                Text(dive.shortFormattedDuration)
+                Text(summary.shortFormattedDuration)
                     .font(.system(.caption2, design: .monospaced))
                     .fontWeight(.semibold)
                     .padding(.horizontal, 6)
@@ -83,8 +83,8 @@ struct DiveRowView: View {
                     .foregroundStyle(.green)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
 
-                if !dive.surfaceInterval.isEmpty && dive.surfaceInterval != "0h 00m" {
-                    Text(dive.displaySurfaceInterval)
+                if !summary.surfaceInterval.isEmpty && summary.surfaceInterval != "0h 00m" {
+                    Text(summary.displaySurfaceInterval)
                         .font(.system(.caption2, design: .monospaced))
                         .fontWeight(.semibold)
                         .padding(.horizontal, 6)
@@ -97,7 +97,7 @@ struct DiveRowView: View {
             
             // Location and Country
             HStack(spacing: 4) {
-                if dive.hasGPSCoordinates {
+                if summary.hasGPSCoordinates {
                     Image(systemName: "location.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
@@ -108,104 +108,35 @@ struct DiveRowView: View {
                     .foregroundStyle(.secondary)
             }
             
-            Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
+            Text(summary.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
                 .font(.caption)
                 .foregroundStyle(.gray)
         }
     }
     
     private var locationText: Text {
-        if let country = dive.siteCountry, !country.isEmpty {
+        if let country = summary.siteCountry, !country.isEmpty {
             // If both location and country exist, combine them
-            if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
-                return Text(verbatim: "\(dive.location), \(country)")
+            if !summary.location.isEmpty && summary.location != "Inconnu" && summary.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
+                return Text(verbatim: "\(summary.location), \(country)")
             }
             // If only country exists
             return Text(verbatim: country)
         }
         // If only location exists
-        if !dive.location.isEmpty && dive.location != "Inconnu" && dive.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
-            return Text(verbatim: dive.location)
+        if !summary.location.isEmpty && summary.location != "Inconnu" && summary.location != NSLocalizedString("Unknown", bundle: Bundle.forAppLanguage(), comment: "") {
+            return Text(verbatim: summary.location)
         }
         // Fallback
         return Text("Unknown location")
     }
     
     private var depthInfo: some View {
-        let depthValue = dive.displayMaxDepth
+        let depthValue = summary.displayMaxDepth
         let depthSymbol = prefs.depthUnit.symbol
         return Text(verbatim: depthValue.localizedString(decimals: 1) + depthSymbol)
             .fontWeight(.bold)
             .foregroundStyle(.primary)
-    }
-}
-
-// MARK: - Stats Header View
-
-struct StatsHeaderView: View {
-    let dives: [Dive]
-    private let prefs = UserPreferences.shared
-    
-    private var totalTimeHMS: String {
-        // Sum seconds with the same preference order used for per-dive duration
-        let totalSeconds = dives.reduce(0) { acc, dive in
-            // Prefer precise seconds from profile if available
-            let samples = dive.profileSamples
-            if let last = samples.last?.time, last > 0 {
-                return acc + Int(round(last * 60))
-            }
-            // Heuristic: if stored duration seems already in seconds (>= 3600), use as-is
-            if dive.duration >= 3600 {
-                return acc + dive.duration
-            }
-            // Fallback: treat stored `duration` as minutes
-            return acc + (dive.duration * 60)
-        }
-        let h = totalSeconds / 3600
-        let m = (totalSeconds % 3600) / 60
-        let s = totalSeconds % 60
-        if h > 0 {
-            return String(format: "%dh %02dm %02ds", h, m, s)
-        } else if m > 0 {
-            return String(format: "%dm %02ds", m, s)
-        } else {
-            return String(format: "%ds", s)
-        }
-    }
-    
-    private var maxDepthEver: Double {
-        dives.map { $0.displayMaxDepth }.max() ?? 0.0
-    }
-    
-    var body: some View {
-        // maxDepthEver is already in display units (via displayMaxDepth), so
-        // no further conversion is needed — just use the unit symbol.
-        let depthValue = maxDepthEver
-        let depthSymbol = prefs.depthUnit.symbol
-        return HStack(spacing: 12) {
-            StatMiniBox(
-                title: "DIVES",
-                value: Double(dives.count).localizedString(decimals: 0),
-                icon: "figure.open.water.swim",
-                color: .blue
-            )
-            
-            StatMiniBox(
-                title: "MAX",
-                value: depthValue.localizedString(decimals: 1) + depthSymbol,
-                icon: "arrow.down.circle.fill",
-                color: .cyan
-            )
-            
-            StatMiniBox(
-                title: "TOTAL TIME",
-                value: totalTimeHMS,
-                icon: "clock.fill",
-                color: .green
-            )
-        }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary.opacity(0.05)))
     }
 }
 

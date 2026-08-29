@@ -13,6 +13,7 @@ struct MainTabView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
     @Environment(\.introVisible) private var introVisible
+    @Environment(FileImportCoordinator.self) private var importCoordinator
 
     private var shouldShowDisclaimer: Bool {
         !introVisible && lastAcceptedDisclaimerVersion != DiveIntroConfig.currentVersion
@@ -114,7 +115,25 @@ struct MainTabView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .importGearXML)) { _ in
+            selectedTab = 2
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .importCertificationXML)) { _ in
+            selectedTab = 3
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .importInsuranceXML)) { _ in
+            selectedTab = 3
+        }
         .task {
+            // If the app launched via a file open (Files, AirDrop, Mail) and restored to
+            // a non-zero tab, ContentView (tab 0) won't mount and its onAppear won't fire.
+            // Switch to tab 0 so ContentView appears and picks up the pending URL.
+            // Note: pendingURL must still be set here (not yet consumed by ContentView.onAppear)
+            // because ContentView hasn't mounted yet — that's exactly the scenario this fixes.
+            if importCoordinator.pendingURL != nil {
+                selectedTab = 0
+            }
+
             // Cold-launch fallback: NotificationCenter posts are dropped before onReceive
             // attaches. didReceive writes the UUID + a timestamp to UserDefaults so .task
             // can recover it. The 5-minute window prevents a stale key (written during an

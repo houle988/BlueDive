@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct MarineLifeView: View {
-    @Query(sort: \Dive.timestamp, order: .reverse) private var allDives: [Dive]
+    @Environment(DiveStore.self) private var store
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -32,18 +32,22 @@ struct MarineLifeView: View {
         let quantityCounts: [SightingQuantity: Int]  // times each range was recorded
     }
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: allDives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
-    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: allDives) }
+    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
+    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
+    private var numberMap: [PersistentIdentifier: Int] {
+        let total = store.dives.count
+        return Dictionary(uniqueKeysWithValues: store.dives.enumerated().map { ($0.element.persistentModelID, total - $0.offset) })
+    }
     private var totalSightingsCount: Int {
-        allDives.reduce(0) { $0 + ($1.seenFish?.count ?? 0) }
+        store.dives.reduce(0) { $0 + ($1.seenFish?.count ?? 0) }
     }
 
     // Changes when any sighting's quantity bucket changes, triggering cache recompute.
     // Uses non-commutative accumulation so add+remove pairs don't cancel out.
     private var sightingCountsHash: Int {
-        allDives.reduce(0) { hash, dive in
+        store.dives.reduce(0) { hash, dive in
             (dive.seenFish ?? []).reduce(hash) { h, sight in
-                (h &* 31) &+ sight.count.hashValue &+ sight.id.hashValue
+                (h &* 31) &+ sight.count.hashValue &+ sight.id.hashValue &+ sight.name.hashValue
             }
         }
     }
@@ -133,7 +137,7 @@ struct MarineLifeView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if !allDives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
+                if !store.dives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
                     NoEntriesForDiverView(
                         title: "No Dives for Diver",
                         description: "No dives were found for the selected diver."
@@ -168,7 +172,7 @@ struct MarineLifeView: View {
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
             .background(Color.platformBackground.ignoresSafeArea())
-            .task(id: "\(allDives.count):\(totalSightingsCount):\(sightingCountsHash):\(selectedDiver)") {
+            .task(id: "\(store.dives.count):\(totalSightingsCount):\(sightingCountsHash):\(selectedDiver)") {
                 statsReady = false
                 appeared = false
                 await computeStats(filteredDives)
@@ -181,7 +185,8 @@ struct MarineLifeView: View {
             .sheet(item: $selectedSpecies) { species in
                 SpeciesDivesSheet(
                     speciesName: species.name,
-                    dives: filteredDives.filter { species.diveIDs.contains($0.id) }
+                    dives: filteredDives.filter { species.diveIDs.contains($0.id) },
+                    numberMap: numberMap
                 )
                 .presentationSizing(.page)
                 .presentationDetents([.large])
@@ -385,6 +390,7 @@ struct MarineLifeView: View {
 struct SpeciesDivesSheet: View {
     let speciesName: String
     let dives: [Dive]
+    let numberMap: [PersistentIdentifier: Int]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @State private var prefs = UserPreferences.shared
@@ -396,7 +402,7 @@ struct SpeciesDivesSheet: View {
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(sortedDives) { dive in
-                        NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives)) {
+                        NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0)) {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
