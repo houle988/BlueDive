@@ -416,6 +416,7 @@ class UserPreferences {
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
         UserDefaults.standard.set(false, forKey: "filterUnusedTanks")
+        UserDefaults.standard.set(false, forKey: "autoSequenceEnabled")
     }
 }
 
@@ -433,6 +434,7 @@ struct SettingsView: View {
     @AppStorage("milestoneNotifications")   private var milestoneNotifs = false
     @AppStorage("filterUnusedTanks")         private var filterUnusedTanks = false
     @AppStorage("showCalculatorsMenu")       private var showCalculatorsMenu = false
+    @AppStorage("autoSequenceEnabled")      private var autoSequenceEnabled = false
 
     // @State on an @Observable singleton: correct pattern for SwiftUI + Observation.
     // Using @State ensures SwiftUI tracks mutations and re-renders the view.
@@ -1083,48 +1085,9 @@ struct SettingsView: View {
     
     private var dataManagementSection: some View {
         VStack(spacing: 16) {
-            SectionHeaderModern(title: "Data", icon: "folder.fill", color: .indigo)
+            SectionHeaderModern(title: "Dive Sequence", icon: "folder.fill", color: .indigo)
             
             VStack(spacing: 12) {
-                Button {
-                    backupDatabase()
-                } label: {
-                    HStack {
-                        ZStack {
-                            Circle()
-                                .fill(Color.indigo.opacity(0.15))
-                                .frame(width: 40, height: 40)
-                            
-                            Image(systemName: "externaldrive.fill.badge.timemachine")
-                                .font(.body)
-                                .foregroundStyle(.indigo)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Backup database")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-                            
-                            Text("Export a compressed backup of your database")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.primary.opacity(0.03))
-                    )
-                }
-                .buttonStyle(.plain)
-                
                 Button {
                     showingRecalculateSurfaceAlert = true
                 } label: {
@@ -1164,12 +1127,27 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 
+                renumberDivesButton
+
                 Text("Dives without a diver name are not affected.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
 
-                renumberDivesButton
+                Divider()
+
+                ModernToggleRow(
+                    isOn: $autoSequenceEnabled,
+                    icon: "arrow.triangle.2.circlepath",
+                    iconColor: .indigo,
+                    title: "Auto-update dive numbers",
+                    subtitle: "Recalculate dive numbers and surface intervals automatically"
+                )
+
+                Text("When on, dive numbers and surface intervals are recalculated automatically when you add, delete, move, or change the date of a dive. Turn this off to update them only with the buttons above.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
 
                 #if os(macOS)
                 Button {
@@ -1554,6 +1532,45 @@ struct SettingsView: View {
             SectionHeaderModern(title: "Data Management", icon: "externaldrive.fill", color: .red)
             
             VStack(spacing: 12) {
+                Button {
+                    backupDatabase()
+                } label: {
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(Color.indigo.opacity(0.15))
+                                .frame(width: 40, height: 40)
+
+                            Image(systemName: "externaldrive.fill.badge.timemachine")
+                                .font(.body)
+                                .foregroundStyle(.indigo)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Backup database")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+
+                            Text("Export a compressed backup of your database")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.primary.opacity(0.03))
+                    )
+                }
+                .buttonStyle(.plain)
+
                 Button(role: .destructive) {
                     showingResetAlert = true
                 } label: {

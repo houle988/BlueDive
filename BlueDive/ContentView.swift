@@ -93,6 +93,7 @@ struct ContentView: View {
 
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
+    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
     @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
     @Environment(CloudKitSyncMonitor.self) private var syncMonitor
     @Environment(FileImportCoordinator.self) var importCoordinator
@@ -1140,12 +1141,14 @@ struct ContentView: View {
         // Re-sequencing runs on a background context so it doesn't block the UI;
         // commitSurfaceIntervals/commitDiveNumbers patch the caches on the MainActor
         // after the background work completes.
-        for diver in affectedDivers {
-            store.recalcSequencesInBackground(
-                container: modelContext.container,
-                newDiverName: diver,
-                originalDiverName: diver
-            )
+        if autoSequenceEnabled {
+            for diver in affectedDivers {
+                store.recalcSequencesInBackground(
+                    container: modelContext.container,
+                    newDiverName: diver,
+                    originalDiverName: diver
+                )
+            }
         }
     }
 
@@ -1157,7 +1160,7 @@ struct ContentView: View {
             modelContext.delete(dive)
             try? modelContext.save()
         }
-        if !affectedDiver.trimmingCharacters(in: .whitespaces).isEmpty {
+        if !affectedDiver.trimmingCharacters(in: .whitespaces).isEmpty && autoSequenceEnabled {
             store.recalcSequencesInBackground(
                 container: modelContext.container,
                 newDiverName: affectedDiver,
@@ -1239,10 +1242,12 @@ struct ContentView: View {
             modelContext.insert(dive)
             try? modelContext.save()
         }
-        store.recalcSequencesInBackground(
-            container: modelContext.container,
-            newDiverName: diverName,
-            originalDiverName: diverName
-        )
+        if autoSequenceEnabled {
+            store.recalcSequencesInBackground(
+                container: modelContext.container,
+                newDiverName: diverName,
+                originalDiverName: diverName
+            )
+        }
     }
 }

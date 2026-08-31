@@ -10,6 +10,7 @@ struct EditMenuStatsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(DiveStore.self) private var store
+    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
     @Query private var allInsurances: [DivingInsurance]
@@ -1351,11 +1352,13 @@ struct EditMenuStatsView: View {
             // Flush changes to the persistent store so the background context sees
             // the updated values when it fetches all dives for recalculation.
             try? modelContext.save()
-            store.recalcSequencesInBackground(
-                container: modelContext.container,
-                newDiverName: dive.diverName,
-                originalDiverName: originalDiverName
-            )
+            if autoSequenceEnabled {
+                store.recalcSequencesInBackground(
+                    container: modelContext.container,
+                    newDiverName: dive.diverName,
+                    originalDiverName: originalDiverName
+                )
+            }
         }
         // First commit triggers an immediate list rebuild; surface intervals update
         // via the second commit from the background task when applicable.

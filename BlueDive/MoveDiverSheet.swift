@@ -13,6 +13,7 @@ struct MoveDiverSheet: View {
 
     @State private var targetName: String
     @State private var diverNames: [String] = []
+    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
     let originalTrimmedName: String
 
     init(dive: Dive) {
@@ -130,11 +131,13 @@ struct MoveDiverSheet: View {
         let newDiverName = resolvedName
         dive.diverName = newDiverName
         try? modelContext.save()
-        store.recalcSequencesInBackground(
-            container: modelContext.container,
-            newDiverName: newDiverName,
-            originalDiverName: originalDiverName
-        )
+        if autoSequenceEnabled {
+            store.recalcSequencesInBackground(
+                container: modelContext.container,
+                newDiverName: newDiverName,
+                originalDiverName: originalDiverName
+            )
+        }
         store.commit(dive, affects: .list)
         dismiss()
     }
