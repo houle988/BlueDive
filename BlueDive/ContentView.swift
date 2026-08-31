@@ -1122,18 +1122,47 @@ struct ContentView: View {
     private func confirmDeleteItems(offsets: IndexSet) {
         // Use store.cachedFilteredDives — IndexSet is relative to the displayed list, not the raw query.
         let displayed = store.cachedFilteredDives
+        // Capture affected diver names before deletion so we can re-sequence
+        // the remaining dives in each group afterward.
+        let affectedDivers = Set(
+            offsets
+                .filter { $0 < displayed.count }
+                .map { displayed[$0].diverName }
+                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        )
         withAnimation {
             for index in offsets where index < displayed.count {
                 modelContext.delete(displayed[index])
             }
             try? modelContext.save()
         }
+        // Deletion triggers @Query re-delivery, which rebuilds cachedSummaries.
+        // Re-sequencing runs on a background context so it doesn't block the UI;
+        // commitSurfaceIntervals/commitDiveNumbers patch the caches on the MainActor
+        // after the background work completes.
+        for diver in affectedDivers {
+            store.recalcSequencesInBackground(
+                container: modelContext.container,
+                newDiverName: diver,
+                originalDiverName: diver
+            )
+        }
     }
 
     private func confirmDeleteSingleDive(_ dive: Dive) {
+        // Capture the diver name before deletion so the remaining dives in that
+        // group can be re-sequenced afterward.
+        let affectedDiver = dive.diverName
         withAnimation {
             modelContext.delete(dive)
             try? modelContext.save()
+        }
+        if !affectedDiver.trimmingCharacters(in: .whitespaces).isEmpty {
+            store.recalcSequencesInBackground(
+                container: modelContext.container,
+                newDiverName: affectedDiver,
+                originalDiverName: affectedDiver
+            )
         }
     }
 
@@ -1210,6 +1239,10 @@ struct ContentView: View {
             modelContext.insert(dive)
             try? modelContext.save()
         }
-        Dive.recalculateSurfaceIntervals(in: modelContext, diverName: diverName)
+        store.recalcSequencesInBackground(
+            container: modelContext.container,
+            newDiverName: diverName,
+            originalDiverName: diverName
+        )
     }
 }

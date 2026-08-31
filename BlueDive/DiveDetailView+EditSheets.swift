@@ -1351,7 +1351,7 @@ struct EditMenuStatsView: View {
             // Flush changes to the persistent store so the background context sees
             // the updated values when it fetches all dives for recalculation.
             try? modelContext.save()
-            store.recalcSurfaceIntervalsInBackground(
+            store.recalcSequencesInBackground(
                 container: modelContext.container,
                 newDiverName: dive.diverName,
                 originalDiverName: originalDiverName

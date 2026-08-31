@@ -130,7 +130,7 @@ struct MoveDiverSheet: View {
         let newDiverName = resolvedName
         dive.diverName = newDiverName
         try? modelContext.save()
-        store.recalcSurfaceIntervalsInBackground(
+        store.recalcSequencesInBackground(
             container: modelContext.container,
             newDiverName: newDiverName,
             originalDiverName: originalDiverName
