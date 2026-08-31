@@ -1521,4 +1521,20 @@ extension Dive {
         try? context.save()
         return result
     }
+
+    // MARK: - Renumber Dives
+
+    static func renumberDives(in context: ModelContext, diverName diverFilter: String? = nil) {
+        let allDives = (try? context.fetch(FetchDescriptor<Dive>())) ?? []
+        let grouped = Dictionary(grouping: allDives) { $0.diverName }
+        for (diver, diverDives) in grouped {
+            if let diverFilter, diver != diverFilter { continue }
+            if diverFilter == nil, diver.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            let sorted = diverDives.sorted { $0.timestamp < $1.timestamp }
+            for (index, dive) in sorted.enumerated() {
+                dive.diveNumber = index + 1
+            }
+        }
+        try? context.save()
+    }
 }

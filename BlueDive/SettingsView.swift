@@ -425,6 +425,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(CloudKitSyncMonitor.self) private var syncMonitor
+    @Environment(DiveStore.self) private var store
     @Environment(\.locale) private var locale
     @AppStorage("notificationsEnabled")     private var notificationsEnabled = false
     @AppStorage("gearMaintenanceReminders") private var gearReminders  = true
@@ -467,6 +468,8 @@ struct SettingsView: View {
     @State private var showFingerprintDebug = false
     @State private var showingRecalculateSurfaceAlert = false
     @State private var showingRecalculateSurfaceDone = false
+    @State private var showingRenumberDivesAlert = false
+    @State private var showingRenumberDivesDone = false
 
     var body: some View {
         NavigationStack {
@@ -1165,7 +1168,9 @@ struct SettingsView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
-                
+
+                renumberDivesButton
+
                 #if os(macOS)
                 Button {
                     showDatabaseInFinder()
@@ -1221,6 +1226,61 @@ struct SettingsView: View {
         }
     }
     
+    private var renumberDivesButton: some View {
+        Button {
+            showingRenumberDivesAlert = true
+        } label: {
+            HStack {
+                ZStack {
+                    Circle()
+                        .fill(Color.indigo.opacity(0.15))
+                        .frame(width: 40, height: 40)
+
+                    Image(systemName: "number.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(.indigo)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Renumber dives")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+
+                    Text("Number each diver's dives sequentially by date")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.primary.opacity(0.03))
+            )
+        }
+        .buttonStyle(.plain)
+        .alert("Renumber Dives?", isPresented: $showingRenumberDivesAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Renumber") {
+                renumberDives()
+                showingRenumberDivesDone = true
+            }
+        } message: {
+            Text("This will assign each diver's dives a sequential number in date order, starting at 1. Dives without a diver name will not be affected.")
+        }
+        .alert("Done", isPresented: $showingRenumberDivesDone) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Dives have been renumbered.")
+        }
+    }
+
     // MARK: - iCloud
     
     private var iCloudSection: some View {
@@ -1880,6 +1940,13 @@ struct SettingsView: View {
 
     private func recalculateSurfaceIntervals() {
         Dive.recalculateSurfaceIntervals(in: modelContext)
+    }
+
+    // MARK: - Renumber Dives
+
+    private func renumberDives() {
+        Dive.renumberDives(in: modelContext)
+        store.commitListRebuild()
     }
 
 
