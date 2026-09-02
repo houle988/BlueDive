@@ -18,6 +18,7 @@ extension BluetoothScannerView {
 
         let total = downloadedDives.count
         syncState = .importing(count: total)
+        importSaveErrorMessage = nil
 
         Task { @MainActor in
             var importedCount = 0
@@ -144,10 +145,13 @@ extension BluetoothScannerView {
                 }
             } catch {
                 Self.logger.error("Save error: \(error.localizedDescription)")
-                downloadedDives = []
-                selectedDevice = nil
-                connectedDeviceName = nil
-                syncState = .error(message: String(format: NSLocalizedString("Error saving: %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when saving dives to the logbook fails. %@ is the system error description."), error.localizedDescription))
+                // Discard the failed batch's pending inserts — save() does NOT roll them back.
+                // downloadedDives and selectedDevice are preserved for an in-session retry.
+                modelContext.rollback()
+                importProgress = 0
+                let reason = String(format: NSLocalizedString("Error saving: %@", bundle: Bundle.forAppLanguage(), value: "Error saving: %@", comment: "Error message shown when saving dives to the logbook fails. %@ is the system error description."), error.localizedDescription)
+                importSaveErrorMessage = reason
+                showingImportConfirmation = true
                 return
             }
 
@@ -223,7 +227,8 @@ extension BluetoothScannerView {
         }
 
         let predicate = #Predicate<DeviceFingerprint> { record in record.serial == serial }
-        let descriptor = FetchDescriptor<DeviceFingerprint>(predicate: predicate)
+        var descriptor = FetchDescriptor<DeviceFingerprint>(predicate: predicate)
+        descriptor.sortBy = [SortDescriptor(\.updatedAt, order: .reverse)]
 
         if let record = try? modelContext.fetch(descriptor).first {
             DeviceFingerprintStorage.shared.saveFingerprint(record.fingerprintData, deviceType: deviceType, serial: serial)
@@ -259,7 +264,8 @@ extension BluetoothScannerView {
         guard let fp = DeviceFingerprintStorage.shared.getFingerprint(forDeviceType: libraryDeviceType, serial: serial)?.fingerprint else { return }
 
         let predicate = #Predicate<DeviceFingerprint> { record in record.serial == serial }
-        let descriptor = FetchDescriptor<DeviceFingerprint>(predicate: predicate)
+        var descriptor = FetchDescriptor<DeviceFingerprint>(predicate: predicate)
+        descriptor.sortBy = [SortDescriptor(\.updatedAt, order: .reverse)]
 
         if let existing = try? modelContext.fetch(descriptor).first {
             existing.fingerprintData = fp

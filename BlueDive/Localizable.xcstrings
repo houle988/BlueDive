@@ -8671,7 +8671,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "Fehler beim Speichern: %@"
           }
         },
@@ -17211,6 +17211,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Photo précédente"
+          }
+        }
+      }
+    },
+    "Previous save failed:\n%@" : {
+      "comment" : "Note appended to the import confirmation alert when re-presented after a save failure. %@ is the system error description explaining why the previous import save did not complete.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vorheriges Speichern fehlgeschlagen:\n%@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'enregistrement précédent a échoué :\n%@"
           }
         }
       }
