@@ -319,13 +319,19 @@ enum AppLanguage: String, CaseIterable {
     case english = "en"
     case frenchCanada = "fr-CA"
     case german = "de"
+    case dutch = "nl"
 
-    var label: LocalizedStringKey {
+    /// Picker label. Language names are shown as endonyms (each in its own
+    /// language) and are intentionally NOT localized — only "System" follows
+    /// the in-app language. Rendered with `Text(verbatim:)` so the language
+    /// names are never treated as localizable keys.
+    var displayName: String {
         switch self {
-        case .system:       "System"
-        case .english:      "English"
-        case .frenchCanada: "Français"
-        case .german:       "Deutsch"
+        case .system:       return NSLocalizedString("System", bundle: .forAppLanguage(), value: "System", comment: "Language picker option that follows the device language")
+        case .english:      return "English"
+        case .frenchCanada: return "Français"
+        case .german:       return "Deutsch"
+        case .dutch:        return "Nederlands"
         }
     }
 
@@ -335,6 +341,7 @@ enum AppLanguage: String, CaseIterable {
         case .english: return Locale(identifier: "en_CA")
         case .frenchCanada: return Locale(identifier: "fr-CA")
         case .german: return Locale(identifier: "de")
+        case .dutch: return Locale(identifier: "nl")
         }
     }
 }

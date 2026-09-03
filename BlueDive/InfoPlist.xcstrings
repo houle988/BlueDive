@@ -5,7 +5,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "BlueDive Tauchtagebuch"
           }
         },
@@ -19,6 +19,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Journal de plongée BlueDive"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive Duiklogboek"
           }
         }
       }
@@ -68,6 +74,12 @@
             "state" : "translated",
             "value" : "Activité Garmin FIT"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garmin FIT-activiteit"
+          }
         }
       }
     },
@@ -91,6 +103,12 @@
             "state" : "translated",
             "value" : "BlueDive utilise le Bluetooth pour se connecter à votre ordinateur de plongée."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive gebruikt Bluetooth om verbinding te maken met je duikcomputer."
+          }
         }
       }
     },
@@ -113,6 +131,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "BlueDive utilise votre position pour l'afficher sur la carte de plongée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive gebruikt je locatie om je positie op de duikkaart weer te geven."
           }
         }
       }
