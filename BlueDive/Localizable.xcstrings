@@ -352,6 +352,12 @@
             "state" : "translated",
             "value" : "%@ de %@ plongées exportées"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ van %@ duiken geëxporteerd"
+          }
         }
       }
     },
@@ -368,6 +374,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ de %@ plongées importées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ van %@ duiken geïmporteerd"
           }
         }
       }
@@ -3435,6 +3447,12 @@
             "state" : "translated",
             "value" : "Déjà importé — sera ignoré"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reeds geïmporteerd — wordt overgeslagen"
+          }
         }
       }
     },
@@ -4714,6 +4732,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ID BlueDive"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive ID"
           }
         }
       }
@@ -9263,6 +9287,12 @@
             "state" : "translated",
             "value" : "Plongeur (optionnel)"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiker (optioneel)"
+          }
         }
       }
     },
@@ -9516,6 +9546,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Assurance plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duikverzekering"
           }
         }
       }
@@ -12185,6 +12221,12 @@
             "state" : "translated",
             "value" : "Exportation en cours..."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporteren..."
+          }
         }
       }
     },
@@ -13246,6 +13288,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Groupe d'équipement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duikuitrustingsgroep"
           }
         }
       }
@@ -15302,6 +15350,12 @@
             "state" : "translated",
             "value" : "Importer %lld nouveaux éléments"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importeer %lld nieuwe items"
+          }
         }
       }
     },
@@ -15318,6 +15372,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importer 1 nouvel élément"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importeer 1 nieuw item"
           }
         }
       }
@@ -18946,6 +19006,12 @@
             "state" : "translated",
             "value" : "Nouveau — sera importé"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieuw - zal worden geïmporteerd"
+          }
         }
       }
     },
@@ -19014,6 +19080,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nouvelles plongées à importer"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieuwe duiken om te importeren"
           }
         }
       }
@@ -19824,6 +19896,12 @@
             "state" : "translated",
             "value" : "Aucune plongée avec une date valide n'a été trouvée dans ce fichier."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er zijn geen duiken met een geldige datum gevonden in dit bestand."
+          }
         }
       }
     },
@@ -19886,6 +19964,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun doublon trouvé."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen duplicaten gevonden/"
           }
         }
       }
@@ -20444,6 +20528,12 @@
             "state" : "translated",
             "value" : "Aucune nouvelle plongée dans ce fichier."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen nieuwe duiken in dit bestand."
+          }
         }
       }
     },
@@ -20460,6 +20550,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun nouvel élément dans ce fichier."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen nieuwe items in dit bestand."
           }
         }
       }
@@ -22467,6 +22563,12 @@
             "state" : "translated",
             "value" : "Prof."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diepte"
+          }
         }
       }
     },
@@ -24024,6 +24126,12 @@
             "state" : "translated",
             "value" : "Revoir l'importation"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beoordeel import"
+          }
         }
       }
     },
@@ -24088,6 +24196,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Révisez ce qui sera importé avant de confirmer."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controleer wat er geïmporteerd gaat worden voordat je bevestigt."
           }
         }
       }
@@ -24542,6 +24656,12 @@
             "state" : "translated",
             "value" : "Même ordinateur & empreinte de plongée"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zelfde duikcomputer en vingerafdruk"
+          }
         }
       }
     },
@@ -24559,6 +24679,12 @@
             "state" : "translated",
             "value" : "Même ID de plongée & profil"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zelfde duik ID & profiel"
+          }
         }
       }
     },
@@ -24575,6 +24701,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Même ID de plongée & numéro de série"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zelfde duik ID & serienummer"
           }
         }
       }
@@ -27323,6 +27455,12 @@
             "state" : "translated",
             "value" : "Enregistrez vos polices d'assurance plongée et gardez les dates de renouvellement à portée de main."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaar je duikverzekeringen en houd de verlengingsdata bij de hand."
+          }
         }
       }
     },
@@ -27839,6 +27977,12 @@
             "state" : "translated",
             "value" : "La synchronisation était incomplète — une ou plusieurs plongées plus anciennes sur l'appareil n'ont pas pu être lues."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De synchronisatie is niet volledig voltooid — een of meer oudere duiken op het apparaat konden niet worden gelezen."
+          }
         }
       }
     },
@@ -28107,6 +28251,12 @@
             "state" : "translated",
             "value" : "Numéro du cylindre"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tanknummer"
+          }
         }
       }
     },
@@ -28177,6 +28327,12 @@
             "state" : "translated",
             "value" : "Position du cylindre"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tankvak"
+          }
         }
       }
     },
@@ -28193,6 +28349,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Modèle de cylindre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tanksjabloon"
           }
         }
       }
@@ -30288,6 +30450,12 @@
             "state" : "translated",
             "value" : "Mettre à jour les échantillons"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metingen bijwerken"
+          }
         }
       }
     },
@@ -30303,6 +30471,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "«Mettre à jour les échantillons» réaffecte les pressions de cylindre et l'attribution du gaz actif dans le profil de plongée selon le nouvel ordre de position."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bij het bijwerken van de metingen worden de tankdrukken en de toewijzing van het actieve gas in het duikprofiel aangepast, zodat deze overeenkomen met de nieuwe volgorde van de slots."
           }
         }
       }
