@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/garmin/fit-swift-sdk",
       "state" : {
-        "revision" : "d7aa45147f5711bcc6662d59e8db0dc0669f5e95",
-        "version" : "21.213.0"
+        "revision" : "6c03d7fca6d35e1505adafc391895b6c9a89e4f9",
+        "version" : "21.214.0"
       }
     },
     {
