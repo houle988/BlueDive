@@ -83,6 +83,27 @@ All date and time values displayed in SwiftUI views must respect both the system
 - When using `DateFormatter` directly, set `formatter.locale = locale` (from `@Environment(\.locale)`) rather than `.current` or `.autoupdatingCurrent`.
 - Never hardcode a locale or use `Locale.current` directly in a view — it does not reflect the in-app language override.
 
+## Release Notes & Commit Messages (GitHub)
+
+When asked for a GitHub release note, PR description, or commit message, use the Conventional Commits style below.
+
+**Title** — a single Conventional Commits line: `<type>: <imperative summary>` (e.g. `feat: BLE Diagnostic Logging with saveable trace files`). Common types: `feat`, `fix`, `refactor`, `perf`, `docs`, `chore`, `test`. Keep it under ~72 characters, lowercase after the colon, no trailing period.
+
+**Body** — a blank line after the title, then a one-paragraph summary of what the change does and why, followed by grouped sections with these exact headings (include only the ones that apply, in this order):
+
+- `Added:` — new user-facing features or capabilities.
+- `Changed:` — modifications to existing behaviour.
+- `Fixed:` — bug fixes.
+- `Notes:` — caveats, defaults, safety/behaviour details worth calling out.
+
+Each section is a bullet list (`- `). Write from the user/reviewer's perspective; name the concrete UI location (e.g. "Settings → Bluetooth Import"), file/type where useful, and any default state.
+
+**Commit trailer** — when the output is an actual git commit message (not just a GitHub release body), end with the standard co-author trailer:
+`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+Omit the trailer when the text is only a GitHub release/PR body.
+
+When a plain, non-technical version is also requested, provide a separate "user-facing" note in simple language (no type prefix, no file/type references), describing what the user can now do and how.
+
 ## DiveStore Architecture
 
 All dive-list data flows through a single `DiveStore`. Follow these rules for any change that reads or mutates dive data displayed in lists, on the map, or in trips.

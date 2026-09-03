@@ -50,6 +50,11 @@ struct BluetoothScannerView: View {
     @State var downloadAllDives: Bool = false
     @AppStorage("filterUnusedTanks") var filterUnusedTanks: Bool = false
     @AppStorage("syncDeviceClock") var syncDeviceClock: Bool = true
+    #if os(iOS)
+    @State var showLogExporter = false
+    @State var logExportDocument: ExportableFileDocument?
+    @State var logExportFileName: String = ""
+    #endif
     @State var diveCountDuringDownload: Int = 0
     @State var downloadProgressCancellable: AnyCancellable?
     @State var isSearching: Bool = false
@@ -138,6 +143,7 @@ struct BluetoothScannerView: View {
             }
             .onDisappear {
                 stopScanning()
+                BLEDiagnosticSession.shared.stop()
                 bleManager.close(clearDevicePtr: true)
                 downloadProgressCancellable = nil
                 isSearching = false
