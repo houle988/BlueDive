@@ -151,7 +151,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "* AMV berekend uit %@ + %@ — alleen native beschikbaar in bar/L"
+            "value" : "* AMV berekend uit %@ + %@ — alleen beschikbaar in bar/L"
           }
         }
       }
@@ -829,7 +829,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld binnenkort aan de beurt"
+            "value" : "%lld verloopt binnenkort"
           }
         }
       }
@@ -1364,7 +1364,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "✈️ Mijn duikreizen"
+            "value" : "✈️ Mijn trips"
           }
         }
       }
@@ -4693,7 +4693,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Beste mix"
+            "value" : "Beste Mengsel"
           }
         }
       }
@@ -4715,7 +4715,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De ‘Best Mix’ is het hoogste zuurstofpercentage in een Nitrox-mengsel waarmee de partiële zuurstofdruk (ppO₂) op een bepaalde diepte op of onder je streefwaarde blijft. Het maximaliseert de niet-decompressielimiet en vermindert stikstofnarcose, terwijl je binnen je ppO₂-grens blijft."
+            "value" : "Het ‘Beste Mengsel’ is het hoogste zuurstofpercentage in een Nitrox-mengsel waarmee de partiële zuurstofdruk (ppO₂) op een bepaalde diepte op of onder je streefwaarde blijft. Het maximaliseert de niet-decompressielimiet en vermindert stikstofnarcose, terwijl je binnen je ppO₂-grens blijft."
           }
         }
       }
@@ -4737,7 +4737,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Beste Nitroxmix"
+            "value" : "Beste Nitroxmengsel"
           }
         }
       }
@@ -6161,7 +6161,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voltooid met %lld fouten. Wacht tot de iCloud-synchronisatie is voltooid voordat je de app sluit. Houd het cloudpictogram op het hoofdscherm in de gaten."
+            "value" : "Er zijn %lld fouten opgetreden. Wacht tot de iCloud-synchronisatie is voltooid voordat je de app sluit. Houd het cloudpictogram op het hoofdscherm in de gaten."
           }
         }
       }
@@ -6184,7 +6184,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voltooid met 1 fout. Wacht tot de iCloud-synchronisatie is voltooid voordat je de app sluit. Houd het cloudpictogram op het hoofdscherm in de gaten."
+            "value" : "Er is 1 fout opgetreden. Wacht tot de iCloud-synchronisatie is voltooid voordat je de app sluit. Houd het cloudpictogram op het hoofdscherm in de gaten."
           }
         }
       }
@@ -9130,7 +9130,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duikhulpmiddelen"
+            "value" : "Duikmaterialen"
           }
         }
       }
@@ -9845,7 +9845,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duik %lld downloaden..."
+            "value" : "Duik %lld downloaden…"
           }
         }
       }
@@ -9875,7 +9875,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bezig met downloaden..."
+            "value" : "Bezig met downloaden…"
           }
         }
       }
@@ -10168,7 +10168,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bijv. AL80, Steel HP100"
+            "value" : "bijv. AL80, Staal HP100"
           }
         }
       }
@@ -11033,7 +11033,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Instappunt"
+            "value" : "Instap"
           }
         }
       }
@@ -11061,7 +11061,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Soort instappunt"
+            "value" : "Soort instap"
           }
         }
       }
@@ -11458,7 +11458,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verbinding tot stand brengen..."
+            "value" : "Verbinding tot stand brengen…"
           }
         }
       }
@@ -11676,7 +11676,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Uitsluiten"
+            "value" : "Exclusief"
           }
         }
       }
@@ -11700,7 +11700,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Uitstapplaats"
+            "value" : "Uitstap"
           }
         }
       }
@@ -12269,7 +12269,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exporteren..."
+            "value" : "Exporteren…"
           }
         }
       }
@@ -12517,7 +12517,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bezig met ophalen..."
+            "value" : "Bezig met ophalen…"
           }
         }
       }
@@ -13030,7 +13030,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gasmix"
+            "value" : "Gasmengsel"
           }
         }
       }
@@ -13187,7 +13187,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gasmix"
+            "value" : "Gsasmengsel"
           }
         }
       }
@@ -13449,7 +13449,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duiklaarzen"
+            "value" : "Schoenen"
           }
         }
       }
@@ -14435,7 +14435,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "GPS Coördinaten (uitstapplaats)"
+            "value" : "GPS Coördinaten (uitstap)"
           }
         }
       }
@@ -14479,7 +14479,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "GPS uitstapplaats"
+            "value" : "GPS uitstap"
           }
         }
       }
@@ -14912,7 +14912,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hoe \"Beste mix\" werkt"
+            "value" : "Hoe \"Beste Mengsel” werkt"
           }
         }
       }
@@ -15856,7 +15856,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeren..."
+            "value" : "Importeren…"
           }
         }
       }
@@ -15930,7 +15930,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Insluiten"
+            "value" : "Inclusief"
           }
         }
       }
@@ -16557,7 +16557,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Laatste 15 minuten synchronisatieactiviteit."
+            "value" : "Laatste 15 minuten van synchronisatie-activiteit."
           }
         }
       }
@@ -18735,7 +18735,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gemiddeld-uitdagend"
+            "value" : "Gemiddeld-Uitdagend"
           }
         }
       }
@@ -21297,7 +21297,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aantekeningen, buddy, divemaster, beoordeling, type duik, omstandigheden, naam en details van de duiklocatie, duiknummer en oppervlakte-interval. Ook het tankvolume, de werkdruk, het materiaal en het type worden bijgehouden, tenzij de computer deze gegevens expliciet rapporteert."
+            "value" : "Aantekeningen, buddy, divemaster, beoordeling, type duik, omstandigheden, naam en details van de duiklocatie, duiknummer en oppervlakte-interval. Ook het tankvolume, de werkdruk, de duikuitrusting en het type worden bijgehouden, tenzij de computer deze gegevens expliciet rapporteert."
           }
         }
       }
@@ -24640,7 +24640,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Veiligheidsfuncties voor elke duik"
+            "value" : "Veiligheidsmaterialen voor elke duik"
           }
         }
       }
@@ -25109,7 +25109,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wordt opgeslagen in het logboek..."
+            "value" : "Wordt opgeslagen in het logboek…"
           }
         }
       }
@@ -26987,7 +26987,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Locatie, plaats, buddy, land, type, tag, duik #…"
+            "value" : "Duikstek, locatie, buddy, land, type, tag, duik #…"
           }
         }
       }
@@ -28072,7 +28072,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De synchronisatie is niet volledig voltooid — een of meer oudere duiken op het apparaat konden niet worden gelezen."
+            "value" : "De synchronisatie is niet volledig voltooid — een of meer oudere duiken op de duikcomputer konden niet worden gelezen."
           }
         }
       }
@@ -29581,7 +29581,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het totale gasvolume (TG) is de totale hoeveelheid lucht wanneer de tank vol is. Het bruikbare gasvolume (UG) is wat er overblijft na aftrek van het MG en het reservegasvolume (RG) — de lucht die je daadwerkelijk tijdens je duik kunt gebruiken."
+            "value" : "Het totale gasvolume (TG) is de totale hoeveelheid lucht wanneer de tank vol is. Het bruikbare gasvolume (BG) is wat er overblijft na aftrek van het MG en het reservegasvolume (RG) — de lucht die je daadwerkelijk tijdens je duik kunt gebruiken."
           }
         }
       }
@@ -30728,7 +30728,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bruikbaar gas (UG)"
+            "value" : "Bruikbaar gas (BG)"
           }
         }
       }
@@ -31228,7 +31228,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sehr einfach"
+            "value" : "Sehr leicht"
           }
         },
         "fr-CA" : {
@@ -31607,7 +31607,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wachten op het importeren van gegevens..."
+            "value" : "Wachten op het importeren van gegevens…"
           }
         }
       }
@@ -31982,7 +31982,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wat is de beste mix?"
+            "value" : "Wat is het beste mengsel?"
           }
         }
       }
