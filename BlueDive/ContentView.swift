@@ -15,6 +15,7 @@ extension UTType {
     static let uddf = UTType(importedAs: "org.uddf.uddf")
     static let garminFIT = UTType(importedAs: "com.garmin.fit")
     static let blueDiveXML = UTType(exportedAs: "app.bluedive.xml")
+    static let ssrf = UTType(importedAs: "org.subsurface-divelog.ssrf")
 }
 
 // Must match `appGroupSuite` in BlueDiveWidgetExtension.swift.
@@ -281,7 +282,7 @@ struct ContentView: View {
             #endif
             .fileImporter(
                 isPresented: $showFileImporter,
-                allowedContentTypes: [.xml, .uddf, .garminFIT, .blueDiveXML],
+                allowedContentTypes: [.xml, .uddf, .ssrf, .garminFIT, .blueDiveXML],
                 allowsMultipleSelection: false
             ) { result in
                 handleFileImport(result: result)

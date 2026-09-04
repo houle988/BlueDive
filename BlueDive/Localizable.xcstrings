@@ -22320,6 +22320,9 @@
         }
       }
     },
+    "This Subsurface file uses an old format (version 2) that is not supported. Re-export it from Subsurface 4.6 or later." : {
+      "comment" : "Error shown when importing a Subsurface version 2 file, which is not supported."
+    },
     "This will also clear the scheduled maintenance reminder." : {
       "comment" : "A message in the confirmation dialog for 'Clear All Records' that warns the user the scheduled maintenance reminder (nextServiceDue) will also be removed.",
       "localizations" : {
@@ -23297,6 +23300,7 @@
     },
     "Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, and Garmin FIT." : {
       "comment" : "Error message displayed when an unsupported file format is selected for import.",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -23311,6 +23315,9 @@
           }
         }
       }
+    },
+    "Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, Subsurface XML, and Garmin FIT." : {
+      "comment" : "Error message displayed when an unsupported file format is selected for import."
     },
     "Update Bluetooth Pairing?" : {
       "comment" : "Alert title shown when a scanned Bluetooth peripheral matches a known dive computer with a different UUID.",

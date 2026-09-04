@@ -30,6 +30,18 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Subsurface Dive Log</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.subsurface-divelog.ssrf</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>BlueDive Dive Log</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
@@ -158,6 +170,23 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>fit</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.xml</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Subsurface Dive Log</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.subsurface-divelog.ssrf</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>ssrf</string>
 				</array>
 			</dict>
 		</dict>
