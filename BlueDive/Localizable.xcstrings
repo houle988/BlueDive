@@ -97,7 +97,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@” wordt permanent verwijderd. Alle bijbehorende gegevens (viswaarnemingen, materiaal) worden ook verwijderd."
+            "value" : "“%@” wordt permanent verwijderd. Alle bijbehorende gegevens (viswaarnemingen, duikuitrusting) worden ook verwijderd."
           }
         }
       }
@@ -151,7 +151,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "* RMV berekend uit %@ + %@ — alleen native beschikbaar in bar/L"
+            "value" : "* AMV berekend uit %@ + %@ — alleen native beschikbaar in bar/L"
           }
         }
       }
@@ -181,7 +181,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "* RMV afgeleid van %1$@ + %2$@ met behulp van de opgeslagen werkdruk voor de omrekening van cu ft naar L"
+            "value" : "* AMV afgeleid van %1$@ + %2$@ met behulp van de opgeslagen werkdruk voor de omrekening van cu ft naar L"
           }
         }
       }
@@ -858,7 +858,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld stuks materiaal"
+            "value" : "%lld stuks duikuitrusting"
           }
         }
       }
@@ -887,7 +887,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld stuks materiaal succesvol geïmporteerd."
+            "value" : "%lld stuks duikuitrusting succesvol geïmporteerd."
           }
         }
       }
@@ -1551,7 +1551,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "0 stuks materiaal"
+            "value" : "0 stuks duikuitrusting"
           }
         }
       }
@@ -1580,7 +1580,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "0 stuks materiaal succesvol geïmporteerd."
+            "value" : "0 stuks duikuitrusting succesvol geïmporteerd."
           }
         }
       }
@@ -1951,7 +1951,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1 stuk materiaal"
+            "value" : "1 stuk duikuitrusting"
           }
         }
       }
@@ -1980,7 +1980,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1 stuk materiaal succesvol geïmporteerd."
+            "value" : "1 stuk duikuitrusting succesvol geïmporteerd."
           }
         }
       }
@@ -2310,7 +2310,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Houdt rekening met een verhoogde RMV onder stress"
+            "value" : "Houdt rekening met een verhoogde AMV onder stress"
           }
         }
       }
@@ -2392,7 +2392,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Actief duikmateriaal"
+            "value" : "Actieve duikuitrusting"
           }
         }
       }
@@ -2651,7 +2651,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg duikmateriaal toe"
+            "value" : "Voeg duikuitrusting toe"
           }
         }
       }
@@ -2675,7 +2675,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg eerst duikmateriaal toe vanaf de Duikmateriaal sectie"
+            "value" : "Voeg eerst duikuitrusting toe vanaf de Duikuitrusting sectie"
           }
         }
       }
@@ -2787,7 +2787,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg nieuw materiaal toe"
+            "value" : "Voeg nieuwe duikuitrusting toe"
           }
         }
       }
@@ -2864,7 +2864,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg notities toe over dit duikmateriaal"
+            "value" : "Voeg notities toe over deze duikuitrusting"
           }
         }
       }
@@ -3281,7 +3281,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle materiaal, groepen en tanksjablonen bestaan al."
+            "value" : "Alle duikuitrusting, groepen en tanksjablonen bestaan al."
           }
         }
       }
@@ -3381,7 +3381,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle resultaten zijn wiskundige schattingen op basis van de door jou ingevoerde gegevens. Er wordt geen rekening gehouden met individuele fysiologische kenmerken, verschillen in uitrusting of omstandigheden in de praktijk."
+            "value" : "Alle resultaten zijn wiskundige schattingen op basis van de door jou ingevoerde gegevens. Er wordt geen rekening gehouden met individuele fysiologische kenmerken, verschillen in duikuitrusting of omstandigheden in de praktijk."
           }
         }
       }
@@ -3456,7 +3456,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Al je duikmateriaal is reeds toegevoegd aan deze duik of je hebt nog geen nieuw duikmateriaal aangemaakt."
+            "value" : "Al je duikuitrusting is reeds toegevoegd aan deze duik of je hebt nog geen nieuwe duikuitrusting aangemaakt."
           }
         }
       }
@@ -3757,7 +3757,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elk nitroxmengsel blijft op deze diepte binnen de PO₂-limiet — controleer of de uitrusting geschikt is voor het gebruikte O₂-percentage."
+            "value" : "Elk nitroxmengsel blijft op deze diepte binnen de PO₂-limiet — controleer of de duikuitrusting geschikt is voor het gebruikte O₂-percentage."
           }
         }
       }
@@ -3781,7 +3781,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Thema"
+            "value" : "Weergave"
           }
         }
       }
@@ -4385,7 +4385,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gem. RMV"
+            "value" : "Gem. AMV"
           }
         }
       }
@@ -6986,7 +6986,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Maak een materiaalgroep aan"
+            "value" : "Maak een duikuitrustinggroep aan"
           }
         }
       }
@@ -7010,7 +7010,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Maak uitrustingsgroepen aan om je duikuitrusting snel klaar te maken. Selecteer een groep om alle uitrusting daaruit in één keer aan een duik toe te voegen."
+            "value" : "Maak groepen aan om je duikuitrusting snel klaar te maken. Selecteer een groep om alle duikuitrusting daaruit in één keer aan een duik toe te voegen."
           }
         }
       }
@@ -8017,7 +8017,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duikmateriaalgroep verwijderen?"
+            "value" : "Duikuitrustinggroep verwijderen?"
           }
         }
       }
@@ -10478,7 +10478,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wijzig duikmateriaal"
+            "value" : "Wijzig duikuitrusting"
           }
         }
       }
@@ -10530,7 +10530,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wijzig duikmateriaalgroep"
+            "value" : "Wijzig duikuitrustinggroep"
           }
         }
       }
@@ -11113,7 +11113,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Materiaal"
+            "value" : "Duikuitrusting"
           }
         }
       }
@@ -11137,7 +11137,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Materiaalonderhoud"
+            "value" : "Duikuitrusting-onderhoud"
           }
         }
       }
@@ -11167,7 +11167,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Naam van het materiaal"
+            "value" : "Naam van de duikuitrusting"
           }
         }
       }
@@ -11197,7 +11197,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gebruikt materiaal"
+            "value" : "Gebruikte duikuitrusting"
           }
         }
       }
@@ -11219,7 +11219,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MATERIAAL GEBRUIKT"
+            "value" : "GEBRUIKTE DUIKUITRUSTING"
           }
         }
       }
@@ -11243,7 +11243,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Materiaal, tanks en certificeringen"
+            "value" : "Duikuitrusting, tanks en certificeringen"
           }
         }
       }
@@ -12570,7 +12570,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vul de informatie in om dit duikmateriaal toe te voegen aan je inventaris"
+            "value" : "Vul de informatie in om deze duikuitrusting toe te voegen aan je inventaris"
           }
         }
       }
@@ -13309,7 +13309,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duikuitrustingsgroep"
+            "value" : "Duikuitrustinggroep"
           }
         }
       }
@@ -13333,7 +13333,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duikmateriaalgroepen"
+            "value" : "Duikuitrustinggroepen"
           }
         }
       }
@@ -14822,7 +14822,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verberg inactief duikmateriaal"
+            "value" : "Verberg inactieve duikuitrusting"
           }
         }
       }
@@ -15618,7 +15618,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeer duikmateriaal"
+            "value" : "Importeer duikuitrusting"
           }
         }
       }
@@ -15907,7 +15907,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inactief duikmateriaal"
+            "value" : "Inactieve duikuitrusting"
           }
         }
       }
@@ -17828,7 +17828,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Materiaal"
+            "value" : "Duikuitrusting"
           }
         }
       }
@@ -18893,7 +18893,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voor de RMV/SAC met meerdere tanks zijn gegevens van de duikcomputer vereist"
+            "value" : "Voor de AMV/SAC met meerdere tanks zijn gegevens van de duikcomputer vereist"
           }
         }
       }
@@ -19518,7 +19518,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voor het duiken met nitrox zijn een specifieke opleiding en een controle van de uitrusting vereist. Duik altijd binnen de grenzen van je opleiding en brevet."
+            "value" : "Voor het duiken met nitrox zijn een specifieke opleiding en een controle van de duikuitrusting vereist. Duik altijd binnen de grenzen van je opleiding en brevet."
           }
         }
       }
@@ -20106,7 +20106,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen materiaal"
+            "value" : "Geen duikuitrusting"
           }
         }
       }
@@ -20136,7 +20136,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen materiaal beschikbaar"
+            "value" : "Geen duikuitrusting beschikbaar"
           }
         }
       }
@@ -20158,7 +20158,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen materiaal voor duiker"
+            "value" : "Geen duikuitrusting voor duiker"
           }
         }
       }
@@ -20182,7 +20182,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen materiaal in je inventaris"
+            "value" : "Geen duikuitrusting in je inventaris"
           }
         }
       }
@@ -20212,7 +20212,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen materiaal opgeslagen"
+            "value" : "Geen duikuitrusting opgeslagen"
           }
         }
       }
@@ -20234,7 +20234,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen materiaal gevonden voor de geselecteerde duiker."
+            "value" : "Geen duikuitrusting gevonden voor de geselecteerde duiker."
           }
         }
       }
@@ -20311,7 +20311,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duikmateriaal gevonden in het geselecteerde bestand."
+            "value" : "Geen duikuitrusting gevonden in het geselecteerde bestand."
           }
         }
       }
@@ -20335,7 +20335,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen materiaalgroepen"
+            "value" : "Geen duikuitrustinggroepen"
           }
         }
       }
@@ -21545,7 +21545,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opent details van duikmateriaal"
+            "value" : "Opent details van duikuitrusting"
           }
         }
       }
@@ -21595,7 +21595,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Optioneel. Geef aan wanneer deze tank tijdens de duik is gebruikt voor een nauwkeurigere berekening van RMV/SAC."
+            "value" : "Optioneel. Geef aan wanneer deze tank tijdens de duik is gebruikt voor een nauwkeurigere berekening van AMV/SAC."
           }
         }
       }
@@ -21678,7 +21678,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deel de uitrusting in groepen in — bijvoorbeeld tropische uitrusting, uitrusting voor koud water."
+            "value" : "Deel de duikuitrusting in groepen in — bijvoorbeeld tropische uitrusting, duikuitrusting voor koud water."
           }
         }
       }
@@ -23484,7 +23484,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verwijder duikmateriaal"
+            "value" : "Verwijder duikuitrusting"
           }
         }
       }
@@ -24298,7 +24298,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RMV"
+            "value" : "AMV"
           }
         }
       }
@@ -24320,7 +24320,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RMV · Gemeten aan het oppervlak"
+            "value" : "AMV · Gemeten aan het oppervlak"
           }
         }
       }
@@ -24344,7 +24344,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RMV (dubbele tanks)"
+            "value" : "AMV (dubbele tanks)"
           }
         }
       }
@@ -24366,7 +24366,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RMV-waarde"
+            "value" : "AMV-waarde"
           }
         }
       }
@@ -25268,7 +25268,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zoek materiaal…"
+            "value" : "Zoek duikuitrusting…"
           }
         }
       }
@@ -25729,7 +25729,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Selecteer ten minste één item van je duikmateriaal"
+            "value" : "Selecteer ten minste één item van je duikuitrusting"
           }
         }
       }
@@ -25776,7 +25776,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Selecteer uitrustingsonderdelen om te groeperen, zodat je je duikuitrusting snel kunt klaarmaken"
+            "value" : "Selecteer duikuitrustingsonderdelen om te groeperen, zodat je je duikuitrusting snel kunt klaarmaken"
           }
         }
       }
@@ -25852,7 +25852,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Selecteer materiaal…"
+            "value" : "Selecteer duikuitrusting…"
           }
         }
       }
@@ -26327,7 +26327,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De onderhoudsgegevens voor de bestaande uitrusting zijn bijgewerkt."
+            "value" : "De onderhoudsgegevens voor de bestaande duikuitrusting zijn bijgewerkt."
           }
         }
       }
@@ -26507,7 +26507,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toon duikmateriaaldetails"
+            "value" : "Toon details van duikuitrusting"
           }
         }
       }
@@ -26535,7 +26535,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toon inactief duikmateriaal"
+            "value" : "Toon inactieve duikuitrusting"
           }
         }
       }
@@ -28971,7 +28971,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De werkdruk wordt gebruikt om de gascapaciteit (ft³) om te rekenen naar het werkelijke watervolume (L) voor RMV- en SAC-berekeningen. Typische waarde: 3000 PSI."
+            "value" : "De werkdruk wordt gebruikt om de gascapaciteit (ft³) om te rekenen naar het werkelijke watervolume (L) voor AMV- en SAC-berekeningen. Typische waarde: 3000 PSI."
           }
         }
       }
@@ -29143,7 +29143,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deze handeling kan niet ongedaan worden gemaakt. De uitrustingsgroep en de bijbehorende configuratie worden definitief verwijderd."
+            "value" : "Deze handeling kan niet ongedaan worden gemaakt. De duikuitrustinggroep en de bijbehorende configuratie worden definitief verwijderd."
           }
         }
       }
@@ -29653,7 +29653,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Houd je uitrusting bij"
+            "value" : "Houd je duikuitrusting bij"
           }
         }
       }
@@ -29677,7 +29677,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Houd je uitrusting bij met onderhoudsdata en ontvang automatische onderhoudsherinneringen."
+            "value" : "Houd je duikuitrusting bij met onderhoudsdata en ontvang automatische onderhoudsherinneringen."
           }
         }
       }
@@ -30660,7 +30660,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Werk de gegevens van deze uitrusting bij"
+            "value" : "Werk de gegevens van deze duikuitrusting bij"
           }
         }
       }
@@ -30893,7 +30893,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Benodigde gebruiksduur voor een RMV met meerdere tanks"
+            "value" : "Benodigde gebruiksduur voor een AMV met meerdere tanks"
           }
         }
       }
@@ -30951,7 +30951,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Benodigde gebruiksduur per tank voor RMV/SAC"
+            "value" : "Benodigde gebruiksduur per tank voor AMV/SAC"
           }
         }
       }
@@ -32048,7 +32048,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wanneer deze functie is ingeschakeld, wordt de minimale gashoeveelheid vermenigvuldigd met een stressfactor om rekening te houden met het feit dat het ademhalingsvolume per minuut (RMV) van een duiker aanzienlijk kan stijgen in noodsituaties — zoals paniek, inspanning of uitputting."
+            "value" : "Wanneer deze functie is ingeschakeld, wordt de minimale gashoeveelheid vermenigvuldigd met een stressfactor om rekening te houden met het feit dat het ademhalingsvolume per minuut (AMV) van een duiker aanzienlijk kan stijgen in noodsituaties — zoals paniek, inspanning of uitputting."
           }
         }
       }
