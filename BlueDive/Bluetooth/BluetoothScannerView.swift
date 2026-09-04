@@ -45,10 +45,16 @@ struct BluetoothScannerView: View {
     @State var downloadedDives: [DiveData] = []
     @State var importProgress: Double = 0
     @State var showingImportConfirmation = false
+    @State var importSaveErrorMessage: String? = nil
     @State var connectedDeviceName: String?
     @State var downloadAllDives: Bool = false
     @AppStorage("filterUnusedTanks") var filterUnusedTanks: Bool = false
     @AppStorage("syncDeviceClock") var syncDeviceClock: Bool = true
+    #if os(iOS)
+    @State var showLogExporter = false
+    @State var logExportDocument: ExportableFileDocument?
+    @State var logExportFileName: String = ""
+    #endif
     @State var diveCountDuringDownload: Int = 0
     @State var downloadProgressCancellable: AnyCancellable?
     @State var isSearching: Bool = false
@@ -111,6 +117,7 @@ struct BluetoothScannerView: View {
                     selectedDevice = nil
                     connectedDeviceName = nil
                     isPartialSync = false
+                    importSaveErrorMessage = nil
                     syncState = .idle
                 }
                 Button("Import") {
@@ -123,7 +130,10 @@ struct BluetoothScannerView: View {
                 let partial = isPartialSync
                     ? "\n\n" + NSLocalizedString("Sync was incomplete — one or more older dives on the device could not be read.", bundle: .forAppLanguage(), value: "Sync was incomplete — one or more older dives on the device could not be read.", comment: "Note appended to the import confirmation alert when a BLE sync completed only partially due to a protocol error on the dive computer (e.g. a corrupt dive slot).")
                     : ""
-                Text(verbatim: base + partial)
+                let saveError = importSaveErrorMessage.map {
+                    "\n\n" + String(format: NSLocalizedString("Previous save failed:\n%@", bundle: .forAppLanguage(), value: "Previous save failed:\n%@", comment: "Note appended to the import confirmation alert when re-presented after a save failure. %@ is the system error description explaining why the previous import save did not complete."), $0)
+                } ?? ""
+                Text(verbatim: base + partial + saveError)
             }
             .onAppear {
                 // Don't auto-scan; show known devices first
@@ -133,11 +143,20 @@ struct BluetoothScannerView: View {
             }
             .onDisappear {
                 stopScanning()
+                BLEDiagnosticSession.shared.stop()
                 bleManager.close(clearDevicePtr: true)
                 downloadProgressCancellable = nil
                 isSearching = false
                 cachedTargetFingerprint = nil
                 discardPendingSeed()
+                // SwiftUI dismisses the retry alert on disappear but leaves syncState .importing; clear all session state so orphaned dives cannot be silently overwritten.
+                if case .importing = syncState {
+                    syncState = .idle
+                    downloadedDives = []
+                    importSaveErrorMessage = nil
+                    showingImportConfirmation = false
+                    isPartialSync = false
+                }
                 #if os(iOS)
                 UIApplication.shared.isIdleTimerDisabled = false
                 Self.logger.debug("Screen lock re-enabled (onDisappear)")

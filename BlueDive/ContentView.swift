@@ -37,6 +37,7 @@ struct ContentView: View {
     @State private var diveToDeleteDirectly: Dive?
     @State private var showDeleteSingleConfirmation = false
     @State private var showDeleteSheet = false
+    @State private var diveToMove: Dive?
     @State var isImporting = false
     @State var importProgressFileName: String = ""
     @State var importProgressCurrent: Int = 0
@@ -92,6 +93,7 @@ struct ContentView: View {
 
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
+    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
     @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
     @Environment(CloudKitSyncMonitor.self) private var syncMonitor
     @Environment(FileImportCoordinator.self) var importCoordinator
@@ -106,6 +108,16 @@ struct ContentView: View {
         )
     }
     
+    @ViewBuilder
+    private func moveButton(for summaryID: UUID) -> some View {
+        Button {
+            diveToMove = store.diveByID[summaryID]
+        } label: {
+            Label("Move", systemImage: "person.fill")
+        }
+        .tint(.blue)
+    }
+
     // MARK: - Body
     
     var body: some View {
@@ -250,6 +262,12 @@ struct ContentView: View {
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $diveToMove) { dive in
+                MoveDiverSheet(dive: dive)
+                    .presentationSizing(.page)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             #if os(iOS)
             .fileExporter(
@@ -700,6 +718,9 @@ struct ContentView: View {
                                         DiveRowView(summary: summary, diveNumber: rowNumber)
                                     }
                                     .listRowBackground(Color.primary.opacity(0.07))
+                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                        moveButton(for: summary.id)
+                                    }
                                     .contextMenu {
                                         Button(role: .destructive) {
                                             if let dive = store.diveByID[summary.id] {
@@ -747,6 +768,9 @@ struct ContentView: View {
                                 DiveRowView(summary: summary, diveNumber: rowNumber)
                             }
                             .listRowBackground(Color.primary.opacity(0.07))
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                moveButton(for: summary.id)
+                            }
                             .contextMenu {
                                 Button(role: .destructive) {
                                     if let dive = store.diveByID[summary.id] {
@@ -1099,18 +1123,49 @@ struct ContentView: View {
     private func confirmDeleteItems(offsets: IndexSet) {
         // Use store.cachedFilteredDives — IndexSet is relative to the displayed list, not the raw query.
         let displayed = store.cachedFilteredDives
+        // Capture affected diver names before deletion so we can re-sequence
+        // the remaining dives in each group afterward.
+        let affectedDivers = Set(
+            offsets
+                .filter { $0 < displayed.count }
+                .map { displayed[$0].diverName }
+                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        )
         withAnimation {
             for index in offsets where index < displayed.count {
                 modelContext.delete(displayed[index])
             }
             try? modelContext.save()
         }
+        // Deletion triggers @Query re-delivery, which rebuilds cachedSummaries.
+        // Re-sequencing runs on a background context so it doesn't block the UI;
+        // commitSurfaceIntervals/commitDiveNumbers patch the caches on the MainActor
+        // after the background work completes.
+        if autoSequenceEnabled {
+            for diver in affectedDivers {
+                store.recalcSequencesInBackground(
+                    container: modelContext.container,
+                    newDiverName: diver,
+                    originalDiverName: diver
+                )
+            }
+        }
     }
 
     private func confirmDeleteSingleDive(_ dive: Dive) {
+        // Capture the diver name before deletion so the remaining dives in that
+        // group can be re-sequenced afterward.
+        let affectedDiver = dive.diverName
         withAnimation {
             modelContext.delete(dive)
             try? modelContext.save()
+        }
+        if !affectedDiver.trimmingCharacters(in: .whitespaces).isEmpty && autoSequenceEnabled {
+            store.recalcSequencesInBackground(
+                container: modelContext.container,
+                newDiverName: affectedDiver,
+                originalDiverName: affectedDiver
+            )
         }
     }
 
@@ -1187,6 +1242,12 @@ struct ContentView: View {
             modelContext.insert(dive)
             try? modelContext.save()
         }
-        Dive.recalculateSurfaceIntervals(in: modelContext, diverName: diverName)
+        if autoSequenceEnabled {
+            store.recalcSequencesInBackground(
+                container: modelContext.container,
+                newDiverName: diverName,
+                originalDiverName: diverName
+            )
+        }
     }
 }

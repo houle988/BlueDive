@@ -23,7 +23,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "\n… %lld regels. Gebruik Kopieer of Opslaan als voor de volledige inhoud."
+            "value" : "\n… nog %lld regels. Gebruik Kopiëren of Opslaan als voor de volledige inhoud."
           }
         }
       }
@@ -97,7 +97,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“ %@” wordt permanent verwijderd. Alle bijbehorende informatie (visinformatie, materiaal) wordt ook verwijderd."
+            "value" : "“%@” wordt permanent verwijderd. Alle bijbehorende gegevens (viswaarnemingen, materiaal) worden ook verwijderd."
           }
         }
       }
@@ -181,7 +181,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "* RMV afgeleid van %1$@ + %2$@ "
+            "value" : "* RMV afgeleid van %1$@ + %2$@ met behulp van de opgeslagen werkdruk voor de omrekening van cu ft naar L"
           }
         }
       }
@@ -241,7 +241,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@land bezocht"
+            "value" : "%@ land bezocht"
           }
         }
       }
@@ -264,7 +264,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@dagen"
+            "value" : "%@ dagen"
           }
         }
       }
@@ -287,7 +287,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@duik"
+            "value" : "%@ duik"
           }
         }
       }
@@ -310,7 +310,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@duiken"
+            "value" : "%@ duiken"
           }
         }
       }
@@ -408,7 +408,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@heeft onderhoud nodig in %2$lld dagen."
+            "value" : "%1$@ heeft over %2$lld dagen onderhoud nodig."
           }
         }
       }
@@ -437,7 +437,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@heeft onderhoud nodig in 30 dagen."
+            "value" : "%@ heeft over 30 dagen onderhoud nodig."
           }
         }
       }
@@ -502,7 +502,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@, %2$@ en %3$@succesvol geïmporteerd"
+            "value" : "%1$@, %2$@ en %3$@ succesvol geïmporteerd."
           }
         }
       }
@@ -525,7 +525,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%dactieve filters"
+            "value" : "%d actieve filters"
           }
         }
       }
@@ -572,7 +572,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldcertificeringen succesvol geïmporteerd"
+            "value" : "%lld certificeringen succesvol geïmporteerd."
           }
         }
       }
@@ -596,7 +596,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldapparaten geregistreerd"
+            "value" : "%lld apparaten geregistreerd"
           }
         }
       }
@@ -690,7 +690,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldduiken al in het logboek"
+            "value" : "%lld duiken al in het logboek"
           }
         }
       }
@@ -777,7 +777,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldduiklogs geïmporteerd"
+            "value" : "%lld duiklogs geïmporteerd"
           }
         }
       }
@@ -806,7 +806,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldduiklogs bijgewerkt"
+            "value" : "%lld duiklogs bijgewerkt"
           }
         }
       }
@@ -830,7 +830,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldverloopt binnenkort"
+            "value" : "%lld verloopt binnenkort"
           }
         }
       }
@@ -859,7 +859,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "% stuks materiaal"
+            "value" : "%lld stuks materiaal"
           }
         }
       }
@@ -888,7 +888,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldstuks materiaal succesvol geïmporteerd"
+            "value" : "%lld stuks materiaal succesvol geïmporteerd."
           }
         }
       }
@@ -917,7 +917,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldmateriaalgroepsonderdelen konden niet vergeleken worden en zijn niet geïmporteerd"
+            "value" : "%lld groepsleden konden niet worden gekoppeld en zijn overgeslagen."
           }
         }
       }
@@ -946,7 +946,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldgroepen"
+            "value" : "%lld groepen"
           }
         }
       }
@@ -975,7 +975,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldverzekeringsrecords succesvol geïmporteerd"
+            "value" : "%lld verzekeringsrecords succesvol geïmporteerd."
           }
         }
       }
@@ -999,7 +999,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "% items"
+            "value" : "%lld items"
           }
         }
       }
@@ -1029,7 +1029,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldregels"
+            "value" : "%lld regels"
           }
         }
       }
@@ -1057,7 +1057,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldachterstallig"
+            "value" : "%lld achterstallig"
           }
         }
       }
@@ -1081,7 +1081,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldgezien"
+            "value" : "%lld gezien"
           }
         }
       }
@@ -1105,7 +1105,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldgeselecteerd"
+            "value" : "%lld geselecteerd"
           }
         }
       }
@@ -1134,7 +1134,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldtanksjablonen"
+            "value" : "%lld tanksjablonen"
           }
         }
       }
@@ -1196,7 +1196,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%&"
+            "value" : "→ %@"
           }
         }
       }
@@ -1235,7 +1235,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "+%lldmeer"
+            "value" : "+%lld meer"
           }
         }
       }
@@ -1257,7 +1257,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "< 5.2 g/L: Veilig - Normale ademhaling."
+            "value" : "< 5.2 g/L: Veilig — normale ademhaling."
           }
         }
       }
@@ -1284,7 +1284,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "≥ 5.2 g/L: Verhoogd — voorzichtig\n"
+            "value" : "≥ 5.2 g/L: Verhoogd — ga voorzichtig te werk."
           }
         }
       }
@@ -1306,7 +1306,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "≥ 6.2 g/L: High — aanzienlijk risico op ademhalingsstoornissen"
+            "value" : "≥ 6.2 g/L: Hoog — aanzienlijk risico op ademhalingsstoornissen."
           }
         }
       }
@@ -1546,7 +1546,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "0 duikuitrusting"
+            "value" : "0 stuks materiaal"
           }
         }
       }
@@ -1575,7 +1575,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "0 duikuitrusting geïmporteerd"
+            "value" : "0 stuks materiaal succesvol geïmporteerd."
           }
         }
       }
@@ -1633,7 +1633,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "0 flessjablonen"
+            "value" : "0 tanksjablonen"
           }
         }
       }
@@ -1696,7 +1696,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1 certificering succesvol geïmporteerd"
+            "value" : "1 certificering succesvol geïmporteerd."
           }
         }
       }
@@ -1946,7 +1946,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1 duikmateriaal-item"
+            "value" : "1 stuk materiaal"
           }
         }
       }
@@ -1975,7 +1975,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1 duikmateriaal-item succesvol geïmporteerd"
+            "value" : "1 stuk materiaal succesvol geïmporteerd."
           }
         }
       }
@@ -2033,7 +2033,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voor 1 groepslid kon geen overeenkomst gevonden worden en is derhalve overgeslagen"
+            "value" : "1 groepslid kon niet worden gekoppeld en is overgeslagen."
           }
         }
       }
@@ -2062,7 +2062,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1 verzekeringsrecord succesvol geïmporteerd"
+            "value" : "1 verzekeringsrecord succesvol geïmporteerd."
           }
         }
       }
@@ -2260,7 +2260,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Boven %1$@ O₂ vereist geavanceerde Nitro training en zuurstofschone apparatuur"
+            "value" : "Boven %1$@ O₂ is geavanceerde Nitrox-training en zuurstofschone apparatuur vereist."
           }
         }
       }
@@ -2305,7 +2305,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verklaringen voor een verhoogde RMV onder stress"
+            "value" : "Houdt rekening met een verhoogde AMV onder stress"
           }
         }
       }
@@ -2417,7 +2417,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg toe"
+            "value" : "Toevoegen"
           }
         }
       }
@@ -2593,7 +2593,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg BlueDive widgets to aan het hoofdscherm voor snelle toegang tot je meest recente duiken en duikstatistieken"
+            "value" : "Voeg BlueDive-widgets toe aan je hoofdscherm voor snelle toegang tot je meest recente duiken en duikstatistieken."
           }
         }
       }
@@ -2729,7 +2729,30 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg onderwaterleven toe"
+            "value" : "Voeg onderwaterleven toe…"
+          }
+        }
+      }
+    },
+    "Add new diver" : {
+      "comment" : "Section header in Move Diver sheet for the text field to type a brand-new diver name.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuen Taucher hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un nouveau plongeur"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieuwe duiker toevoegen"
           }
         }
       }
@@ -2783,7 +2806,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg je certificeringen en verzekeringen om deze hier te monitoren"
+            "value" : "Voeg je certificeringen en verzekeringen toe om deze hier te monitoren"
           }
         }
       }
@@ -2806,7 +2829,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg je eerste duik toe om je statistieken te zien"
+            "value" : "Voeg je eerste duik toe om je statistieken te zien."
           }
         }
       }
@@ -2866,7 +2889,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg je tanks, pakken en ademautomaten to om hun gebruik en onderhoud te monitoren"
+            "value" : "Voeg je tanks, pakken en ademautomaten toe om hun gebruik en onderhoud te monitoren."
           }
         }
       }
@@ -3114,7 +3137,7 @@
       }
     },
     "All data erased. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen." : {
-      "comment" : "Status message shown after all local and iCloud data has been erased. Instructs the user to wait for iCloud upload to complete before closing the app.",
+      "comment" : "Status message shown after all local and iCloud data has been erased.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -3253,7 +3276,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle materiaal, groepen en tanksjablonen bestaan al"
+            "value" : "Alle materiaal, groepen en tanksjablonen bestaan al."
           }
         }
       }
@@ -3276,7 +3299,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle verzekeringspolissen zijn verlopen"
+            "value" : "Alle verzekeringspolissen zijn verlopen."
           }
         }
       }
@@ -3306,7 +3329,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle voorkeuren worden teruggezet naar de standaardwaarden"
+            "value" : "Alle voorkeuren worden teruggezet naar de standaardwaarden."
           }
         }
       }
@@ -3329,7 +3352,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle records in het bestand zijn al geïmporteerd"
+            "value" : "Alle records in het bestand zijn al geïmporteerd."
           }
         }
       }
@@ -3353,7 +3376,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle resultaten zijn wiskundige schattingen op basis van de door u ingevoerde gegevens. Er wordt geen rekening gehouden met individuele fysiologische kenmerken, verschillen in uitrusting of omstandigheden in de praktijk."
+            "value" : "Alle resultaten zijn wiskundige schattingen op basis van de door jou ingevoerde gegevens. Er wordt geen rekening gehouden met individuele fysiologische kenmerken, verschillen in uitrusting of omstandigheden in de praktijk."
           }
         }
       }
@@ -3376,7 +3399,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle rechten voorbehouden"
+            "value" : "Alle rechten voorbehouden."
           }
         }
       }
@@ -3428,7 +3451,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Al je duikmateriaal is reeds toegevoegd aan deze duik of je hebt nog geen nieuw duikmateriaal aangemaakt"
+            "value" : "Al je duikmateriaal is reeds toegevoegd aan deze duik of je hebt nog geen nieuw duikmateriaal aangemaakt."
           }
         }
       }
@@ -3649,7 +3672,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Een onbekende fout is opgetreden"
+            "value" : "Een onbekende fout is opgetreden."
           }
         }
       }
@@ -3707,7 +3730,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "en %lldmeer…"
+            "value" : "en %lld meer…"
           }
         }
       }
@@ -3836,7 +3859,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weet u zeker dat u “%@”? Deze actie kan niet ongedaan gemaakt worden."
+            "value" : "Weet je zeker dat je \"%@\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
           }
         }
       }
@@ -4105,6 +4128,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Automatisch detecteren"
+          }
+        }
+      }
+    },
+    "Auto-update dive numbers" : {
+      "comment" : "Toggle label for the setting to automatically recalculate dive numbers and surface intervals when dives are added, deleted, moved, or edited.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchnummern automatisch aktualisieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mise à jour automatique des numéros de plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiknummers automatisch bijwerken"
           }
         }
       }
@@ -4387,7 +4434,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "backup database"
+            "value" : "Back-up van database"
           }
         }
       }
@@ -4433,7 +4480,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Backup mislukt: database bestanden konden niet gekopieerd worden."
+            "value" : "Backup mislukt: databasebestanden konden niet gekopieerd worden."
           }
         }
       }
@@ -4525,7 +4572,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Backup mislukt: kon niet lezen van de database folder"
+            "value" : "Backup mislukt: kon de databasemap niet lezen."
           }
         }
       }
@@ -4548,7 +4595,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Backup mislukt: geen database bestanden gevonden"
+            "value" : "Backup mislukt: geen databasebestanden gevonden."
           }
         }
       }
@@ -4686,6 +4733,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beste Nitroxmix"
+          }
+        }
+      }
+    },
+    "BLE Diagnostic Logging" : {
+      "comment" : "Toggle to enable/disable BLE diagnostic logging.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BLE-Diagnoseprotokollierung"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journalisation de diagnostic BLE"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BLE-diagnoselogboek"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive en de ontwikkelaars ervan aanvaarden geen enkele verantwoordelijkheid of aansprakelijkheid voor duikplanning, beslissingen met betrekking tot duikveiligheid of incidenten die verband houden met duikactiviteiten. Houd je altijd aan de veiligheidsvoorschriften voor het duiken en volg je opleiding op."
           }
         }
       }
@@ -4830,7 +4907,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bluetooth import"
+            "value" : "Bluetooth-import"
           }
         }
       }
@@ -5028,7 +5105,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Buddies"
+            "value" : "Buddy's"
           }
         }
       }
@@ -5051,7 +5128,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Calculate the density of your breathing gas at depth. Colour-coded thresholds warn you when gas density may impair breathing and increase CO₂ retention risk."
+            "value" : "Bereken de dichtheid van je ademgas op diepte. Kleurcodes waarschuwen je wanneer de gasdichtheid de ademhaling kan bemoeilijken en het risico op CO₂-ophoping kan verhogen."
           }
         }
       }
@@ -5281,7 +5358,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Koolstof"
+            "value" : "Carbon"
           }
         }
       }
@@ -5312,24 +5389,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Categorie"
-          }
-        }
-      }
-    },
-    "Celebrate your achievements" : {
-      "comment" : "Title of a toggle row in the settings view that allows the user to enable or disable notifications for milestones reached.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Feiere deine Erfolge"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Célébrez vos réalisations"
           }
         },
         "nl" : {
@@ -5525,26 +5584,25 @@
         }
       }
     },
-    "Changes to iCloud sync take effect after restarting the app." : {
-      "comment" : "A note displayed in the Settings View, explaining that changes to iCloud sync settings only take effect after restarting the app.",
-      "isCommentAutoGenerated" : true,
+    "Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark. Switching from or to System will close Settings to apply the change." : {
+      "comment" : "Appearance picker caption for iOS — includes note that switching from/to System closes Settings.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Änderungen an der iCloud-Synchronisation werden nach dem Neustart der App wirksam."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Changes to iCloud sync take effect after restarting the app."
+            "value" : "Wähle System, um das Erscheinungsbild deines Geräts zu übernehmen (Einstellungen → Anzeige & Helligkeit), oder überschreibe es mit Hell oder Dunkel. Ein Wechsel von oder zu System schließt die Einstellungen, um die Änderung anzuwenden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les modifications de la synchronisation iCloud prennent effet après le redémarrage de l'application."
+            "value" : "Choisissez Système pour suivre l'apparence de votre appareil (Réglages → Luminosité et affichage), ou sélectionnez Clair ou Sombre. Passer de ou vers Système fermera les Réglages pour appliquer le changement."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies Systeem om de weergave van je apparaat te volgen (Instellingen → Beeldscherm en helderheid), of gebruik Licht of Donker. Bij het wisselen van of naar Systeem worden de Instellingen gesloten om de wijziging toe te passen."
           }
         },
         "nl" : {
@@ -5555,42 +5613,25 @@
         }
       }
     },
-    "Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark." : {
-      "comment" : "Appearance picker caption for iOS — references Settings → Display & Brightness.",
+    "Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark. Switching from or to System will close Settings to apply the change." : {
+      "comment" : "Appearance picker caption for macOS — includes note that switching from/to System closes Settings.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle System, um das Erscheinungsbild deines Geräts zu übernehmen (Einstellungen → Anzeige & Helligkeit), oder überschreibe es mit Hell oder Dunkel."
+            "value" : "Wähle System, um das Erscheinungsbild deines Geräts zu übernehmen (Systemeinstellungen → Erscheinungsbild), oder überschreibe es mit Hell oder Dunkel. Ein Wechsel von oder zu System schließt die Einstellungen, um die Änderung anzuwenden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choisissez Système pour suivre l'apparence de votre appareil (Réglages → Luminosité et affichage), ou sélectionnez Clair ou Sombre."
+            "value" : "Choisissez Système pour suivre l'apparence de votre appareil (Réglages du système → Apparence), ou sélectionnez Clair ou Sombre. Passer de ou vers Système fermera les Réglages pour appliquer le changement."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kies ‘Systeem’ om de weergave van je apparaat te volgen (Instellingen → Scherm en helderheid), of stel zelf een lichte of donkere modus in."
-          }
-        }
-      }
-    },
-    "Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark." : {
-      "comment" : "Appearance picker caption for macOS — references System Settings → Appearance.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wähle System, um das Erscheinungsbild deines Geräts zu übernehmen (Systemeinstellungen → Erscheinungsbild), oder überschreibe es mit Hell oder Dunkel."
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisissez Système pour suivre l'apparence de votre appareil (Réglages du système → Apparence), ou sélectionnez Clair ou Sombre."
+            "value" : "Kies Systeem om de weergave van je apparaat te volgen (Systeeminstellingen → Weergave), of gebruik Licht of Donker. Bij het wisselen van of naar Systeem worden de Instellingen gesloten om de wijziging toe te passen."
           }
         },
         "nl" : {
@@ -5601,19 +5642,26 @@
         }
       }
     },
-    "Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français or Deutsch." : {
-      "comment" : "A description of the language picker, explaining that System follows Settings → General → Language & Region.",
+    "Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change." : {
+      "comment" : "A description of the language picker.",
+      "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle System, um die Gerätesprache zu verwenden (Einstellungen → Allgemein → Sprache & Region), oder überschreibe sie mit English, Français oder Deutsch."
+            "value" : "Wähle System, um die Gerätesprache zu verwenden (Einstellungen → Allgemein → Sprache & Region), oder überschreibe sie mit English, Français, Deutsch oder Nederlands. Ein Wechsel von oder zu System schließt die Einstellungen, um die Änderung anzuwenden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choisissez Système pour utiliser la langue de votre appareil (Réglages → Général → Langue et région), ou remplacez par English, Français ou Deutsch."
+            "value" : "Choisissez Système pour utiliser la langue de votre appareil (Réglages → Général → Langue et région), ou remplacez par English, Français, Deutsch ou Nederlands. Passer de ou vers Système fermera les Réglages pour appliquer le changement."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies Systeem om de taal van je apparaat te gebruiken (Instellingen → Algemeen → Taal en regio), of gebruik English, Français, Deutsch of Nederlands. Bij het wisselen van of naar Systeem worden de Instellingen gesloten om de wijziging toe te passen."
           }
         },
         "nl" : {
@@ -5624,19 +5672,26 @@
         }
       }
     },
-    "Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français or Deutsch." : {
-      "comment" : "Language picker caption for macOS — references System Settings → General → Language & Region.",
+    "Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change." : {
+      "comment" : "A description of how to change the app's language.",
+      "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle System, um die Gerätesprache zu verwenden (Systemeinstellungen → Allgemein → Sprache & Region), oder überschreibe sie mit English, Français oder Deutsch."
+            "value" : "Wähle System, um die Gerätesprache zu verwenden (Systemeinstellungen → Allgemein → Sprache & Region), oder überschreibe sie mit English, Français, Deutsch oder Nederlands. Ein Wechsel von oder zu System schließt die Einstellungen, um die Änderung anzuwenden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choisissez Système pour utiliser la langue de votre appareil (Réglages du système → Général → Langue et région), ou remplacez par English, Français ou Deutsch."
+            "value" : "Choisissez Système pour utiliser la langue de votre appareil (Réglages du système → Général → Langue et région), ou remplacez par English, Français, Deutsch ou Nederlands. Passer de ou vers Système fermera les Réglages pour appliquer le changement."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies Systeem om de taal van je apparaat te gebruiken (Systeeminstellingen → Algemeen → Taal en regio), of gebruik English, Français, Deutsch of Nederlands. Bij het wisselen van of naar Systeem worden de Instellingen gesloten om de wijziging toe te passen."
           }
         },
         "nl" : {
@@ -5741,7 +5796,31 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Schokkerig"
+            "value" : "Woelig"
+          }
+        }
+      }
+    },
+    "Clear all BLE log files from Documents" : {
+      "comment" : "A description of the action of clearing all BLE diagnostic logs.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle BLE-Protokolldateien aus „Dokumente“ löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer tous les fichiers journaux BLE des Documents"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle BLE-logbestanden uit Documenten wissen"
           }
         }
       }
@@ -5794,6 +5873,30 @@
         }
       }
     },
+    "Clear Diagnostic Logs" : {
+      "comment" : "A button that clears all BLE diagnostic logs.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnoseprotokolle löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer les journaux de diagnostic"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostische logs wissen"
+          }
+        }
+      }
+    },
     "Clear filters" : {
       "comment" : "A button label that clears all active filters.",
       "isCommentAutoGenerated" : true,
@@ -5841,7 +5944,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De kloksynchronisatie wordt alleen uitgevoerd op duikcomputers die deze functie ondersteunen. Als uw computer het instellen van de klok niet ondersteunt, heeft deze optie geen effect en verloopt de synchronisatie normaal."
+            "value" : "De kloksynchronisatie wordt alleen uitgevoerd op duikcomputers die deze functie ondersteunen. Als je computer het instellen van de klok niet ondersteunt, heeft deze optie geen effect en verloopt de synchronisatie normaal."
           }
         }
       }
@@ -5945,7 +6048,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O₂-toxiciteit in het centrale zenuwstelsel"
+            "value" : "CNS O₂-toxiciteit"
           }
         }
       }
@@ -6650,7 +6753,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kopieer"
+            "value" : "Kopiëren"
           }
         }
       }
@@ -6697,7 +6800,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kopieer vanaf bestaande duiklocatie"
+            "value" : "Kopiëren van bestaande duiklocatie"
           }
         }
       }
@@ -6719,7 +6822,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kopieer vanaf tanksjabloon"
+            "value" : "Kopiëren van tanksjabloon"
           }
         }
       }
@@ -6743,7 +6846,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Site-informatie kopiëren"
+            "value" : "Duiklocatie-informatie kopiëren"
           }
         }
       }
@@ -6867,28 +6970,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Land"
-          }
-        }
-      }
-    },
-    "Counts dives for all divers combined. Not recommended when multiple divers share this app." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zählt Tauchgänge aller Taucher zusammen. Nicht empfohlen, wenn mehrere Taucher diese App teilen."
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compte les plongées de tous les plongeurs combinés. Non recommandé lorsque plusieurs plongeurs partagent cette application."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Telt het totale aantal duiken van alle duikers samen. Niet aanbevolen wanneer meerdere duikers deze app delen."
           }
         }
       }
@@ -7136,36 +7217,6 @@
         }
       }
     },
-    "Customize your experience" : {
-      "comment" : "A description below the title of the settings view, describing the purpose of the view.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Persönliche Anpassungen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Customize your experience"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Personnalisez votre expérience"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stel je voorkeuren in"
-          }
-        }
-      }
-    },
     "Dangerous (≥18 m/min)" : {
       "comment" : "A label for the maximum safe rate of ascent.",
       "isCommentAutoGenerated" : true,
@@ -7292,30 +7343,6 @@
         }
       }
     },
-    "Data" : {
-      "comment" : "Section header title in the Settings view related to data management.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daten"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Données"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Data"
-          }
-        }
-      }
-    },
     "Data Management" : {
       "comment" : "Title of a section in the settings view related to data management.",
       "isCommentAutoGenerated" : true,
@@ -7335,7 +7362,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Data management"
+            "value" : "Gegevensbeheer"
           }
         }
       }
@@ -7760,7 +7787,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Einde van de decompressie"
+            "value" : "Decompressiestop"
           }
         }
       }
@@ -8195,7 +8222,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dipete"
+            "value" : "Diepte"
           }
         }
       }
@@ -8241,6 +8268,12 @@
             "state" : "translated",
             "value" : "Diepte (m)"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diepte (m)"
+          }
         }
       }
     },
@@ -8269,30 +8302,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Diepte ↓"
-          }
-        }
-      }
-    },
-    "Depth in %@ · Pressure in %@ · Temperature in %@ · Volume in %@ · Weight in %@" : {
-      "comment" : "A footer displaying the current unit symbols for depth, pressure, temperature, volume, and weight.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tiefe in %1$@ · Druck in %2$@ · Temperatur in %3$@ · Volumen in %4$@ · Gewicht in %5$@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Depth in %1$@ · Pressure in %2$@ · Temperature in %3$@ · Volume in %4$@ · Weight in %5$@"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profondeur en %1$@ · Pression en %2$@ · Température en %3$@ · Volume en %4$@ · Lest en %5$@"
           }
         },
         "nl" : {
@@ -8477,11 +8486,6 @@
           }
         }
       }
-    },
-    "Deutsch" : {
-      "comment" : "Display name for the German language.",
-      "isCommentAutoGenerated" : true,
-      "shouldTranslate" : false
     },
     "Device not available" : {
       "comment" : "Error message shown when the dive computer device pointer is unavailable at the start of a download.",
@@ -8964,7 +8968,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duikmap"
+            "value" : "Duikkaart"
           }
         }
       }
@@ -9031,6 +9035,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "DUIKPROFIEL"
+          }
+        }
+      }
+    },
+    "Dive Sequence" : {
+      "comment" : "Title of a section in the settings view related to dive sequence.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchsequenz"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Séquence de plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duikvolgorde"
           }
         }
       }
@@ -9321,7 +9349,30 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duiker voor %1$lld jaar %2$@"
+            "value" : "Al %1$lld jaar duiker"
+          }
+        }
+      }
+    },
+    "Diver name" : {
+      "comment" : "Placeholder text in the new-diver text field in the Move Diver sheet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name des Tauchers"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom du plongeur"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naam duiker"
           }
         }
       }
@@ -9409,7 +9460,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duiker:"
+            "value" : "Duiker: "
           }
         }
       }
@@ -9441,6 +9492,12 @@
             "state" : "translated",
             "value" : "Duiken"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiker:"
+          }
         }
       }
     },
@@ -9463,6 +9520,42 @@
             "state" : "translated",
             "value" : "Duiken die al in je logboek staan, worden normaal gesproken overgeslagen. In de modus ‘Alle duiken downloaden’ worden overeenkomende duiken daarentegen samengevoegd — de computer werkt de opgeslagen gegevens bij, terwijl je persoonlijke invoer ongewijzigd blijft."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken"
+          }
+        }
+      }
+    },
+    "Dives have been renumbered." : {
+      "comment" : "A message displayed after a user renumbers their dives.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Tauchgänge wurden neu nummeriert."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plongées ont été renumérotées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken zijn opnieuw genummerd."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken die al in je logboek staan, worden normaal gesproken overgeslagen. In de modus ‘Alle duiken downloaden’ worden overeenkomende duiken daarentegen samengevoegd — de computer werkt de opgeslagen gegevens bij, terwijl je persoonlijke invoer ongewijzigd blijft."
+          }
         }
       }
     },
@@ -9471,7 +9564,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tauchgänge ohne Tauchernamenseintrag sind nicht betroffen."
+            "value" : "Tauchgänge ohne Tauchernamen sind nicht betroffen."
           }
         },
         "fr-CA" : {
@@ -9813,7 +9906,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Downladen van duik %lld"
+            "value" : "Duik %lld downloaden..."
           }
         }
       }
@@ -9843,7 +9936,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Downloading..."
+            "value" : "Bezig met downloaden..."
           }
         }
       }
@@ -10255,6 +10348,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "bijv. DAN"
+          }
+        }
+      }
+    },
+    "Easy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leicht"
+          }
+        }
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Makkelijk"
           }
         }
       }
@@ -10757,19 +10867,26 @@
         }
       }
     },
-    "Enable reminders and notifications" : {
-      "comment" : "Subtitle for the notifications toggle in Settings.",
+    "Enable before connecting to a device. Save the log from the error screen after a sync failure." : {
+      "comment" : "A description of the BLE diagnostic logging feature.",
+      "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Erinnerungen und Benachrichtigungen aktivieren"
+            "value" : "Aktiviere die Funktion vor dem Verbinden mit einem Gerät. Speichere das Protokoll nach einem Synchronisierungsfehler über den Fehlerbildschirm."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Activer les rappels et les notifications"
+            "value" : "Activez avant de vous connecter à un appareil. Enregistrez le journal depuis l'écran d'erreur après un échec de synchronisation."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schakel dit in voordat je verbinding maakt met een apparaat. Bewaar het logboek vanaf het foutscherm na een mislukte synchronisatie."
           }
         },
         "nl" : {
@@ -10861,6 +10978,12 @@
             "state" : "translated",
             "value" : "Einddatum / Verlenging"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einddatum / Verlenging"
+          }
         }
       }
     },
@@ -10933,11 +11056,6 @@
           }
         }
       }
-    },
-    "English" : {
-      "comment" : "Label for the \"English\" app language option.",
-      "isCommentAutoGenerated" : true,
-      "shouldTranslate" : false
     },
     "Enter hex bytes…" : {
       "comment" : "A label for a text field that lets the user enter a hexadecimal string of bytes.",
@@ -11146,7 +11264,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Materiaal gebruikt"
+            "value" : "Gebruikt materiaal"
           }
         }
       }
@@ -11476,7 +11594,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alleen gebeurtenissen sinds laatste keer opstarten van de app"
+            "value" : "Alleen gebeurtenissen sinds de laatste keer dat de app is gestart"
           }
         }
       }
@@ -11813,7 +11931,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verloopt in 2 dag"
+            "value" : "Verloopt in 1 dag"
           }
         }
       }
@@ -11958,26 +12076,25 @@
         }
       }
     },
-    "Export a compressed backup of your database" : {
-      "comment" : "A description of the action of backing up the user's database.",
-      "isCommentAutoGenerated" : true,
+    "Export a compressed backup of your database." : {
+      "comment" : "Subtitle under the Backup Database button in Data Management settings.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Komprimiertes Backup deiner Datenbank exportieren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Export a compressed backup of your database"
+            "value" : "Komprimiertes Backup deiner Datenbank exportieren."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exporter une sauvegarde compressée de votre base de données"
+            "value" : "Exporter une sauvegarde compressée de votre base de données."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporteer een gecomprimeerde back-up van je database."
           }
         },
         "nl" : {
@@ -12061,7 +12178,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exporteer "
+            "value" : "Exporteer wanneer je wilt"
           }
         }
       }
@@ -12373,7 +12490,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Snell opstijging (10-18 m/min)"
+            "value" : "Snelle opstijging (10-18 m/min)"
           }
         }
       }
@@ -12445,6 +12562,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pieds (pi)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voet (ft)"
           }
         },
         "nl" : {
@@ -12618,7 +12741,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filter op duiker: %@"
+            "value" : "Filter op duiker: "
           }
         }
       }
@@ -12692,7 +12815,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filt4ers"
+            "value" : "Filters"
           }
         }
       }
@@ -12895,11 +13018,6 @@
         }
       }
     },
-    "Français" : {
-      "comment" : "Label for the \"Français\" app language option.",
-      "isCommentAutoGenerated" : true,
-      "shouldTranslate" : false
-    },
     "Freshwater" : {
       "comment" : "Water type: fresh water",
       "localizations" : {
@@ -12919,29 +13037,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zoetwater"
-          }
-        }
-      }
-    },
-    "G" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Leicht"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Facile"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "G"
           }
         }
       }
@@ -13014,7 +13109,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gasmix"
+            "value" : "Gasmengsel"
           }
         }
       }
@@ -13149,7 +13244,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "GAS MIX"
+            "value" : "GASMENGSEL"
           }
         }
       }
@@ -13171,7 +13266,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gasmix"
+            "value" : "Gasmengsel"
           }
         }
       }
@@ -13868,7 +13963,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "2e trap"
+            "value" : "Tweede trap"
           }
         }
       }
@@ -14037,6 +14132,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Émetteur"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transmitter"
           }
         },
         "nl" : {
@@ -14395,7 +14496,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "GPS Coördinaten (Instapplaats)"
+            "value" : "GPS Coördinaten (instapplaats)"
           }
         }
       }
@@ -14511,7 +14612,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Groepsnaam moet ten minste 2 karakters bevattten"
+            "value" : "Groepsnaam moet ten minste 2 karakters bevatten"
           }
         }
       }
@@ -14535,7 +14636,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Groepeer je duiken in duiktrips en herbeleef je duikavonturen"
+            "value" : "Groepeer je duiken in duiktrips en herbeleef je duikavonturen."
           }
         }
       }
@@ -14608,7 +14709,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verwerkingsdruk"
+            "value" : "Afhandeldruk"
           }
         }
       }
@@ -14630,7 +14731,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verwerkingstijd"
+            "value" : "Afhandeltijd"
           }
         }
       }
@@ -14652,7 +14753,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verwerkingstijd (min)"
+            "value" : "Afhandeltijd (min)"
           }
         }
       }
@@ -14704,7 +14805,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hevige golven"
+            "value" : "Zware deining"
           }
         }
       }
@@ -14852,7 +14953,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hoge gasconcentratie — verhoogd risico op ademhalingsmoeilijkheden."
+            "value" : "Hoge gasdichtheid — verhoogd risico op ademhalingsmoeilijkheden."
           }
         }
       }
@@ -14874,7 +14975,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Beginscherm Widgets"
+            "value" : "Beginscherm-widgets"
           }
         }
       }
@@ -14896,7 +14997,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hoe de “Beste mix” werkt"
+            "value" : "Hoe \"Beste mengsel\" werkt"
           }
         }
       }
@@ -14940,7 +15041,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hoe wordt het minimumgasverbruik berekend?"
+            "value" : "Hoe wordt het minimumgas berekend?"
           }
         }
       }
@@ -14962,7 +15063,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hoe minimumgasverbruik werkt"
+            "value" : "Hoe minimumgas werkt"
           }
         }
       }
@@ -15015,7 +15116,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hypoxic"
+            "value" : "Hypoxisch"
           }
         }
       }
@@ -15117,7 +15218,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iCloud account"
+            "value" : "iCloud-account"
           }
         }
       }
@@ -15301,7 +15402,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Imperial"
+            "value" : "Imperiaal"
           }
         }
       }
@@ -15530,7 +15631,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeerformaten"
+            "value" : "Importformaten"
           }
         }
       }
@@ -15554,7 +15655,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeren vanuit BlueDive XML-, MacDive XML- of UDDF-bestanden — alle gangbare formaten voor duiklogboeken worden ondersteund."
+            "value" : "Importeren vanuit BlueDive XML-, MacDive XML-, UDDF- of Garmin FIT-bestanden — alle gangbare formaten voor duiklogboeken worden ondersteund."
           }
         }
       }
@@ -15624,7 +15725,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeerlimiet bereikt"
+            "value" : "Importlimiet bereikt"
           }
         }
       }
@@ -15647,7 +15748,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeeropties"
+            "value" : "Importopties"
           }
         }
       }
@@ -15722,7 +15823,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeermelding"
+            "value" : "Belangrijke mededeling"
           }
         }
       }
@@ -15752,7 +15853,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeer dataformaat"
+            "value" : "Geïmporteerd dataformaat"
           }
         }
       }
@@ -15781,7 +15882,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lldduiken importeren…"
+            "value" : "%lld duiken importeren…"
           }
         }
       }
@@ -15810,7 +15911,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importeer 1 duik…"
+            "value" : "1 duik importeren…"
           }
         }
       }
@@ -16243,7 +16344,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ongeldig invoer"
+            "value" : "Ongeldig bedrag."
           }
         }
       }
@@ -16296,7 +16397,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Certificeringsdatum"
+            "value" : "Uitgiftedatum"
           }
         }
       }
@@ -16523,6 +16624,29 @@
         }
       }
     },
+    "Last 15 minutes of sync activity." : {
+      "comment" : "Subtitle under the Export Sync Log button describing the time window covered by the log.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte 15 Minuten der Synchronisierungsaktivität."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "15 dernières minutes d'activité de synchronisation."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laatste 15 minuten van synchronisatieactiviteit."
+          }
+        }
+      }
+    },
     "Last Maintenance" : {
       "comment" : "Title of a row in the gear service view that displays the date of the last recorded maintenance.",
       "isCommentAutoGenerated" : true,
@@ -16596,7 +16720,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Latitude"
+            "value" : "Breedtegraad"
           }
         }
       }
@@ -16923,7 +17047,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Log onderhoud"
+            "value" : "Onderhoud registreren"
           }
         }
       }
@@ -17001,7 +17125,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Longitude"
+            "value" : "Lengtegraad"
           }
         }
       }
@@ -17065,6 +17189,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le mode faible consommation est activé — la synchronisation iCloud peut être plus lente. Désactivez-le dans Réglages > Batterie."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De energiebesparingsmodus is ingeschakeld — de synchronisatie met iCloud kan hierdoor trager verlopen. Schakel deze uit via ‘Instellingen’ > ‘Batterij’."
           }
         },
         "nl" : {
@@ -17273,24 +17403,6 @@
             "state" : "translated",
             "value" : "Het onderhoud moet vandaag worden uitgevoerd (%@)."
           }
-        }
-      }
-    },
-    "Maintenance reminders" : {
-      "comment" : "Title of a toggle row in the settings view that controls whether gear maintenance reminders are enabled.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wartungserinnerungen"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rappels d'entretien"
-          }
         },
         "nl" : {
           "stringUnit" : {
@@ -17318,7 +17430,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het onderhoud had %@ (%@ dagen geleden) moeten plaatsvinden."
+            "value" : "Het onderhoud had op %@ (%@ dagen geleden) moeten plaatsvinden."
           }
         }
       }
@@ -17723,7 +17835,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geef een onderhoudsbeurt aan om de automatische tracking van uw apparatuur te starten"
+            "value" : "Geef een onderhoudsbeurt aan om de automatische tracking van je apparatuur te starten"
           }
         }
       }
@@ -17753,7 +17865,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Markeren als afgehandeld"
+            "value" : "Markeren als onderhouden"
           }
         }
       }
@@ -17987,7 +18099,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Max. temperatuur."
+            "value" : "Max. temp."
           }
         }
       }
@@ -18226,7 +18338,30 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Metrisch)"
+            "value" : "Metrisch"
+          }
+        }
+      }
+    },
+    "Milestone counts dives for all divers combined. Not recommended when multiple divers share this app." : {
+      "comment" : "Footer under the Milestones toggle warning about multi-diver use.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meilensteine zählen Tauchgänge aller Taucher zusammen. Nicht empfohlen, wenn mehrere Taucher diese App teilen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les jalons comptent les plongées de tous les plongeurs combinés. Non recommandé lorsque plusieurs plongeurs partagent cette application."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mijlpaal telt duiken van alle duikers samen. Niet aanbevolen wanneer meerdere duikers deze app delen."
           }
         }
       }
@@ -18366,7 +18501,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Min. Temp."
+            "value" : "Min. temp."
           }
         }
       }
@@ -18424,7 +18559,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Min. moet minder zijn dan Max."
+            "value" : "Min. moet kleiner zijn dan Max."
           }
         }
       }
@@ -18513,6 +18648,12 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "Calculator voor minimumgas"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Calculator voor het minimale gasverbruik"
           }
         }
@@ -18535,7 +18676,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minimum is 40 bar"
+            "value" : "Minimaal 40 bar"
           }
         }
       }
@@ -18557,7 +18698,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minimum is 600 psi"
+            "value" : "Minimaal 600 psi"
           }
         }
       }
@@ -18781,7 +18922,53 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meest waargenomen (zee)dier"
+            "value" : "Meest waargenomen (zee)dieren"
+          }
+        }
+      }
+    },
+    "Move" : {
+      "comment" : "Swipe-right action button label and confirm button in the Move Diver sheet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschieben"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verplaatsen"
+          }
+        }
+      }
+    },
+    "Move dive" : {
+      "comment" : "Navigation title of the Move Diver sheet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgang verschieben"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer la plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duik verplaatsen"
           }
         }
       }
@@ -19010,7 +19197,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nieuw - zal worden geïmporteerd"
+            "value" : "Nieuw — zal worden geïmporteerd"
           }
         }
       }
@@ -19606,7 +19793,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen certificeringen voor de geselecteerde duiker"
+            "value" : "Geen certificeringen voor de geselecteerde duiker."
           }
         }
       }
@@ -19714,6 +19901,12 @@
             "state" : "translated",
             "value" : "Er zijn geen duikgegevens om weer te geven"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen apparaten geregistreerd"
+          }
         }
       }
     },
@@ -19729,6 +19922,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun directeur de plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen divemaster"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er zijn geen duikgegevens om weer te geven"
+          }
+        }
+      }
+    },
+    "No diver" : {
+      "comment" : "Row label in Move Diver sheet to remove the diver assignment from a dive.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Taucher"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun plongeur"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen duiker"
           }
         },
         "nl" : {
@@ -19854,7 +20082,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duiken gevonden voor de geselecteerde duiker"
+            "value" : "Geen duiken gevonden voor de geselecteerde duiker."
           }
         }
       }
@@ -19877,7 +20105,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duiken gevonden voor het huidige filter"
+            "value" : "Geen duiken gevonden voor het huidige filter."
           }
         }
       }
@@ -19969,7 +20197,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duplicaten gevonden/"
+            "value" : "Geen duplicaten gevonden."
           }
         }
       }
@@ -20127,7 +20355,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen materiaal gevonden voor de geselecteerde duiker"
+            "value" : "Geen materiaal gevonden voor de geselecteerde duiker."
           }
         }
       }
@@ -20181,7 +20409,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen (zee)dieren opgeslagen"
+            "value" : "Geen (zee)dieren opgeslagen."
           }
         }
       }
@@ -20204,7 +20432,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duikmateriaal gevonden in het geselecteerde bestand"
+            "value" : "Geen duikmateriaal gevonden in het geselecteerde bestand."
           }
         }
       }
@@ -20273,7 +20501,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen verzekering voor de geselecteerde duiker"
+            "value" : "Geen verzekering voor de geselecteerde duiker."
           }
         }
       }
@@ -20326,7 +20554,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen verzekeringsrecords gevonden in het geselecteerde bestand"
+            "value" : "Geen verzekeringsrecords gevonden in het geselecteerde bestand."
           }
         }
       }
@@ -20486,7 +20714,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen overeengekomen duiken"
+            "value" : "Geen overeenkomende duiken"
           }
         }
       }
@@ -20607,7 +20835,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen foto’s."
+            "value" : "Geen foto."
           }
         }
       }
@@ -20804,7 +21032,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen tanksjablomnen"
+            "value" : "Geen tanksjablonen"
           }
         }
       }
@@ -20878,7 +21106,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen trips gevonden voor de geselecteerde duiker"
+            "value" : "Geen trips gevonden voor de geselecteerde duiker."
           }
         }
       }
@@ -21190,6 +21418,12 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "Aantekeningen, buddy, divemaster, beoordeling, type duik, omstandigheden, naam en details van de duiklocatie, duiknummer en oppervlakte-interval. Ook het tankvolume, de werkdruk, het materiaal en het type worden bijgehouden, tenzij de computer deze gegevens expliciet rapporteert."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Aantekeningen, buddy, divemaster, kwalificatie, type duik, omstandigheden, naam en details van de duiklocatie, duiknummer en oppervlakte-interval. Ook het tankvolume, de werkdruk, het materiaal en het type worden bijgehouden, tenzij de computer deze gegevens expliciet weergeeft."
           }
         }
@@ -21320,30 +21554,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
-          }
-        }
-      }
-    },
-    "Only import gas mixes actually used during the dive" : {
-      "comment" : "Tooltip for the toggle that filters out unused tanks when importing from a dive computer.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nur tatsächlich verwendete Gasmischungen importieren"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Importer uniquement les mélanges gazeux utilisés pendant la plongée"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Importeer alleen gasmengsels die gebruikt zijn tijdens de duik"
           }
         }
       }
@@ -21595,7 +21805,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De uitrusting in groepen indelen — bijvoorbeeld tropische uitrusting, uitrusting voor koud water."
+            "value" : "Deel de uitrusting in groepen in — bijvoorbeeld tropische uitrusting, uitrusting voor koud water."
           }
         }
       }
@@ -21619,7 +21829,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trips organiseren"
+            "value" : "Trips organiseren…"
           }
         }
       }
@@ -21687,7 +21897,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Over %@"
+            "value" : "Meer dan %@"
           }
         }
       }
@@ -21878,25 +22088,25 @@
         }
       }
     },
-    "Permanently delete all data from this device and iCloud" : {
-      "comment" : "A subtitle describing what the Erase All Data button does.",
+    "Permanently deletes all data from this device and iCloud. This action cannot be undone. Wait for iCloud sync to finish uploading before closing the app." : {
+      "comment" : "Footer under the Erase All Data button in Data Management settings.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle Daten von diesem Gerät und iCloud dauerhaft löschen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permanently delete all data from this device and iCloud"
+            "value" : "Löscht dauerhaft alle Daten von diesem Gerät und iCloud. Diese Aktion kann nicht rückgängig gemacht werden. Warte, bis der iCloud-Upload abgeschlossen ist, bevor du die App schließt."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Supprimer définitivement toutes les données de cet appareil et d'iCloud"
+            "value" : "Supprime définitivement toutes les données de cet appareil et d'iCloud. Cette action est irréversible. Attendez que la synchronisation iCloud termine l'envoi avant de fermer l'application."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijdert permanent alle gegevens van dit apparaat en iCloud. Deze actie kan niet ongedaan worden gemaakt. Wacht tot de iCloud-synchronisatie klaar is met uploaden voordat je de app sluit."
           }
         },
         "nl" : {
@@ -22104,7 +22314,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lees dit alsjeblieft voordat u verdergaat"
+            "value" : "Lees dit alsjeblieft voordat je verder gaat"
           }
         }
       }
@@ -22513,6 +22723,29 @@
         }
       }
     },
+    "Previous save failed:\n%@" : {
+      "comment" : "Note appended to the import confirmation alert when re-presented after a save failure. %@ is the system error description explaining why the previous import save did not complete.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorheriges Speichern fehlgeschlagen:\n%@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'enregistrement précédent a échoué :\n%@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorige opslag mislukt:\n%@"
+          }
+        }
+      }
+    },
     "Price" : {
       "comment" : "A label describing the price of an item.",
       "isCommentAutoGenerated" : true,
@@ -22637,6 +22870,12 @@
           }
         },
         "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PSI"
+          }
+        },
+        "nl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "PSI"
@@ -22832,7 +23071,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ruwe gegevens (%lld-punten)"
+            "value" : "Ruwe gegevens (%lld punten)"
           }
         }
       }
@@ -22986,28 +23225,6 @@
         }
       }
     },
-    "Recalculate surface interval for each diver's dives" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oberflächenintervall für die Tauchgänge jedes Tauchers neu berechnen"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recalculer l'intervalle de surface pour les plongées de chaque plongeur"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bereken de oppervlaktepauze voor de duiken van elke duiker opnieuw"
-          }
-        }
-      }
-    },
     "Recalculate surface intervals" : {
       "localizations" : {
         "de" : {
@@ -23130,6 +23347,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recente duiken"
+          }
+        }
+      }
+    },
+    "Records full BLE packet traces for troubleshooting sync errors" : {
+      "comment" : "Subtitle for the BLE diagnostic logging toggle row.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeichnet vollständige BLE-Paketverläufe zur Behebung von Synchronisierungsfehlern auf"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistre les traces complètes des paquets BLE pour diagnostiquer les erreurs de synchronisation"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legt volledige BLE-pakkettraces vast voor het oplossen van synchronisatiefouten"
           }
         }
       }
@@ -23288,7 +23529,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Herinneringen worden automatisch bijgewerkt wanneer de data wijzigt"
+            "value" : "Herinneringen worden automatisch bijgewerkt wanneer de data wijzigt."
           }
         }
       }
@@ -23454,7 +23695,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verwijder deze foto van de duik"
+            "value" : "Deze foto uit de duik verwijderen?"
           }
         }
       }
@@ -23518,26 +23759,86 @@
         }
       }
     },
-    "Renewal reminders" : {
-      "comment" : "Toggle row title for receiving renewal reminders about their certification.",
+    "Renumber" : {
+      "comment" : "A button that renumbers dives by date.",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verlängerungserinnerungen"
+            "value" : "Neu nummerieren"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rappels de renouvellement"
+            "value" : "Renuméroter"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opnieuw nummeren"
+          }
+        }
+      }
+    },
+    "Renumber dives" : {
+      "comment" : "A label for a button that renumbers dives by date.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge neu nummerieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renuméroter les plongées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken opnieuw nummeren"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Herinneringen voor verlenging"
+          }
+        }
+      }
+    },
+    "Renumber Dives?" : {
+      "comment" : "A confirmation prompt to renumber dives.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge neu nummerieren?"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renuméroter les plongées ?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken opnieuw nummeren?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HERHALEND"
           }
         }
       }
@@ -23562,22 +23863,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HERHALEND"
-          }
-        }
-      }
-    },
-    "Replay the launch animation" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Startanimation erneut abspielen"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rejouer l'animation de lancement"
           }
         },
         "nl" : {
@@ -23752,7 +24037,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset %lld filters"
+            "value" : "%lld filters resetten"
           }
         }
       }
@@ -23781,7 +24066,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset %lldfilters & sortering"
+            "value" : "%lld filters & sortering resetten"
           }
         }
       }
@@ -23810,7 +24095,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset 1 filter"
+            "value" : "1 filter resetten"
           }
         }
       }
@@ -23839,7 +24124,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset 1 filter & sortering"
+            "value" : "1 filter & sortering resetten"
           }
         }
       }
@@ -23924,6 +24209,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réinitialiser les préférences ?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset voorkeuren?"
           }
         },
         "nl" : {
@@ -24082,26 +24373,25 @@
         }
       }
     },
-    "Return to default values" : {
-      "comment" : "A description of the action to reset all preferences to their default values.",
-      "isCommentAutoGenerated" : true,
+    "Return all preferences to their default values." : {
+      "comment" : "Subtitle under the Reset Preferences button in Data Management settings.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Auf Standardwerte zurücksetzen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Return to default values"
+            "value" : "Alle Einstellungen auf ihre Standardwerte zurücksetzen."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Revenir aux valeurs par défaut"
+            "value" : "Réinitialiser toutes les préférences à leurs valeurs par défaut."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zet alle voorkeuren terug naar hun standaardwaarden."
           }
         },
         "nl" : {
@@ -24131,54 +24421,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beoordeel import"
-          }
-        }
-      }
-    },
-    "Review the feature walkthrough" : {
-      "comment" : "A caption displayed underneath the \"Welcome Tour\" button in the Settings view.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Funktionsübersicht ansehen"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Revoir le guide de bienvenue"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bekijk de uitleg over de functie"
-          }
-        }
-      }
-    },
-    "Review the safety disclaimer" : {
-      "comment" : "A description of the disclaimer.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sicherheitshinweis lesen"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Consulter l'avertissement de sécurité"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lees de veiligheidsverklaring door"
           }
         }
       }
@@ -24293,7 +24535,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AMV"
+            "value" : "AMV-waarde"
           }
         }
       }
@@ -24338,7 +24580,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "$%ld PPO₂ (0–2 bar)"
+            "value" : "S%ld PPO₂ (0–2 bar)"
           }
         }
       }
@@ -24361,7 +24603,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "S%ld:"
+            "value" : "S%ld: "
           }
         }
       }
@@ -24731,6 +24973,12 @@
             "state" : "translated",
             "value" : "Zelfde duikcomputer ID"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zelfde logboekrecord (Legacy)"
+          }
         }
       }
     },
@@ -24896,6 +25144,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Backup opslaan"
+          }
+        }
+      }
+    },
+    "Save Diagnostic Log" : {
+      "comment" : "A button that saves a diagnostic log.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnoseprotokoll speichern"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer le journal de diagnostic"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostisch logboek opslaan"
           }
         }
       }
@@ -25141,7 +25413,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zoek duiken..."
+            "value" : "Zoek duiken…"
           }
         }
       }
@@ -25171,7 +25443,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zoek materiaal…"
+            "value" : "Zoek materiaal..."
           }
         }
       }
@@ -25298,7 +25570,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Suche nach Bluetooth-Tauchcomputern..."
+            "value" : "Suche nach Bluetooth-Tauchcomputern…"
           }
         },
         "fr-CA" : {
@@ -25340,7 +25612,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zoeken…"
+            "value" : "Zoeken..."
           }
         }
       }
@@ -25608,7 +25880,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Selecteer een sjabloon"
+            "value" : "Selecteer een sjabloon..."
           }
         }
       }
@@ -25632,7 +25904,30 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Selecteer ten minste één item van je duikmateriaal"
+            "value" : "Selecteer ten minste één item van je duikmaterialen"
+          }
+        }
+      }
+    },
+    "Select diver" : {
+      "comment" : "Section header in Move Diver sheet listing existing divers to pick from.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taucher auswählen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sélectionner un plongeur"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiker selecteren"
           }
         }
       }
@@ -26082,7 +26377,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ONDERHOUD NODIG IN 1 DAG"
+            "value" : "ONDERHOUD NODIG OVER 1 DAG"
           }
         }
       }
@@ -26237,7 +26532,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Onderhoud benodigd"
+            "value" : "Onderhoud vereist"
           }
         }
       }
@@ -26289,7 +26584,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zet een herinnering voor onderhoud"
+            "value" : "Stel een herinnering in voor onderhoud"
           }
         }
       }
@@ -26314,6 +26609,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réglages"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instellingen"
           }
         },
         "nl" : {
@@ -26867,7 +27168,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Plaats, locatie, buddy, land, type, tag, duik #.…"
+            "value" : "Duikstek, locatie, buddy, land, type, tag, duik #.…"
           }
         }
       }
@@ -27144,7 +27445,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Soorten geziern"
+            "value" : "Soorten gezien"
           }
         }
       }
@@ -27174,7 +27475,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Standaardweergave"
+            "value" : "Standaardkaart"
           }
         }
       }
@@ -27555,7 +27856,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Structuur: BlueDiveGlobalData ·\nBlueDiveSiteData ·\nBlueDiveTankData ·\nBlueDiveMarineLifeData ·\nBlueDiveGearData ·\nBlueDiveSamplesData"
+            "value" : "Structuur: BlueDiveGlobalData · BlueDiveSiteData · BlueDiveTankData · BlueDiveMarineLifeData · BlueDiveGearData · BlueDiveSamplesData"
           }
         }
       }
@@ -27645,7 +27946,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oppervlakteinterval"
+            "value" : "Oppervlakte-interval"
           }
         }
       }
@@ -27716,28 +28017,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Een Swift-wrapper rond libdivecomputer, die native integratie met Apple-platforms mogelijk maakt voor communicatie met duikcomputers."
-          }
-        }
-      }
-    },
-    "Switching from or to System will close this window to apply the new setting." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beim Wechsel zu oder vom Systemmodus wird dieses Fenster geschlossen, um die neue Einstellung zu übernehmen."
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Passer au mode Système (ou le quitter) fermera cette fenêtre pour appliquer le nouveau paramètre."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Als u van of naar System overschakelt, wordt dit venster gesloten om de nieuwe instelling toe te passen."
           }
         }
       }
@@ -27853,32 +28132,25 @@
         }
       }
     },
-    "Sync dive data across your devices" : {
-      "comment" : "A description of what iCloud sync does.",
-      "isCommentAutoGenerated" : true,
+    "Sync dive data across your devices. Changes take effect after restarting the app." : {
+      "comment" : "Footer under the iCloud Sync toggle describing the effect and restart requirement.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tauchdaten auf all deinen Geräten synchronisieren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sync dive data across your devices"
+            "value" : "Tauchdaten auf all deinen Geräten synchronisieren. Änderungen werden nach dem Neustart der App wirksam."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synchronisez vos données de plongée sur tous vos appareils"
+            "value" : "Synchronisez vos données de plongée sur tous vos appareils. Les modifications prennent effet après le redémarrage de l'application."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synchroniseer duiklogs tussen alle apparaten"
+            "value" : "Synchroniseer duikgegevens tussen je apparaten. Wijzigingen worden van kracht na het opnieuw starten van de app."
           }
         }
       }
@@ -27981,7 +28253,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De synchronisatie is niet volledig voltooid — een of meer oudere duiken op het apparaat konden niet worden gelezen."
+            "value" : "De synchronisatie is niet volledig voltooid — een of meer oudere duiken op de duikcomputer konden niet worden gelezen."
           }
         }
       }
@@ -28057,8 +28329,7 @@
       }
     },
     "System" : {
-      "comment" : "Label for the \"System\" appearance mode.",
-      "isCommentAutoGenerated" : true,
+      "comment" : "Language picker option that follows the device language",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -28280,6 +28551,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pression du cylindre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tankdruk"
           }
         },
         "nl" : {
@@ -28536,7 +28813,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tik op een duikcomputer om het te scannen en automatisch verbinding te maken."
+            "value" : "Tik op een duikcomputer om hem te scannen en automatisch verbinding te maken."
           }
         }
       }
@@ -28642,7 +28919,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Temperatuur (%@)"
+            "value" : "Temperaturen (%@)"
           }
         }
       }
@@ -28881,7 +29158,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De bedrijfsdruk wordt gebruikt om de gascapaciteit (ft³) om te rekenen naar het werkelijke watervolume (L) voor RMV- en SAC-berekeningen. Typische waarde: 3000 PSI."
+            "value" : "De werkdruk wordt gebruikt om de gascapaciteit (ft³) om te rekenen naar het werkelijke watervolume (L) voor AMV- en SAC-berekeningen. Typische waarde: 3000 PSI."
           }
         }
       }
@@ -29053,7 +29330,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deze handeling kan niet ongedaan worden gemaakt. De versnellingsgroep en de bijbehorende configuratie worden definitief verwijderd."
+            "value" : "Deze handeling kan niet ongedaan worden gemaakt. De materiaalgroep en de bijbehorende configuratie worden definitief verwijderd."
           }
         }
       }
@@ -29077,7 +29354,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deze handeling kan niet ongedaan worden gemaakt. De tanksjabloon wordt definitief verwijderd."
+            "value" : "Deze handeling kan niet ongedaan worden gemaakt. Het tanksjabloon wordt definitief verwijderd."
           }
         }
       }
@@ -29151,6 +29428,30 @@
         }
       }
     },
+    "This will assign each diver's dives a sequential number in date order, starting at 1. Dives without a diver name will not be affected." : {
+      "comment" : "Alert message for renumbering dives.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dadurch erhalten die Tauchgänge jedes Tauchers eine fortlaufende Nummer nach Datum, beginnend bei 1. Tauchgänge ohne Tauchernamen sind nicht betroffen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceci attribuera à chaque plongée d'un plongeur un numéro séquentiel par ordre de date, à partir de 1. Les plongées sans nom de plongeur ne seront pas affectées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiermee krijgt elke duik van een duiker een volgnummer op datumvolgorde, beginnend bij 1. Duiken zonder naam van een duiker worden niet beïnvloed."
+          }
+        }
+      }
+    },
     "This will permanently delete all your data from this device and iCloud. This action cannot be undone. Wait for the iCloud sync to finish uploading before closing the app." : {
       "comment" : "An alert message warning the user that erasing all data is permanent and affects both local storage and iCloud.",
       "localizations" : {
@@ -29179,7 +29480,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dadurch wird das Oberflächenintervall für alle Tauchgänge basierend auf dem vorherigen Tauchgang jedes Tauchers aktualisiert. Tauchgänge ohne Taucher-Namen werden nicht beeinflusst."
+            "value" : "Dadurch wird das Oberflächenintervall für alle Tauchgänge basierend auf dem vorherigen Tauchgang jedes Tauchers aktualisiert. Tauchgänge ohne Tauchernamen sind nicht betroffen."
           }
         },
         "fr-CA" : {
@@ -29213,7 +29514,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Er zijn drie redenen waarom deze reserve moet worden aangehouden: toezichthouders eisen een minimale inlaatdruk om gas betrouwbaar te kunnen leveren, manometers zijn niet volledig nauwkeurig en de gasdruk daalt wanneer de watertemperatuur lager is dan de vultemperatuur. Samen zorgen deze factoren ervoor dat er ongeveer 40 bar (600 psi) onbruikbaar gas op de bodem van je cilinder achterblijft."
+            "value" : "Er zijn drie redenen waarom deze reserve moet worden aangehouden: ademautomaten hebben een minimale inlaatdruk nodig om gas betrouwbaar te kunnen leveren, manometers zijn niet volledig nauwkeurig en de gasdruk daalt wanneer de watertemperatuur lager is dan de vultemperatuur. Samen zorgen deze factoren ervoor dat er ongeveer 40 bar (600 psi) onbruikbaar gas op de bodem van je cilinder achterblijft."
           }
         }
       }
@@ -29293,7 +29594,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Om alleen duiken te herdownloaden die na een bepaald tijdstip hebben plaatsgevonden, moet je de synchronisatie-vingerafdruk overschrijven in **Instellingen → Bluetooth-import → Synchronisatie-vingerafdrukken**. [Instructies en details](https://github.com/houle988/BlueDive/wiki/Dive-Computer-Sync-Fingerprints#overriding-a-fingerprint)"
+            "value" : "Om alleen duiken opnieuw te downloaden die na een bepaald tijdstip hebben plaatsgevonden, moet je de synchronisatie-vingerafdruk overschrijven in **Instellingen → Bluetooth-import → Synchronisatie-vingerafdrukken**. [Instructies en details](https://github.com/houle988/BlueDive/wiki/Dive-Computer-Sync-Fingerprints#overriding-a-fingerprint)"
           }
         }
       }
@@ -29403,6 +29704,12 @@
             "state" : "translated",
             "value" : "Totale kosten"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Totale kosten"
+          }
         }
       }
     },
@@ -29445,7 +29752,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Totale Gasvolume (TG)"
+            "value" : "Totaal gasvolume (TG)"
           }
         }
       }
@@ -29655,7 +29962,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duur van de reis"
+            "value" : "Duur van de trip"
           }
         }
       }
@@ -29674,6 +29981,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voyages"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trips"
           }
         },
         "nl" : {
@@ -29710,6 +30023,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Probeer andere zoekwoorden of pas de filters aan."
+          }
+        }
+      }
+    },
+    "Turns off automatically 24 hours after you enable it." : {
+      "comment" : "A description of the BLE diagnostic logging feature.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird 24 Stunden nach dem Aktivieren automatisch deaktiviert."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se désactive automatiquement 24 heures après l'activation."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wordt automatisch uitgeschakeld 24 uur nadat je dit hebt ingeschakeld."
           }
         }
       }
@@ -29798,7 +30135,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "UDDF inhoud"
+            "value" : "UDDF-inhoud"
           }
         }
       }
@@ -30385,7 +30722,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Onbekend bestandsformaat. Ondersteunde formaten zijn MacDive XML, BlueDive XML en UDDF."
+            "value" : "Onbekend bestandsformaat. Ondersteunde formaten zijn MacDive XML, BlueDive XML, UDDF en Garmin FIT."
           }
         }
       }
@@ -30522,7 +30859,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Werk de gegevens van dit apparaat bij"
+            "value" : "Werk de gegevens van deze uitrusting bij"
           }
         }
       }
@@ -30813,7 +31150,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Benodigde gebruiksduur per tank voor AMV/SAC"
+            "value" : "Gebruiksduur per tank voor AMV/SAC"
           }
         }
       }
@@ -31061,36 +31398,6 @@
         }
       }
     },
-    "Version, contributors & acknowledgements" : {
-      "comment" : "A description of the \"About\" section in the settings view, highlighting its content.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Version, Mitwirkende und Danksagungen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Version, contributors & acknowledgements"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Version, contributeurs et remerciements"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Versie, bijdragers en dankbetuigingen"
-          }
-        }
-      }
-    },
     "Very Challenging" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31189,19 +31496,25 @@
         }
       }
     },
-    "View and edit dive computer sync fingerprints" : {
+    "View and edit dive computer sync fingerprints." : {
       "comment" : "Subtitle for the Sync Fingerprints button in Bluetooth Import settings.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synchronisierungs-Fingerabdrücke des Tauchcomputers anzeigen und bearbeiten"
+            "value" : "Synchronisierungs-Fingerabdrücke des Tauchcomputers anzeigen und bearbeiten."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voir et modifier les empreintes de synchronisation des ordinateurs de plongée"
+            "value" : "Voir et modifier les empreintes de synchronisation des ordinateurs de plongée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bekijk en bewerk synchronisatie-vingerafdrukken van duikcomputers."
           }
         },
         "nl" : {
@@ -31599,7 +31912,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Slap"
+            "value" : "Zwak"
           }
         }
       }
@@ -31782,7 +32095,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gewicht( (%@)"
+            "value" : "Gewicht (%@)"
           }
         }
       }
@@ -31852,7 +32165,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Welkomsttoer"
+            "value" : "Welkomstrondleiding"
           }
         }
       }
@@ -31963,6 +32276,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanneer deze functie is ingeschakeld, wordt de interne klok van je duikcomputer direct na elke geslaagde synchronisatie afgestemd op de huidige tijd en tijdzone van je apparaat. Hierdoor blijven de tijdstempels van je duiken nauwkeurig, zonder dat je de computer handmatig hoeft aan te passen."
+          }
+        }
+      }
+    },
+    "When on, dive numbers and surface intervals are recalculated automatically when you add, delete, move, or change the date of a dive. Turn this off to update them only with the buttons above." : {
+      "comment" : "A description of the auto-update toggle.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn aktiviert, werden Tauchnummern und Oberflächenintervalle automatisch aktualisiert, wenn du einen Tauchgang hinzufügst, löschst, verschiebst oder das Datum änderst. Deaktiviere diese Option, um sie nur über die Schaltflächen oben zu aktualisieren."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsque cette option est activée, les numéros de plongée et les intervalles de surface sont recalculés automatiquement lorsque vous ajoutez, supprimez, déplacez une plongée ou modifiez sa date. Désactivez cette option pour les mettre à jour uniquement avec les boutons ci-dessus."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanneer ingeschakeld, worden duiknummers en oppervlakte-intervallen automatisch herberekend wanneer je een duik toevoegt, verwijdert, verplaatst of de datum ervan wijzigt. Schakel dit uit om ze alleen met de knoppen hierboven bij te werken."
           }
         }
       }
@@ -32152,7 +32489,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Werkdruk moet een geldig nummer zijn"
+            "value" : "Werkdruk moet een geldig getal zijn"
           }
         }
       }
@@ -32205,7 +32542,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XML inhoud"
+            "value" : "XML-inhoud"
           }
         }
       }

@@ -18,9 +18,9 @@ Do not estimate any data displayed or stored. All fields must be calculated or e
 
 Always use English (Canada) for labels, text, and comments in user-facing content.
 
-All public-facing text must be defined in code as localizable strings and translated in both French (Canada) and German in the Localizable file. In SwiftUI views, use `LocalizedStringKey` (e.g. `Text("My Key")`) for direct text display. When building strings programmatically — including inside `Text(verbatim:)` with interpolation, even within SwiftUI views — use `NSLocalizedString(_:bundle:comment:)` with `Bundle.forAppLanguage()` instead of `String(localized:)`, because `String(localized:)` follows the OS language and ignores the in-app language override. Outside SwiftUI views (e.g. PDF generation, enum properties, model logic), always use `NSLocalizedString(_:bundle:comment:)` with `Bundle.forAppLanguage()`. Never wrap `NSLocalizedString` in a custom helper function (e.g. `L("key")`), because Xcode's string catalog compiler only detects keys from direct `NSLocalizedString` calls with literal strings — a wrapper hides the keys and causes Xcode to mark them as "Stale". When localizing data-model values from a known finite set of options (e.g. weather, current, tank type), use a `switch` with literal `NSLocalizedString` calls for each case so Xcode can detect every key; never pass a runtime variable as the key. Every new localizable key must also have corresponding `fr-CA` and `de` entries added to `Localizable.xcstrings` in the same commit. All German (`de`) translations that are added or edited must be marked with `"state" : "needs_review"` in `Localizable.xcstrings`.
+All public-facing text must be defined in code as localizable strings and translated in French (Canada), German, and Dutch in the Localizable file. In SwiftUI views, use `LocalizedStringKey` (e.g. `Text("My Key")`) for direct text display. When building strings programmatically — including inside `Text(verbatim:)` with interpolation, even within SwiftUI views — use `NSLocalizedString(_:bundle:comment:)` with `Bundle.forAppLanguage()` instead of `String(localized:)`, because `String(localized:)` follows the OS language and ignores the in-app language override. Outside SwiftUI views (e.g. PDF generation, enum properties, model logic), always use `NSLocalizedString(_:bundle:comment:)` with `Bundle.forAppLanguage()`. Never wrap `NSLocalizedString` in a custom helper function (e.g. `L("key")`), because Xcode's string catalog compiler only detects keys from direct `NSLocalizedString` calls with literal strings — a wrapper hides the keys and causes Xcode to mark them as "Stale". When localizing data-model values from a known finite set of options (e.g. weather, current, tank type), use a `switch` with literal `NSLocalizedString` calls for each case so Xcode can detect every key; never pass a runtime variable as the key. Every new localizable key must also have corresponding `fr-CA`, `de`, and `nl` entries added to `Localizable.xcstrings` in the same commit. All German (`de`) and Dutch (`nl`) translations that are added or edited must be marked with `"state" : "needs_review"` in `Localizable.xcstrings`.
 
-When adding a new localizable string, write the Swift code first and build the project so Xcode auto-inserts the key into `Localizable.xcstrings`. For `NSLocalizedString` calls, always include the `value:` parameter with the English text as a fallback so the string displays correctly before Xcode syncs the catalog (e.g. `NSLocalizedString("Service record saved.", bundle: Bundle.forAppLanguage(), value: "Service record saved.", comment: "")`). Only add `fr-CA` and `de` translations after confirming the key exists in the file.
+When adding a new localizable string, write the Swift code first and build the project so Xcode auto-inserts the key into `Localizable.xcstrings`. For `NSLocalizedString` calls, always include the `value:` parameter with the English text as a fallback so the string displays correctly before Xcode syncs the catalog (e.g. `NSLocalizedString("Service record saved.", bundle: Bundle.forAppLanguage(), value: "Service record saved.", comment: "")`). Only add `fr-CA`, `de`, and `nl` translations after confirming the key exists in the file.
 
 When editing or adding translations in `Localizable.xcstrings`, never read the full file. Always grep for the exact key string first to get its line number, then read only ~25 lines around that position. The file is large (24 000+ lines) and targeted reads are the only efficient approach.
 
@@ -82,6 +82,27 @@ All date and time values displayed in SwiftUI views must respect both the system
 - When using SwiftUI's `Text(_:format:)` with a `Date.FormatStyle`, always append `.locale(locale)` to the format style, e.g. `Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))`.
 - When using `DateFormatter` directly, set `formatter.locale = locale` (from `@Environment(\.locale)`) rather than `.current` or `.autoupdatingCurrent`.
 - Never hardcode a locale or use `Locale.current` directly in a view — it does not reflect the in-app language override.
+
+## Release Notes & Commit Messages (GitHub)
+
+When asked for a GitHub release note, PR description, or commit message, use the Conventional Commits style below.
+
+**Title** — a single Conventional Commits line: `<type>: <imperative summary>` (e.g. `feat: BLE Diagnostic Logging with saveable trace files`). Common types: `feat`, `fix`, `refactor`, `perf`, `docs`, `chore`, `test`. Keep it under ~72 characters, lowercase after the colon, no trailing period.
+
+**Body** — a blank line after the title, then a one-paragraph summary of what the change does and why, followed by grouped sections with these exact headings (include only the ones that apply, in this order):
+
+- `Added:` — new user-facing features or capabilities.
+- `Changed:` — modifications to existing behaviour.
+- `Fixed:` — bug fixes.
+- `Notes:` — caveats, defaults, safety/behaviour details worth calling out.
+
+Each section is a bullet list (`- `). Write from the user/reviewer's perspective; name the concrete UI location (e.g. "Settings → Bluetooth Import"), file/type where useful, and any default state.
+
+**Commit trailer** — when the output is an actual git commit message (not just a GitHub release body), end with the standard co-author trailer:
+`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+Omit the trailer when the text is only a GitHub release/PR body.
+
+When a plain, non-technical version is also requested, provide a separate "user-facing" note in simple language (no type prefix, no file/type references), describing what the user can now do and how.
 
 ## DiveStore Architecture
 

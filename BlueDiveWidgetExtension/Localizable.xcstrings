@@ -19,6 +19,12 @@
             "state" : "translated",
             "value" : "%@ h"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ u"
+          }
         }
       }
     },
@@ -35,6 +41,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ h %@ min"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ u %@ min"
           }
         }
       }
@@ -53,6 +65,12 @@
             "state" : "translated",
             "value" : "%@ min"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ min"
+          }
         }
       }
     },
@@ -69,6 +87,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tous les plongeurs"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Alle duikers"
           }
         }
       }
@@ -95,6 +119,12 @@
             "state" : "translated",
             "value" : "Plongée Bluetooth"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bluetooth-duik"
+          }
         }
       }
     },
@@ -111,6 +141,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisissez les statistiques du plongeur à afficher."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kies welke duikerstatistieken worden weergegeven."
           }
         }
       }
@@ -129,6 +165,12 @@
             "state" : "translated",
             "value" : "Depuis (jours)"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dagen sinds"
+          }
         }
       }
     },
@@ -145,6 +187,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Plus profonde"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diepste"
           }
         }
       }
@@ -164,6 +212,12 @@
             "state" : "translated",
             "value" : "Nombre de plongées"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aantal duiken"
+          }
         }
       }
     },
@@ -181,6 +235,12 @@
             "state" : "translated",
             "value" : "Plongeur"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Duiker"
+          }
         }
       }
     },
@@ -197,6 +257,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Statistiques du plongeur"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Duikerstatistieken"
           }
         }
       }
@@ -216,6 +282,12 @@
             "state" : "translated",
             "value" : "Filtrer par nom de plongeur."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Filter op duikernaam."
+          }
         }
       }
     },
@@ -232,6 +304,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Depuis l'ordinateur de plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Van duikcomputer"
           }
         }
       }
@@ -251,6 +329,12 @@
             "state" : "translated",
             "value" : "Importez une plongée depuis votre ordinateur de plongée via Bluetooth."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Importeer een duik van je duikcomputer via Bluetooth."
+          }
         }
       }
     },
@@ -267,6 +351,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Saisir manuellement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Handmatig invoeren"
           }
         }
       }
@@ -285,6 +375,12 @@
             "state" : "translated",
             "value" : "Plus longue"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Langste"
+          }
         }
       }
     },
@@ -301,6 +397,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Manuel"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Handmatig"
           }
         }
       }
@@ -320,6 +422,12 @@
             "state" : "translated",
             "value" : "Plongée manuelle"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Handmatige duik"
+          }
         }
       }
     },
@@ -338,6 +446,12 @@
             "state" : "translated",
             "value" : "Notez rapidement une nouvelle plongée manuellement."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leg snel een nieuwe duik handmatig vast."
+          }
         }
       }
     },
@@ -354,6 +468,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Consultez vos statistiques de plongeur en un coup d'œil."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bekijk je belangrijkste duikerstatistieken in één oogopslag."
           }
         }
       }
@@ -373,6 +493,12 @@
             "state" : "translated",
             "value" : "Consultez votre nombre total de plongées enregistrées en un coup d'œil."
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bekijk in één oogopslag het totale aantal geregistreerde duiken."
+          }
         }
       }
     },
@@ -390,6 +516,12 @@
             "state" : "translated",
             "value" : "Plongées totales"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Totaal aantal duiken"
+          }
         }
       }
     },
@@ -406,6 +538,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Temps total"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Totale tijd"
           }
         }
       }
@@ -431,6 +569,12 @@
             "state" : "translated",
             "value" : "pi"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ft"
+          }
         }
       }
     },
@@ -453,6 +597,12 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "m"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "m"
           }
         }

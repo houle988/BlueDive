@@ -388,7 +388,7 @@ pip3 install Pillow
 | `GearIcon_Ratio` | Ratio | `ratio` |
 | `GearIcon_DiveSystem` | DiveSystem | `divesystem`, `idive` |
 | `GearIcon_Apeks` | Apeks | `apeks` |
-| `GearIcon_Orcatorch` | Orcatorch | `orcatorch` |
+| `GearIcon_OrcaTorch` | OrcaTorch | `orcatorch` |
 | `GearIcon_DiveRite` | Dive Rite | `dive rite` |
 | `GearIcon_SeaDog` | Sea-Dog | `sea-dog`, `sea dog` |
 | `GearIcon_XSScuba` | XS Scuba | `xs scuba` |
@@ -454,6 +454,7 @@ pip3 install Pillow
 | `GearIcon_Keldan` | Keldan | `keldan` |
 | `GearIcon_Ikelite` | Ikelite | `ikelite` |
 | `GearIcon_SeaAndSea` | Sea & Sea | `sea & sea`, `sea&sea`, `sea and sea` |
+| `GearIcon_GoPro` | GoPro | `gopro` |
 | `GearIcon_Paralenz` | Paralenz | `paralenz` |
 | `GearIcon_Nauticam` | Nauticam | `nauticam` |
 | `GearIcon_Sola` | Sola | `sola` |
