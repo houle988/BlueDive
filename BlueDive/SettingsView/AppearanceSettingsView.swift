@@ -49,27 +49,30 @@ struct AppearanceSettingsView: View {
                 .padding(.horizontal)
 
                 VStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    HStack {
                         Label("Language", systemImage: "globe")
                             .font(.subheadline)
                             .foregroundStyle(.cyan)
+                        Spacer()
                         Picker("Language", selection: $prefs.languageMode) {
                             ForEach(AppLanguage.allCases, id: \.self) { lang in
-                                Text(lang.label).tag(lang)
+                                Text(verbatim: lang.displayName).tag(lang)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .tint(.cyan)
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, or Deutsch. Switching from or to System will close Settings to apply the change.")
+                        Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal)
                     } else {
-                        Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, or Deutsch. Switching from or to System will close Settings to apply the change.")
+                        Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal)
