@@ -833,6 +833,28 @@ struct ContentView: View {
         DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver, hasUnnamedDives: store.cachedHasUnnamedDives)
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
+        // On iOS use `.topBarLeading` (not `.navigation`) so these items stay
+        // pinned to the leading edge; `.navigation` is re-flowed to the trailing
+        // side by SwiftUI when popping back from a pushed detail view, which
+        // crams every leading button into the top-right. macOS keeps `.navigation`
+        // (there is no `.topBarLeading` there). Matches DiverFilterToolbar.
+        #if os(iOS)
+        ToolbarItem(placement: .topBarLeading) {
+            Button(action: { showSettings = true }) {
+                Image(systemName: "gearshape.fill")
+                    .foregroundStyle(.cyan)
+            }
+            .help("Settings")
+        }
+        ToolbarItem(placement: .topBarLeading) {
+            cloudSyncToolbarItem
+        }
+        if showCalculatorsMenu {
+            ToolbarItem(placement: .topBarLeading) {
+                calculatorsMenu
+            }
+        }
+        #else
         ToolbarItem(placement: .navigation) {
             Button(action: { showSettings = true }) {
                 Image(systemName: "gearshape.fill")
@@ -848,6 +870,7 @@ struct ContentView: View {
                 calculatorsMenu
             }
         }
+        #endif
         // ── Right ───────────────────────────────────────────────────────────
 
         #if os(macOS)
