@@ -149,6 +149,7 @@ struct NotificationsSettingsView: View {
             }
             .padding(.vertical)
         }
+        .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("Notifications", bundle: .forAppLanguage(), value: "Notifications", comment: "")))
         .task {
             await checkNotificationStatus()

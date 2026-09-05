@@ -141,6 +141,7 @@ struct DataManagementSettingsView: View {
             }
             .padding(.vertical)
         }
+        .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("Data Management", bundle: .forAppLanguage(), value: "Data Management", comment: "")))
         .alert("Reset preferences?", isPresented: $showingResetAlert) {
             Button("Cancel", role: .cancel) { }

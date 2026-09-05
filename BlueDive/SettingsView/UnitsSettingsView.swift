@@ -95,6 +95,7 @@ struct UnitsSettingsView: View {
             }
             .padding(.vertical)
         }
+        .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("Units of Measure", bundle: .forAppLanguage(), value: "Units of Measure", comment: "")))
     }
 }

@@ -143,6 +143,7 @@ struct ICloudSettingsView: View {
             }
             .padding(.vertical)
         }
+        .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("iCloud", bundle: .forAppLanguage(), value: "iCloud", comment: "")))
         #if os(iOS)
         .fileExporter(

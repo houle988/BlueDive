@@ -78,6 +78,7 @@ struct BluetoothSettingsView: View {
             }
             .padding(.vertical)
         }
+        .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("Bluetooth Import", bundle: .forAppLanguage(), value: "Bluetooth Import", comment: "")))
         .onAppear {
             bleLogCount = BLEDiagnosticSession.shared.logFileCount

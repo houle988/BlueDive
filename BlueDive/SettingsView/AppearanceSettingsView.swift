@@ -91,6 +91,7 @@ struct AppearanceSettingsView: View {
             }
             .padding(.vertical)
         }
+        .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("Appearance", bundle: .forAppLanguage(), value: "Appearance", comment: "")))
         .preferredColorScheme(prefs.appearanceMode.colorScheme)
         .onChange(of: prefs.appearanceMode) {

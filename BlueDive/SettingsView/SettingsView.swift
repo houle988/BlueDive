@@ -657,6 +657,38 @@ struct ModernToggleRow: View {
     }
 }
 
+/// The vertical blue gradient background shared across the Settings sub-views,
+/// matching the Sync Fingerprints screen. The `platformBackground` endpoints keep
+/// it seamless in both light and dark mode. The middle tint uses a stronger blue
+/// in light mode (where 5% over white is nearly invisible) and the original subtle
+/// value in dark mode.
+private struct SettingsGradientBackground: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.background(
+            LinearGradient(
+                colors: [
+                    Color.platformBackground,
+                    Color.blue.opacity(colorScheme == .dark ? 0.05 : 0.10),
+                    Color.platformBackground
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
+    }
+}
+
+extension View {
+    /// Applies the subtle vertical blue gradient background used across the
+    /// Settings sub-views, matching the Sync Fingerprints screen.
+    func settingsGradientBackground() -> some View {
+        modifier(SettingsGradientBackground())
+    }
+}
+
 // Extension pour le text field autocapitalization multiplatform
 extension View {
     @ViewBuilder

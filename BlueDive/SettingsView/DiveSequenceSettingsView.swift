@@ -119,6 +119,7 @@ struct DiveSequenceSettingsView: View {
             }
             .padding(.vertical)
         }
+        .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("Dive Sequence", bundle: .forAppLanguage(), value: "Dive Sequence", comment: "")))
         .alert("Recalculate Surface Intervals?", isPresented: $showingRecalculateSurfaceAlert) {
             Button("Cancel", role: .cancel) { }
