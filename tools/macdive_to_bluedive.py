@@ -31,6 +31,11 @@ Flags:
 
         Weight unit must be specified with --weight-unit because the SQLite database
         stores whatever unit the user entered and this cannot be detected automatically.
+        --weight-unit sets the default unit for every dive and gear item.  When an
+        individual weight field embeds its own unit token (e.g. "9 kg", "48 lbs"),
+        that embedded unit takes priority over the --weight-unit default for that
+        record only.  The value is never converted — only the unit label follows the
+        embedded token.
 
         Timezone handling is automatic: the script converts both the SQLite CoreData
         timestamps (UTC) and the XML <date> strings (local time of the exporting Mac)
@@ -93,25 +98,9 @@ def fmt_double(v):
         return s if s not in ("", "-", "-0") else "0"
     except (ValueError, TypeError):
         pass
-    # MacDive stores weight as freeform strings like "48 pounds", "9 kg", or "4,5 kg".
-    # Extract the leading numeric part (including comma decimals) and re-format it.
-    # Warn when the embedded unit token contradicts the declared --weight-unit so the
-    # caller knows the number may be in the wrong unit.
-    s_v = str(v)
-    m = re.match(r'^\s*(-?[\d.,]+)\s*([a-zA-Z]*)', s_v)
+    # Freeform strings like "4,5 kg" — extract leading numeric part and re-format.
+    m = re.match(r'^\s*(-?[\d.,]+)', str(v))
     if m:
-        embedded_unit = m.group(2).strip().lower()
-        if embedded_unit:
-            _WEIGHT_UNIT_ALIASES = {
-                "kg": "kg", "kgs": "kg", "kilogram": "kg", "kilograms": "kg",
-                "lb": "lbs", "lbs": "lbs", "pound": "lbs", "pounds": "lbs",
-            }
-            canonical = _WEIGHT_UNIT_ALIASES.get(embedded_unit)
-            if canonical and hasattr(fmt_double, "_weight_unit") and canonical != fmt_double._weight_unit:
-                import sys as _sys
-                print(f"  Warning: weight value '{v}' has embedded unit '{embedded_unit}' "
-                      f"but --weight-unit={fmt_double._weight_unit} — number emitted without conversion",
-                      file=_sys.stderr)
         try:
             s = f"{float(m.group(1).replace(',', '.')):.4f}".rstrip("0").rstrip(".")
             return s if s not in ("", "-", "-0") else "0"
@@ -126,6 +115,49 @@ _XML_ILLEGAL = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
 # Junction table keyword hints used to identify gear associations (module-level so
 # export_dives warning and fetch_dive_gear matching always use the same set).
 _GEAR_HINTS = ("GEAR", "ITEM", "EQUIPMENT")
+
+# Recognized weight unit tokens in MacDive freeform weight strings.
+_WEIGHT_UNIT_ALIASES = {
+    "kg": "kg", "kgs": "kg", "kilogram": "kg", "kilograms": "kg",
+    "lb": "lbs", "lbs": "lbs", "pound": "lbs", "pounds": "lbs",
+}
+
+
+def parse_weight(raw, default_unit):
+    """Return (numeric_str, unit) from a raw MacDive weight value.
+
+    If the stored value contains a recognized unit token (e.g. '9 kg', '48 lbs'),
+    that unit takes priority over default_unit.  Plain numbers fall back to
+    default_unit.  Returns ('', default_unit) when raw is absent (None), an empty
+    string, or unparseable — an empty <weight> tag means "unrecorded", never a
+    fabricated 0.
+    """
+    if raw is None or raw == "":
+        return ("", default_unit)
+    s = str(raw)
+    m = re.match(r'^\s*(-?[\d.,]+)\s*([a-zA-Z]*)', s)
+    if m:
+        embedded = m.group(2).strip().lower()
+        canonical = _WEIGHT_UNIT_ALIASES.get(embedded) if embedded else None
+        unit = canonical if canonical else default_unit
+        if canonical and canonical != default_unit:
+            print(
+                f"  Note: weight '{raw}' has embedded unit '{embedded}'"
+                f" → using '{unit}' instead of --weight-unit={default_unit}",
+                file=sys.stderr,
+            )
+        try:
+            numeric = f"{float(m.group(1).replace(',', '.')):.4f}".rstrip("0").rstrip(".")
+            numeric = numeric if numeric not in ("", "-", "-0") else "0"
+            return (numeric, unit)
+        except (ValueError, TypeError):
+            pass
+    try:
+        numeric = f"{float(s):.4f}".rstrip("0").rstrip(".")
+        numeric = numeric if numeric not in ("", "-", "-0") else "0"
+        return (numeric, default_unit)
+    except (ValueError, TypeError):
+        return ("", default_unit)
 
 
 def xml_escape(s):
@@ -621,7 +653,7 @@ def load_gear_map(cur):
             "next_service_due":  coredata_to_str(next_svc_ts) if next_svc_ts is not None else "",
             "is_inactive":       "true" if is_inactive else "false",
             "service_records":   svc_records_list,
-            "weight_contribution": fmt_double(weight) if weight is not None else "0.0",
+            "weight_raw":          weight,
             "diver_fk":          int(diver_fk) if diver_fk is not None else None,
         }
     return result
@@ -1264,7 +1296,6 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
               f"Expected one of: {', '.join(MACDIVE_UNIT_PRESETS)}.", file=sys.stderr)
         sys.exit(1)
     units = {**preset, "weight": weight_unit}
-    fmt_double._weight_unit = weight_unit  # expose to fmt_double for embedded-unit mismatch warnings
     # XML sample unit flags.
     # Depth:    Metric exports metres; Canadian / Imperial export feet.
     # Pressure: Canadian / Imperial export PSI; Metric exports bar.
@@ -1716,13 +1747,16 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
 
         lines.append("  <dive>")
 
-        # Units — same value for all dives, set by CLI flags
-        lines.append(xtag("distanceFormat",    distance_fmt, indent=4))
-        lines.append(xtag("temperatureFormat", temp_fmt,     indent=4))
-        lines.append(xtag("pressureFormat",    pressure_fmt, indent=4))
-        lines.append(xtag("volumeFormat",      volume_fmt,   indent=4))
-        lines.append(xtag("weightFormat",      weight_fmt,   indent=4))
-        lines.append(xtag("sourceImport",      "MacDive",    indent=4))
+        # Per-dive weight: embedded unit token in the raw value takes priority over --weight-unit.
+        _weight_str, _weight_unit_dive = parse_weight(weight, weight_unit)
+
+        # Units — distance/temp/pressure/volume are global; weight may be per-dive.
+        lines.append(xtag("distanceFormat",    distance_fmt,                          indent=4))
+        lines.append(xtag("temperatureFormat", temp_fmt,                              indent=4))
+        lines.append(xtag("pressureFormat",    pressure_fmt,                          indent=4))
+        lines.append(xtag("volumeFormat",      volume_fmt,                            indent=4))
+        lines.append(xtag("weightFormat",      WEIGHT_FORMAT[_weight_unit_dive],      indent=4))
+        lines.append(xtag("sourceImport",      "MacDive",                             indent=4))
 
         # Basic info
         lines.append(xtag("date",           coredata_to_str(ts),             indent=4))
@@ -1808,7 +1842,7 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
 
         # Conditions
         lines.append(xtag("visibility",        str(visibility  or ""), indent=4))
-        lines.append(xtag("weight",            fmt_double(weight),     indent=4))
+        lines.append(xtag("weight",            _weight_str,            indent=4))
         lines.append(xtag("weather",           str(weather     or ""), indent=4))
         lines.append(xtag("current",           str(current     or ""), indent=4))
         lines.append(xtag("surfaceConditions", str(surf_cond   or ""), indent=4))
@@ -1959,7 +1993,7 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     print(f"  Temperature : {temp_fmt}")
     print(f"  Pressure    : {pressure_fmt}")
     print(f"  Volume      : {volume_fmt}")
-    print(f"  Weight      : {weight_fmt}  (declared via --weight-unit; raw SQLite value emitted as-is)")
+    print(f"  Weight      : {weight_fmt} default (embedded unit in field value takes priority per dive)")
     if _n_xml_press + _n_auto_press > 0:
         print(f"  Tank start/end pressure source:")
         print(f"    XML (unit-verified)  : {_n_xml_press} field(s)")
@@ -2057,7 +2091,6 @@ def gear_group_xml_lines(group, indent=4):
 
 def export_gears(input_path, output_path, weight_unit):
     _reset_schema_caches()
-    fmt_double._weight_unit = weight_unit
     con = sqlite3.connect(input_path)
     cur = con.cursor()
 
@@ -2065,7 +2098,6 @@ def export_gears(input_path, output_path, weight_unit):
     gear_map    = load_gear_map(cur)
     junctions   = discover_junctions(cur)
     gear_groups = load_gear_groups(cur, gear_map, junctions)
-    weight_fmt  = WEIGHT_FORMAT[weight_unit]
 
     lines = []
     lines.append('<?xml version="1.0" encoding="UTF-8"?>')
@@ -2082,6 +2114,8 @@ def export_gears(input_path, output_path, weight_unit):
     lines.append("  <gears>")
     for pk, g in gear_map.items():
         diver_name = divers.get(g["diver_fk"], "")
+        # Per-item weight: embedded unit token in the raw value takes priority over --weight-unit.
+        _wc_str, _wc_unit = parse_weight(g["weight_raw"], weight_unit)
 
         lines.append("    <gear>")
         lines.append(xtag("id",                   g["uuid"],                   indent=6))
@@ -2098,8 +2132,8 @@ def export_gears(input_path, output_path, weight_unit):
         lines.append(xtag("nextServiceDue",       g["next_service_due"],       indent=6))
         lines.extend(service_records_xml_lines(g["service_records"], indent=6))
         lines.append(xtag("gearNotes",            g["notes"],                  indent=6))
-        lines.append(xtag("weightContribution",   g["weight_contribution"],    indent=6))
-        lines.append(xtag("weightContributionUnit", weight_fmt,                indent=6))
+        lines.append(xtag("weightContribution",   _wc_str,                     indent=6))
+        lines.append(xtag("weightContributionUnit", WEIGHT_FORMAT[_wc_unit],   indent=6))
         lines.append(xtag("isInactive",           g["is_inactive"],            indent=6))
         lines.append(xtag("diverName",            diver_name,                  indent=6))
         lines.append("    </gear>")
@@ -2117,7 +2151,7 @@ def export_gears(input_path, output_path, weight_unit):
 
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")
     print(f"✓ {len(gear_map)} gear items, {len(gear_groups)} gear groups exported to {output_path}")
-    print(f"  Weight unit : {weight_fmt}")
+    print(f"  Weight unit : {WEIGHT_FORMAT[weight_unit]} default (embedded unit in field value takes priority per item)")
 
 
 # ---------------------------------------------------------------------------
@@ -2300,7 +2334,8 @@ Examples:
     parser.add_argument("--schema", action="store_true",
                         help="Print database schema and exit (no conversion)")
     parser.add_argument("--weight-unit", choices=["kg", "lbs"], dest="weight",
-                        help="Weight unit stored in the database  [required for dives, gears]")
+                        help="Default weight unit; an embedded unit token in a weight "
+                             "field (e.g. '9 kg') overrides it per record  [required for dives, gears]")
     parser.add_argument("--macdive-xml", dest="macdive_xml", default=None,
                         help="Path to a MacDive XML export — units and profile samples are read from it  [required for dives]")
     args = parser.parse_args()
