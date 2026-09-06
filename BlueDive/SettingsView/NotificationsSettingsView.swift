@@ -7,6 +7,7 @@ struct NotificationsSettingsView: View {
     @AppStorage("notificationsEnabled")     private var notificationsEnabled = false
     @AppStorage("gearMaintenanceReminders") private var gearReminders = true
     @AppStorage("certificationReminders")   private var certReminders = true
+    @AppStorage("insuranceReminders")       private var insuranceReminders = true
     @AppStorage("milestoneNotifications")   private var milestoneNotifs = false
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
@@ -71,6 +72,18 @@ struct NotificationsSettingsView: View {
                             .tint(.cyan)
                             .onChange(of: certReminders) {
                                 Task { await rescheduleCertNotifications() }
+                            }
+                        }
+                        .padding()
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle(isOn: $insuranceReminders) {
+                                Label("Insurance expiration", systemImage: "shield.fill")
+                            }
+                            .tint(.cyan)
+                            .onChange(of: insuranceReminders) {
+                                Task { await rescheduleInsuranceNotifications() }
                             }
                         }
                         .padding()
@@ -232,8 +245,21 @@ struct NotificationsSettingsView: View {
     }
 
     @MainActor
+    private func rescheduleInsuranceNotifications() async {
+        #if canImport(UserNotifications)
+        if insuranceReminders {
+            let allInsurances = (try? modelContext.fetch(FetchDescriptor<DivingInsurance>())) ?? []
+            NotificationManager.shared.scheduleInsuranceReminders(for: allInsurances)
+        } else {
+            await NotificationManager.shared.cancelNotifications(withPrefix: "insurance-")
+        }
+        #endif
+    }
+
+    @MainActor
     private func rescheduleAllNotifications() async {
         await rescheduleGearNotifications()
         await rescheduleCertNotifications()
+        await rescheduleInsuranceNotifications()
     }
 }

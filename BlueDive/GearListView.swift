@@ -614,7 +614,7 @@ struct GearListView: View {
         withAnimation {
             for index in offsets {
                 let itemToDelete = items[index]
-                NotificationManager.shared.cancelNotification(identifier: "gear-\(itemToDelete.id.uuidString)")
+                NotificationManager.shared.cancelGearReminder(id: itemToDelete.id)
                 modelContext.delete(itemToDelete)
             }
             try? modelContext.save()

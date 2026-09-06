@@ -342,6 +342,7 @@ struct DataManagementSettingsView: View {
             }
 
             NotificationManager.shared.cancelAllNotifications()
+            NotificationManager.shared.clearAllCatchUpMarkers()
             await NotificationManager.shared.clearBadge()
             UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
             UserDefaults.standard.removeObject(forKey: "lastMilestoneNotified")
