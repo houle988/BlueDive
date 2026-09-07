@@ -18,11 +18,39 @@ Do not estimate any data displayed or stored. All fields must be calculated or e
 
 Always use English (Canada) for labels, text, and comments in user-facing content.
 
-All public-facing text must be defined in code as localizable strings and translated in French (Canada), German, and Dutch in the Localizable file. In SwiftUI views, use `LocalizedStringKey` (e.g. `Text("My Key")`) for direct text display. When building strings programmatically — including inside `Text(verbatim:)` with interpolation, even within SwiftUI views — use `NSLocalizedString(_:bundle:comment:)` with `Bundle.forAppLanguage()` instead of `String(localized:)`, because `String(localized:)` follows the OS language and ignores the in-app language override. Outside SwiftUI views (e.g. PDF generation, enum properties, model logic), always use `NSLocalizedString(_:bundle:comment:)` with `Bundle.forAppLanguage()`. Never wrap `NSLocalizedString` in a custom helper function (e.g. `L("key")`), because Xcode's string catalog compiler only detects keys from direct `NSLocalizedString` calls with literal strings — a wrapper hides the keys and causes Xcode to mark them as "Stale". When localizing data-model values from a known finite set of options (e.g. weather, current, tank type), use a `switch` with literal `NSLocalizedString` calls for each case so Xcode can detect every key; never pass a runtime variable as the key. Every new localizable key must also have corresponding `fr-CA`, `de`, and `nl` entries added to `Localizable.xcstrings` in the same commit. All German (`de`) and Dutch (`nl`) translations that are added or edited must be marked with `"state" : "needs_review"` in `Localizable.xcstrings`.
+All public-facing text must be defined in code as localizable strings and translated in French (Canada), German, and Dutch in the Localizable file. In SwiftUI views, use `LocalizedStringKey` (e.g. `Text("My Key")`) for direct text display. When building strings programmatically — including inside `Text(verbatim:)` with interpolation, even within SwiftUI views — use `NSLocalizedString(_:bundle:comment:)` with `Bundle.forAppLanguage()` instead of `String(localized:)`, because `String(localized:)` follows the OS language and ignores the in-app language override. Outside SwiftUI views (e.g. PDF generation, enum properties, model logic), always use `NSLocalizedString(_:bundle:comment:)` with `Bundle.forAppLanguage()`. Never wrap `NSLocalizedString` in a custom helper function (e.g. `L("key")`), because Xcode's string catalog compiler only detects keys from direct `NSLocalizedString` calls with literal strings — a wrapper hides the keys and causes Xcode to mark them as "Stale". When localizing data-model values from a known finite set of options (e.g. weather, current, tank type), use a `switch` with literal `NSLocalizedString` calls for each case so Xcode can detect every key; never pass a runtime variable as the key.
 
-When adding a new localizable string, write the Swift code first and build the project so Xcode auto-inserts the key into `Localizable.xcstrings`. For `NSLocalizedString` calls, always include the `value:` parameter with the English text as a fallback so the string displays correctly before Xcode syncs the catalog (e.g. `NSLocalizedString("Service record saved.", bundle: Bundle.forAppLanguage(), value: "Service record saved.", comment: "")`). Only add `fr-CA`, `de`, and `nl` translations after confirming the key exists in the file.
+### Localizable.xcstrings — never edit by hand
 
-When editing or adding translations in `Localizable.xcstrings`, never read the full file. Always grep for the exact key string first to get its line number, then read only ~25 lines around that position. The file is large (24 000+ lines) and targeted reads are the only efficient approach.
+`BlueDive/Localizable.xcstrings` is ~1 MB / 38 000 lines. **Never open, read, grep-and-read, or hand-edit it, and never use a file-edit tool on it.** Reading any part of it into context is wasted time. All changes go through `Scripts/xcstrings.py`, which edits the JSON in place, preserves Xcode's exact formatting (byte-identical round-trip, minimal diff), and enforces the review-state rule automatically (`fr-CA` → `translated`; `de` and `nl` → `needs_review`).
+
+The `needs_review` state left on `de`/`nl` is intentional, not a bug: a native reviewer promotes those to `translated` in Xcode's catalog editor (the script never writes `translated` for `de`/`nl`), and a later re-translation via `set` correctly resets them to `needs_review` so the edit is re-reviewed.
+
+Workflow for every new or changed user-facing string:
+
+1. Write the Swift code with the literal key. For `NSLocalizedString`, always pass `value:` with the English text so the string displays before the catalog syncs, e.g. `NSLocalizedString("Service record saved.", bundle: Bundle.forAppLanguage(), value: "Service record saved.", comment: "")`.
+2. Build the project (⌘B) so Xcode inserts the key into the catalog. Do not add keys to the catalog yourself.
+3. Run `python3 Scripts/xcstrings.py missing` — it lists every key still lacking `fr-CA`, `de` or `nl`. These are the only keys you translate.
+4. Write the translations to a temp JSON file and apply them in one call:
+   ```
+   cat > /tmp/i18n.json <<'JSON'
+   {
+     "Service record saved.": { "fr-CA": "Fiche d'entretien enregistrée.", "de": "Wartungseintrag gespeichert.", "nl": "Onderhoudsrecord opgeslagen." }
+   }
+   JSON
+   python3 Scripts/xcstrings.py set-json /tmp/i18n.json
+   ```
+   For a single key: `python3 Scripts/xcstrings.py set "Key" --fr-CA "…" --de "…" --nl "…"`.
+   Plural keys take a dict per language: `"fr-CA": { "one": "%lld plongée", "other": "%lld plongées" }`. The script refuses to overwrite a plural with a plain string.
+5. Run `python3 Scripts/xcstrings.py check` before committing; it exits non-zero if any translatable key is missing a language. Translations for a key ship in the same commit as the code that introduces it.
+
+**Run the script only after the build has finished and the catalog is not dirty in Xcode's editor.** The script does an unguarded read-modify-write; if Xcode has unsaved changes to the catalog (or a build is re-extracting strings) when the script writes, one side silently clobbers the other. After running the script, re-run `show`/`check` (or reopen the catalog) to confirm the edit survived.
+
+Other commands: `show "Key"` prints one entry. The `check` and `missing` commands are **per-file** — when you touch a widget string, run them against the widget catalog too. Put `--file` **after** the subcommand (it is a per-command option), e.g. `python3 Scripts/xcstrings.py check --file BlueDiveWidgetExtension/Localizable.xcstrings` or `python3 Scripts/xcstrings.py set "Key" --de "…" --file BlueDiveWidgetExtension/Localizable.xcstrings`. If `set` reports the key is not found, the build has not run yet — build, do not use `--create` (Xcode collates keys in localized order; a key appended by `--create` gets relocated on Xcode's next write, causing a large move-diff).
+
+Translation quality rules: keep `%lld`, `%@`, `%.1f` and other format specifiers unchanged and in the same order; French uses fr-CA conventions (espace insécable before `:`, `?`, `!`; `«»` quotes); German uses `„“` quotes; keep the same terminal punctuation as the English source.
+
+Fallback only if no shell is available in the current agent session: locate the key with a search for the exact text `"<key>" : {` (use the JSON-escaped form of the key — e.g. a key containing a newline is stored as `\n`, quotes as `\"`), read at most 15 lines around that line, and perform a single targeted replacement of the empty or comment-only entry with the full `localizations` block. Never read more than that, never reformat, never rewrite the file.
 
 ## Number Formatting
 

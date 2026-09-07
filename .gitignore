@@ -66,6 +66,7 @@ iOSInjectionProject/
 *.log
 *.swp
 *.bak
+*.xcstrings.tmp
 Examples/
 Icon
 .DocumentRevisions-V100
