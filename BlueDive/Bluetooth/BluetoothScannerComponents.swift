@@ -378,7 +378,10 @@ struct ModelPickerSheet: View {
                                     Text(model.name)
                                         .foregroundStyle(.primary)
                                     Spacer()
-                                    if currentOverride == model {
+                                    // Compare by name, not by ==: ComputerModel equality is (family, modelID)
+                                    // only, so sibling models sharing an ID (e.g. the Mares Puck 0x35 group)
+                                    // would all show a checkmark. Names are unique in supportedModels.
+                                    if currentOverride?.name == model.name {
                                         Image(systemName: "checkmark")
                                             .foregroundStyle(Color.accentColor)
                                     }

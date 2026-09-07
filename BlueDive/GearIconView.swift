@@ -82,6 +82,9 @@ struct GearIconView: View {
         Brand(name: "Heinrichs Weikamp",       tokens: ["heinrichs", "weikamp", "ostc"],       asset: "GearIcon_HeinrichsWeikamp"),
         Brand(name: "Cressi",                  tokens: ["cressi"],                             asset: "GearIcon_Cressi"),
         Brand(name: "Divesoft",                tokens: ["divesoft"],                           asset: "GearIcon_Divesoft"),
+        Brand(name: "Crest",                   tokens: ["crest"],                              asset: "GearIcon_Crest"),
+        Brand(name: "Genesis",                 tokens: ["genesis", "genesis scuba"],           asset: "GearIcon_Genesis"),
+        Brand(name: "Scorpena",                tokens: ["scorpena"],                           asset: "GearIcon_Scorpena"),
         // Accessories / Knives / Safety
         Brand(name: "Deep Six",                tokens: ["deep six"],                           asset: "GearIcon_DeepSix"),
         Brand(name: "Deepblu",                 tokens: ["deepblu"],                            asset: "GearIcon_Deepblu"),

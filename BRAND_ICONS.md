@@ -372,6 +372,9 @@ pip3 install Pillow
 | `GearIcon_HeinrichsWeikamp` | Heinrichs Weikamp | `heinrichs`, `weikamp`, `ostc` |
 | `GearIcon_Cressi` | Cressi | `cressi` |
 | `GearIcon_Divesoft` | Divesoft | `divesoft` |
+| `GearIcon_Crest` | Crest | `crest` |
+| `GearIcon_Genesis` | Genesis | `genesis`, `genesis scuba` |
+| `GearIcon_Scorpena` | Scorpena | `scorpena` |
 | `GearIcon_Tusa` | Tusa | `tusa` |
 | `GearIcon_Garmin` | Garmin | `garmin` |
 
