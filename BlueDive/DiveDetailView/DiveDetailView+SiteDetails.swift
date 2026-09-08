@@ -109,20 +109,50 @@ extension DiveDetailView {
                             value: "—")
             }
 
-            // Map view
+            // Map view — tap to open a larger, zoomable map.
             if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
                 Divider().background(.primary.opacity(0.2))
 
                 siteMap(entryLat: lat, entryLon: lon,
                         exitLat: dive.exitLatitude, exitLon: dive.exitLongitude)
                     .frame(height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    // Keep the preview itself non-interactive so the tap gesture
+                    // below (not the map's own pan/zoom) receives the touch.
                     .allowsHitTesting(false)
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(6)
+                            .background(.black.opacity(0.45), in: Circle())
+                            .padding(8)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                    .onTapGesture { showFullScreenSiteMap = true }
+                    .accessibilityElement()
+                    .accessibilityLabel(Text("View larger map"))
+                    .accessibilityAddTraits(.isButton)
+                    // onTapGesture isn't reliably fired by VoiceOver's activate
+                    // gesture; this makes double-tap open the large map.
+                    .accessibilityAction { showFullScreenSiteMap = true }
             }
         }
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
+        .sheet(isPresented: $showFullScreenSiteMap) {
+            if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
+                SiteMapFullScreenView(
+                    entryLat: lat, entryLon: lon,
+                    exitLat: dive.exitLatitude, exitLon: dive.exitLongitude,
+                    siteName: dive.siteName
+                )
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+        }
     }
 
     @ViewBuilder
@@ -222,6 +252,131 @@ extension DiveDetailView {
                 }
             }
             Spacer()
+        }
+    }
+}
+
+// MARK: - Full-Screen Site Map
+
+/// An interactive, zoomable map of a single dive site, presented as a sheet from
+/// the Site Details preview. Takes plain coordinates so it needs no `Dive` or
+/// `DiveStore` access — it is a pure read of the values passed in.
+struct SiteMapFullScreenView: View {
+    let entryLat: Double
+    let entryLon: Double
+    let exitLat: Double?
+    let exitLon: Double?
+    let siteName: String
+
+    @Environment(\.dismiss) private var dismiss
+    // Standard by default so the large map matches the Site Details preview. The
+    // user can switch to hybrid/satellite via the style menu.
+    @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
+
+    // The framed region for this site, computed once from the coordinates.
+    private var targetRegion: MKCoordinateRegion {
+        if let eLat = exitLat, let eLon = exitLon {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: (entryLat + eLat) / 2,
+                                               longitude: (entryLon + eLon) / 2),
+                span: MKCoordinateSpan(
+                    latitudeDelta: max(abs(entryLat - eLat) * 1.5, 0.005),
+                    longitudeDelta: max(abs(entryLon - eLon) * 1.5, 0.005)
+                )
+            )
+        } else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon),
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            )
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            // Uncontrolled initial camera (like the Site Details preview) so the
+            // annotations render immediately. A bound `position` with an initial
+            // region leaves MapKit not laying out pins until the first camera
+            // change (they only appear after a pan); `initialPosition` avoids that.
+            Map(initialPosition: .region(targetRegion)) {
+                let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
+                if let eLat = exitLat, let eLon = exitLon {
+                    Annotation(coordinate: entryCoord, anchor: .bottom) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .green)
+                    } label: {
+                        if siteName.isEmpty {
+                            Text("Entry")
+                        } else {
+                            Text(verbatim: siteName)
+                        }
+                    }
+                    Annotation(coordinate: CLLocationCoordinate2D(latitude: eLat, longitude: eLon), anchor: .bottom) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .orange)
+                    } label: {
+                        Text("Exit")
+                    }
+                } else {
+                    Annotation(coordinate: entryCoord, anchor: .bottom) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .red)
+                    } label: {
+                        if siteName.isEmpty {
+                            Text("Dive Site")
+                        } else {
+                            Text(verbatim: siteName)
+                        }
+                    }
+                }
+            }
+            .mapStyle(mapStyle)
+            .mapControls {
+                MapUserLocationButton()
+                MapCompass()
+                MapScaleView()
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .navigationTitle("Site Map")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Section("Map Style") {
+                            Button {
+                                mapStyle = .standard(elevation: .realistic)
+                            } label: {
+                                Label("Standard Map", systemImage: "map")
+                            }
+                            Button {
+                                mapStyle = .hybrid(elevation: .realistic)
+                            } label: {
+                                Label("Hybrid View", systemImage: "map.fill")
+                            }
+                            Button {
+                                mapStyle = .imagery(elevation: .realistic)
+                            } label: {
+                                Label("Satellite View", systemImage: "globe.americas.fill")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.cyan)
+                    }
+                }
+            }
         }
     }
 }

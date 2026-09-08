@@ -106,6 +106,7 @@ struct DiveDetailView: View {
     @State var fishToEdit: MarineSight?
     @State var selectedPhotoForPreview: IdentifiablePhotoData?
     @State var selectedTankIndex: Int = 0
+    @State var showFullScreenSiteMap = false
     @State private var dragOffset: CGFloat = 0
     @State private var pendingDive: Dive? = nil
     @State private var viewWidth: CGFloat = 400
@@ -475,6 +476,7 @@ struct DiveDetailView: View {
             showEditSheet = false
             showAddFish = false
             showAddGear = false
+            showFullScreenSiteMap = false
             selectedPhotos = []
             showPhotosPicker = false
             showFileImporter = false
