@@ -142,7 +142,14 @@
       }
     },
     "Subsurface Dive Log" : {
-
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subsurface Duiklogboek"
+          }
+        }
+      }
     },
     "UDDF Document" : {
       "shouldTranslate" : false
