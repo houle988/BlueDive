@@ -121,6 +121,18 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
     // which Subsurface writes <event> vs <sample> elements at the same timestamp.
     private var tempRawEvents: [(time: Int, name: String, cylinder: Int?)] = []
 
+    // Raw per-sample deco fields, aligned 1:1 with tempSamples: the in_deco (mandatory
+    // decompression) flag, the current ceiling / next-stop depth in metres, and the
+    // required time at that stop in seconds. Subsurface encodes deco through these sample
+    // attributes rather than <event> elements, and delta-encodes them (a value is written
+    // only when it changes), so they are forward-filled in resolveSampleEventsAndGas.
+    private var tempRawDeco: [(inDeco: Bool?, stopDepth: Double?, stopTime: Int?)] = []
+
+    // Mandatory decompression stops and the deco-dive flag, derived from the in_deco /
+    // stopdepth / stoptime sample attributes in resolveSampleEventsAndGas.
+    private var tempDecoStops: [DecoStop] = []
+    private var tempIsDecoDive: Bool = false
+
     // MARK: - Date Formatter
 
     private lazy var dateFormatter: DateFormatter = {
@@ -500,6 +512,15 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             }
         }
 
+        // Deco obligation state. Subsurface reports a mandatory-decompression sample with
+        // in_deco='1', the current ceiling as stopdepth, and the required time at that
+        // stop as stoptime. These are delta-encoded (written only when they change) and
+        // forward-filled in resolveSampleEventsAndGas, where they become .decoStop events
+        // and the dive's decoStops list.
+        let inDeco    = attrs["in_deco"].map    { $0.trimmingCharacters(in: .whitespaces) == "1" }
+        let stopDepth = attrs["stopdepth"].flatMap { parseSubsurfaceValue($0) }
+        let stopTime  = attrs["stoptime"].flatMap  { parseSubsurfaceTime($0) }
+
         // Events, gas index, per-sample tank pressure/sensor ppO₂ and forward-filled
         // fields are resolved after the whole divecomputer block is parsed
         // (resolveSampleEventsAndGas), so pressure/currentGas are placeholders here.
@@ -513,6 +534,8 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             ndt: ndtMinutes,
             currentGas: 0
         ))
+        // Kept 1:1 with tempSamples (appended on the same guard-passing path).
+        tempRawDeco.append((inDeco: inDeco, stopDepth: stopDepth, stopTime: stopTime))
     }
 
     private func parseEvent(_ attrs: [String: String]) {
@@ -568,13 +591,42 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         var runningTankPressures: [Int: Double] = [:]
         var runningSensorPPO2: [Int: Double] = [:]
 
-        var rebuilt: [BlueDiveSamplesData] = tempSamples.map { s in
+        // Forward-filled deco state, plus the longest reported stop time per (rounded)
+        // ceiling depth while under a mandatory obligation — mirrors the Garmin FIT
+        // importer's stopsByDepth accumulation.
+        var lastInDeco = false
+        var lastStopDepth: Double? = nil
+        var lastStopTime: Int? = nil
+        var stopsByDepth: [Int: (depth: Double, time: Int)] = [:]
+
+        var rebuilt: [BlueDiveSamplesData] = tempSamples.indices.map { i in
+            let s = tempSamples[i]
             // Forward-fill the delta-encoded fields from the last sample that carried them.
             if let t = s.temperature { lastTemp = t }
             if let n = s.ndt { lastNdt = n }
             if let pp = s.ppo2 { lastPpo2 = pp }
             if let tp = s.tankPressures { for (k, v) in tp { runningTankPressures[k] = v } }
             if let sp = s.sensorPPO2 { for (k, v) in sp { runningSensorPPO2[k] = v } }
+
+            // Forward-fill deco state and mark mandatory-deco samples with a .decoStop
+            // event (drives the chart's deco band). Accumulate the mandatory stops.
+            let raw = i < tempRawDeco.count ? tempRawDeco[i] : (inDeco: nil, stopDepth: nil, stopTime: nil)
+            if let d = raw.inDeco { lastInDeco = d }
+            if let sd = raw.stopDepth { lastStopDepth = sd }
+            if let st = raw.stopTime { lastStopTime = st }
+            var events = s.events
+            if lastInDeco {
+                events.append(.decoStop)
+                tempIsDecoDive = true
+                if let sd = lastStopDepth, sd > 0, let st = lastStopTime, st > 0 {
+                    let key = Int(sd.rounded())
+                    if let existing = stopsByDepth[key] {
+                        stopsByDepth[key] = (depth: existing.depth, time: max(existing.time, st))
+                    } else {
+                        stopsByDepth[key] = (depth: sd, time: st)
+                    }
+                }
+            }
 
             let filledTankPressures = runningTankPressures.isEmpty ? nil : runningTankPressures
             let filledSensorPPO2 = runningSensorPPO2.isEmpty ? nil : runningSensorPPO2
@@ -589,9 +641,15 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
                 time: s.time, depth: s.depth, pressure: primaryPressure,
                 tankPressures: filledTankPressures, temperature: lastTemp,
                 ppo2: lastPpo2, sensorPPO2: filledSensorPPO2, ndt: lastNdt,
-                events: s.events, currentGas: gas
+                events: events, currentGas: gas
             )
         }
+
+        // Mandatory decompression stops, deepest-first (type 2 = DECOSTOP), matching the
+        // Garmin FIT importer and the chart's deco-stop marker expectations.
+        tempDecoStops = stopsByDepth.values
+            .sorted { $0.depth > $1.depth }
+            .map { DecoStop(depth: $0.depth, time: TimeInterval($0.time), type: 2) }
 
         // Dive-start reference: a gaschange at or before the first sample establishes the
         // starting gas rather than a mid-dive switch, so its marker is suppressed (the gas
@@ -740,7 +798,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             interval:          nil,
             cns:               tempCNS ?? tempMaxSampleCNS,
             decoModel:         tempDecoModel,
-            isDecompressionDive: false,
+            isDecompressionDive: tempIsDecoDive,
             tempAir:           airTemp,
             tempHigh:          nil,
             tempLow:           waterTemp,
@@ -765,7 +823,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             gear:              gearItems,
             samples:           tempSamples,
             marineLifeSeen:    [],
-            decoStops:         [],
+            decoStops:         tempDecoStops,
             rawDiveComputerData: nil,
             fingerprintData:   nil
         ))
@@ -803,6 +861,9 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         tempWeightKg     = 0.0
         tempSamples      = []
         tempRawEvents    = []
+        tempRawDeco      = []
+        tempDecoStops    = []
+        tempIsDecoDive   = false
         isFirstDiveComputerForDive = true
     }
 

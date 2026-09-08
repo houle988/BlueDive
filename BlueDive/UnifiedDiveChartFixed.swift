@@ -750,17 +750,24 @@ private struct StaticChartLayer: View, Equatable {
             .sorted { $0.depth > $1.depth }
         guard !stops.isEmpty else { return [] }
 
-        let decoSamples = dive.profileSamples
+        let allSamples = dive.profileSamples
+        let decoSamples = allSamples
             .filter { $0.events.contains(.decoStop) }
             .sorted { $0.time < $1.time }
         guard !decoSamples.isEmpty else { return [] }
 
-        // For accurate crossing detection, search ALL profile samples within the deco
-        // window (plus a 2-minute lookback). This handles dive computers that only start
-        // emitting .decoStop events after the profile has already passed stop.depth.
+        // For accurate crossing detection, search from a 2-minute lookback before the first
+        // deco sample (handles computers that emit .decoStop only after passing stop.depth)
+        // through to the END OF THE DIVE. Extending past the obligation window lets stops
+        // whose depth is only physically reached after the obligation clears — e.g. Bühlmann
+        // GF computers that clear deco deep and let the diver drift up through the shallow
+        // stops — resolve onto the real ascent line instead of collapsing onto the shallowest
+        // in-window sample. The loop still takes the FIRST ascending crossing at/after
+        // searchFloorTime, so dives that already cross within the obligation window are
+        // unaffected.
         let decoWindowStart = (decoSamples.first?.time ?? 0) - 2.0
-        let decoWindowEnd   = decoSamples.last?.time ?? 0
-        let windowSamples = dive.profileSamples
+        let decoWindowEnd   = allSamples.map(\.time).max() ?? (decoSamples.last?.time ?? 0)
+        let windowSamples = allSamples
             .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
             .sorted { $0.time < $1.time }
 
@@ -1106,7 +1113,10 @@ struct UnifiedDiveChartOptimized: View {
         guard !decoSamples.isEmpty else { cachedDecoStopEntries = []; return }
 
         let windowStart = (decoSamples.first?.time ?? 0) - 2.0
-        let windowEnd   = decoSamples.last?.time ?? 0
+        // Extend the crossing search to the end of the dive (see mandatoryDecoStopPoints):
+        // stops physically reached only after the obligation clears resolve onto the real
+        // ascent line. First-crossing-at/after-floor keeps in-window dives unchanged.
+        let windowEnd   = samples.map(\.time).max() ?? (decoSamples.last?.time ?? 0)
         let windowSamples = samples
             .filter { $0.time >= windowStart && $0.time <= windowEnd }
             .sorted { $0.time < $1.time }
