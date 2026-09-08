@@ -19179,7 +19179,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Laatst gesynchroniseerd: %@"
+            "value" : "Laatste synchronisatie: %@"
           }
         }
       }
@@ -32577,7 +32577,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gesynchroniseerd %@"
+            "value" : "Laatste synchronisatie: %@"
           }
         }
       }
@@ -35773,7 +35773,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Einde gebruik"
+            "value" : "Einde verbruik"
           }
         }
       }
@@ -35801,7 +35801,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Begin gebruik"
+            "value" : "Begin verbruik"
           }
         }
       }
