@@ -6433,8 +6433,8 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kies Systeem om de taal van je apparaat te gebruiken (Systeeminstellingen → Algemeen → Taal en regio), of gebruik English, Français, Deutsch of Nederlands. Bij het wisselen van of naar Systeem worden dit popup-venster gesloten om de wijziging toe te passen."
+            "state" : "needs_review",
+            "value" : "Kies Systeem om de taal van je apparaat te gebruiken (Systeeminstellingen → Algemeen → Taal en regio), of gebruik English, Français, Deutsch of Nederlands. Bij het wisselen van of naar Systeem wordt dit popup-venster gesloten om de wijziging toe te passen."
           }
         }
       }

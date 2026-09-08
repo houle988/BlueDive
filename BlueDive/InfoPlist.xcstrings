@@ -143,6 +143,18 @@
     },
     "Subsurface Dive Log" : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subsurface-Tauchprotokoll"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journal de plongée Subsurface"
+          }
+        },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
