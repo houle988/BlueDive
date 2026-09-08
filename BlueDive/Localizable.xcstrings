@@ -2367,7 +2367,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Een duiklogboek voor iPadOS en iOS rijk aan functionaliteit"
+            "value" : "Een volwaardig duiklogboek voor iPadOS en iOS"
           }
         }
       }
@@ -5495,7 +5495,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "BlueDive is uitsluitend een app voor het bijhouden van duiken, bedoeld om je duikgeschiedenis vast te leggen en te ordenen. Het is geen hulpmiddel voor het plannen van duiken en mag nooit als zodanig worden gebruikt."
+            "value" : "BlueDive is uitsluitend een applicatie voor het bijhouden van duiklogs om je duikgeschiedenis vast te leggen en te ordenen. Het is geen hulpmiddel voor het plannen van duiken en mag nooit als zodanig worden gebruikt."
           }
         }
       }
@@ -6345,7 +6345,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kies Systeem om de weergave van je apparaat te volgen (Instellingen → Beeldscherm en helderheid), of gebruik Licht of Donker. Bij het wisselen van of naar Systeem worden de Instellingen gesloten om de wijziging toe te passen."
+            "value" : "Kies Systeem om de weergave van je apparaat te volgen (Instellingen → Beeldscherm en helderheid), of gebruik Licht of Donker. Bij het wisselen van of naar Systeem wordt dit popup-venster gesloten om de wijziging toe te passen."
           }
         }
       }
@@ -6374,7 +6374,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kies Systeem om de weergave van je apparaat te volgen (Systeeminstellingen → Weergave), of gebruik Licht of Donker. Bij het wisselen van of naar Systeem worden de Instellingen gesloten om de wijziging toe te passen."
+            "value" : "Kies Systeem om de weergave van je apparaat te volgen (Systeeminstellingen → Weergave), of gebruik Licht of Donker. Bij het wisselen van of naar Systeem wordt dit popup-venster gesloten om de wijziging toe te passen."
           }
         }
       }
@@ -6404,7 +6404,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kies Systeem om de taal van je apparaat te gebruiken (Instellingen → Algemeen → Taal en regio), of gebruik English, Français, Deutsch of Nederlands. Bij het wisselen van of naar Systeem worden de Instellingen gesloten om de wijziging toe te passen."
+            "value" : "Kies Systeem om de taal van je apparaat te gebruiken (Instellingen → Algemeen → Taal en regio), of gebruik English, Français, Deutsch of Nederlands. Bij het wisselen van of naar Systeem wordt dit popup-venster gesloten om de wijziging toe te passen."
           }
         }
       }
@@ -6434,7 +6434,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kies Systeem om de taal van je apparaat te gebruiken (Systeeminstellingen → Algemeen → Taal en regio), of gebruik English, Français, Deutsch of Nederlands. Bij het wisselen van of naar Systeem worden de Instellingen gesloten om de wijziging toe te passen."
+            "value" : "Kies Systeem om de taal van je apparaat te gebruiken (Systeeminstellingen → Algemeen → Taal en regio), of gebruik English, Français, Deutsch of Nederlands. Bij het wisselen van of naar Systeem worden dit popup-venster gesloten om de wijziging toe te passen."
           }
         }
       }
@@ -10944,7 +10944,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duiken zonder naam van de duiker vallen hier niet onder."
+            "value" : "Duiklogs zonder naam van de duiker vallen hier niet onder."
           }
         }
       }
@@ -18863,7 +18863,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Houd de gegevens van je duiker, contactpersonen voor noodgevallen en verzekeringsgegevens bij de hand."
+            "value" : "Houd alle gegevens van jou, als duiker, bij de hand, zoals contactpersonen voor noodgevallen en verzekeringsgegevens."
           }
         }
       }
@@ -19179,7 +19179,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Laatst gesynchroniseerd: %@"
+            "value" : "Laatste synchronisatie: %@"
           }
         }
       }
@@ -19566,7 +19566,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Noteer de vissen en zeedieren die je tijdens elke duik hebt gezien."
+            "value" : "Noteer de vissen en andere (zee)dieren die je tijdens elke duik hebt gezien."
           }
         }
       }
@@ -27735,7 +27735,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset voorkeuren"
+            "value" : "Voorkeuren opnieuw instellen"
           }
         }
       }
@@ -27765,7 +27765,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset voorkeuren?"
+            "value" : "Voorkeuren opnieuw instellen?"
           }
         }
       }
@@ -31491,7 +31491,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sommige duikcomputers (Aqualung, Oceanic, Sherwood, HW OSTC, Cressi, DeepSix, Deepblu, Oceans, McLean) geven alle geconfigureerde gasvakken weer, zelfs als er maar één is gebruikt. Als deze optie is ingeschakeld, worden ‘fantoomflessen’ weggefilterd. Schakel deze optie uit als je geconfigureerde maar ongebruikte flessen bij je hebt (bijv. ponyfles, bailout)."
+            "value" : "Sommige duikcomputers (Aqualung, Oceanic, Sherwood, HW OSTC, Cressi, DeepSix, Deepblu, Oceans, McLean) geven alle geconfigureerde tanks weer, zelfs als er maar één is gebruikt. Als deze optie is ingeschakeld, worden ongebruikte tanks weggefilterd. Schakel deze optie uit als je geconfigureerde maar ongebruikte tanks bij je hebt (bijv. ponyfles, bailout)."
           }
         }
       }
@@ -32427,7 +32427,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synchroniseer duikgegevens tussen je apparaten. Wijzigingen worden van kracht na het opnieuw starten van de app."
+            "value" : "Synchroniseer alle data tussen je apparaten. Wijzigingen worden van kracht na het opnieuw starten van de app."
           }
         }
       }
@@ -32601,7 +32601,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gesynchroniseerd %@"
+            "value" : "Laatste synchronisatie: %@"
           }
         }
       }
@@ -33997,7 +33997,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hiermee krijgt elke duik van een duiker een volgnummer op datumvolgorde, beginnend bij 1. Duiken zonder naam van een duiker worden niet beïnvloed."
+            "value" : "Hiermee krijgt elke duik van een duiker een volgnummer op datumvolgorde, beginnend bij 1. Duiklogs zonder naam van een duiker worden niet beïnvloed."
           }
         }
       }
@@ -34054,7 +34054,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hierdoor wordt de oppervlaktepauze voor alle duiken bijgewerkt op basis van de vorige duik van elke duiker. Duiken zonder naam van een duiker blijven hierdoor ongewijzigd."
+            "value" : "Hierdoor wordt de oppervlaktepauze voor alle duiken bijgewerkt op basis van de vorige duik van elke duiker. Duiklogs zonder naam van een duiker blijven hierdoor ongewijzigd."
           }
         }
       }
@@ -35797,7 +35797,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Einde gebruik"
+            "value" : "Einde verbruik"
           }
         }
       }
@@ -35825,7 +35825,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Begin gebruik"
+            "value" : "Begin verbruik"
           }
         }
       }
@@ -37303,7 +37303,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wanneer ingeschakeld, worden duiknummers en oppervlakte-intervallen automatisch herberekend wanneer je een duik toevoegt, verwijdert, verplaatst of de datum ervan wijzigt. Schakel dit uit om ze alleen met de knoppen hierboven bij te werken."
+            "value" : "Wanneer deze optie is ingeschakeld worden duiknummers en oppervlakte-intervallen automatisch herberekend wanneer je een duik toevoegt, verwijdert, verplaatst of de datum ervan wijzigt. Schakel dit uit om ze alleen met de knoppen hierboven bij te werken."
           }
         }
       }
