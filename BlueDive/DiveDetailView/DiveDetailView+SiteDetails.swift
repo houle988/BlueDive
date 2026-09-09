@@ -77,12 +77,25 @@ extension DiveDetailView {
 
             Divider().background(.primary.opacity(0.2))
 
+            // GPS Coordinates — when entry and exit are the exact same point, both
+            // rows use the combined up/down purple marker, mirroring the single
+            // combined pin shown on the map.
+            let coordsIdentical: Bool = {
+                guard let lat = dive.siteLatitude, let lon = dive.siteLongitude,
+                      let eLat = dive.exitLatitude, let eLon = dive.exitLongitude else { return false }
+                return lat == eLat && lon == eLon
+            }()
+            let entryIcon = coordsIdentical ? "arrow.up.arrow.down.circle.fill" : "arrow.down.circle.fill"
+            let entryColor: Color = coordsIdentical ? .purple : .green
+            let exitIcon = coordsIdentical ? "arrow.up.arrow.down.circle.fill" : "arrow.up.circle.fill"
+            let exitColor: Color = coordsIdentical ? .purple : .orange
+
             // GPS Coordinates (Entry)
             if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
-                conditionRow(icon: "location.circle.fill", color: .green, label: "Coordinates (entry)",
+                conditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
                             value: String(format: "%.6f, %.6f", lat, lon))
             } else {
-                conditionRow(icon: "location.circle.fill", color: .green, label: "Coordinates (entry)",
+                conditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
                             value: "—")
             }
 
@@ -90,10 +103,10 @@ extension DiveDetailView {
 
             // GPS Coordinates (Exit)
             if let exitLat = dive.exitLatitude, let exitLon = dive.exitLongitude {
-                conditionRow(icon: "location.circle", color: .green, label: "Coordinates (exit)",
+                conditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
                             value: String(format: "%.6f, %.6f", exitLat, exitLon))
             } else {
-                conditionRow(icon: "location.circle", color: .green, label: "Coordinates (exit)",
+                conditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
                             value: "—")
             }
 
@@ -170,25 +183,43 @@ extension DiveDetailView {
                 longitudeDelta: max(abs(entryLon - eLon) * 1.5, 0.005)
             )
             Map(initialPosition: .region(MKCoordinateRegion(center: center, span: span))) {
-                Annotation(coordinate: entryCoord, anchor: .bottom) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.title2)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .green)
-                } label: {
-                    if dive.siteName.isEmpty {
-                        Text("Entry")
-                    } else {
-                        Text(verbatim: dive.siteName)
+                // When entry and exit share the exact same coordinate, a single
+                // combined pin avoids the two markers overlapping (which would hide
+                // the entry pin under the exit pin).
+                if entryLat == eLat && entryLon == eLon {
+                    Annotation(coordinate: entryCoord, anchor: .bottom) {
+                        Image(systemName: "arrow.up.arrow.down.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .purple)
+                    } label: {
+                        if dive.siteName.isEmpty {
+                            Text("Entry & exit")
+                        } else {
+                            Text(verbatim: dive.siteName)
+                        }
                     }
-                }
-                Annotation(coordinate: exitCoord, anchor: .bottom) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .orange)
-                } label: {
-                    Text("Exit")
+                } else {
+                    Annotation(coordinate: entryCoord, anchor: .bottom) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .green)
+                    } label: {
+                        if dive.siteName.isEmpty {
+                            Text("Entry")
+                        } else {
+                            Text(verbatim: dive.siteName)
+                        }
+                    }
+                    Annotation(coordinate: exitCoord, anchor: .bottom) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .orange)
+                    } label: {
+                        Text("Exit")
+                    }
                 }
             }
         } else {
@@ -301,25 +332,42 @@ struct SiteMapFullScreenView: View {
             Map(initialPosition: .region(targetRegion)) {
                 let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
                 if let eLat = exitLat, let eLon = exitLon {
-                    Annotation(coordinate: entryCoord, anchor: .bottom) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .green)
-                    } label: {
-                        if siteName.isEmpty {
-                            Text("Entry")
-                        } else {
-                            Text(verbatim: siteName)
+                    if entryLat == eLat && entryLon == eLon {
+                        // Identical entry/exit: one combined pin instead of two
+                        // overlapping markers.
+                        Annotation(coordinate: entryCoord, anchor: .bottom) {
+                            Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                .font(.title2)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .purple)
+                        } label: {
+                            if siteName.isEmpty {
+                                Text("Entry & exit")
+                            } else {
+                                Text(verbatim: siteName)
+                            }
                         }
-                    }
-                    Annotation(coordinate: CLLocationCoordinate2D(latitude: eLat, longitude: eLon), anchor: .bottom) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .orange)
-                    } label: {
-                        Text("Exit")
+                    } else {
+                        Annotation(coordinate: entryCoord, anchor: .bottom) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.title2)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .green)
+                        } label: {
+                            if siteName.isEmpty {
+                                Text("Entry")
+                            } else {
+                                Text(verbatim: siteName)
+                            }
+                        }
+                        Annotation(coordinate: CLLocationCoordinate2D(latitude: eLat, longitude: eLon), anchor: .bottom) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.title2)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .orange)
+                        } label: {
+                            Text("Exit")
+                        }
                     }
                 } else {
                     Annotation(coordinate: entryCoord, anchor: .bottom) {
