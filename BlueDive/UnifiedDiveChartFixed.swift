@@ -332,7 +332,14 @@ private struct StaticChartLayer: View, Equatable {
         // fraction=0 (y=0, top) → normalised=1 → warmest; fraction=1 (y=-base, bottom) → normalised=0 → coldest
         let normalised = 1.0 - fraction(for: y)
         let value = axisMin + normalised * axisRange
-        return value.rounded().localizedString(decimals: 0) + prefs.temperatureUnit.symbol
+        // One decimal so each label exactly describes its gridline position. The
+        // gridlines are shared with the depth axis, so they rarely fall on a whole
+        // degree; rounding to an integer would displace the label from the trace.
+        // Round to one decimal and normalise negative zero so a gridline just below
+        // 0° doesn't render as "-0.0°".
+        var display = (value * 10).rounded() / 10
+        if display == 0 { display = 0 }
+        return display.localizedString(decimals: 1, minDecimals: 1) + prefs.temperatureUnit.symbol
     }
 
     /// NDL label for a tick.  100 min at surface (y=0), 0 min at deepest (y=yDomainMin).
@@ -383,7 +390,10 @@ private struct StaticChartLayer: View, Equatable {
         .chartXAxis {
             AxisMarks(values: .automatic) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(.white.opacity(0.2))
+                    // Appearance-adaptive: primary is white in dark mode (unchanged
+                    // look) and black in light mode, so the grid stays visible on
+                    // both dark and light chart backgrounds.
+                    .foregroundStyle(Color.primary.opacity(0.2))
                 AxisValueLabel {
                     if let time = value.as(Double.self) {
                         Text("\(Int(time)) min")
@@ -397,11 +407,16 @@ private struct StaticChartLayer: View, Equatable {
             // ── Left axis: depth, shown as positive numbers increasing downward ──
             AxisMarks(position: .leading, values: .automatic) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(.white.opacity(0.2))
+                    // Appearance-adaptive: primary is white in dark mode (unchanged
+                    // look) and black in light mode, so the grid stays visible on
+                    // both dark and light chart backgrounds.
+                    .foregroundStyle(Color.primary.opacity(0.2))
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
-                        // v is negative — negate to show a positive depth label
-                        Text(verbatim: (-v).localizedString(decimals: 0) + prefs.depthUnit.symbol)
+                        // v is negative (or -0.0 at the surface) — use abs() to show a
+                        // positive depth and normalise negative zero, which would
+                        // otherwise render as "-0m".
+                        Text(verbatim: abs(v).localizedString(decimals: 0) + prefs.depthUnit.symbol)
                             .font(.caption2)
                             .foregroundStyle(.cyan)
                     }
