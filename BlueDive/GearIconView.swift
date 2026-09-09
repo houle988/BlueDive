@@ -128,6 +128,8 @@ struct GearIconView: View {
         Brand(name: "Kubi",                    tokens: ["kubi"],                               asset: "GearIcon_Kubi"),
         Brand(name: "Eezycut",                 tokens: ["eezycut"],                            asset: "GearIcon_Eezycut"),
         Brand(name: "Tecline",                 tokens: ["tecline"],                            asset: "GearIcon_Tecline"),
+        Brand(name: "HOG",                     tokens: ["hog", "highly optimized gear"],       asset: "GearIcon_HOG"),
+        Brand(name: "DIRZONE",                 tokens: ["dirzone", "dir zone"],                asset: "GearIcon_DIRZONE"),
         // Computers / Multi-category
         Brand(name: "Tusa",                    tokens: ["tusa"],                               asset: "GearIcon_Tusa"),
         Brand(name: "Garmin",                  tokens: ["garmin"],                             asset: "GearIcon_Garmin"),

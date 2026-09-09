@@ -438,6 +438,8 @@ pip3 install Pillow
 | `GearIcon_Kubi` | Kubi | `kubi` |
 | `GearIcon_Eezycut` | Eezycut | `eezycut` |
 | `GearIcon_Tecline` | Tecline | `tecline` |
+| `GearIcon_HOG` | HOG | `hog`, `highly optimized gear` |
+| `GearIcon_DIRZONE` | DIRZONE | `dirzone`, `dir zone` |
 
 ### Gear — Masks / Fins
 
