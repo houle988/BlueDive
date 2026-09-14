@@ -249,14 +249,18 @@ extension BluetoothScannerView {
             resolvedMixIdx = profileGasMixOrder[tankIndex]
         } else if tankIndex < dcGasMixes.count {
             // Positional last resort: no profile evidence for this tank's gas
+            Logger.shared.log("Tank \(tankIndex): no profile-order evidence; using positional mix \(tankIndex) (\(Int(dcGasMixes[tankIndex].oxygen * 100))% O2)", level: .info)
             o2 = dcGasMixes[tankIndex].oxygen
             he = dcGasMixes[tankIndex].helium
             resolvedMixIdx = tankIndex
         } else if let firstMix = dcGasMixes.first {
+            Logger.shared.log("Tank \(tankIndex): out of range; using first available mix (\(Int(firstMix.oxygen * 100))% O2)", level: .warning)
             o2 = firstMix.oxygen
             he = firstMix.helium
         } else {
-            o2 = Double(headerGasMix ?? 21) / 100.0
+            let pct = headerGasMix ?? 21
+            Logger.shared.log("Tank \(tankIndex): no gas mix data; defaulting to \(pct)% O2", level: .warning)
+            o2 = Double(pct) / 100.0
             he = 0.0
         }
         return (o2, he, resolvedMixIdx)

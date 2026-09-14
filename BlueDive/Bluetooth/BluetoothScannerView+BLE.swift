@@ -155,12 +155,23 @@ extension BluetoothScannerView {
         Self.logger.info("Attempting to connect to \(deviceName)")
         Self.logger.info("peripheral: \(peripheral)")
 
-        #if DEBUG
-        Logger.shared.shouldShowRawData = false
-        Logger.shared.onPacket = { event in
-            print("[\(event.direction.rawValue.uppercased())] \(event.characteristicUUID) (\(event.data.count) bytes)\n\(event.hexDump)")
+        // BLE Diagnostic Logging
+        // Toggle ON  → BLEDiagnosticSession.start(): writes the full trace (log lines +
+        //              packet hex dumps) to a log file in Documents; packet dumps also
+        //              echo to the Xcode console in DEBUG builds.
+        //              (Settings → Bluetooth Import → BLE Diagnostic Logging)
+        //              Log file: BlueDive_BLE_<timestamp>.log — saved via error screen or Settings
+        // Toggle OFF → silent; uncomment the #if DEBUG block below for quick console-only debugging
+        if BLEDiagnosticSession.resolveLoggingEnabled() {
+            BLEDiagnosticSession.shared.start()
+        } else {
+            #if DEBUG
+            // Logger.shared.enableDebugMode()
+            // Logger.shared.onPacket = { event in
+            //     print("[\(event.direction.rawValue.uppercased())] \(event.characteristicUUID) (\(event.data.count) bytes)\n\(event.hexDump)")
+            // }
+            #endif
         }
-        #endif
 
         // Stop scanning
         stopScanning()
@@ -194,6 +205,7 @@ extension BluetoothScannerView {
             guard connected else {
                 DispatchQueue.main.async {
                     Self.logger.error("Failed to connect to \(deviceName)")
+                    BLEDiagnosticSession.shared.stop()
                     self.syncState = .error(message: String(format: NSLocalizedString("Unable to connect to %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when a Bluetooth connection to a dive computer fails. %@ is the device name."), deviceName))
                     self.selectedDevice = nil
                     self.discardPendingSeed(matchingUUID: deviceAddress)
@@ -228,6 +240,7 @@ extension BluetoothScannerView {
                     Self.logger.error("Timeout: device pointer not available after \(timeoutSeconds)s")
                     self.syncState = .error(message: NSLocalizedString("Connection established but device not ready", bundle: Bundle.forAppLanguage(), comment: "Error message shown when the Bluetooth connection succeeded but the device pointer was not available in time."))
                     self.selectedDevice = nil
+                    BLEDiagnosticSession.shared.stop()
                     self.bleManager.close(clearDevicePtr: true)
                     self.bleManager.clearRetrievalState()
                     self.discardPendingSeed(matchingUUID: deviceAddress)
@@ -252,6 +265,7 @@ extension BluetoothScannerView {
         guard let devicePtr = bleManager.openedDeviceDataPtr else {
             Self.logger.error("Device pointer not available")
             syncState = .error(message: NSLocalizedString("Device not available", bundle: Bundle.forAppLanguage(), comment: "Error message shown when the dive computer device pointer is unavailable at the start of a download."))
+            BLEDiagnosticSession.shared.stop()
             bleManager.close(clearDevicePtr: true)
             selectedDevice = nil
             return
@@ -350,6 +364,7 @@ extension BluetoothScannerView {
                             // No new dives, close the connection
                             self.downloadProgressCancellable = nil
                             self.commitPendingSeed()
+                            BLEDiagnosticSession.shared.stop()
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
                             self.selectedDevice = nil
@@ -360,6 +375,7 @@ extension BluetoothScannerView {
                             self.commitPendingSeed()
                             self.downloadedDives = viewModel.dives
                             self.isPartialSync = viewModel.isPartialSync
+                            BLEDiagnosticSession.shared.stop()
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
                             self.showingImportConfirmation = true
@@ -385,6 +401,7 @@ extension BluetoothScannerView {
                                 Self.logger.info("[BLE] Removed DeviceStorage entry for failed reassociation \(failedUUID.prefix(8))…")
                             }
                         }
+                        BLEDiagnosticSession.shared.stop()
                         self.bleManager.close(clearDevicePtr: true)
                         self.bleManager.clearRetrievalState()
                         self.selectedDevice = nil

@@ -372,6 +372,9 @@ pip3 install Pillow
 | `GearIcon_HeinrichsWeikamp` | Heinrichs Weikamp | `heinrichs`, `weikamp`, `ostc` |
 | `GearIcon_Cressi` | Cressi | `cressi` |
 | `GearIcon_Divesoft` | Divesoft | `divesoft` |
+| `GearIcon_Crest` | Crest | `crest` |
+| `GearIcon_Genesis` | Genesis | `genesis`, `genesis scuba` |
+| `GearIcon_Scorpena` | Scorpena | `scorpena` |
 | `GearIcon_Tusa` | Tusa | `tusa` |
 | `GearIcon_Garmin` | Garmin | `garmin` |
 
@@ -388,7 +391,7 @@ pip3 install Pillow
 | `GearIcon_Ratio` | Ratio | `ratio` |
 | `GearIcon_DiveSystem` | DiveSystem | `divesystem`, `idive` |
 | `GearIcon_Apeks` | Apeks | `apeks` |
-| `GearIcon_Orcatorch` | Orcatorch | `orcatorch` |
+| `GearIcon_OrcaTorch` | OrcaTorch | `orcatorch` |
 | `GearIcon_DiveRite` | Dive Rite | `dive rite` |
 | `GearIcon_SeaDog` | Sea-Dog | `sea-dog`, `sea dog` |
 | `GearIcon_XSScuba` | XS Scuba | `xs scuba` |
@@ -435,6 +438,8 @@ pip3 install Pillow
 | `GearIcon_Kubi` | Kubi | `kubi` |
 | `GearIcon_Eezycut` | Eezycut | `eezycut` |
 | `GearIcon_Tecline` | Tecline | `tecline` |
+| `GearIcon_HOG` | HOG | `hog`, `highly optimized gear` |
+| `GearIcon_DIRZONE` | DIRZONE | `dirzone`, `dir zone` |
 
 ### Gear — Masks / Fins
 
@@ -454,6 +459,7 @@ pip3 install Pillow
 | `GearIcon_Keldan` | Keldan | `keldan` |
 | `GearIcon_Ikelite` | Ikelite | `ikelite` |
 | `GearIcon_SeaAndSea` | Sea & Sea | `sea & sea`, `sea&sea`, `sea and sea` |
+| `GearIcon_GoPro` | GoPro | `gopro` |
 | `GearIcon_Paralenz` | Paralenz | `paralenz` |
 | `GearIcon_Nauticam` | Nauticam | `nauticam` |
 | `GearIcon_Sola` | Sola | `sola` |

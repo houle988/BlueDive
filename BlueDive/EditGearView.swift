@@ -638,7 +638,7 @@ struct EditGearView: View {
             gear.scheduleMaintenanceReminder()
         } else if hadServiceDate && !showNextServiceDue {
             // Si l'utilisateur a supprimé la date d'entretien, annuler la notification
-            NotificationManager.shared.cancelNotification(identifier: "gear-\(gear.id.uuidString)")
+            NotificationManager.shared.cancelGearReminder(id: gear.id)
         }
         
         gear.gearNotes = gearNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : gearNotes.trimmingCharacters(in: .whitespacesAndNewlines)

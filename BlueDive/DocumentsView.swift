@@ -449,7 +449,7 @@ struct DocumentsView: View {
                 Button("Cancel", role: .cancel) { certificationToDelete = nil }
                 Button("Delete", role: .destructive) {
                     if let cert = certificationToDelete {
-                        NotificationManager.shared.cancelNotification(identifier: "cert-30-\(cert.id.uuidString)")
+                        NotificationManager.shared.cancelCertificationReminder(id: cert.id)
                         modelContext.delete(cert)
                         certificationToDelete = nil
                     }
@@ -482,6 +482,7 @@ struct DocumentsView: View {
                 Button("Cancel", role: .cancel) { insuranceToDelete = nil }
                 Button("Delete", role: .destructive) {
                     if let insurance = insuranceToDelete {
+                        NotificationManager.shared.cancelInsuranceReminder(id: insurance.id)
                         modelContext.delete(insurance)
                         insuranceToDelete = nil
                     }
@@ -1169,6 +1170,7 @@ struct DocumentsView: View {
                 notes: item.notes
             )
             modelContext.insert(record)
+            record.scheduleExpirationReminder()
             count += 1
         }
         pendingInsuranceImport = []
@@ -1405,7 +1407,7 @@ struct CertificationDetailView: View {
             .alert("Delete certification?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
                 Button("Delete", role: .destructive) {
-                    NotificationManager.shared.cancelNotification(identifier: "cert-30-\(certification.id.uuidString)")
+                    NotificationManager.shared.cancelCertificationReminder(id: certification.id)
                     selectedCertification = nil
                     modelContext.delete(certification)
                 }
@@ -1821,7 +1823,7 @@ struct AddCertificationView: View {
             if hasExpiration {
                 cert.scheduleExpirationReminder()
             } else {
-                NotificationManager.shared.cancelNotification(identifier: "cert-30-\(cert.id.uuidString)")
+                NotificationManager.shared.cancelCertificationReminder(id: cert.id)
             }
         } else {
             let trimmedInstructor = instructorName.trimmingCharacters(in: .whitespaces)

@@ -2,6 +2,10 @@ import SwiftUI
 import SwiftData
 import CoreBluetooth
 import LibDCSwift
+import UniformTypeIdentifiers
+#if canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - Views
 
@@ -351,9 +355,51 @@ extension BluetoothScannerView {
                 .buttonStyle(.borderedProminent)
             }
 
+            if let logURL = BLEDiagnosticSession.shared.currentLogURL {
+                Button {
+                    saveDiagnosticLog(logURL)
+                } label: {
+                    Label("Save Diagnostic Log", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.bordered)
+            }
+
             Spacer()
         }
         .padding()
+        #if os(iOS)
+        .fileExporter(
+            isPresented: $showLogExporter,
+            document: logExportDocument,
+            contentType: .plainText,
+            defaultFilename: logExportFileName
+        ) { _ in
+            logExportDocument = nil
+        }
+        #endif
+    }
+
+    /// Saves the diagnostic log via the app's standard export flow (fileExporter on
+    /// iOS / "Designed for iPad" on Mac, NSSavePanel on the macOS target), matching
+    /// XML export and database backup. The log is saved as plain text (.txt).
+    private func saveDiagnosticLog(_ url: URL) {
+        guard let payload = BLEDiagnosticSession.shared.exportPayload(for: url) else { return }
+
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.title = NSLocalizedString("Save Diagnostic Log", bundle: .forAppLanguage(), value: "Save Diagnostic Log", comment: "")
+        panel.nameFieldStringValue = payload.filename
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let destination = panel.url else { return }
+            try? payload.data.write(to: destination)
+        }
+        #else
+        logExportDocument = ExportableFileDocument(data: payload.data)
+        logExportFileName = payload.filename
+        showLogExporter = true
+        #endif
     }
 
     // MARK: - Toolbar

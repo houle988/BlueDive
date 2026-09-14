@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "Puck_Pro_EZ.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

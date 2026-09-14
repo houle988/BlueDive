@@ -223,10 +223,15 @@ private struct StaticChartLayer: View, Equatable {
     /// Hash of tanks' O₂ fractions — changes when gas mix is edited, allowing the
     /// Equatable check to detect tank mutations even though dive.id is stable.
     let tanksO2Hash: Int
+    /// Fingerprint of the display units (depth/temperature/pressure) — changes when
+    /// the user switches units, so the Equatable check re-renders the axis labels and
+    /// mark positions even though `dive.id` and `prefs` (a shared reference) are stable.
+    let unitsHash: Int
 
     static func == (lhs: StaticChartLayer, rhs: StaticChartLayer) -> Bool {
         lhs.dive.id == rhs.dive.id &&
         lhs.tanksO2Hash == rhs.tanksO2Hash &&
+        lhs.unitsHash == rhs.unitsHash &&
         lhs.visibility.showDepth == rhs.visibility.showDepth &&
         lhs.visibility.showTemperature == rhs.visibility.showTemperature &&
         lhs.visibility.showPressure == rhs.visibility.showPressure &&
@@ -286,26 +291,61 @@ private struct StaticChartLayer: View, Equatable {
         return prefs.pressureUnit.formatted(value, from: prefs.pressureUnit)
     }
 
-    /// Temperature label for a tick.  Matches the encoding used in `temperatureMarks`.
-    private func temperatureLabel(for y: Double) -> String {
-        let (axisMin, axisRange): (Double, Double) = {
+    /// Temperature axis bounds `(min, range)` in the user's display unit.
+    /// Derived from the dive's own temperature samples with padding so the trace is
+    /// never clamped — warm (> 30 °C) or unusually cold dives use the full vertical
+    /// range instead of flattening against a fixed cap. Falls back to a sensible
+    /// fixed range per unit when the dive has no temperature samples.
+    private var temperatureAxis: (min: Double, range: Double) {
+        // Single allocation-free pass over the samples to find the display-unit
+        // temperature extremes.
+        var lo = Double.greatestFiniteMagnitude
+        var hi = -Double.greatestFiniteMagnitude
+        for sample in dive.profileSamples {
+            guard let raw = sample.temperature else { continue }
+            let value = dive.displayProfileTemperature(raw)
+            if value < lo { lo = value }
+            if value > hi { hi = value }
+        }
+        guard lo <= hi else {
             switch prefs.temperatureUnit {
             case .celsius:    return (-10.0, 40.0)
             case .fahrenheit: return (14.0,  72.0)
             case .kelvin:     return (263.15, 40.0)
             }
-        }()
+        }
+        // Pad by 10 % of the span (at least 2°) so the line never touches the plot
+        // edges, then round to whole units for clean tick labels.
+        let span = max(hi - lo, 1.0)
+        let pad = max(span * 0.1, 2.0)
+        let axisMin = (lo - pad).rounded(.down)
+        let axisMax = (hi + pad).rounded(.up)
+        return (axisMin, axisMax - axisMin)
+    }
+
+    /// Temperature label for a tick.  Matches the encoding used in `temperatureMarks`.
+    /// `axis` is precomputed once in `body` and threaded in to avoid rescanning the
+    /// samples on every tick.
+    private func temperatureLabel(for y: Double, axis: (min: Double, range: Double)) -> String {
+        let (axisMin, axisRange) = axis
         // Mirrors the mark formula: normalised = 1 - fraction → temp = axisMin + normalised * axisRange
         // fraction=0 (y=0, top) → normalised=1 → warmest; fraction=1 (y=-base, bottom) → normalised=0 → coldest
         let normalised = 1.0 - fraction(for: y)
         let value = axisMin + normalised * axisRange
-        return "\(Int(value.rounded()))\(prefs.temperatureUnit.symbol)"
+        // One decimal so each label exactly describes its gridline position. The
+        // gridlines are shared with the depth axis, so they rarely fall on a whole
+        // degree; rounding to an integer would displace the label from the trace.
+        // Round to one decimal and normalise negative zero so a gridline just below
+        // 0° doesn't render as "-0.0°".
+        var display = (value * 10).rounded() / 10
+        if display == 0 { display = 0 }
+        return display.localizedString(decimals: 1, minDecimals: 1) + prefs.temperatureUnit.symbol
     }
 
     /// NDL label for a tick.  100 min at surface (y=0), 0 min at deepest (y=yDomainMin).
     private func ndlLabel(for y: Double) -> String {
         let value = (1.0 - fraction(for: y)) * 100.0
-        return "\(Int(value.rounded()))min"
+        return value.rounded().localizedString(decimals: 0) + "min"
     }
 
     private let ppo2AxisMax: Double = 2.0
@@ -327,11 +367,15 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     var body: some View {
-        Chart {
+        // Compute the temperature axis once per render (only when the trace is shown),
+        // then thread it into the marks and every right-axis label so the sample scan
+        // runs a single time instead of once per axis tick.
+        let tempAxis = visibility.showTemperature ? temperatureAxis : (min: 0.0, range: 1.0)
+        return Chart {
             decoMarks
             depthMarks
             gasChangeMarks
-            temperatureMarks
+            temperatureMarks(axis: tempAxis)
             pressureMarks
             ndlMarks
             ppo2Marks
@@ -346,7 +390,10 @@ private struct StaticChartLayer: View, Equatable {
         .chartXAxis {
             AxisMarks(values: .automatic) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(.white.opacity(0.2))
+                    // Appearance-adaptive: primary is white in dark mode (unchanged
+                    // look) and black in light mode, so the grid stays visible on
+                    // both dark and light chart backgrounds.
+                    .foregroundStyle(Color.primary.opacity(0.2))
                 AxisValueLabel {
                     if let time = value.as(Double.self) {
                         Text("\(Int(time)) min")
@@ -360,11 +407,16 @@ private struct StaticChartLayer: View, Equatable {
             // ── Left axis: depth, shown as positive numbers increasing downward ──
             AxisMarks(position: .leading, values: .automatic) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(.white.opacity(0.2))
+                    // Appearance-adaptive: primary is white in dark mode (unchanged
+                    // look) and black in light mode, so the grid stays visible on
+                    // both dark and light chart backgrounds.
+                    .foregroundStyle(Color.primary.opacity(0.2))
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
-                        // v is negative — negate to show a positive depth label
-                        Text(verbatim: (-v).localizedString(decimals: 0) + prefs.depthUnit.symbol)
+                        // v is negative (or -0.0 at the surface) — use abs() to show a
+                        // positive depth and normalise negative zero, which would
+                        // otherwise render as "-0m".
+                        Text(verbatim: abs(v).localizedString(decimals: 0) + prefs.depthUnit.symbol)
                             .font(.caption2)
                             .foregroundStyle(.cyan)
                     }
@@ -395,7 +447,7 @@ private struct StaticChartLayer: View, Equatable {
                                     if visibility.showPressure || visibility.showPPO2 {
                                         Text("|").font(.caption2).foregroundStyle(.secondary)
                                     }
-                                    Text(temperatureLabel(for: depth))
+                                    Text(temperatureLabel(for: depth, axis: tempAxis))
                                         .font(.caption2)
                                         .foregroundStyle(.green)
                                 }
@@ -489,19 +541,13 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private var temperatureMarks: some ChartContent {
+    private func temperatureMarks(axis: (min: Double, range: Double)) -> some ChartContent {
         if visibility.showTemperature {
             let samplesWithTemp = dive.profileSamples.filter { $0.temperature != nil }
+            let (axisMin, axisRange) = axis
             ForEach(samplesWithTemp) { sample in
                 if let temp = sample.temperature {
                     let displayTemp = dive.displayProfileTemperature(temp)
-                    let (axisMin, axisRange): (Double, Double) = {
-                        switch prefs.temperatureUnit {
-                        case .celsius:    return (-10.0, 40.0)
-                        case .fahrenheit: return (14.0,  72.0)
-                        case .kelvin:     return (263.15, 40.0)
-                        }
-                    }()
                     // Map temperature onto the negated depth axis:
                     // warmest temp → y = 0 (top), coldest temp → y = -displayMaxDepth (bottom)
                     // (1 - normalised) flips the direction so high temp sits near the surface.
@@ -719,17 +765,24 @@ private struct StaticChartLayer: View, Equatable {
             .sorted { $0.depth > $1.depth }
         guard !stops.isEmpty else { return [] }
 
-        let decoSamples = dive.profileSamples
+        let allSamples = dive.profileSamples
+        let decoSamples = allSamples
             .filter { $0.events.contains(.decoStop) }
             .sorted { $0.time < $1.time }
         guard !decoSamples.isEmpty else { return [] }
 
-        // For accurate crossing detection, search ALL profile samples within the deco
-        // window (plus a 2-minute lookback). This handles dive computers that only start
-        // emitting .decoStop events after the profile has already passed stop.depth.
+        // For accurate crossing detection, search from a 2-minute lookback before the first
+        // deco sample (handles computers that emit .decoStop only after passing stop.depth)
+        // through to the END OF THE DIVE. Extending past the obligation window lets stops
+        // whose depth is only physically reached after the obligation clears — e.g. Bühlmann
+        // GF computers that clear deco deep and let the diver drift up through the shallow
+        // stops — resolve onto the real ascent line instead of collapsing onto the shallowest
+        // in-window sample. The loop still takes the FIRST ascending crossing at/after
+        // searchFloorTime, so dives that already cross within the obligation window are
+        // unaffected.
         let decoWindowStart = (decoSamples.first?.time ?? 0) - 2.0
-        let decoWindowEnd   = decoSamples.last?.time ?? 0
-        let windowSamples = dive.profileSamples
+        let decoWindowEnd   = allSamples.map(\.time).max() ?? (decoSamples.last?.time ?? 0)
+        let windowSamples = allSamples
             .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
             .sorted { $0.time < $1.time }
 
@@ -948,7 +1001,7 @@ struct UnifiedDiveChartOptimized: View {
             : Double(dive.duration)
         let xMax = max(lastSampleTime, storedDurationMinutes)
 
-        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash)
+        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash)
             .equatable()
             // chartOverlay gives us a ChartProxy so we can read the exact plot-area
             // frame — the rectangle inside both Y-axis label gutters.  Everything
@@ -1075,7 +1128,10 @@ struct UnifiedDiveChartOptimized: View {
         guard !decoSamples.isEmpty else { cachedDecoStopEntries = []; return }
 
         let windowStart = (decoSamples.first?.time ?? 0) - 2.0
-        let windowEnd   = decoSamples.last?.time ?? 0
+        // Extend the crossing search to the end of the dive (see mandatoryDecoStopPoints):
+        // stops physically reached only after the obligation clears resolve onto the real
+        // ascent line. First-crossing-at/after-floor keeps in-window dives unchanged.
+        let windowEnd   = samples.map(\.time).max() ?? (decoSamples.last?.time ?? 0)
         let windowSamples = samples
             .filter { $0.time >= windowStart && $0.time <= windowEnd }
             .sorted { $0.time < $1.time }
@@ -1396,6 +1452,19 @@ struct UnifiedDiveChartOptimized: View {
     /// Accessed during body so @Observable tracks tanksData as a dependency.
     private var tanksO2Hash: Int {
         dive.tanks.reduce(0) { ($0 &* 31) &+ Int($1.o2 * 1_000_000) }
+    }
+
+    /// Fingerprint of the display units that affect the chart (depth, temperature,
+    /// pressure). Captured as a value so the Equatable `StaticChartLayer` re-renders
+    /// when the user switches units, even though `prefs` is a shared reference whose
+    /// two sides would otherwise compare equal. Read during body so @Observable
+    /// tracks these unit properties as dependencies.
+    private var unitsHash: Int {
+        var hasher = Hasher()
+        hasher.combine(prefs.depthUnit)
+        hasher.combine(prefs.temperatureUnit)
+        hasher.combine(prefs.pressureUnit)
+        return hasher.finalize()
     }
 
     private var ppo2Available: Bool {

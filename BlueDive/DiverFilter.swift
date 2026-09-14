@@ -26,6 +26,15 @@ enum DiverFilter {
         return Array(Set(names.filter { !$0.isEmpty })).sorted()
     }
 
+    /// First letters of up to two words in a name, uppercased (e.g. "Steve Houle" → "SH").
+    /// Returns "?" when the name contains no letters or digits. Shared by the toolbar
+    /// chip and the map pins so initials render identically everywhere.
+    static func initials(for name: String) -> String {
+        let words = name.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        let letters = words.prefix(2).compactMap { $0.first.map { String($0).uppercased() } }
+        return letters.isEmpty ? "?" : letters.joined()
+    }
+
     /// Returns `dives` filtered to a single diver, or unchanged when no diver is selected.
     /// Trims stored names before comparison so they match the trimmed picker values.
     static func apply(_ selected: String, to dives: [Dive]) -> [Dive] {
@@ -170,12 +179,6 @@ struct DiverFilterToolbar: ToolbarContent {
 
     private var isActive: Bool { !selectedDiver.isEmpty }
 
-    private func initials(for name: String) -> String {
-        let words = name.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-        let letters = words.prefix(2).compactMap { $0.first.map { String($0).uppercased() } }
-        return letters.isEmpty ? "?" : letters.joined()
-    }
-
     private var picker: some View {
         Menu {
             Button {
@@ -205,7 +208,7 @@ struct DiverFilterToolbar: ToolbarContent {
                     Circle()
                         .fill(Color.cyan)
                         .frame(width: 24, height: 24)
-                    Text(initials(for: selectedDiver))
+                    Text(DiverFilter.initials(for: selectedDiver))
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Color.black)
                 }

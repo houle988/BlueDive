@@ -1063,7 +1063,7 @@ struct GearServiceView: View {
     
     private func saveAndReschedule() {
         try? modelContext.save()
-        NotificationManager.shared.cancelNotification(identifier: "gear-\(gear.id.uuidString)")
+        NotificationManager.shared.cancelGearReminder(id: gear.id)
         gear.scheduleMaintenanceReminder()
     }
 

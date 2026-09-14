@@ -11,6 +11,7 @@ enum ImportFileType {
     case uddf
     case gearCSV
     case garminFIT
+    case subsurface
 }
 
 // MARK: - File Import Coordinator
@@ -45,6 +46,7 @@ enum ImportError: LocalizedError {
     case fileSelectionFailed(Error)
     case saveFailed(Error)
     case unsupportedFormat
+    case subsurfaceUnsupportedVersion
 
     var errorDescription: String? {
         let bundle = Bundle.forAppLanguage()
@@ -62,7 +64,9 @@ enum ImportError: LocalizedError {
             let fmt = NSLocalizedString("Save error: %@", bundle: bundle, comment: "")
             return String(format: fmt, error.localizedDescription)
         case .unsupportedFormat:
-            return NSLocalizedString("Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, and Garmin FIT.", bundle: bundle, value: "Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, and Garmin FIT.", comment: "Error message displayed when an unsupported file format is selected for import.")
+            return NSLocalizedString("Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, Subsurface XML, and Garmin FIT.", bundle: bundle, value: "Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, Subsurface XML, and Garmin FIT.", comment: "Error message displayed when an unsupported file format is selected for import.")
+        case .subsurfaceUnsupportedVersion:
+            return NSLocalizedString("This Subsurface file uses an old format (version 2) that is not supported. Re-export it from Subsurface 4.6 or later.", bundle: bundle, value: "This Subsurface file uses an old format (version 2) that is not supported. Re-export it from Subsurface 4.6 or later.", comment: "Error shown when importing a Subsurface version 2 file, which is not supported.")
         }
     }
 }
@@ -196,8 +200,20 @@ extension ContentView {
             || url.pathExtension.lowercased() == "uddf"
         )
 
-        // 3. MacDive XML — identified by its DOCTYPE declaration.
-        let isMacDive = !isBlueDive && !isUDDF && (
+        // 3. Subsurface XML — identified by program='subsurface' or program="subsurface"
+        //    in the root <divelog> element, or by the .ssrf extension.
+        //    Checked before MacDive to prevent the loose mac-dive.com fallback
+        //    from matching files that happen to contain that string. Also excludes the
+        //    BlueDive auxiliary XML types so a gear/cert/insurance export can never be
+        //    misrouted here even if its payload happened to contain "program=".
+        let isSubsurface = !isBlueDive && !isUDDF && !isGearXML && !isCertXML && !isInsuranceXML && (
+            snippet.contains("program='subsurface'")
+            || snippet.contains("program=\"subsurface\"")
+            || url.pathExtension.lowercased() == "ssrf"
+        )
+
+        // 4. MacDive XML — identified by its DOCTYPE declaration.
+        let isMacDive = !isBlueDive && !isUDDF && !isSubsurface && (
             snippet.contains("<!DOCTYPE dives SYSTEM \"http://www.mac-dive.com/macdive_logbook.dtd\">")
             || snippet.contains("mac-dive.com")
         )
@@ -227,6 +243,16 @@ extension ContentView {
             importFormatOptions = options
             if let data = rawData {
                 pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .uddf)
+            }
+
+        } else if isSubsurface {
+            // Subsurface XML — always metric (like UDDF); show the import sheet
+            // so the user can toggle gear import. Dive computers listed in
+            // <settings><divecomputerid> are imported as Gear items when enabled.
+            let options = ImportFormatOptions()
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .subsurface)
             }
 
         } else if isMacDive {
@@ -343,6 +369,8 @@ extension ContentView {
             throw ImportError.unsupportedFormat
         case .garminFIT:
             parsed = try parseGarminFIT(data: data)
+        case .subsurface:
+            parsed = try parseSubsurfaceXML(data: data, importGear: formats.importGear)
         }
         return parsed.filter { $0.date != nil }
     }
@@ -382,6 +410,18 @@ extension ContentView {
         let parser = UDDFXMLParser()
         parser.importGear = importGear
         guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    private func parseSubsurfaceXML(data: Data, importGear: Bool) throws -> [BlueDiveGlobalData] {
+        let parser = SubsurfaceXMLParser()
+        parser.importGear = importGear
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            if parser.rejectedUnsupportedVersion {
+                throw ImportError.subsurfaceUnsupportedVersion
+            }
             throw ImportError.parsingFailed
         }
         return parsedData

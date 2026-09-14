@@ -38,6 +38,8 @@ extension Notification.Name {
     static let openEquipmentForService      = Notification.Name("NotificationAction.markDone")
     /// Posted from a RENEW notification action to navigate to the Certifications tab.
     static let openCertificationsForRenewal = Notification.Name("NotificationAction.renew")
+    /// Posted from a RENEW_INSURANCE notification action to navigate to the Documents tab for insurance renewal.
+    static let openInsuranceForRenewal      = Notification.Name("NotificationAction.renewInsurance")
     /// Posted when a BlueDive Gear XML file is opened via file association; switches to Equipment tab.
     static let importGearXML          = Notification.Name("FileImport.importGearXML")
     /// Posted when a BlueDive Certification XML file is opened via file association; switches to Documents tab.

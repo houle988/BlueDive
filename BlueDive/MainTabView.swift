@@ -10,6 +10,7 @@ struct MainTabView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
     @AppStorage("gearMaintenanceReminders") private var gearReminders = true
     @AppStorage("certificationReminders") private var certReminders = true
+    @AppStorage("insuranceReminders") private var insuranceReminders = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
     @Environment(\.introVisible) private var introVisible
@@ -42,6 +43,7 @@ struct MainTabView: View {
     @State private var selectedTab: Int = 0
     @State private var gearToOpen: Gear? = nil
     @State private var certToRenew: Certification? = nil
+    @State private var insuranceToRenew: DivingInsurance? = nil
 
     init() {
         // Force black background for all tabs on macOS
@@ -115,6 +117,17 @@ struct MainTabView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openInsuranceForRenewal)) { note in
+            let insuranceId = note.object as? String
+            Task { @MainActor in
+                UserDefaults.standard.removeObject(forKey: "pendingInsuranceDeepLink")
+                UserDefaults.standard.removeObject(forKey: "pendingInsuranceDeepLinkTime")
+                selectedTab = 3
+                if let insuranceId {
+                    insuranceToRenew = fetchInsurance(id: insuranceId)
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .importGearXML)) { _ in
             selectedTab = 2
         }
@@ -155,6 +168,15 @@ struct MainTabView: View {
                 if now - written < 300 {
                     selectedTab = 3
                     certToRenew = fetchCertification(id: certId)
+                }
+            }
+            if let insuranceId = UserDefaults.standard.string(forKey: "pendingInsuranceDeepLink") {
+                let written = UserDefaults.standard.double(forKey: "pendingInsuranceDeepLinkTime")
+                UserDefaults.standard.removeObject(forKey: "pendingInsuranceDeepLink")
+                UserDefaults.standard.removeObject(forKey: "pendingInsuranceDeepLinkTime")
+                if now - written < 300 {
+                    selectedTab = 3
+                    insuranceToRenew = fetchInsurance(id: insuranceId)
                 }
             }
             await scheduleNotificationsAtLaunch()
@@ -223,6 +245,12 @@ struct MainTabView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(item: $insuranceToRenew) { insurance in
+            AddInsuranceView(insuranceToEdit: insurance)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Notification Action Handlers
@@ -243,6 +271,14 @@ struct MainTabView: View {
         ).first
     }
 
+    @MainActor
+    private func fetchInsurance(id: String) -> DivingInsurance? {
+        guard let uuid = UUID(uuidString: id) else { return nil }
+        return try? modelContext.fetch(
+            FetchDescriptor<DivingInsurance>(predicate: #Predicate { $0.id == uuid })
+        ).first
+    }
+
     // MARK: - Notification Scheduling at Launch
     
     private func scheduleNotificationsAtLaunch() async {
@@ -257,20 +293,38 @@ struct MainTabView: View {
         guard status == .authorized || status == .provisional else { return }
         
         NotificationManager.shared.setupNotificationCategories()
-        
+
+        // Fetch each record set once — reused for scheduling and for the orphan reconcile below.
+        let allGear = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
+        let allCerts = (try? modelContext.fetch(FetchDescriptor<Certification>())) ?? []
+        let allInsurances = (try? modelContext.fetch(FetchDescriptor<DivingInsurance>())) ?? []
+
         if gearReminders {
-            let allGear = (try? modelContext.fetch(FetchDescriptor<Gear>())) ?? []
             NotificationManager.shared.scheduleGearMaintenanceReminders(for: allGear)
         } else {
             await NotificationManager.shared.cancelNotifications(withPrefix: "gear-")
         }
 
         if certReminders {
-            let allCerts = (try? modelContext.fetch(FetchDescriptor<Certification>())) ?? []
             NotificationManager.shared.scheduleCertificationReminders(for: allCerts)
         } else {
             await NotificationManager.shared.cancelNotifications(withPrefix: "cert-")
         }
+
+        if insuranceReminders {
+            NotificationManager.shared.scheduleInsuranceReminders(for: allInsurances)
+        } else {
+            await NotificationManager.shared.cancelNotifications(withPrefix: "insurance-")
+        }
+
+        // Reconcile: drop any pending reminder whose record no longer exists (e.g. deleted
+        // on another device and removed locally via CloudKit sync, where no in-app delete
+        // handler ran). Also clears that record's stale catch-up marker.
+        await NotificationManager.shared.reconcilePendingReminders(
+            gearIDs: Set(allGear.map(\.id)),
+            certIDs: Set(allCerts.map(\.id)),
+            insuranceIDs: Set(allInsurances.map(\.id))
+        )
     }
     
 }

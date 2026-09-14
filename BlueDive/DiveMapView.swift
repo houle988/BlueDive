@@ -66,6 +66,9 @@ struct DiveMapView: View {
         let id: String
         let coordinate: CLLocationCoordinate2D
         let dives: [Dive]
+        // Single-diver initials for the pin, computed once at build time (see
+        // singleDiverInitials) so rendering stays O(1) per pin at scale.
+        let initials: String?
     }
 
     // Normalizes longitude into [-180, 180) so dives near the antimeridian
@@ -218,7 +221,8 @@ struct DiveMapView: View {
                 return DiveCluster(
                     id: "\(minID)_\(raw.memberIDs.count)",
                     coordinate: CLLocationCoordinate2D(latitude: raw.centroidLat, longitude: raw.centroidLon),
-                    dives: dives
+                    dives: dives,
+                    initials: DiveMapView.singleDiverInitials(for: dives)
                 )
             }.sorted { $0.id < $1.id }
             isFilterTaskActive = false
@@ -255,7 +259,8 @@ struct DiveMapView: View {
                 return DiveCluster(
                     id: "\(minID)_\(raw.memberIDs.count)",
                     coordinate: CLLocationCoordinate2D(latitude: raw.centroidLat, longitude: raw.centroidLon),
-                    dives: dives
+                    dives: dives,
+                    initials: DiveMapView.singleDiverInitials(for: dives)
                 )
             }.sorted { $0.id < $1.id }
         }
@@ -457,6 +462,16 @@ struct DiveMapView: View {
         filterObserversB
     }
 
+    // Initials to carry on a cluster: the diver's initials when every dive in the
+    // cluster belongs to a single named diver, otherwise nil (pin shows the count).
+    // Called once per cluster during the filter/recluster pass — never from `body` —
+    // so per-render pin rendering stays O(1) even for large single-site clusters.
+    private static func singleDiverInitials(for dives: [Dive]) -> String? {
+        let names = Set(dives.map { $0.diverName.trimmingCharacters(in: .whitespaces) })
+        guard names.count == 1, let name = names.first, !name.isEmpty else { return nil }
+        return DiverFilter.initials(for: name)
+    }
+
     private func handleClusterTap(_ cluster: DiveCluster) {
         let lats: [Double]
         let lons: [Double]
@@ -517,7 +532,7 @@ struct DiveMapView: View {
                                 String(format: NSLocalizedString("%@ dives", bundle: .forAppLanguage(), comment: "Plural dive count in a cluster map annotation"), Double(cluster.dives.count).localizedString(decimals: 0)),
                                 coordinate: cluster.coordinate
                             ) {
-                                DiveMapClusterPin(count: cluster.dives.count)
+                                DiveMapClusterPin(count: cluster.dives.count, initials: cluster.initials)
                                     .onTapGesture {
                                         handleClusterTap(cluster)
                                     }
@@ -701,11 +716,20 @@ struct DiveMapPin: View {
     let dive: Dive
     let isSelected: Bool
 
+    // Diver initials when the dive has a named diver; nil for unnamed dives,
+    // which fall back to the orange flag pin so "?" never appears on the map.
+    private var diverInitials: String? {
+        let trimmed = dive.diverName.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : DiverFilter.initials(for: trimmed)
+    }
+
     var body: some View {
+        let initials = diverInitials
+        let tint: Color = initials == nil ? .orange : .cyan
         VStack(spacing: 0) {
             ZStack {
                 Circle()
-                    .fill(Color.orange)
+                    .fill(tint)
                     .frame(width: isSelected ? 44 : 32, height: isSelected ? 44 : 32)
                     .overlay(
                         Circle()
@@ -713,9 +737,15 @@ struct DiveMapPin: View {
                     )
                     .shadow(radius: 5)
 
-                Image(systemName: "flag.fill")
-                    .font(isSelected ? .title3 : .caption)
-                    .foregroundStyle(.primary)
+                if let initials {
+                    Text(verbatim: initials)
+                        .font(.system(size: isSelected ? 16 : 12, weight: .semibold))
+                        .foregroundStyle(Color.black)
+                } else {
+                    Image(systemName: "flag.fill")
+                        .font(isSelected ? .title3 : .caption)
+                        .foregroundStyle(.primary)
+                }
             }
 
             // Triangle pointer
@@ -725,7 +755,7 @@ struct DiveMapPin: View {
                 path.addLine(to: CGPoint(x: -10, y: 15))
                 path.closeSubpath()
             }
-            .fill(Color.orange)
+            .fill(tint)
             .frame(width: 20, height: 15)
             .offset(y: -2)
         }
@@ -737,21 +767,31 @@ struct DiveMapPin: View {
 
 struct DiveMapClusterPin: View {
     let count: Int
+    // When every dive in the cluster belongs to one named diver, show that
+    // diver's initials (cyan); otherwise show the dive count (orange).
+    var initials: String? = nil
 
     var body: some View {
+        let tint: Color = initials == nil ? .orange : .cyan
         VStack(spacing: 0) {
             ZStack {
                 Circle()
-                    .fill(Color.orange)
+                    .fill(tint)
                     .frame(width: 40, height: 40)
                     .overlay(
                         Circle().stroke(.white, lineWidth: 2)
                     )
                     .shadow(radius: 5)
 
-                Text(verbatim: Double(count).localizedString(decimals: 0))
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                if let initials {
+                    Text(verbatim: initials)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.black)
+                } else {
+                    Text(verbatim: Double(count).localizedString(decimals: 0))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                }
             }
 
             Path { path in
@@ -760,7 +800,7 @@ struct DiveMapClusterPin: View {
                 path.addLine(to: CGPoint(x: -10, y: 15))
                 path.closeSubpath()
             }
-            .fill(Color.orange)
+            .fill(tint)
             .frame(width: 20, height: 15)
             .offset(y: -2)
         }
@@ -775,6 +815,26 @@ struct DiveClusterListCard: View {
     let onClose: () -> Void
     @Environment(\.locale) private var locale
     @State private var prefs = UserPreferences.shared
+
+    /// Row leading icon: a cyan initials badge when this dive's diver is named
+    /// (matching the map pins); otherwise the orange flag badge (unknown diver).
+    @ViewBuilder
+    private func rowIcon(for dive: Dive) -> some View {
+        let name = dive.diverName.trimmingCharacters(in: .whitespaces)
+        if !name.isEmpty {
+            Text(verbatim: DiverFilter.initials(for: name))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.black)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.cyan))
+        } else {
+            Image(systemName: "flag.fill")
+                .font(.caption)
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.orange))
+        }
+    }
 
     /// Height that fits up to 3 rows exactly; beyond 3 dives the list scrolls.
     private var listScrollHeight: CGFloat {
@@ -821,11 +881,7 @@ struct DiveClusterListCard: View {
                             onSelect(dive)
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "flag.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.white)
-                                    .frame(width: 28, height: 28)
-                                    .background(Circle().fill(Color.orange))
+                                rowIcon(for: dive)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(formattedDate(dive.timestamp))

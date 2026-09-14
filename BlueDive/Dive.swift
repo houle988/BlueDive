@@ -1521,4 +1521,26 @@ extension Dive {
         try? context.save()
         return result
     }
+
+    // MARK: - Renumber Dives
+
+    // Returns a map of dive ID → new diveNumber so callers can patch DiveStore's
+    // summary caches directly, bypassing the main-context merge delay.
+    @discardableResult
+    static func renumberDives(in context: ModelContext, diverName diverFilter: String? = nil) -> [UUID: Int] {
+        let allDives = (try? context.fetch(FetchDescriptor<Dive>())) ?? []
+        let grouped = Dictionary(grouping: allDives) { $0.diverName }
+        var result: [UUID: Int] = [:]
+        for (diver, diverDives) in grouped {
+            if let diverFilter, diver != diverFilter { continue }
+            if diverFilter == nil, diver.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            let sorted = diverDives.sorted { $0.timestamp < $1.timestamp }
+            for (index, dive) in sorted.enumerated() {
+                dive.diveNumber = index + 1
+                result[dive.id] = index + 1
+            }
+        }
+        try? context.save()
+        return result
+    }
 }

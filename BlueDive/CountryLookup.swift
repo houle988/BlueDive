@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Centralised country-name-to-flag and accent-colour lookup.
-/// Supports English, French Canadian, and German country names with accent-insensitive matching.
+/// Supports English, French Canadian, German, and Dutch country names with accent-insensitive matching.
 enum CountryLookup {
 
     // MARK: - Public API
@@ -287,6 +287,74 @@ enum CountryLookup {
         "grönland": "gl", "hongkong": "hk",
         "saint-pierre und miquelon": "pm", "st. helena": "sh",
         "turks- und caicosinseln": "tc", "ålandinseln": "ax",
+        // Dutch (nl) country names
+        // A
+        "albanië": "al", "algerije": "dz", "antigua en barbuda": "ag",
+        "argentinië": "ar", "armenië": "am", "australië": "au",
+        "azerbeidzjan": "az", "amerikaans-samoa": "as", "amerikaanse maagdeneilanden": "vi",
+        // B
+        "bahama's": "bs", "bahrein": "bh", "belgië": "be",
+        "bosnië en herzegovina": "ba", "brazilië": "br", "bulgarije": "bg",
+        "britse maagdeneilanden": "vg",
+        // C
+        "cambodja": "kh", "centraal-afrikaanse republiek": "cf", "chili": "cl",
+        "comoren": "km", "cookeilanden": "ck",
+        // D
+        "democratische republiek congo": "cd", "denemarken": "dk", "dominicaanse republiek": "do",
+        "duitsland": "de",
+        // E
+        "egypte": "eg", "equatoriaal-guinea": "gq", "ethiopië": "et",
+        // F
+        "filipijnen": "ph", "frankrijk": "fr", "faeröer": "fo",
+        "frans-guyana": "gf", "frans-polynesië": "pf",
+        // G
+        "georgië": "ge", "griekenland": "gr", "groot-brittannië": "gb",
+        "guinee": "gn", "guinee-bissau": "gw", "groenland": "gl",
+        // H
+        "hongarije": "hu",
+        // I
+        "ierland": "ie", "ijsland": "is", "indonesië": "id",
+        "italië": "it", "ivoorkust": "ci",
+        // J
+        "jordanië": "jo",
+        // K
+        "kaapverdië": "cv", "kaaimaneilanden": "ky", "kameroen": "cm",
+        "kazachstan": "kz", "kirgizië": "kg", "koeweit": "kw",
+        "kroatië": "hr",
+        // L
+        "letland": "lv", "libië": "ly", "litouwen": "lt",
+        // M
+        "macedonië": "mk", "maldiven": "mv", "maleisië": "my",
+        "marshalleilanden": "mh", "mauritanië": "mr", "moldavië": "md",
+        "mongolië": "mn",
+        // N
+        "namibië": "na", "nederland": "nl", "nieuw-zeeland": "nz",
+        "noord-korea": "kp", "noord-macedonië": "mk", "noorwegen": "no",
+        "nieuw-caledonië": "nc",
+        // O
+        "oeganda": "ug", "oekraïne": "ua", "oezbekistan": "uz",
+        "oostenrijk": "at", "oost-timor": "tl",
+        // P
+        "papoea-nieuw-guinea": "pg", "palestina": "ps",
+        // R
+        "roemenië": "ro", "rusland": "ru",
+        // S
+        "saint kitts en nevis": "kn", "saint vincent en de grenadines": "vc", "salomonseilanden": "sb",
+        "saudi-arabië": "sa", "servië": "rs", "slovenië": "si",
+        "slowakije": "sk", "soedan": "sd", "somalië": "so",
+        "spanje": "es", "syrië": "sy", "sint-maarten": "sx",
+        // T
+        "tadzjikistan": "tj", "trinidad en tobago": "tt", "tsjaad": "td",
+        "tsjechië": "cz", "tunesië": "tn", "turkije": "tr",
+        "turks- en caicoseilanden": "tc",
+        // V
+        "vaticaanstad": "va", "verenigd koninkrijk": "gb", "verenigde arabische emiraten": "ae",
+        "verenigde staten": "us", "verenigde staten van amerika": "us",
+        // W
+        "westelijke sahara": "eh", "wit-rusland": "by",
+        // Z
+        "zuid-afrika": "za", "zuid-korea": "kr", "zuid-soedan": "ss",
+        "zweden": "se", "zwitserland": "ch",
     ]
 
     // MARK: - ISO code → accent colour

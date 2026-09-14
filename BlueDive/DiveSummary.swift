@@ -4,7 +4,7 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
 
     // MARK: - Identity
     let id: UUID
-    let diveNumber: Int?
+    var diveNumber: Int?
 
     // MARK: - Scalars (direct column reads, no faults)
     let timestamp: Date

@@ -97,10 +97,18 @@ struct AboutView: View {
                     
                     // Community Contributors
                     VStack(spacing: 16) {
-                        sectionHeader(title: "Community Contributors", icon: "person.3.fill", color: .cyan)
+                        sectionHeader(title: "Key Community Contributors", icon: "person.3.fill", color: .cyan)
 
                         VStack(spacing: 8) {
-                            contributorRow(name: "Thomas MacDermott", role: "Wiki, testing and ideas for new features")
+                            contributorRow(name: "Thomas MacDermott", role: "Testing and ideas for new features")
+                            Divider().opacity(0.3)
+                            contributorRow(name: "Espen Moe", role: "Testing and ideas for new features")
+                            Divider().opacity(0.3)
+                            contributorRow(name: "Lionel Prost", role: "Testing and ideas for new features")
+                            Divider().opacity(0.3)
+                            contributorRow(name: "Mark Kuiphuis", role: "Dutch Translation, Testing and ideas for new features")
+                            Divider().opacity(0.3)
+                            contributorRow(name: "Simone Ueberwasser", role: "German Translation, Testing and ideas for new features")
                         }
                         .padding()
                         .sectionCardBackground()

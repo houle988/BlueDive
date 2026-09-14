@@ -1175,6 +1175,7 @@ struct InsuranceDetailView: View {
                 Button("Cancel", role: .cancel) { }
                 Button("Delete", role: .destructive) {
                     selectedInsurance = nil
+                    NotificationManager.shared.cancelInsuranceReminder(id: insurance.id)
                     modelContext.delete(insurance)
                 }
             } message: {
@@ -1431,6 +1432,7 @@ struct AddInsuranceView: View {
             insurance.contactEmail = trimmedEmail.isEmpty ? nil : trimmedEmail
             let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             insurance.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
+            insurance.scheduleExpirationReminder()
         } else {
             let trimmedPhone = contactPhone.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedEmail = contactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1447,6 +1449,7 @@ struct AddInsuranceView: View {
                 notes: trimmedNotes.isEmpty ? nil : trimmedNotes
             )
             modelContext.insert(newInsurance)
+            newInsurance.scheduleExpirationReminder()
         }
         dismiss()
     }

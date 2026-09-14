@@ -142,9 +142,9 @@ struct BlueDiveApp: App {
                     }
                     return
                 }
-                // File open: .fit and .uddf files from document associations, share
-                // sheet, AirDrop, or Files app. ContentView observes importCoordinator
-                // and calls handleExternalFileURL when this becomes non-nil.
+                // File open: .fit, .uddf, .ssrf, and .bluedive files from document
+                // associations, share sheet, AirDrop, or Files app. ContentView observes
+                // importCoordinator and calls handleExternalFileURL when this becomes non-nil.
                 if url.isFileURL {
                     importCoordinator.pendingURL = url
                 }
