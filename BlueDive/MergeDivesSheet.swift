@@ -1,6 +1,27 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Merge Order
+
+/// Resolves which of two dives is the earlier one (kept as the merge base) and which is the
+/// later one (samples appended, then deleted).
+///
+/// Shared by `ContentView.mergeDives` and the merge confirmation message so the dialog always
+/// names the dive that will actually be deleted. Keep this as the single source of truth — when
+/// the two disagreed, the confirmation could name one dive and the merge delete the other.
+enum DiveMergeOrder {
+    static func resolve(_ diveA: Dive, _ diveB: Dive) -> (earlier: Dive, later: Dive) {
+        // Primary signal: timestamp. Tiebreaker: tank start pressure (more gas = start of dive),
+        // so that dives with identical timestamps (e.g. date-only precision) are ordered correctly.
+        if diveA.timestamp != diveB.timestamp {
+            return diveA.timestamp < diveB.timestamp ? (diveA, diveB) : (diveB, diveA)
+        }
+        let aStart = diveA.tanks.first?.startPressure ?? 0
+        let bStart = diveB.tanks.first?.startPressure ?? 0
+        return aStart >= bStart ? (diveA, diveB) : (diveB, diveA)
+    }
+}
+
 // MARK: - Merge Dives Sheet
 
 struct MergeDivesSheet: View {
@@ -25,20 +46,30 @@ struct MergeDivesSheet: View {
     /// Quick summary for the confirmation dialog
     private var mergeSummary: String {
         guard let a = selectedDiveA, let b = selectedDiveB else { return "" }
-        let earlier = a.timestamp <= b.timestamp ? a : b
-        let later   = a.timestamp <= b.timestamp ? b : a
+        // Must match mergeDives exactly, or the dialog names the wrong dive as deleted.
+        let (earlier, later) = DiveMergeOrder.resolve(a, b)
         let format = NSLocalizedString(
             "Keep \"%@\" (%@) and append samples from \"%@\" (%@). The second dive will be deleted.",
             bundle: .forAppLanguage(),
             comment: "Merge confirmation message showing which dive is kept and which is deleted"
         )
-        return String(
+        let summary = String(
             format: format,
             earlier.siteName,
             earlier.timestamp.formatted(date: .abbreviated, time: .shortened),
             later.siteName,
             later.timestamp.formatted(date: .abbreviated, time: .shortened)
         )
+        // Disclose that combined stats span the surface interval: the merged profile keeps
+        // the surface interval between the two dives, so duration, average depth and SAC are
+        // computed over the whole excursion rather than each dive's submerged time.
+        let note = NSLocalizedString(
+            "Note: the merged dive's duration, average depth, and SAC include the surface interval between the two dives.",
+            bundle: .forAppLanguage(),
+            value: "Note: the merged dive's duration, average depth, and SAC include the surface interval between the two dives.",
+            comment: "Disclosure in the merge confirmation that combined stats span the surface interval"
+        )
+        return summary + "\n\n" + note
     }
 
     var body: some View {

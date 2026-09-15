@@ -1156,20 +1156,28 @@ extension ContentView {
 
     /// Merges two dives into one. The earlier dive is kept as the base and
     /// the later dive's samples are appended (offset by dive 1 duration + surface interval).
-    /// Recalculated fields: maxDepth, averageDepth, duration, cns, tempAir, tempHigh, tempLow, endPressure.
+    /// Dive order is resolved by `DiveMergeOrder.resolve`, shared with the confirmation dialog.
+    ///
+    /// Recalculated fields: maxDepth, averageDepth, duration, cns, tempAir, tempHigh, tempLow.
+    ///
+    /// Merged fields:
+    /// - Tanks: start pressure from the earlier dive, end pressure from the later dive (matched
+    ///   by index). Tanks used only by the later dive are appended, keeping their original index
+    ///   so the appended samples' `currentGas` still resolves. Usage-time windows are shifted
+    ///   onto the merged timeline, and a matched tank's window spans both dives.
+    /// - Decompression: `decoStops` concatenated, `isDecompressionDive` OR-ed,
+    ///   `decompressionAlgorithm` filled from the later dive only when the earlier dive has none.
+    /// - Exit GPS: taken from the later dive; entry GPS stays from the earlier dive.
+    ///
+    /// Note: the merged profile retains the surface interval, so duration, averageDepth and the
+    /// SAC/RMV divisor span the whole excursion rather than each dive's submerged time. The merge
+    /// confirmation dialog discloses this to the user.
+    ///
     /// The later dive is deleted after merge.
     func mergeDives(_ diveA: Dive, with diveB: Dive) {
-        // Determine which dive is earlier.
-        // Primary signal: timestamp. Tiebreaker: tank start pressure (more gas = start of dive),
-        // so that dives with identical timestamps (e.g. date-only precision) are ordered correctly.
-        let (earlier, later): (Dive, Dive) = {
-            if diveA.timestamp != diveB.timestamp {
-                return diveA.timestamp < diveB.timestamp ? (diveA, diveB) : (diveB, diveA)
-            }
-            let aStart = diveA.tanks.first?.startPressure ?? 0
-            let bStart = diveB.tanks.first?.startPressure ?? 0
-            return aStart >= bStart ? (diveA, diveB) : (diveB, diveA)
-        }()
+        // Determine which dive is earlier. Shared with the merge confirmation message via
+        // DiveMergeOrder so the dialog always names the dive that is actually deleted.
+        let (earlier, later) = DiveMergeOrder.resolve(diveA, diveB)
 
         // --- Append samples from the later dive ---
         var combinedSamples = earlier.profileSamples
@@ -1246,12 +1254,27 @@ extension ContentView {
         // --- Tank pressures: start from earlier dive, end from later dive ---
         // Tanks are matched by index (tank 0 ↔ tank 0, etc.).
         // Tanks in the earlier dive that have no counterpart in the later dive are unchanged.
+        // Tanks used only by the later dive (indices beyond the earlier dive's tank
+        // count) are appended in order, so each keeps its original index. That preserves
+        // the appended samples' `currentGas` indices without any remapping, allowing
+        // gas-switch events in the later portion to resolve to the correct gas name.
         if !earlier.tanks.isEmpty {
             var updatedTanks = earlier.tanks
             let laterTanks = later.tanks
-            for i in 0..<updatedTanks.count {
+            let matchedCount = updatedTanks.count
+            for i in 0..<matchedCount {
                 guard i < laterTanks.count else { break }
                 let tank = updatedTanks[i]
+                // The matched (index-aligned) tank is the same physical tank used across
+                // both dives, so its usage window must span the whole excursion: keep the
+                // earlier dive's start, and take the later dive's end shifted onto the merged
+                // timeline. A single [start, end] window cannot express the surface-interval
+                // gap between the two segments — spanning it keeps per-tank SAC/RMV from
+                // attributing both dives' gas to only the earlier dive's time and depth.
+                // A later `usageEndTime` of 0/nil ("no end recorded") maps to nil so SAC
+                // falls back to the merged dive end (the tank runs to the end of dive 2).
+                let laterEndRaw = laterTanks[i].usageEndTime ?? 0
+                let mergedUsageEnd: Double? = laterEndRaw > 0 ? laterTanks[i].usageEndTime! + timeOffset * 60.0 : nil
                 updatedTanks[i] = TankData(
                     id: tank.id,
                     o2: tank.o2,
@@ -1261,10 +1284,20 @@ extension ContentView {
                     endPressure: laterTanks[i].endPressure,
                     workingPressure: tank.workingPressure,
                     tankMaterial: tank.tankMaterial,
-                    tankType: tank.tankType
+                    tankType: tank.tankType,
+                    usageStartTime: tank.usageStartTime,
+                    usageEndTime: mergedUsageEnd
                 )
             }
+            if laterTanks.count > matchedCount {
+                updatedTanks.append(contentsOf: laterTanks[matchedCount...].map { offsetTankUsage($0, byMinutes: timeOffset) })
+            }
             earlier.tanks = updatedTanks
+        } else if !later.tanks.isEmpty {
+            // Earlier dive carried no tanks; adopt the later dive's tanks wholesale
+            // so its gas mixes and gas-switch events still resolve after the merge.
+            // Usage times are shifted onto the merged timeline (see offsetTankUsage).
+            earlier.tanks = later.tanks.map { offsetTankUsage($0, byMinutes: timeOffset) }
         }
 
         // --- Exit GPS: always taken from the later dive (nil if it has none) ---
@@ -1272,9 +1305,55 @@ extension ContentView {
         earlier.exitLatitude  = later.exitLatitude
         earlier.exitLongitude = later.exitLongitude
 
+        // --- Decompression data: preserve both dives' deco stops and flags ---
+        // Deco data lives in dedicated stored fields, not only in the per-sample
+        // `events`, so it must be merged explicitly or the combined dive loses the
+        // deco section (Gas tab gates on `isDecompressionDive && !decoStops.isEmpty`).
+        // `DecoStop.time` is a stop duration (not an absolute timestamp), so the two
+        // stop lists concatenate directly with no time offset.
+        earlier.decoStops = earlier.decoStops + later.decoStops
+        earlier.isDecompressionDive = earlier.isDecompressionDive || later.isDecompressionDive
+        if earlier.decompressionAlgorithm == nil {
+            earlier.decompressionAlgorithm = later.decompressionAlgorithm
+        }
+
         // --- Delete the later dive ---
         modelContext.delete(later)
         try? modelContext.save()
+
+        // NOTE (DiveStore): we intentionally do NOT call store.commit(_:affects:) here.
+        // mergeDives runs inside ContentView, the sole @Query Dive owner. Deleting `later`
+        // and saving triggers a @Query re-delivery, which ContentView forwards to
+        // store.scheduleRebuild(...) — a full rebuild that drops the deleted dive and
+        // recomputes every summary (including `earlier`'s new depth/duration). Calling
+        // store.commit(earlier, affects: .list) here would be unsafe: store.dives still
+        // contains the just-deleted `later` at this point (the @Query has not re-delivered),
+        // so commit(.list) would rebuild summaries over a deleted SwiftData object.
+    }
+
+    /// Returns a copy of `tank` with its usage-time window (seconds into the dive) shifted
+    /// onto the merged timeline by `byMinutes`. Used when a later dive's tanks are carried
+    /// into the merged dive: the later dive's samples are offset by the same amount, so the
+    /// tank's usage window must move with them for per-tank SAC/RMV to stay accurate.
+    /// A `usageEndTime` of 0 (or nil) means "no end recorded" and is left untouched so it
+    /// keeps falling back to the dive end.
+    func offsetTankUsage(_ tank: TankData, byMinutes: Double) -> TankData {
+        let offsetSec = byMinutes * 60.0
+        let newStart = tank.usageStartTime.map { $0 + offsetSec }
+        let newEnd = (tank.usageEndTime ?? 0) > 0 ? tank.usageEndTime! + offsetSec : tank.usageEndTime
+        return TankData(
+            id: tank.id,
+            o2: tank.o2,
+            he: tank.he,
+            volume: tank.volume,
+            startPressure: tank.startPressure,
+            endPressure: tank.endPressure,
+            workingPressure: tank.workingPressure,
+            tankMaterial: tank.tankMaterial,
+            tankType: tank.tankType,
+            usageStartTime: newStart,
+            usageEndTime: newEnd
+        )
     }
 
     /// Parses a surface interval display string like "1h 36m" or "2d 1h 30m" into total minutes.

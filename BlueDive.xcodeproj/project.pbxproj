@@ -112,6 +112,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0C03F8143058D732002739AC /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				57EA9DA82F42109E00486B7A /* DeepBlue.xcodeproj */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		0C89AA6A2F49EF2400B7EEBE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -132,6 +140,7 @@
 				0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */,
 				0C89AA6A2F49EF2400B7EEBE /* Frameworks */,
 				57EA9D4B2F42108A00486B7A /* Products */,
+				0C03F8143058D732002739AC /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -401,8 +410,8 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "BlueDive uses Bluetooth to connect to your dive computer and download your dives.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BlueDive uses your location to identify your current dive site on the map when requested.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "BlueDive uses Bluetooth to connect to your dive computer.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BlueDive uses your location to show your position on the dive map.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -468,8 +477,8 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "BlueDive uses Bluetooth to connect to your dive computer and download your dives.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BlueDive uses your location to identify your current dive site on the map when requested.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "BlueDive uses Bluetooth to connect to your dive computer.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BlueDive uses your location to show your position on the dive map.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
