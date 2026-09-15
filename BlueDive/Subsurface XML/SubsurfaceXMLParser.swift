@@ -487,9 +487,10 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         // For OC dives this attribute is absent; for CCR dives it is the setpoint (in bar).
         let ppo2     = attrs["po2"].flatMap { parseSubsurfaceValue($0) }
 
-        // Track the max per-sample CNS (written as "N%"), used as the dive CNS when the
-        // dive-level cns attribute is absent.
-        if let sampleCNS = attrs["cns"].flatMap({ Double($0.replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)) }) {
+        // Per-sample CNS (written as "N%"). Also feeds the max tracker, used as the dive
+        // CNS when the dive-level cns attribute is absent.
+        let sampleCNS = attrs["cns"].flatMap { Double($0.replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)) }
+        if let sampleCNS {
             tempMaxSampleCNS = max(tempMaxSampleCNS ?? 0, sampleCNS)
         }
 
@@ -532,6 +533,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             ppo2: ppo2,
             sensorPPO2: sensorPPO2.isEmpty ? nil : sensorPPO2,
             ndt: ndtMinutes,
+            cns: sampleCNS,
             currentGas: 0
         ))
         // Kept 1:1 with tempSamples (appended on the same guard-passing path).
@@ -588,6 +590,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         var lastTemp: Double? = nil
         var lastNdt: Int? = nil
         var lastPpo2: Double? = nil
+        var lastCNS: Double? = nil
         var runningTankPressures: [Int: Double] = [:]
         var runningSensorPPO2: [Int: Double] = [:]
 
@@ -605,6 +608,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             if let t = s.temperature { lastTemp = t }
             if let n = s.ndt { lastNdt = n }
             if let pp = s.ppo2 { lastPpo2 = pp }
+            if let c = s.cns { lastCNS = c }
             if let tp = s.tankPressures { for (k, v) in tp { runningTankPressures[k] = v } }
             if let sp = s.sensorPPO2 { for (k, v) in sp { runningSensorPPO2[k] = v } }
 
@@ -641,6 +645,21 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
                 time: s.time, depth: s.depth, pressure: primaryPressure,
                 tankPressures: filledTankPressures, temperature: lastTemp,
                 ppo2: lastPpo2, sensorPPO2: filledSensorPPO2, ndt: lastNdt,
+                // Gate on lastInDeco so a forward-filled stopdepth never leaks past the
+                // end of the obligation, and require > 0 (matching the stopsByDepth check
+                // above) so a file where in_deco='1' but stopdepth='0.0 m' — flags out of
+                // step, seen in third-party/re-exported files — doesn't produce a spurious
+                // surface-level ceiling. Subsurface stopdepth is metres, matching the
+                // hardcoded "meters" importDistanceUnit of this importer.
+                ceilingDepth: (lastInDeco && (lastStopDepth ?? 0) > 0) ? lastStopDepth : nil,
+                // Subsurface stoptime is seconds; ceilingTime is minutes. Also requires the
+                // ceiling depth to be valid (not just its own stoptime > 0) so a malformed
+                // file can't leave an orphaned stop time with no matching ceiling.
+                ceilingTime: (lastInDeco && (lastStopDepth ?? 0) > 0 && (lastStopTime ?? 0) > 0) ? lastStopTime.map { Double($0) / 60.0 } : nil,
+                // CNS is a cumulative, monotonically non-decreasing load, so the
+                // forward-filled value needs no gating predicate the way the ceiling
+                // does — there is no obligation window it could leak past.
+                cns: lastCNS,
                 events: events, currentGas: gas
             )
         }
@@ -676,6 +695,9 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
                 time: s.time, depth: s.depth, pressure: s.pressure,
                 tankPressures: s.tankPressures, temperature: s.temperature,
                 ppo2: s.ppo2, sensorPPO2: s.sensorPPO2, ndt: s.ndt,
+                ceilingDepth: s.ceilingDepth,
+                ceilingTime: s.ceilingTime,
+                cns: s.cns,
                 events: s.events + [ev], currentGas: s.currentGas
             )
         }

@@ -363,6 +363,23 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 let isMandatoryDeco = (ndlTime == 0)
                     || (ndlTime == nil && sampleNdlWasZero && depthM > 1.5)
 
+                // Decompression ceiling (metres) for this sample, gated on the same
+                // mandatory-vs-safety-stop predicate used by the stopsByDepth aggregation
+                // below: Garmin reports nextStopDepth > 0 for safety stops on plain NDL
+                // dives too. Left nil when the record carries no stop data, rather than
+                // carrying forward a stale value.
+                let stopDepthM = record.getNextStopDepth()
+                let ceilingM: Double? = (isMandatoryDeco && (stopDepthM ?? 0) > 0)
+                    ? stopDepthM.map { Double($0) }
+                    : nil
+                // Remaining required time at that ceiling. nextStopTime is seconds
+                // (UInt32); ceilingTime is minutes. Gated on the same predicate as
+                // ceilingM, and left nil when either field is missing.
+                let stopTimeSeconds = record.getNextStopTime()
+                let ceilingTimeMin: Double? = (ceilingM != nil && (stopTimeSeconds ?? 0) > 0)
+                    ? stopTimeSeconds.map { Double($0) / 60.0 }
+                    : nil
+
                 sampleList.append(BlueDiveSamplesData(
                     time: elapsed,
                     depth: depthM,
@@ -377,6 +394,11 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                     ppo2: ppo2,
                     sensorPPO2: nil,
                     ndt: ndlMin,
+                    ceilingDepth: ceilingM,
+                    ceilingTime: ceilingTimeMin,
+                    // FIT documents no hold/delta semantics for cnsLoad, so a record
+                    // without it stays nil rather than carrying the prior value forward.
+                    cns: record.getCnsLoad().map { Double($0) },
                     events: {
                     var evts: [DiveProfileEvent] = []
                     if isMandatoryDeco { evts.append(.decoStop) }

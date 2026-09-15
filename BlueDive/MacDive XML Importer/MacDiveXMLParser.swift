@@ -189,10 +189,13 @@ struct BlueDiveSamplesData: Sendable {
     let ppo2: Double?
     let sensorPPO2: [Int: Double]? // Per-O2-sensor PPO2 {sensorIndex: bar}; nil for non-CCR
     let ndt: Int?
+    let ceilingDepth: Double?      // reported decompression ceiling, same unit as depth; nil when no obligation
+    let ceilingTime: Double?       // reported time remaining required at that ceiling, minutes; nil when no obligation
+    let cns: Double?               // reported CNS oxygen-toxicity load at this sample, percentage 0-100; nil when not reported per sample
     let events: [DiveProfileEvent]
     let currentGas: Int?           // active tank index at this sample point
 
-    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
+    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
         self.time = time
         self.depth = depth
         self.pressure = pressure
@@ -201,6 +204,9 @@ struct BlueDiveSamplesData: Sendable {
         self.ppo2 = ppo2
         self.sensorPPO2 = sensorPPO2
         self.ndt = ndt
+        self.ceilingDepth = ceilingDepth
+        self.ceilingTime = ceilingTime
+        self.cns = cns
         self.events = events
         self.currentGas = currentGas
     }

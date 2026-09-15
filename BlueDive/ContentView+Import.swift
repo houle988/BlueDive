@@ -884,6 +884,9 @@ extension ContentView {
                 tankPressure: sample.pressure,
                 tankPressures: sample.tankPressures,
                 ndl: sample.ndt != nil ? Double(sample.ndt!) : nil,
+                ceilingDepth: sample.ceilingDepth,
+                ceilingTime: sample.ceilingTime,
+                cns: sample.cns,
                 ppo2: sample.ppo2,
                 sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
@@ -1199,6 +1202,13 @@ extension ContentView {
                 tankPressure: sample.tankPressure,
                 tankPressures: sample.tankPressures,
                 ndl: sample.ndl,
+                ceilingDepth: sample.ceilingDepth,
+                ceilingTime: sample.ceilingTime,
+                // The per-sample CNS series is carried through as-is, not re-based onto
+                // the earlier dive's ending load — matching how depth and the deco data
+                // are handled here, since re-basing would fabricate values the dive
+                // computer never reported.
+                cns: sample.cns,
                 ppo2: sample.ppo2,
                 sensorPPO2: sample.sensorPPO2,
                 events: sample.events,

@@ -302,7 +302,9 @@ extension BluetoothScannerView {
             return DiveProfilePoint(
                 time: point.time, depth: point.depth, temperature: point.temperature,
                 tankPressure: point.tankPressure, tankPressures: point.tankPressures,
-                ndl: point.ndl, ppo2: point.ppo2, sensorPPO2: point.sensorPPO2, events: point.events,
+                ndl: point.ndl, ceilingDepth: point.ceilingDepth,
+                ceilingTime: point.ceilingTime, cns: point.cns, ppo2: point.ppo2,
+                sensorPPO2: point.sensorPPO2, events: point.events,
                 currentGas: gasMixToTankIndex[gasIdx]
             )
         }
@@ -346,7 +348,9 @@ extension BluetoothScannerView {
             // Synthesize a decoStop event from DC_SAMPLE_DECO data when the dive computer
             // reports a mandatory deco obligation (decoStop depth is only set for DC_DECO_DECOSTOP).
             // NDL=0 alone does not imply a deco obligation and must not generate a synthetic event.
-            if base.decoStop != nil {
+            // Gated on > 0, not just non-nil: a reported-but-zero ceiling is not a real
+            // obligation, matching the ceilingDepth/ceilingTime gate below.
+            if (base.decoStop ?? 0) > 0 {
                 // Mandatory deco stop (decoStop depth is only set for DC_DECO_DECOSTOP)
                 if !allEvents.contains(.decoStop) {
                     allEvents.append(.decoStop)
@@ -376,6 +380,18 @@ extension BluetoothScannerView {
                 tankPressure: primaryPressure,
                 tankPressures: perTank,
                 ndl: base.ndl.map { Double($0) / 60.0 }, // Seconds to minutes
+                // decoStop is the libdc per-sample ceiling in metres, and this path
+                // hardcodes importDistanceUnit = "meters". Gated on > 0 so a
+                // reported-but-zero ceiling never reaches the sample — a literal 0 is not a
+                // real obligation, and the Subsurface and Garmin importers already exclude
+                // it the same way (see the fuller rationale on hasCeilingData in
+                // UnifiedDiveChartFixed.swift).
+                ceilingDepth: (base.decoStop ?? 0) > 0 ? base.decoStop : nil,
+                // decoTime is the libdc per-sample remaining stop time in seconds. Also
+                // requires the ceiling depth to be valid so there can be no orphaned stop
+                // time with no matching ceiling.
+                ceilingTime: (base.decoStop ?? 0) > 0 ? base.decoTime.map { Double($0) / 60.0 } : nil,
+                cns: base.cns,
                 ppo2: base.po2,
                 sensorPPO2: sensorPPO2,
                 events: allEvents,
