@@ -24509,7 +24509,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Hinweis: Dauer, durchschnittliche Tiefe und SAC des zusammengeführten Tauchgangs schließen das Oberflächenintervall zwischen den beiden Tauchgängen ein."
           }
         },
@@ -24521,7 +24521,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Let op: de duur, gemiddelde diepte en SAC van de samengevoegde duik zijn inclusief het oppervlakte-interval tussen de twee duiken."
           }
         }
@@ -24650,7 +24650,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notizen, Tauchpartner, Tauchleiter, Bewertung, Tauchgangstyp, Bedingungen, Tauchplatzname und -details, Tauchgangsnummer und Oberflächenpause. Flaschvolumen, Arbeitsdruck, Material und Typ werden ebenfalls beibehalten, sofern der Tauchcomputer diese nicht explizit meldet."
+            "value" : "Notizen, Tauchpartner, Tauchleiter, Bewertung, Tauchgangstyp, Bedingungen, Tauchplatzname und -details, Tauchgangsnummer und Oberflächenintervall. Flaschvolumen, Arbeitsdruck, Material und Typ werden ebenfalls beibehalten, sofern der Tauchcomputer diese nicht explizit meldet."
           }
         },
         "en" : {
@@ -26732,7 +26732,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oppervlaktepauze herberekenen"
+            "value" : "Oppervlakte-intervallen herberekenen"
           }
         }
       }
@@ -26760,7 +26760,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oppervlaktepauze herberekenen?"
+            "value" : "Oppervlakte-intervallen herberekenen?"
           }
         }
       }
@@ -34101,7 +34101,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hierdoor wordt de oppervlaktepauze voor alle duiken bijgewerkt op basis van de vorige duik van elke duiker. Duiklogs zonder naam van een duiker blijven hierdoor ongewijzigd."
+            "value" : "Hierdoor wordt het oppervlakte-interval voor alle duiken bijgewerkt op basis van de vorige duik van elke duiker. Duiklogs zonder naam van een duiker blijven hierdoor ongewijzigd."
           }
         }
       }
