@@ -13,13 +13,13 @@ struct DiveRowView: View {
             diveIcon
             VStack(alignment: .leading, spacing: 4) {
                 diveTitle
-                HStack(alignment: .top, spacing: 8) {
-                    diveDetails
-                    Spacer()
-                    depthInfo
-                }
+                diveDetails
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            depthInfo
+                .frame(maxHeight: .infinity, alignment: .center)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
     }
     

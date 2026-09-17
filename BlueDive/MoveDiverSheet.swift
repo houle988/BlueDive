@@ -41,18 +41,21 @@ struct MoveDiverSheet: View {
                         HStack {
                             Label {
                                 Text("No diver")
+                                    .foregroundStyle(.primary)
                             } icon: {
                                 Image(systemName: "person.slash")
+                                    .foregroundStyle(.secondary)
                             }
-                            .foregroundStyle(.primary)
                             Spacer()
                             if resolvedName.isEmpty {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(.cyan)
+                                    .accessibilityHidden(true)
                             }
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(resolvedName.isEmpty ? .isSelected : [])
 
                     ForEach(diverNames, id: \.self) { name in
                         Button {
@@ -61,18 +64,21 @@ struct MoveDiverSheet: View {
                             HStack {
                                 Label {
                                     Text(verbatim: name)
+                                        .foregroundStyle(.primary)
                                 } icon: {
-                                    Image(systemName: "person.fill")
+                                    Image(systemName: "person")
+                                        .foregroundStyle(.cyan)
                                 }
-                                .foregroundStyle(.primary)
                                 Spacer()
                                 if resolvedName == name {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(.cyan)
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityAddTraits(resolvedName == name ? .isSelected : [])
                     }
                 } header: {
                     Text("Select diver")
