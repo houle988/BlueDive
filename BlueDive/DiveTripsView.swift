@@ -165,6 +165,11 @@ struct DiveTripsView: View {
                                 TripCard(trip: trip, prefs: prefs)
                                     .padding(.horizontal)
                                     .onTapGesture { selectedTrip = trip }
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityAddTraits(.isButton)
+                                    // onTapGesture isn't reliably fired by VoiceOver's activate
+                                    // gesture; this makes double-tap open the trip.
+                                    .accessibilityAction { selectedTrip = trip }
                                     .opacity(tripsAppeared ? 1.0 : 0.0)
                                     .offset(y: tripsAppeared ? 0 : 20)
                             }
@@ -184,9 +189,8 @@ struct DiveTripsView: View {
             #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
@@ -249,7 +253,7 @@ struct TripSummaryStat: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: icon).foregroundStyle(color).font(.title3)
+            Image(systemName: icon).foregroundStyle(color).font(.title3).accessibilityHidden(true)
             Text(value).font(.title2.weight(.black)).foregroundStyle(.primary)
             Text(label).font(.caption2).foregroundStyle(.secondary)
         }
@@ -304,6 +308,7 @@ struct TripCard: View {
                     HStack(spacing: 8) {
                         Image(systemName: "calendar")
                             .font(.caption)
+                            .accessibilityHidden(true)
                         Text(tripDateRange(trip))
                             .font(.caption)
                     }
@@ -333,6 +338,7 @@ struct TripCard: View {
                         Image(systemName: Double(star) <= trip.averageRating ? "star.fill" : "star")
                             .font(.caption)
                             .foregroundStyle(Double(star) <= trip.averageRating ? .yellow : .secondary)
+                            .accessibilityHidden(true)
                     }
                     Text(verbatim: trip.averageRating.localizedString(decimals: 1) + " / 5")
                         .font(.caption)
@@ -341,6 +347,7 @@ struct TripCard: View {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -392,7 +399,7 @@ struct TripStatMini: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            Image(systemName: icon).font(.caption2).foregroundStyle(.secondary)
+            Image(systemName: icon).font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
             Text(value).font(.subheadline.weight(.bold)).monospacedDigit()
             Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
         }
@@ -446,9 +453,8 @@ struct TripDetailSheet: View {
             #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
             }
         }
@@ -535,7 +541,7 @@ struct TripHeroStat: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: icon).font(.title2).foregroundStyle(color)
+            Image(systemName: icon).font(.title2).foregroundStyle(color).accessibilityHidden(true)
             Text(value).font(.title3.weight(.black)).monospacedDigit()
             Text(label).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
@@ -555,7 +561,7 @@ struct HighlightRow: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(color.opacity(0.15)).frame(width: 36, height: 36)
-                Image(systemName: icon).foregroundStyle(color).font(.system(size: 15))
+                Image(systemName: icon).foregroundStyle(color).font(.system(size: 15)).accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline.weight(.semibold))

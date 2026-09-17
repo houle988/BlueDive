@@ -536,8 +536,12 @@ struct DiveMapView: View {
                                     .onTapGesture {
                                         handleClusterTap(cluster)
                                     }
+                                    .accessibilityElement()
                                     .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%@ dives at this location", bundle: .forAppLanguage(), comment: "Number of dives at a cluster location"), Double(cluster.dives.count).localizedString(decimals: 0))))
                                     .accessibilityAddTraits(.isButton)
+                                    // onTapGesture isn't reliably fired by VoiceOver's activate
+                                    // gesture; this makes double-tap open the cluster.
+                                    .accessibilityAction { handleClusterTap(cluster) }
                             }
                         }
                     }
@@ -566,6 +570,7 @@ struct DiveMapView: View {
                 }
                 .mapControls {
                     MapUserLocationButton()
+                        .tint(.cyan)
                     MapCompass()
                     MapScaleView()
                 }
@@ -646,8 +651,7 @@ struct DiveMapView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showFilterSheet = true }) {
                         ZStack(alignment: .topTrailing) {
-                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                                .font(.title3)
+                            Image(systemName: "line.3.horizontal.decrease")
                                 .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
 
                             if activeFilterCount > 0 {
@@ -660,8 +664,12 @@ struct DiveMapView: View {
                             }
                         }
                     }
+                    .accessibilityLabel(activeFilterCount == 0
+                        ? Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
+                        : Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), activeFilterCount))
+                    )
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
                             cameraPosition = .automatic
@@ -700,10 +708,10 @@ struct DiveMapView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "ellipsis")
                             .foregroundStyle(.cyan)
                     }
+                    .accessibilityLabel(Text("More"))
                 }
             }
         }
@@ -871,7 +879,12 @@ struct DiveClusterListCard: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title2)
                         .foregroundStyle(.secondary)
+                        // Top-trailing of the popup header: empty Spacer leading, 16 pt of card
+                        // padding above and trailing, and 12 pt to the dive list below, so a
+                        // symmetric 9 pt expansion stays clear of the list rows. 44 × 44 pt.
+                        .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
                 }
+                .accessibilityLabel(Text("Close"))
             }
 
             ScrollView {
@@ -901,6 +914,7 @@ struct DiveClusterListCard: View {
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
                             }
                             .padding(.vertical, 6)
                             .padding(.horizontal, 8)
@@ -967,6 +981,7 @@ struct DiveMapCard: View {
                             Image(systemName: "location.fill")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
+                                .accessibilityLabel(Text("Has GPS coordinates"))
                         }
 
                         locationText
@@ -981,19 +996,26 @@ struct DiveMapCard: View {
                     Image(systemName: "fish.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(.teal)
+                        .accessibilityLabel(Text("Has fish sightings"))
                 }
 
                 if !(dive.photosData?.isEmpty ?? true) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(.red)
+                        .accessibilityLabel(Text("Has photos"))
                 }
 
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title2)
                         .foregroundStyle(.secondary)
+                        // Top-trailing of the popup header. The fish/camera glyphs 8 pt to its
+                        // leading are decorative, and there is 16 pt of card padding above and
+                        // trailing plus 12 pt of non-interactive stats below. 44 × 44 pt.
+                        .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
                 }
+                .accessibilityLabel(Text("Close"))
             }
 
             HStack(spacing: 16) {

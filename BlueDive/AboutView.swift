@@ -63,7 +63,7 @@ struct AboutView: View {
                     
                     // Documentation
                     VStack(spacing: 16) {
-                        sectionHeader(title: "Documentation", icon: "book.fill", color: .blue)
+                        AboutSectionHeader(title: "Documentation", icon: "book.fill", color: .blue)
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Guides, tips, and reference material to help you get the most out of BlueDive.")
@@ -81,14 +81,14 @@ struct AboutView: View {
 
                     // Contributors
                     VStack(spacing: 16) {
-                        sectionHeader(title: "Contributors", icon: "person.3.fill", color: .cyan)
+                        AboutSectionHeader(title: "Contributors", icon: "person.3.fill", color: .cyan)
                         
                         VStack(spacing: 8) {
-                            contributorRow(name: "Patrick Houle")
+                            ContributorRow(name: "Patrick Houle")
                             Divider().opacity(0.3)
-                            contributorRow(name: "Steve Houle")
+                            ContributorRow(name: "Steve Houle")
                             Divider().opacity(0.3)
-                            contributorRow(name: "Jérôme Devost")
+                            ContributorRow(name: "Jérôme Devost")
                         }
                         .padding()
                         .sectionCardBackground()
@@ -97,18 +97,18 @@ struct AboutView: View {
                     
                     // Community Contributors
                     VStack(spacing: 16) {
-                        sectionHeader(title: "Key Community Contributors", icon: "person.3.fill", color: .cyan)
+                        AboutSectionHeader(title: "Key Community Contributors", icon: "person.3.fill", color: .cyan)
 
                         VStack(spacing: 8) {
-                            contributorRow(name: "Thomas MacDermott", role: "Testing and ideas for new features")
+                            ContributorRow(name: "Thomas MacDermott", role: "Testing and ideas for new features")
                             Divider().opacity(0.3)
-                            contributorRow(name: "Espen Moe", role: "Testing and ideas for new features")
+                            ContributorRow(name: "Espen Moe", role: "Testing and ideas for new features")
                             Divider().opacity(0.3)
-                            contributorRow(name: "Lionel Prost", role: "Testing and ideas for new features")
+                            ContributorRow(name: "Lionel Prost", role: "Testing and ideas for new features")
                             Divider().opacity(0.3)
-                            contributorRow(name: "Mark Kuiphuis", role: "Dutch Translation, Testing and ideas for new features")
+                            ContributorRow(name: "Mark Kuiphuis", role: "Dutch Translation, Testing and ideas for new features")
                             Divider().opacity(0.3)
-                            contributorRow(name: "Simone Ueberwasser", role: "German Translation, Testing and ideas for new features")
+                            ContributorRow(name: "Simone Ueberwasser", role: "German Translation, Testing and ideas for new features")
                         }
                         .padding()
                         .sectionCardBackground()
@@ -117,10 +117,10 @@ struct AboutView: View {
 
                     // Acknowledgements
                     VStack(spacing: 16) {
-                        sectionHeader(title: "Acknowledgements", icon: "heart.fill", color: .orange)
+                        AboutSectionHeader(title: "Acknowledgements", icon: "heart.fill", color: .orange)
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            acknowledgementRow(
+                            AcknowledgementRow(
                                 name: "libdivecomputer",
                                 description: "Open-source library for communicating with dive computers. Provides the low-level protocol support for downloading dive data from a wide range of hardware.",
                                 url: "https://www.libdivecomputer.org"
@@ -128,7 +128,7 @@ struct AboutView: View {
                             
                             Divider().opacity(0.3)
                             
-                            acknowledgementRow(
+                            AcknowledgementRow(
                                 name: "LibDC-Swift",
                                 description: "Swift wrapper around libdivecomputer, enabling native integration with Apple platforms for dive computer communication.",
                                 url: "https://github.com/latishab/LibDC-Swift"
@@ -165,38 +165,58 @@ struct AboutView: View {
 
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                    closeToolbarButton { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
                 }
             }
         }
     }
     
-    // MARK: - Components
-    
-    private func sectionHeader(title: LocalizedStringKey, icon: String, color: Color) -> some View {
+}
+
+// MARK: - Components
+
+/// Used to be a plain function that inlined its HStack/ZStack/Text tree at every call
+/// site; `AboutView.body` combines it with `ContributorRow`/`AcknowledgementRow` for 14
+/// static calls total in one property — the same class of bug that caused two confirmed
+/// `EXC_BAD_ACCESS` crashes elsewhere in this app (too many inlined view trees combined in
+/// one `some View` property overflow the stack during Swift's runtime value-witness copy).
+/// Packaging this as a nominal struct bounds the complexity at its own `body`.
+struct AboutSectionHeader: View {
+    let title: LocalizedStringKey
+    let icon: String
+    let color: Color
+
+    var body: some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(color.opacity(0.15))
                     .frame(width: 36, height: 36)
-                
+
                 Image(systemName: icon)
                     .font(.body)
                     .foregroundStyle(color)
             }
-            
+
             Text(title)
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundStyle(.primary)
-            
+
             Spacer()
         }
     }
-    
-    private func contributorRow(name: String, role: LocalizedStringKey? = nil) -> some View {
+}
+
+/// See `AboutSectionHeader` above for why this was converted from a plain function to a
+/// nominal struct. `name` is a person's proper name, deliberately displayed verbatim
+/// (`Text(name)` on a `String`), never looked up in the localization catalog.
+struct ContributorRow: View {
+    let name: String
+    var role: LocalizedStringKey? = nil
+
+    var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "person.fill")
                 .font(.caption)
@@ -220,25 +240,33 @@ struct AboutView: View {
         }
         .padding(.vertical, 4)
     }
-    
-    private func acknowledgementRow(name: String, description: LocalizedStringKey, url: String) -> some View {
+}
+
+/// See `AboutSectionHeader` above for why this was converted from a plain function to a
+/// nominal struct.
+struct AcknowledgementRow: View {
+    let name: String
+    let description: LocalizedStringKey
+    let url: String
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: "shippingbox.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
-                
+
                 Text(name)
                     .font(.subheadline)
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
             }
-            
+
             Text(description)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            
+
             if let link = URL(string: url) {
                 ExternalLinkView(url: link)
             }

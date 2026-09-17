@@ -25,7 +25,7 @@ extension DiveDetailView {
             }
 
             // Dive Site
-            conditionRow(icon: "location.fill", color: .cyan, label: "Dive Site",
+            ConditionRow(icon: "location.fill", color: .cyan, label: "Dive Site",
                         value: dive.siteName.isEmpty ? "—" : dive.siteName)
 
             Divider().background(.primary.opacity(0.2))
@@ -39,6 +39,7 @@ extension DiveDetailView {
                         .frame(width: 36, height: 36)
                     Text(countryInfo.flag)
                         .font(.system(size: 20))
+                        .accessibilityHidden(true)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Country")
@@ -55,7 +56,7 @@ extension DiveDetailView {
             Divider().background(.primary.opacity(0.2))
 
             // Location
-            conditionRow(icon: "mappin.and.ellipse", color: .orange, label: "Location",
+            ConditionRow(icon: "mappin.and.ellipse", color: .orange, label: "Location",
                         value: dive.location.isEmpty ? "—" : dive.location)
 
             Divider().background(.primary.opacity(0.2))
@@ -66,13 +67,13 @@ extension DiveDetailView {
             Divider().background(.primary.opacity(0.2))
 
             // Water Type
-            conditionRow(icon: "drop.fill", color: .blue, label: "Water Type",
+            ConditionRow(icon: "drop.fill", color: .blue, label: "Water Type",
                         value: localizedWaterType(dive.siteWaterType))
 
             Divider().background(.primary.opacity(0.2))
 
             // Body of Water
-            conditionRow(icon: "water.waves", color: .teal, label: "Body of Water",
+            ConditionRow(icon: "water.waves", color: .teal, label: "Body of Water",
                         value: dive.siteBodyOfWater?.isEmpty == false ? dive.siteBodyOfWater! : "—")
 
             Divider().background(.primary.opacity(0.2))
@@ -92,10 +93,10 @@ extension DiveDetailView {
 
             // GPS Coordinates (Entry)
             if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
-                conditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
+                ConditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
                             value: String(format: "%.6f, %.6f", lat, lon))
             } else {
-                conditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
+                ConditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
                             value: "—")
             }
 
@@ -103,10 +104,10 @@ extension DiveDetailView {
 
             // GPS Coordinates (Exit)
             if let exitLat = dive.exitLatitude, let exitLon = dive.exitLongitude {
-                conditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
+                ConditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
                             value: String(format: "%.6f, %.6f", exitLat, exitLon))
             } else {
-                conditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
+                ConditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
                             value: "—")
             }
 
@@ -115,10 +116,10 @@ extension DiveDetailView {
             // Altitude
             if let alt = dive.displaySiteAltitude {
                 let depthUnit = prefs.depthUnit.symbol
-                conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
+                ConditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
                             value: alt.localizedString(decimals: 0) + " \(depthUnit)")
             } else {
-                conditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
+                ConditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
                             value: "—")
             }
 
@@ -397,7 +398,7 @@ struct SiteMapFullScreenView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    closeToolbarButton { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -419,10 +420,10 @@ struct SiteMapFullScreenView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "ellipsis")
                             .foregroundStyle(.cyan)
                     }
+                    .accessibilityLabel(Text("Map Style"))
                 }
             }
         }

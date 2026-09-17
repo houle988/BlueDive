@@ -783,6 +783,7 @@ extension CloudKitSyncMonitor.SyncState {
 struct CloudKitSyncStatusView: View {
     @Environment(CloudKitSyncMonitor.self) private var monitor
     @Environment(\.locale) private var locale
+    @Environment(\.dismiss) private var dismiss
 
     @State private var showExporter = false
     @State private var exportDocument: ExportableFileDocument?
@@ -790,6 +791,7 @@ struct CloudKitSyncStatusView: View {
     @State private var isPreparingExport = false
 
     var body: some View {
+        NavigationStack {
         ZStack {
             LinearGradient(
                 colors: [Color.platformBackground, Color.cyan.opacity(0.05), Color.platformBackground],
@@ -836,6 +838,16 @@ struct CloudKitSyncStatusView: View {
         ) { _ in
             exportDocument = nil
         }
+        .navigationTitle("iCloud Sync Status")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                closeToolbarButton { dismiss() }
+            }
+        }
+        }
     }
 
     private var heroHeader: some View {
@@ -859,7 +871,6 @@ struct CloudKitSyncStatusView: View {
                 if monitor.isSyncing {
                     ProgressView()
                         .scaleEffect(1.2)
-                        .tint(.cyan)
                 } else {
                     Image(systemName: monitor.hasError ? "exclamationmark.icloud.fill" : "icloud.fill")
                         .font(.system(size: 34))
@@ -870,6 +881,7 @@ struct CloudKitSyncStatusView: View {
                                 endPoint: .bottomTrailing
                             )
                         )
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.top, 24)
@@ -940,6 +952,7 @@ struct CloudKitSyncStatusView: View {
                     Image(systemName: icon)
                         .font(.system(size: 18))
                         .foregroundStyle(state.statusColor)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -976,6 +989,7 @@ struct CloudKitSyncStatusView: View {
                 Image(systemName: "battery.25")
                     .font(.system(size: 18))
                     .foregroundStyle(.yellow)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -1015,6 +1029,7 @@ struct CloudKitSyncStatusView: View {
                     Image(systemName: monitor.ckAccountStatusIcon)
                         .font(.system(size: 18))
                         .foregroundStyle(monitor.ckAccountStatusColor)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -1070,11 +1085,11 @@ struct CloudKitSyncStatusView: View {
                         if isPreparingExport {
                             ProgressView()
                                 .scaleEffect(0.7)
-                                .tint(.cyan)
                         } else {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 18))
                                 .foregroundStyle(.cyan)
+                                .accessibilityHidden(true)
                         }
                     }
                     VStack(alignment: .leading, spacing: 3) {
@@ -1090,6 +1105,7 @@ struct CloudKitSyncStatusView: View {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)

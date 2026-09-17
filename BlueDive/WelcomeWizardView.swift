@@ -126,6 +126,10 @@ struct WelcomeWizardView: View {
                                 .animation(.spring(response: 0.3), value: currentPage)
                         }
                     }
+                    // The dots are purely decorative; this exposes the position they convey
+                    // visually as a single spoken element instead of dropping it entirely.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Page %lld of %lld", bundle: .forAppLanguage(), comment: "Announces the current page's position in the welcome wizard's page indicator"), currentPage + 1, pages.count)))
 
                     // Buttons
                     HStack {
@@ -223,6 +227,7 @@ struct WelcomeWizardView: View {
                     Image(systemName: page.icon)
                         .font(.system(size: 40))
                         .foregroundStyle(page.iconColor)
+                        .accessibilityHidden(true)
                 }
 
                 // Title & subtitle
@@ -265,6 +270,7 @@ struct WelcomeWizardView: View {
                 Image(systemName: feature.icon)
                     .font(.body)
                     .foregroundStyle(feature.color)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {

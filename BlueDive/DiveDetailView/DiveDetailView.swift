@@ -381,7 +381,6 @@ struct DiveDetailView: View {
                 }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 12) {
                     // Export menu
                     Menu {
                         Button {
@@ -404,12 +403,14 @@ struct DiveDetailView: View {
                         Label("Export", systemImage: "square.and.arrow.up.circle.fill")
                             .foregroundStyle(.cyan)
                         #else
-                        Image(systemName: "square.and.arrow.up.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "square.and.arrow.up")
                             .foregroundStyle(.cyan)
                         #endif
                     }
+                    .accessibilityLabel(Text("Export Dive"))
+                }
 
+                ToolbarItem(placement: .primaryAction) {
                     // Edit button
                     Button {
                         showEditSheet = true
@@ -418,12 +419,11 @@ struct DiveDetailView: View {
                         Label("Edit", systemImage: "pencil.circle.fill")
                             .foregroundStyle(.cyan)
                         #else
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "pencil")
                             .foregroundStyle(.cyan)
                         #endif
                     }
-                }
+                    .accessibilityLabel(Text("Edit Dive"))
                 }
             }
         }
@@ -560,6 +560,7 @@ struct DiveDetailView: View {
             }
             .disabled(previousDiveInList == nil)
             .help("Previous dive")
+            .accessibilityLabel(Text("Previous dive"))
 
             Button {
                 if let next = nextDiveInList { navigateTo(next, forward: true) }
@@ -572,6 +573,7 @@ struct DiveDetailView: View {
             }
             .disabled(nextDiveInList == nil)
             .help("Next dive")
+            .accessibilityLabel(Text("Next dive"))
         }
     }
 
@@ -704,8 +706,8 @@ struct DiveDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { showEditSheet = false }.foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { showEditSheet = false }
                 }
             }
         }

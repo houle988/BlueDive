@@ -184,6 +184,7 @@ struct AddGearGroupView: View {
                         Circle()
                             .fill(gear.isInactive ? .red : .green)
                             .frame(width: 6, height: 6)
+                            .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
                         Text(gear.name)
                             .font(.subheadline)
                             .foregroundStyle(gear.isInactive ? .secondary : .primary)
@@ -215,6 +216,7 @@ struct AddGearGroupView: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var validationSection: some View {
@@ -255,6 +257,7 @@ struct AddGearGroupView: View {
                 .disabled(!isFormValid)
                 #if os(iOS)
                 .fontWeight(.semibold)
+                .buttonStyle(.borderedProminent)
                 #endif
         }
     }

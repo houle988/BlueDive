@@ -543,6 +543,52 @@
       },
       "shouldTranslate" : false
     },
+    "%@: Auto-detected" : {
+      "comment" : "Accessibility label naming the field whose value was auto-detected from the import file",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: automatisch erkannt"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ : détecté automatiquement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: automatisch gedetecteerd"
+          }
+        }
+      }
+    },
+    "%@: Auto-Detection Unavailable" : {
+      "comment" : "Accessibility label naming the field for which auto-detection was unavailable",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: automatische Erkennung nicht verfügbar"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ : détection automatique indisponible"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: automatische detectie niet beschikbaar"
+          }
+        }
+      }
+    },
     "%1$@, %2$@, and %3$@ imported successfully." : {
       "comment" : "Sentence frame for the XML gear import success message. Arguments: gear noun phrase, group noun phrase, tank template noun phrase.",
       "localizations" : {
@@ -576,27 +622,75 @@
       "comment" : "Accessibility label for the filter button showing the number of active filters",
       "localizations" : {
         "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d aktive Filter"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d aktiver Filter"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d aktive Filter"
+                }
+              }
+            }
           }
         },
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d active filters"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d active filter"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d active filters"
+                }
+              }
+            }
           }
         },
         "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d filtres actifs"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d filtre actif"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d filtres actifs"
+                }
+              }
+            }
           }
         },
         "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d actieve filters"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%d actief filter"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%d actieve filters"
+                }
+              }
+            }
           }
         }
       }
@@ -674,6 +768,83 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld apparaten geregistreerd"
+          }
+        }
+      }
+    },
+    "%lld dive" : {
+      "comment" : "Number of dives logged on a calendar day, read by VoiceOver",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Tauchgang"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Tauchgänge"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld dive"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld dives"
+                }
+              }
+            }
+          }
+        },
+        "fr-CA" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld plongée"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld plongées"
+                }
+              }
+            }
+          }
+        },
+        "nl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld duik"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld duiken"
+                }
+              }
+            }
           }
         }
       }
@@ -1213,6 +1384,83 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld geselecteerd"
+          }
+        }
+      }
+    },
+    "%lld star" : {
+      "comment" : "Star rating button label; tapping it sets the dive rating to this many stars",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Stern"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Sterne"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld star"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld stars"
+                }
+              }
+            }
+          }
+        },
+        "fr-CA" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld étoile"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld étoiles"
+                }
+              }
+            }
+          }
+        },
+        "nl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld ster"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld sterren"
+                }
+              }
+            }
           }
         }
       }
@@ -2861,6 +3109,50 @@
         }
       }
     },
+    "Add Dive" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgang hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg duik toe"
+          }
+        }
+      }
+    },
+    "Add Document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokument hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un document"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg document toe"
+          }
+        }
+      }
+    },
     "Add Equipment" : {
       "comment" : "The title of the view that appears when adding equipment to a dive.",
       "isCommentAutoGenerated" : true,
@@ -2921,6 +3213,30 @@
         }
       }
     },
+    "Add Gear Group" : {
+      "comment" : "A label for a button that adds a new gear group.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausrüstungsgruppe hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un groupe d'équipement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg uitrustingsgroep toe"
+          }
+        }
+      }
+    },
     "Add Insurance" : {
       "comment" : "A button label that says \"Add Insurance\".",
       "isCommentAutoGenerated" : true,
@@ -2947,6 +3263,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voeg verzekering toe"
+          }
+        }
+      }
+    },
+    "Add Marine Life" : {
+      "comment" : "A button that adds a marine life to a dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterwasserlebewesen hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter la vie marine"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg onderwaterleven toe"
           }
         }
       }
@@ -3035,6 +3375,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voeg nieuwe duikuitrusting toe"
+          }
+        }
+      }
+    },
+    "Add Photo" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une photo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg foto toe"
+          }
+        }
+      }
+    },
+    "Add Service Record" : {
+      "comment" : "A button title that opens a sheet for adding a service record.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartungseintrag hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une fiche d'entretien"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg onderhoudsrecord toe"
+          }
+        }
+      }
+    },
+    "Add Tank" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flasche hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un cylindre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg tank toe"
+          }
+        }
+      }
+    },
+    "Add Tank Template" : {
+      "comment" : "A label for a button that adds a new tank template.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flaschenvorlage hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un modèle de bouteille"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg tanksjabloon toe"
           }
         }
       }
@@ -4263,6 +4695,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alles toepassen — %@"
+          }
+        }
+      }
+    },
+    "Apply Auto-Detected %@ Value" : {
+      "comment" : "Accessibility label for a button that applies the auto-detected value for a specific unit field, naming the field",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch erkannten Wert für %@ übernehmen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appliquer la valeur détectée automatiquement pour %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch gedetecteerde waarde voor %@ toepassen"
+          }
+        }
+      }
+    },
+    "Apply Gear Group" : {
+      "comment" : "A button that allows the user to apply a gear group to the dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausrüstungsgruppe anwenden"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appliquer le groupe d'équipement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitrustingsgroep toepassen"
           }
         }
       }
@@ -5874,6 +6353,30 @@
         }
       }
     },
+    "Calculators" : {
+      "comment" : "A popover that displays a list of calculators.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechner"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculatrices"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rekenmachines"
+          }
+        }
+      }
+    },
     "Calendar" : {
       "comment" : "A button that displays a view for displaying a calendar heatmap.",
       "isCommentAutoGenerated" : true,
@@ -6113,7 +6616,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Decke"
           }
         },
@@ -6125,7 +6628,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Plafond"
           }
         }
@@ -6136,7 +6639,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Decke %1$@ %2$@"
           }
         },
@@ -6148,7 +6651,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Plafond %1$@ %2$@"
           }
         }
@@ -6359,6 +6862,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wijzig model"
+          }
+        }
+      }
+    },
+    "Change Model for %@" : {
+      "comment" : "Accessibility label for a button that changes the detected computer model for a specific paired device, naming the device",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modell für %@ ändern"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changer le modèle pour %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzig model voor %@"
+          }
+        }
+      }
+    },
+    "Checked" : {
+      "comment" : "The accessibility label for the button that allows the user to agree to the disclaimer.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiviert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cochée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aangevinkt"
           }
         }
       }
@@ -6594,6 +7144,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Woelig"
+          }
+        }
+      }
+    },
+    "Clear" : {
+      "comment" : "A button to clear the text field.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wissen"
           }
         }
       }
@@ -6838,7 +7412,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "CNS"
           }
         },
@@ -6850,7 +7424,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "CNS"
           }
         }
@@ -6996,6 +7570,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Koudste"
+          }
+        }
+      }
+    },
+    "Collapsed" : {
+      "comment" : "A description of the collapsed state of a list item.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reduziert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réduit"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Samengevouwen"
           }
         }
       }
@@ -8774,7 +9372,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Dekodecke"
           }
         },
@@ -8786,8 +9384,8 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Decoplafond"
+            "state" : "translated",
+            "value" : "Decompressieplafond"
           }
         }
       }
@@ -9141,6 +9739,28 @@
         }
       }
     },
+    "Delete Certification" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zertifizierung löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la certification"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder certificering"
+          }
+        }
+      }
+    },
     "Delete certification?" : {
       "comment" : "An alert title that asks if the user wants to delete a certification.",
       "isCommentAutoGenerated" : true,
@@ -9283,6 +9903,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Duikuitrustinggroep verwijderen?"
+          }
+        }
+      }
+    },
+    "Delete Insurance" : {
+      "comment" : "A button title that de",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versicherung löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer l'assurance"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder verzekering"
           }
         }
       }
@@ -12313,6 +12957,28 @@
         }
       }
     },
+    "Edit Photos" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos bearbeiten"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier les photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzig foto's"
+          }
+        }
+      }
+    },
     "Edit Service Record" : {
       "comment" : "A title for a sheet that allows the user to edit a previous service record.",
       "isCommentAutoGenerated" : true,
@@ -13634,6 +14300,30 @@
         }
       }
     },
+    "Expanded" : {
+      "comment" : "A description of the state of the view when it is expanded.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erweitert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Développé"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitgevouwen"
+          }
+        }
+      }
+    },
     "Expert" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14071,6 +14761,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exporteer wanneer je wilt"
+          }
+        }
+      }
+    },
+    "Export Dive" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgang exportieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter la plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporteer duik"
           }
         }
       }
@@ -17026,6 +17738,78 @@
         }
       }
     },
+    "Has fish sightings" : {
+      "comment" : "A description of a dive that has fish sightings.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enthält Fischsichtungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contient des observations de poissons"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heeft visobservaties"
+          }
+        }
+      }
+    },
+    "Has GPS coordinates" : {
+      "comment" : "A description of a location that has GPS coordinates.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPS-Koordinaten verfügbar"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coordonnées GPS disponibles"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPS-coördinaten beschikbaar"
+          }
+        }
+      }
+    },
+    "Has photos" : {
+      "comment" : "A tooltip for a button that displays a photo.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enthält Fotos"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contient des photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heeft foto's"
+          }
+        }
+      }
+    },
     "Heavy swell" : {
       "localizations" : {
         "de" : {
@@ -17194,6 +17978,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hoog"
+          }
+        }
+      }
+    },
+    "High confidence match" : {
+      "comment" : "Accessibility label describing the confidence level of a detected duplicate dive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übereinstimmung mit hoher Zuversicht"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correspondance de confiance élevée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overeenkomst met hoge zekerheid"
           }
         }
       }
@@ -17635,6 +18442,30 @@
         }
       }
     },
+    "iCloud sync is turned off" : {
+      "comment" : "The accessibility label for the sync button when iCloud sync is disabled.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud-Synchronisierung ist deaktiviert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La synchronisation iCloud est désactivée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud-synchronisatie is uitgeschakeld"
+          }
+        }
+      }
+    },
     "iCloud Sync Status" : {
       "comment" : "Title of the iCloud sync status popover and toolbar button tooltip.",
       "localizations" : {
@@ -17690,6 +18521,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Identificatie"
+          }
+        }
+      }
+    },
+    "Idle" : {
+      "comment" : "A description of a state where the app is not syncing with iCloud.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inaktiv"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inactif"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inactief"
           }
         }
       }
@@ -18399,6 +19254,30 @@
         }
       }
     },
+    "Inactive" : {
+      "comment" : "The accessibility label for the inactive dot.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inaktiv"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inactif"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inactief"
+          }
+        }
+      }
+    },
     "Inactive Equipment" : {
       "localizations" : {
         "de" : {
@@ -18511,6 +19390,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voeg GPS-coördinaten toe (instap- en uitstapplaats)"
+          }
+        }
+      }
+    },
+    "Information" : {
+      "comment" : "A button that opens a view with information.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informationen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informations"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informatie"
           }
         }
       }
@@ -19832,6 +20735,29 @@
         }
       }
     },
+    "Low confidence match" : {
+      "comment" : "Accessibility label describing the confidence level of a detected duplicate dive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übereinstimmung mit geringer Zuversicht"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correspondance de confiance faible"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overeenkomst met lage zekerheid"
+          }
+        }
+      }
+    },
     "Low Power Mode" : {
       "comment" : "Title for the low power mode warning card in the iCloud sync status sheet.",
       "localizations" : {
@@ -20978,6 +21904,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Maximum temperatuur"
+          }
+        }
+      }
+    },
+    "Medium confidence match" : {
+      "comment" : "Accessibility label describing the confidence level of a detected duplicate dive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übereinstimmung mit mittlerer Zuversicht"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correspondance de confiance moyenne"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overeenkomst met gemiddelde zekerheid"
           }
         }
       }
@@ -22551,6 +23500,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Volgende onderhoudsdatum"
+          }
+        }
+      }
+    },
+    "Next Year" : {
+      "comment" : "A label for the button that scrolls to the next year.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nächstes Jahr"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Année suivante"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volgend jaar"
           }
         }
       }
@@ -24563,6 +25536,30 @@
         }
       }
     },
+    "Not Checked" : {
+      "comment" : "The accessibility label for the button that allows the user to agree to the disclaimer.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht aktiviert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non cochée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet aangevinkt"
+          }
+        }
+      }
+    },
     "Not yet synced" : {
       "comment" : "CloudKit sync state label when no sync has occurred since app launch",
       "localizations" : {
@@ -25340,6 +26337,30 @@
         }
       }
     },
+    "Overdue" : {
+      "comment" : "Label indicating that the maintenance is overdue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überfällig"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En retard"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Achterstallig"
+          }
+        }
+      }
+    },
     "Override (hex)" : {
       "comment" : "A label for the text field that lets the user override the fingerprint.",
       "isCommentAutoGenerated" : true,
@@ -25454,6 +26475,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zuurstof (O₂)"
+          }
+        }
+      }
+    },
+    "Page %lld of %lld" : {
+      "comment" : "Announces the current page's position in the welcome wizard's page indicator",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seite %1$lld von %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld of %2$lld"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page %1$lld sur %2$lld"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pagina %1$lld van %2$lld"
           }
         }
       }
@@ -25655,6 +26705,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Telefoon"
+          }
+        }
+      }
+    },
+    "Photo %lld of %lld" : {
+      "comment" : "Announces the current photo's position while paging through a dive's photos",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %lld von %lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo %1$lld of %2$lld"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo %lld sur %lld"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %lld van %lld"
           }
         }
       }
@@ -26266,6 +27345,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vorige opslag mislukt:\n%@"
+          }
+        }
+      }
+    },
+    "Previous Year" : {
+      "comment" : "A label for a button that scrolls to the previous year.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorheriges Jahr"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Année précédente"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorig jaar"
           }
         }
       }
@@ -26941,6 +28044,30 @@
         }
       }
     },
+    "Recently synced" : {
+      "comment" : "A description of the state of the user's iCloud sync.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kürzlich synchronisiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récemment synchronisé"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent gesynchroniseerd"
+          }
+        }
+      }
+    },
     "Records full BLE packet traces for troubleshooting sync errors" : {
       "comment" : "Subtitle for the BLE diagnostic logging toggle row.",
       "isCommentAutoGenerated" : true,
@@ -27172,6 +28299,29 @@
         }
       }
     },
+    "Remove %@" : {
+      "comment" : "Accessibility label for a button that removes a filter chip, naming the specific value it removes",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ verwijderen"
+          }
+        }
+      }
+    },
     "Remove %@ (%@) from known devices? The next sync will re-download all dives from this computer." : {
       "localizations" : {
         "de" : {
@@ -27316,6 +28466,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verwijder foto"
+          }
+        }
+      }
+    },
+    "Remove Photo %lld" : {
+      "comment" : "Accessibility label for a button that removes one photo, naming its position in the photo strip",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %lld entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la photo %lld"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder foto %lld"
+          }
+        }
+      }
+    },
+    "Remove Tank" : {
+      "comment" : "A button that removes the currently selected tank.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flasche entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer le cylindre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tank verwijderen"
           }
         }
       }
@@ -27525,6 +28722,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HERHALEND"
+          }
+        }
+      }
+    },
+    "Rescan" : {
+      "comment" : "A button that triggers a new scan.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneut scannen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle analyse"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opnieuw scannen"
           }
         }
       }
@@ -30476,6 +31697,30 @@
         }
       }
     },
+    "Service Due Soon" : {
+      "comment" : "A label describing a service that is due in the near future.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartung bald fällig"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entretien bientôt requis"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderhoud binnenkort nodig"
+          }
+        }
+      }
+    },
     "SERVICE DUE SOON" : {
       "localizations" : {
         "de" : {
@@ -30500,6 +31745,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ONDERHOUD NODIG OP KORTE TERMIJN"
+          }
+        }
+      }
+    },
+    "Service Overdue" : {
+      "comment" : "A label describing a service that is overdue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartung überfällig"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entretien en retard"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderhoud achterstallig"
           }
         }
       }
@@ -32019,7 +33288,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Stopp"
           }
         },
@@ -32031,7 +33300,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Stop"
           }
         }
@@ -32042,7 +33311,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Stopp %1$@ · %2$@"
           }
         },
@@ -32054,7 +33323,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Stop %1$@ · %2$@"
           }
         }
@@ -32612,6 +33881,30 @@
         }
       }
     },
+    "Sync error" : {
+      "comment" : "A description of a sync error.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisierungsfehler"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erreur de synchronisation"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisatiefout"
+          }
+        }
+      }
+    },
     "Sync Error" : {
       "comment" : "A label displayed in the iCloud sync status sheet when a CloudKit sync error has occurred.",
       "localizations" : {
@@ -32782,6 +34075,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Laatste synchronisatie: %@"
+          }
+        }
+      }
+    },
+    "Syncing" : {
+      "comment" : "A description of the sync process.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird synchronisiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation en cours"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchroniseren"
           }
         }
       }

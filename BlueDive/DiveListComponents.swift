@@ -20,6 +20,7 @@ struct DiveRowView: View {
                 }
             }
         }
+        .accessibilityElement(children: .combine)
     }
     
     private var diveIcon: some View {
@@ -41,6 +42,7 @@ struct DiveRowView: View {
 
                 Text(resolved.flag)
                     .font(.system(size: 24))
+                    .accessibilityHidden(true)
             }
 
             HStack(spacing: 4) {
@@ -48,11 +50,13 @@ struct DiveRowView: View {
                     Image(systemName: "fish.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(.teal)
+                        .accessibilityLabel(Text("Has fish sightings"))
                 }
                 if summary.hasPhotos {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(.red)
+                        .accessibilityLabel(Text("Has photos"))
                 }
             }
         }
@@ -101,8 +105,9 @@ struct DiveRowView: View {
                     Image(systemName: "location.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
+                        .accessibilityLabel(Text("Has GPS coordinates"))
                 }
-                
+
                 locationText
                     .font(.caption)
                     .foregroundStyle(.secondary)

@@ -121,18 +121,11 @@ struct MergeDivesSheet: View {
             }
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button {
+            Button("Merge") {
                 showConfirmation = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.triangle.merge")
-                    Text("Merge")
-                }
-                .fontWeight(.semibold)
             }
             #if os(iOS)
             .buttonStyle(.borderedProminent)
-            .tint(.cyan)
             #else
             .foregroundStyle(.cyan)
             #endif
@@ -151,6 +144,7 @@ struct MergeDivesSheet: View {
                 Image(systemName: "arrow.triangle.merge")
                     .font(.system(size: 32))
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
             }
 
             Text("Merge Dives")
@@ -173,6 +167,7 @@ struct MergeDivesSheet: View {
                 Image(systemName: "checkmark.circle")
                     .font(.title3)
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
                 Text("Selection")
                     .font(.headline)
                     .fontWeight(.semibold)
@@ -198,6 +193,7 @@ struct MergeDivesSheet: View {
                 Image(systemName: "list.bullet")
                     .font(.title3)
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
                 Text("Dives")
                     .font(.headline)
                     .fontWeight(.semibold)
@@ -230,6 +226,7 @@ struct MergeDivesSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 TextField("Search dives…", text: $searchText)
                     .textFieldStyle(.plain)
             }
@@ -250,6 +247,7 @@ struct MergeDivesSheet: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 36))
                     .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
                 Text("No matching dives")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -344,6 +342,7 @@ struct MergeDivesSheet: View {
                     .font(.title3)
                     .foregroundStyle(.cyan)
                     .transition(.scale.combined(with: .opacity))
+                    .accessibilityHidden(true)
             }
         }
         .padding(12)
@@ -359,6 +358,15 @@ struct MergeDivesSheet: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                toggleSelection(dive)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        // onTapGesture isn't reliably fired by VoiceOver's activate
+        // gesture; this makes double-tap toggle the selection.
+        .accessibilityAction {
             withAnimation(.easeInOut(duration: 0.2)) {
                 toggleSelection(dive)
             }

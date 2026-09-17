@@ -197,13 +197,11 @@ struct DiverProfileView: View {
             #endif
 
             .toolbar {
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") {
-                        dismiss()
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
+
+                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
             .sheet(item: $documentsSection) { section in
                 DocumentsView(initialSection: section, onClose: { documentsSection = nil })
@@ -286,6 +284,7 @@ struct DiverProfileView: View {
                         HStack(spacing: 5) {
                             Image(systemName: "calendar")
                                 .font(.caption2)
+                                .accessibilityHidden(true)
                             Text("Diver for \(yearsActive) year\(yearsActive > 1 ? "s" : "")")
                                 .font(.caption)
                         }
@@ -372,6 +371,7 @@ struct DiverProfileView: View {
                             Image(systemName: "eye.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
                             Text(verbatim: Double(creature.count).localizedString(decimals: 0))
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
@@ -397,22 +397,6 @@ struct DiverProfileView: View {
         case 2: return Color(red: 0.8, green: 0.5, blue: 0.2)
         default: return .secondary
         }
-    }
-
-    // MARK: - Add Document Button
-
-    private func addDocumentButton(label: LocalizedStringKey, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(label, systemImage: icon)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(color)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Certifications Section
@@ -445,11 +429,12 @@ struct DiverProfileView: View {
                             Image(systemName: "graduationcap")
                                 .font(.title2)
                                 .foregroundStyle(.cyan.opacity(0.5))
+                                .accessibilityHidden(true)
                             Text("No certifications")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        addDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showingAddCertification = true }
+                        ProfileAddDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showingAddCertification = true }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -460,11 +445,12 @@ struct DiverProfileView: View {
                             Image(systemName: "person.slash")
                                 .font(.title2)
                                 .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
                             Text("No Certifications for Diver")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        addDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showingAddCertification = true }
+                        ProfileAddDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showingAddCertification = true }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -481,6 +467,7 @@ struct DiverProfileView: View {
                                     Image(systemName: cert.isExpired ? "exclamationmark.circle.fill" : "checkmark.seal.fill")
                                         .font(.system(size: 16))
                                         .foregroundStyle(cert.isExpired ? .red : .cyan)
+                                        .accessibilityLabel(cert.isExpired ? Text("Expired") : Text("Active"))
                                 }
 
                                 VStack(alignment: .leading, spacing: 3) {
@@ -524,6 +511,7 @@ struct DiverProfileView: View {
                                 Image(systemName: "chevron.right")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
                             }
                             .padding(.vertical, 10)
                         }
@@ -587,11 +575,12 @@ struct DiverProfileView: View {
                             Image(systemName: "shield")
                                 .font(.title2)
                                 .foregroundStyle(.blue.opacity(0.5))
+                                .accessibilityHidden(true)
                             Text("No insurance recorded")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        addDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showingAddInsurance = true }
+                        ProfileAddDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showingAddInsurance = true }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -602,11 +591,12 @@ struct DiverProfileView: View {
                             Image(systemName: "person.slash")
                                 .font(.title2)
                                 .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
                             Text("No Insurance for Diver")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        addDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showingAddInsurance = true }
+                        ProfileAddDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showingAddInsurance = true }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -623,6 +613,7 @@ struct DiverProfileView: View {
                                     Image(systemName: insurance.isExpired ? "exclamationmark.shield.fill" : "shield.fill")
                                         .font(.system(size: 16))
                                         .foregroundStyle(insurance.isExpired ? .red : (insurance.isExpiringSoon ? .orange : .blue))
+                                        .accessibilityLabel(insurance.isExpired ? Text("Expired") : (insurance.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
                                 }
 
                                 VStack(alignment: .leading, spacing: 3) {
@@ -678,6 +669,7 @@ struct DiverProfileView: View {
                                 Image(systemName: "chevron.right")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
                             }
                             .padding(.vertical, 10)
                         }
@@ -732,6 +724,36 @@ struct DiverProfileView: View {
     // MARK: - Actions
 }
 
+/// Used to be a plain function (`addDocumentButton`) on `DiverProfileView` that inlined its
+/// Button/Label tree at every call site — the same class of bug that caused two confirmed
+/// `EXC_BAD_ACCESS` crashes elsewhere in this app (too many inlined view trees combined in
+/// one `some View` property overflow the stack during Swift's runtime value-witness copy).
+/// This one is called only 4 times across two separate sub-properties, well below the
+/// thresholds that actually crashed, but is converted for consistency with the same fix
+/// applied throughout the app. Named distinctly from `DocumentsView.swift`'s
+/// `AddDocumentButton` (a different, similarly-purposed but differently-styled view) to
+/// avoid a top-level name collision.
+struct ProfileAddDocumentButton: View {
+    let label: LocalizedStringKey
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(color)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Profile Card Container
 
 private struct ProfileCard<Content: View>: View {
@@ -776,6 +798,7 @@ private struct BigStatCard: View {
                 Image(systemName: icon)
                     .font(.title3)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
@@ -814,6 +837,7 @@ private struct SmallStatCard: View {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(color)
+                .accessibilityHidden(true)
             Text(value)
                 .font(.title3)
                 .fontWeight(.bold)
@@ -850,6 +874,7 @@ private struct GoalRow: View {
                     .font(.caption)
                     .foregroundStyle(goal.color)
                     .frame(width: 18)
+                    .accessibilityHidden(true)
 
                 Text(goal.title)
                     .font(.subheadline)
@@ -1015,6 +1040,7 @@ struct InsuranceCard: View {
             Circle()
                 .fill(showExpired ? Color.red : (insurance.isExpiringSoon ? Color.orange : Color.blue))
                 .frame(width: 12, height: 12)
+                .accessibilityLabel(showExpired ? Text("Expired") : (insurance.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
@@ -1137,15 +1163,16 @@ struct InsuranceDetailView: View {
                 : insurance.insurerName)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    closeToolbarButton { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .destructiveAction) {
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
                     } label: {
                         Image(systemName: "trash")
                     }
+                    .accessibilityLabel(Text("Delete Insurance"))
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -1323,14 +1350,8 @@ struct AddInsuranceView: View {
                         .keyboardShortcut(.escape, modifiers: [])
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button {
+                    Button(isEditing ? LocalizedStringKey("Save") : LocalizedStringKey("Add")) {
                         save()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text(isEditing ? LocalizedStringKey("Save") : LocalizedStringKey("Add"))
-                        }
-                        .fontWeight(.semibold)
                     }
                     .disabled(!isValid)
                     #if os(iOS)
@@ -1372,6 +1393,7 @@ struct AddInsuranceView: View {
                 Image(systemName: icon)
                     .font(.subheadline)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -1406,6 +1428,8 @@ struct AddInsuranceView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
                     }
                     .buttonStyle(.plain)
                 }

@@ -302,6 +302,8 @@ struct DiverAutocompleteField: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
                     }
                     .buttonStyle(.plain)
                 }

@@ -170,6 +170,7 @@ struct ImportFormatPickerView: View {
                         unitCard(
                             icon: "arrow.down.to.line", iconColor: .cyan,
                             title: "Distance / Depth",
+                            fieldName: "Distance / Depth",
                             autoValue: detectedSystem?.formatOptions.distanceFormat,
                             currentValue: options.distanceFormat,
                             optionList: distanceOptions,
@@ -178,6 +179,7 @@ struct ImportFormatPickerView: View {
                         unitCard(
                             icon: "thermometer.medium", iconColor: .orange,
                             title: "Temperature",
+                            fieldName: "Temperature",
                             autoValue: detectedSystem?.formatOptions.temperatureFormat,
                             currentValue: options.temperatureFormat,
                             optionList: temperatureOptions,
@@ -186,6 +188,7 @@ struct ImportFormatPickerView: View {
                         unitCard(
                             icon: "gauge.with.needle.fill", iconColor: .red,
                             title: "Pressure",
+                            fieldName: "Pressure",
                             autoValue: detectedSystem?.formatOptions.pressureFormat,
                             currentValue: options.pressureFormat,
                             optionList: pressureOptions,
@@ -194,6 +197,7 @@ struct ImportFormatPickerView: View {
                         unitCard(
                             icon: "cylinder.fill", iconColor: .indigo,
                             title: "Volume / Tank Size",
+                            fieldName: "Volume / Tank Size",
                             autoValue: detectedSystem?.formatOptions.volumeFormat,
                             currentValue: options.volumeFormat,
                             optionList: volumeOptions,
@@ -202,6 +206,7 @@ struct ImportFormatPickerView: View {
                         unitCard(
                             icon: "scalemass.fill", iconColor: .purple,
                             title: "Weight",
+                            fieldName: "Weight",
                             autoValue: detectedSystem?.formatOptions.weightFormat,
                             currentValue: options.weightFormat,
                             optionList: weightOptions,
@@ -211,6 +216,7 @@ struct ImportFormatPickerView: View {
                         unitCard(
                             icon: "scalemass.fill", iconColor: .purple,
                             title: "Weight",
+                            fieldName: "Weight",
                             autoValue: nil,
                             currentValue: options.weightFormat,
                             optionList: weightOptions,
@@ -249,6 +255,7 @@ struct ImportFormatPickerView: View {
                 Image(systemName: "square.and.arrow.down.fill")
                     .font(.system(size: 20))
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: fileType == .macDive || fileType == .gearCSV
@@ -266,6 +273,7 @@ struct ImportFormatPickerView: View {
                 if !fileName.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "doc.fill")
+                            .accessibilityHidden(true)
                         Text(verbatim: fileName)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -279,8 +287,12 @@ struct ImportFormatPickerView: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
                     .foregroundStyle(.secondary)
+                    // Only control in the header card: empty Spacer leading, 16 pt of card
+                    // padding on the other three sides. 44 × 44 pt.
+                    .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Close"))
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.primary.opacity(0.05)))
@@ -292,6 +304,11 @@ struct ImportFormatPickerView: View {
         icon: String,
         iconColor: Color,
         title: LocalizedStringKey,
+        // Same text as `title`, as a plain String, so the auto-detect chip's
+        // accessibility labels can name the specific field they apply to.
+        // Passing the identical literal text keeps both mapped to the same
+        // catalog entry, so there is still only one string to translate.
+        fieldName: String,
         autoValue: String?,
         currentValue: String,
         optionList: [(label: LocalizedStringKey, value: String)],
@@ -304,12 +321,13 @@ struct ImportFormatPickerView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(iconColor)
                     .frame(width: 24)
+                    .accessibilityHidden(true)
                 Text(title)
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
                 Spacer()
                 if showAutoChip {
-                    autoChip(autoValue: autoValue, currentValue: currentValue, apply: apply)
+                    autoChip(fieldName: fieldName, autoValue: autoValue, currentValue: currentValue, apply: apply)
                 }
             }
             HStack(spacing: 8) {
@@ -347,16 +365,19 @@ struct ImportFormatPickerView: View {
 
     @ViewBuilder
     private func autoChip(
+        fieldName: String,
         autoValue: String?,
         currentValue: String,
         apply: @escaping (String) -> Void
     ) -> some View {
+        let localizedFieldName = NSLocalizedString(fieldName, bundle: .forAppLanguage(), comment: "")
         if let detected = autoValue {
             if currentValue == detected {
                 Label("Auto", systemImage: "checkmark.circle.fill")
                     .font(.caption.bold())
                     .foregroundStyle(.green)
                     .labelStyle(.titleAndIcon)
+                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%@: Auto-detected", bundle: .forAppLanguage(), comment: "Accessibility label naming the field whose value was auto-detected from the import file"), localizedFieldName)))
             } else {
                 Button { withAnimation(.spring(duration: 0.25)) { apply(detected) } } label: {
                     Label("Auto", systemImage: "sparkles")
@@ -368,12 +389,14 @@ struct ImportFormatPickerView: View {
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.yellow.opacity(0.15)))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Apply Auto-Detected %@ Value", bundle: .forAppLanguage(), comment: "Accessibility label for a button that applies the auto-detected value for a specific unit field, naming the field"), localizedFieldName)))
             }
         } else {
             Label("Auto", systemImage: "questionmark.circle")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .labelStyle(.titleAndIcon)
+                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%@: Auto-Detection Unavailable", bundle: .forAppLanguage(), comment: "Accessibility label naming the field for which auto-detection was unavailable"), localizedFieldName)))
         }
     }
 
@@ -385,6 +408,7 @@ struct ImportFormatPickerView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.green)
                 .frame(width: 24)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Import Gear")
                     .font(.subheadline.bold())
@@ -394,7 +418,7 @@ struct ImportFormatPickerView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Toggle("", isOn: $options.importGear)
+            Toggle("Import Gear", isOn: $options.importGear)
                 .labelsHidden()
                 .tint(.green)
         }
@@ -427,6 +451,7 @@ struct ImportFormatPickerView: View {
             Button(action: onConfirm) {
                 HStack(spacing: 6) {
                     Image(systemName: "square.and.arrow.down.fill")
+                        .accessibilityHidden(true)
                     Text("Import").fontWeight(.bold)
                 }
                 .font(.subheadline)
@@ -450,6 +475,7 @@ struct ImportFormatPickerView: View {
                     Image(systemName: "sparkle.magnifyingglass")
                         .font(.title2)
                         .foregroundStyle(system.color)
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Unit system detected: **\(system.label)**")
                             .font(.subheadline)
@@ -465,6 +491,7 @@ struct ImportFormatPickerView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: system.icon)
+                            .accessibilityHidden(true)
                         Text("Apply All — \(system.label)").fontWeight(.semibold)
                     }
                     .font(.subheadline)
@@ -486,6 +513,7 @@ struct ImportFormatPickerView: View {
                 Image(systemName: "questionmark.circle.fill")
                     .font(.title2)
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("No unit tag detected")
                         .font(.subheadline.bold())

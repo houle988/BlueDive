@@ -163,9 +163,8 @@ struct DiveCalendarHeatmapView: View {
             #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
@@ -207,7 +206,13 @@ struct DiveCalendarHeatmapView: View {
                     .foregroundStyle(cachedAvailableYears.contains(where: { $0 < selectedYear }) ? .cyan : .secondary)
                     .padding(8)
                     .contentShape(Rectangle())
+                    // padding(8) around a 16 × 21 pt glyph only reaches 32 × 37 pt. The row has
+                    // 16 pt spacing to the (non-interactive) year label and 16 pt of scroll-view
+                    // padding leading, and the next chevron is a full year label away, so 8 pt
+                    // horizontally / 4 pt vertically is free. 48 × 45 pt.
+                    .tapTargetInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
             }
+            .accessibilityLabel(Text("Previous Year"))
 
             Text(String(selectedYear))
                 .font(.system(size: 28, weight: .black, design: .rounded))
@@ -224,7 +229,12 @@ struct DiveCalendarHeatmapView: View {
                     .foregroundStyle(cachedAvailableYears.contains(where: { $0 > selectedYear }) ? .cyan : .secondary)
                     .padding(8)
                     .contentShape(Rectangle())
+                    // Mirror of the previous-year chevron: 16 pt to the year label leading and an
+                    // empty Spacer trailing, so 8 pt each way stays clear of the streak chip.
+                    // 48 × 45 pt.
+                    .tapTargetInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
             }
+            .accessibilityLabel(Text("Next Year"))
 
             Spacer()
 
@@ -401,6 +411,19 @@ struct DiveCalendarHeatmapView: View {
                             showDaySheet = true
                         }
                     }
+                    .accessibilityElement()
+                    .accessibilityLabel(Text(day, format: .dateTime.day().month().year().locale(locale)))
+                    .accessibilityValue(divesOnDay.isEmpty ? Text(verbatim: "") : Text(verbatim: String(format: NSLocalizedString("%lld dive", bundle: .forAppLanguage(), comment: "Number of dives logged on a calendar day, read by VoiceOver"), divesOnDay.count)))
+                    .accessibilityAddTraits(divesOnDay.isEmpty ? [] : .isButton)
+                    // onTapGesture isn't reliably fired by VoiceOver's activate
+                    // gesture; this makes double-tap open the day's dives.
+                    .accessibilityAction {
+                        if !divesOnDay.isEmpty {
+                            selectedDay = day
+                            selectedDayDives = divesOnDay
+                            showDaySheet = true
+                        }
+                    }
                 }
             }
         }
@@ -475,9 +498,8 @@ struct DayDivesSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
             }
         }

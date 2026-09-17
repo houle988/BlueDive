@@ -107,6 +107,168 @@ extension DatePicker {
     }
 }
 
+// MARK: - Toolbar Close Button
+
+/// A toolbar dismiss button that never loses progress (per HIG, distinct from `.cancel`).
+/// Uses the standard system close affordance on iOS 26+, falling back to a plain
+/// "Close" label pre-26. Place at `.cancellationAction` to match HIG's leading-edge
+/// convention for dismiss buttons.
+@ViewBuilder
+func closeToolbarButton(action: @escaping () -> Void) -> some View {
+    if #available(iOS 26.0, macOS 26.0, *) {
+        Button(role: .close, action: action)
+    } else {
+        Button("Close", action: action)
+    }
+}
+
+// MARK: - Text field clear-button tap target
+
+extension View {
+    /// Enlarges a text field's clear button (`xmark.circle.fill`) tap area on iOS so the
+    /// ~20 pt glyph reaches an accessible size, without moving the glyph, changing its
+    /// appearance, or altering the surrounding layout.
+    ///
+    /// Apply to the `Image` inside the button's label, after its `.foregroundStyle`.
+    ///
+    /// Geometry — the hit rectangle grows **downward, upward and trailing only**, never
+    /// back toward the typed text:
+    /// - The clear button sits at the trailing edge of its field (as an `.overlay(alignment: .trailing)`
+    ///   or as the last sibling in the field's `HStack`). Growing the hit box leading-ward
+    ///   would park an invisible 44 pt "Clear" target on top of the end of the user's own
+    ///   text, so a tap meant to reposition the caret would wipe the field instead. This is
+    ///   why UIKit's own `clearButtonMode` button is also deliberately sub-44 pt.
+    /// - Trailing/vertical growth only ever extends into the row's own padding or the field's
+    ///   inset, where nothing interactive lives.
+    /// - The trailing `.padding(-12)` cancels the layout effect of the expanded frame, so the
+    ///   glyph renders in exactly its original position and rows keep their original height;
+    ///   `.contentShape` keeps the enlarged rectangle hit-testable. Verified layout-neutral:
+    ///   an unmodified and a modified field row both measure 320 × 22.
+    ///
+    /// Result: a ~44 × 32 pt target (up from ~20 × 20) for a body-sized glyph.
+    ///
+    /// No-op on macOS: pointer input does not need finger-sized targets, and the existing
+    /// sizing inside `#if os(macOS)` branches is intentional.
+    func clearButtonTapTarget() -> some View {
+        #if os(iOS)
+        self
+            .padding(.vertical, 12)
+            .padding(.trailing, 12)
+            .contentShape(Rectangle())
+            .padding(.vertical, -12)
+            .padding(.trailing, -12)
+        #else
+        self
+        #endif
+    }
+
+    /// Grows a small control's tappable rectangle by the given per-edge insets **without
+    /// changing layout**: the glyph keeps its exact position and the row keeps its exact
+    /// size, because the expanding `.padding` is cancelled by an equal negative `.padding`
+    /// applied after `.contentShape`.
+    ///
+    /// Apply to the `Image` inside a `Button`/`Menu` label, after its `.foregroundStyle`.
+    /// This is the same technique as `clearButtonTapTarget()`, generalised so each edge can
+    /// be sized independently — necessary wherever a control sits close to another control
+    /// (chip grids, "add/remove" icon pairs in a section header) and a symmetric 44 × 44
+    /// frame would either bloat the surrounding container or overlap the neighbour's target.
+    ///
+    /// Sizing rule used at the call sites: grow generously into padding/whitespace, and no
+    /// more than **half the measured gap** toward an adjacent interactive control, so two
+    /// enlarged targets can touch but never overlap.
+    ///
+    /// Insets are layout-direction aware (`leading`/`trailing`, not left/right).
+    ///
+    /// No-op on macOS: pointer input does not need finger-sized targets, and the existing
+    /// sizing inside `#if os(macOS)` branches is intentional.
+    func tapTargetInsets(
+        top: CGFloat = 0,
+        leading: CGFloat = 0,
+        bottom: CGFloat = 0,
+        trailing: CGFloat = 0
+    ) -> some View {
+        #if os(iOS)
+        self
+            .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
+            .contentShape(Rectangle())
+            .padding(EdgeInsets(top: -top, leading: -leading, bottom: -bottom, trailing: -trailing))
+        #else
+        self
+        #endif
+    }
+}
+
+// MARK: - Tap target enlargement as a nominal view
+
+/// Grows a small control's tappable rectangle by the given per-edge insets **without
+/// changing layout** — same geometry as `View.tapTargetInsets(...)`, but packaged as a
+/// nominal `View` struct instead of a modifier chain.
+///
+/// **Use this, not `tapTargetInsets(...)`, inside any view property that is combined with
+/// several sibling sections into one `some View`.**
+///
+/// Why: `tapTargetInsets(...)` adds three nested anonymous `ModifiedContent<...>` layers to
+/// the *call site's* type. `some View` hides that type from the type-checker, but the Swift
+/// ABI must still copy the full concrete nested generic at runtime, and each layer adds a
+/// level of recursion to the generated value-witness `initializeWithCopy`. Stacking ten of
+/// these across three sibling sections that all funnel into `DiveDetailView.menuTabContent`
+/// pushed that recursive copy past the stack limit and crashed with `EXC_BAD_ACCESS`
+/// (`swift_retain` inside a 13-deep `ExclusiveGesture`/`HStack` witness chain) on every
+/// attempt to open a dive. A build succeeds either way — only a live tap-test catches it.
+///
+/// A struct's `body` is its own self-contained opaque type, so the padding/`contentShape`
+/// complexity stops at this boundary and never propagates into the parent's compound type.
+/// This is Apple's standard guidance for bounding generated-type complexity.
+///
+/// Wrap the `Image` inside a `Button`/`Menu` label, after its `.foregroundStyle`. Insets are
+/// layout-direction aware (`leading`/`trailing`, not left/right).
+///
+/// Sizing rule used at the call sites: grow generously into padding/whitespace, and no more
+/// than **half the measured gap** toward an adjacent interactive control, so two enlarged
+/// targets can touch but never overlap. Never grow back toward adjacent text.
+///
+/// No-op on macOS: pointer input does not need finger-sized targets, and the existing sizing
+/// inside `#if os(macOS)` branches is intentional.
+struct TapTargetInset<Content: View>: View {
+    var top: CGFloat = 0
+    var leading: CGFloat = 0
+    var bottom: CGFloat = 0
+    var trailing: CGFloat = 0
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        #if os(iOS)
+        content()
+            .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
+            .contentShape(Rectangle())
+            .padding(EdgeInsets(top: -top, leading: -leading, bottom: -bottom, trailing: -trailing))
+        #else
+        content()
+        #endif
+    }
+}
+
+/// The standard text-field clear glyph (`xmark.circle.fill`, secondary style) with its
+/// enlarged tap target already applied — the exact chain that every clear button in the app
+/// spells out by hand.
+///
+/// Use this instead of `Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+/// .clearButtonTapTarget()` inside any view property that is combined with several sibling
+/// sections into one `some View`. See `TapTargetInset` for the full explanation: this packages
+/// five `ModifiedContent` layers behind one nominal type's `body`, so the call site's concrete
+/// type stays flat and the runtime value-witness copy cannot recurse deep enough to overflow
+/// the stack.
+///
+/// The geometry itself still lives in `clearButtonTapTarget()`, so there is one source of truth.
+struct ClearButtonGlyph: View {
+    var body: some View {
+        Image(systemName: "xmark.circle.fill")
+            .foregroundStyle(.secondary)
+            .clearButtonTapTarget()
+            .accessibilityLabel(Text("Clear"))
+    }
+}
+
 #if os(iOS)
 extension View {
     /// Applies a keyboard type on iOS/iPadOS.

@@ -49,22 +49,34 @@ extension DiveDetailView {
                 Button {
                     addNewTank()
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.green)
+                    // Header HStack spacing is 8 pt, so this grows only 4 pt (half the gap)
+                    // toward the adjacent Remove button and 12 pt leading into the empty
+                    // Spacer/counter area. Vertically: 16 pt of card padding above, 12 pt
+                    // to the tank Picker below. 40 × 44 pt.
+                    TapTargetInset(top: 10, leading: 12, bottom: 10, trailing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.green)
+                    }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Add Tank"))
 
                 // Remove selected tank button (only if more than one tank)
                 if dive.tanks.count > 1 {
                     Button {
                         removeSelectedTank()
                     } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.red)
+                        // Mirror of the Add button: 4 pt toward it (half the 8 pt gap),
+                        // 12 pt trailing into the card's 16 pt padding. 40 × 44 pt.
+                        TapTargetInset(top: 10, leading: 4, bottom: 10, trailing: 12) {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.red)
+                        }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Remove Tank"))
                 }
             }
 
@@ -122,22 +134,25 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            conditionRow(icon: "bubbles.and.sparkles.fill", color: .purple, label: "Gas Type", value: gasTypeDisplay)
+            ConditionRow(icon: "bubbles.and.sparkles.fill", color: .purple, label: "Gas Type", value: gasTypeDisplay)
 
-            conditionRow(icon: "o.circle.fill", color: .green,  label: "Oxygen (O₂)", value: "\(o2Pct) %")
-            conditionRow(icon: "h.circle.fill", color: .cyan,   label: "Helium (He)",   value: "\(hePct) %")
-            conditionRow(icon: "n.circle.fill", color: .blue,   label: "Nitrogen (N₂)",    value: "\(n2Pct) %")
+            ConditionRow(icon: "o.circle.fill", color: .green,  label: "Oxygen (O₂)", value: "\(o2Pct) %")
+            ConditionRow(icon: "h.circle.fill", color: .cyan,   label: "Helium (He)",   value: "\(hePct) %")
+            ConditionRow(icon: "n.circle.fill", color: .blue,   label: "Nitrogen (N₂)",    value: "\(n2Pct) %")
 
-            conditionRow(icon: "cylinder.fill", color: .blue, label: "Tank Volume", value: volumeDisplay)
+            ConditionRow(icon: "cylinder.fill", color: .blue, label: "Tank Volume", value: volumeDisplay)
 
-            conditionRow(icon: "cylinder.split.1x2.fill", color: .blue, label: "Double Tank", value: isDouble ? "Yes" : "No")
+            ConditionRow(icon: "cylinder.split.1x2.fill", color: .blue, label: "Double Tank",
+                        value: isDouble
+                            ? NSLocalizedString("Yes", bundle: .forAppLanguage(), comment: "")
+                            : NSLocalizedString("No", bundle: .forAppLanguage(), comment: ""))
 
-            conditionRow(icon: "gauge.badge.plus", color: .teal, label: "Working Pressure", value: wpDisplay)
+            ConditionRow(icon: "gauge.badge.plus", color: .teal, label: "Working Pressure", value: wpDisplay)
 
-            conditionRow(icon: "cube.fill", color: .gray, label: "Material",
+            ConditionRow(icon: "cube.fill", color: .gray, label: "Material",
                         value: tank?.tankMaterial.flatMap { $0.isEmpty ? nil : localizedTankMaterial($0) } ?? "—")
 
-            conditionRow(icon: "cylinder.split.1x2.fill", color: .indigo, label: "Format",
+            ConditionRow(icon: "cylinder.split.1x2.fill", color: .indigo, label: "Format",
                         value: tank?.tankType.flatMap { $0.isEmpty ? nil : localizedTankFormat($0) } ?? "—")
         }
         .padding()
@@ -170,16 +185,16 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            conditionRow(icon: "gauge.with.needle.fill", color: .red, label: "Start Pressure", value: startDisplay)
-            conditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .orange, label: "End Pressure", value: endDisplay)
+            ConditionRow(icon: "gauge.with.needle.fill", color: .red, label: "Start Pressure", value: startDisplay)
+            ConditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .orange, label: "End Pressure", value: endDisplay)
 
             if tank?.usageStartTime != nil || tank?.usageEndTime != nil {
                 let startSec = tank?.usageStartTime ?? 0
                 let endSec = tank?.usageEndTime
                 let startLabel = formatUsageTime(startSec)
                 let endLabel = endSec.map { formatUsageTime($0) } ?? "—"
-                conditionRow(icon: "play.fill", color: .cyan, label: "Usage Start", value: startLabel)
-                conditionRow(icon: "stop.fill", color: .cyan, label: "Usage End", value: endLabel)
+                ConditionRow(icon: "play.fill", color: .cyan, label: "Usage Start", value: startLabel)
+                ConditionRow(icon: "stop.fill", color: .cyan, label: "Usage End", value: endLabel)
             }
 
             let tankIdx = dive.tanks.isEmpty ? -1 : min(selectedTankIndex, dive.tanks.count - 1)
@@ -194,8 +209,8 @@ extension DiveDetailView {
             let multiTankNoSamples = dive.profileSamples.count < 2 && validTankCount > 1
 
             if multiTankNoSamples || multiTankMissingUsageTime {
-                conditionRow(icon: "lungs.fill", color: .pink, label: rmvLabel, value: "—")
-                conditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel, value: "—")
+                ConditionRow(icon: "lungs.fill", color: .pink, label: rmvLabel, value: "—")
+                ConditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel, value: "—")
                 if multiTankNoSamples {
                     Text("Multi-tank RMV/SAC requires dive computer data")
                         .font(.caption2)
@@ -208,9 +223,9 @@ extension DiveDetailView {
                         .padding(.top, 2)
                 }
             } else {
-                conditionRow(icon: "lungs.fill", color: .pink, label: rmvLabel,
+                ConditionRow(icon: "lungs.fill", color: .pink, label: rmvLabel,
                             value: dive.formattedRMV(forTankAt: tankIdx))
-                conditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel,
+                ConditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel,
                             value: dive.formattedSAC(forTankAt: tankIdx))
             }
 
@@ -243,7 +258,7 @@ extension DiveDetailView {
             // Decompression Algorithm with GF values - always display
             VStack(alignment: .leading, spacing: 8) {
                 let decoAlgo = dive.decompressionAlgorithm ?? ""
-                conditionRow(icon: "function", color: .cyan, label: "Algorithm",
+                ConditionRow(icon: "function", color: .cyan, label: "Algorithm",
                             value: !decoAlgo.isEmpty ? decoAlgo : "—")
 
                 // Try to extract GF Low/High from algorithm string
@@ -339,7 +354,7 @@ extension DiveDetailView {
                     Spacer()
                 }
             } else {
-                conditionRow(icon: "exclamationmark.triangle.fill", color: .yellow, label: "CNS O₂ Toxicity", value: "—")
+                ConditionRow(icon: "exclamationmark.triangle.fill", color: .yellow, label: "CNS O₂ Toxicity", value: "—")
             }
 
             Divider()

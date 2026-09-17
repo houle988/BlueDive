@@ -59,6 +59,7 @@ extension BluetoothScannerView {
                     }
                 }
             }
+            .accessibilityHidden(true)
 
             // Status text
             VStack(spacing: 4) {
@@ -280,6 +281,7 @@ extension BluetoothScannerView {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 60))
                 .foregroundStyle(.green)
+                .accessibilityHidden(true)
 
             VStack(spacing: 8) {
                 Text(imported + merged > 0 ? "Sync Complete" : "No New Dives")
@@ -329,6 +331,7 @@ extension BluetoothScannerView {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 60))
                 .foregroundStyle(.red)
+                .accessibilityHidden(true)
 
             VStack(spacing: 8) {
                 Text("Sync Error")
@@ -407,7 +410,7 @@ extension BluetoothScannerView {
     @ToolbarContentBuilder
     var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Close") {
+            closeToolbarButton {
                 stopScanning()
                 bleManager.close(clearDevicePtr: true)
                 dismiss()
@@ -421,36 +424,49 @@ extension BluetoothScannerView {
         }
 
         if !(syncState.isActive && syncState != .scanning) {
-            ToolbarItem(placement: .confirmationAction) {
+            #if os(iOS)
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showInfo = true
+                } label: {
+                    Image(systemName: "info")
+                }
+                .accessibilityLabel(Text("Information"))
+            }
+            #else
+            ToolbarItem(placement: .automatic) {
                 Button {
                     showInfo = true
                 } label: {
                     Image(systemName: "info.circle")
                         .foregroundStyle(.cyan)
                 }
+                .accessibilityLabel(Text("Information"))
             }
+            #endif
         }
 
-        ToolbarItem(placement: .primaryAction) {
-            if syncState == .scanning {
-                HStack(spacing: 12) {
-                    Button {
-                        stopScanning()
-                        isSearching = false
-                        cachedTargetFingerprint = nil
-                        discardPendingSeed()
-                        syncState = .idle
-                    } label: {
-                        Text("Cancel")
-                    }
-
-                    Button {
-                        stopScanning()
-                        startScanning()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
+        if syncState == .scanning {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    stopScanning()
+                    isSearching = false
+                    cachedTargetFingerprint = nil
+                    discardPendingSeed()
+                    syncState = .idle
+                } label: {
+                    Text("Cancel")
                 }
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    stopScanning()
+                    startScanning()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .accessibilityLabel(Text("Rescan"))
             }
         }
     }
@@ -522,8 +538,8 @@ extension BluetoothScannerView {
             .navigationTitle("Sync Options")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { showInfo = false }
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { showInfo = false }
                 }
             }
         }

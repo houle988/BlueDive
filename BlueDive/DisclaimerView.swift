@@ -11,6 +11,9 @@ struct DisclaimerView: View {
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
     @State private var agreed = false
     @State private var appeared = false
+    /// True when re-opened from Settings to re-read the disclaimer, as opposed to the
+    /// first-run gate — only the gate blocks dismissal until the user agrees.
+    var isReview: Bool = false
 
     var body: some View {
         ZStack {
@@ -35,6 +38,7 @@ struct DisclaimerView: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 40))
                                 .foregroundStyle(.orange)
+                                .accessibilityHidden(true)
                         }
 
                         // Title
@@ -98,6 +102,7 @@ struct DisclaimerView: View {
                             Image(systemName: agreed ? "checkmark.square.fill" : "square")
                                 .font(.title3)
                                 .foregroundStyle(agreed ? .cyan : .secondary)
+                                .accessibilityHidden(true)
 
                             Text("I understand that BlueDive is a dive log only and not a dive planning tool")
                                 .font(.subheadline)
@@ -107,6 +112,8 @@ struct DisclaimerView: View {
                         .padding(.horizontal, 24)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isToggle)
+                    .accessibilityValue(agreed ? Text("Checked") : Text("Not Checked"))
 
                     // Continue button
                     Button {
@@ -133,8 +140,29 @@ struct DisclaimerView: View {
             }
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 20)
+
+            if isReview {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                                // Floating close affordance in the review overlay: 16 pt of
+                                // padding around it and nothing else interactive nearby — the
+                                // overlay is the last sibling, so it wins the hit test. 44 × 44 pt.
+                                .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Close"))
+                    }
+                    Spacer()
+                }
+                .padding()
+            }
         }
-        .interactiveDismissDisabled()
+        .interactiveDismissDisabled(!isReview)
         .onAppear {
             withAnimation(.easeOut(duration: 0.5)) {
                 appeared = true
@@ -157,6 +185,7 @@ struct DisclaimerView: View {
                 Image(systemName: icon)
                     .font(.body)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -215,6 +244,7 @@ struct CalculatorSafetyWarningView: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 40))
                                 .foregroundStyle(.orange)
+                                .accessibilityHidden(true)
                         }
 
                         VStack(spacing: 6) {
@@ -274,6 +304,7 @@ struct CalculatorSafetyWarningView: View {
                             Image(systemName: agreed ? "checkmark.square.fill" : "square")
                                 .font(.title3)
                                 .foregroundStyle(agreed ? .cyan : .secondary)
+                                .accessibilityHidden(true)
 
                             Text("I understand these tools provide estimates only and do not replace proper dive training")
                                 .font(.subheadline)
@@ -283,6 +314,8 @@ struct CalculatorSafetyWarningView: View {
                         .padding(.horizontal, 24)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isToggle)
+                    .accessibilityValue(agreed ? Text("Checked") : Text("Not Checked"))
 
                     Button {
                         lastAcknowledgedCalculatorWarningVersion = appVersionBuild()
@@ -330,6 +363,7 @@ struct CalculatorSafetyWarningView: View {
                 Image(systemName: icon)
                     .font(.body)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {

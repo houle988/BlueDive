@@ -271,6 +271,7 @@ struct EditMenuStatsView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -315,6 +316,7 @@ struct EditMenuStatsView: View {
                                                     .foregroundStyle(.secondary)
                                             }
                                             .buttonStyle(.plain)
+                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), buddy)))
                                         }
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
@@ -343,6 +345,7 @@ struct EditMenuStatsView: View {
                                                 }
                                                 .buttonStyle(.plain)
                                                 .padding(.trailing, 6)
+                                                .accessibilityLabel(Text("Clear"))
                                             }
                                         }
                                         .onSubmit {
@@ -409,6 +412,7 @@ struct EditMenuStatsView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -443,6 +447,7 @@ struct EditMenuStatsView: View {
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.trailing, 6)
+                                            .accessibilityLabel(Text("Clear"))
                                         }
                                     }
                             }
@@ -470,6 +475,7 @@ struct EditMenuStatsView: View {
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.trailing, 6)
+                                            .accessibilityLabel(Text("Clear"))
                                         }
                                     }
                             }
@@ -497,6 +503,7 @@ struct EditMenuStatsView: View {
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.trailing, 6)
+                                            .accessibilityLabel(Text("Clear"))
                                         }
                                     }
                             }
@@ -540,6 +547,7 @@ struct EditMenuStatsView: View {
                                                         .foregroundStyle(.secondary)
                                                 }
                                                 .buttonStyle(.plain)
+                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), type)))
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
@@ -568,6 +576,7 @@ struct EditMenuStatsView: View {
                                                     }
                                                     .buttonStyle(.plain)
                                                     .padding(.trailing, 6)
+                                                    .accessibilityLabel(Text("Clear"))
                                                 }
                                             }
                                             .onSubmit {
@@ -632,6 +641,16 @@ struct EditMenuStatsView: View {
                                                     workingRating = star == workingRating ? 0 : star
                                                 }
                                             }
+                                            .accessibilityElement()
+                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%lld star", bundle: .forAppLanguage(), comment: "Star rating button label; tapping it sets the dive rating to this many stars"), star)))
+                                            .accessibilityAddTraits(star <= workingRating ? [.isButton, .isSelected] : .isButton)
+                                            // onTapGesture isn't reliably fired by VoiceOver's activate
+                                            // gesture; this makes double-tap set the rating.
+                                            .accessibilityAction {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    workingRating = star == workingRating ? 0 : star
+                                                }
+                                            }
                                     }
                                 }
                             }
@@ -661,6 +680,7 @@ struct EditMenuStatsView: View {
                                                     .foregroundStyle(.secondary)
                                             }
                                             .buttonStyle(.plain)
+                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), tag)))
                                         }
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
@@ -688,6 +708,7 @@ struct EditMenuStatsView: View {
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.trailing, 6)
+                                            .accessibilityLabel(Text("Clear"))
                                         }
                                     }
                                     .onSubmit {
@@ -771,6 +792,7 @@ struct EditMenuStatsView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 6)
+                        .accessibilityLabel(Text("Clear"))
                     }
                 }
         }
@@ -801,6 +823,7 @@ struct EditMenuStatsView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.trailing, 6)
+                            .accessibilityLabel(Text("Clear"))
                         }
                     }
             }
@@ -850,8 +873,7 @@ struct EditMenuStatsView: View {
                         workingMaxDepthText = ""
                         workingMaxDepth = 0
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        ClearButtonGlyph()
                     }
                     .buttonStyle(.plain)
                 }
@@ -873,8 +895,7 @@ struct EditMenuStatsView: View {
                         workingAvgDepthText = ""
                         workingAvgDepth = 0
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        ClearButtonGlyph()
                     }
                     .buttonStyle(.plain)
                 }
@@ -896,8 +917,7 @@ struct EditMenuStatsView: View {
                         workingDurationText = ""
                         workingDuration = 0
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        ClearButtonGlyph()
                     }
                     .buttonStyle(.plain)
                 }
@@ -940,8 +960,7 @@ struct EditMenuStatsView: View {
                                 Button {
                                     workingDiveNumber = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -982,11 +1001,19 @@ struct EditMenuStatsView: View {
                                                         removeBuddy(buddy)
                                                     }
                                                 } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
+                                                    // Chip grid: 12 pt horizontal / 6 pt vertical
+                                                    // chip padding, 8 pt between chips and 8 pt
+                                                    // between rows. Grows only half of each 8 pt
+                                                    // gap (4 pt) so neighbouring chips' targets
+                                                    // touch without overlapping. 36 × 34 pt.
+                                                    TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
+                                                        Image(systemName: "xmark.circle.fill")
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
+                                                    }
                                                 }
                                                 .buttonStyle(.plain)
+                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), buddy)))
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
@@ -1011,8 +1038,7 @@ struct EditMenuStatsView: View {
                                     Button {
                                         newBuddy = ""
                                     } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundStyle(.secondary)
+                                        ClearButtonGlyph()
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -1073,8 +1099,7 @@ struct EditMenuStatsView: View {
                                     workingWeights = nil
                                     workingWeightsText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -1105,11 +1130,17 @@ struct EditMenuStatsView: View {
                                                         removeDiveType(type)
                                                     }
                                                 } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
+                                                    // Same chip grid geometry as the buddy chips:
+                                                    // grows 4 pt (half of the 8 pt gap) toward the
+                                                    // next chip and the next row. 36 × 34 pt.
+                                                    TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
+                                                        Image(systemName: "xmark.circle.fill")
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
+                                                    }
                                                 }
                                                 .buttonStyle(.plain)
+                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), type)))
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
@@ -1134,8 +1165,7 @@ struct EditMenuStatsView: View {
                                     Button {
                                         newType = ""
                                     } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundStyle(.secondary)
+                                        ClearButtonGlyph()
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -1191,6 +1221,16 @@ struct EditMenuStatsView: View {
                                                 workingRating = star == workingRating ? 0 : star
                                             }
                                         }
+                                        .accessibilityElement()
+                                        .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%lld star", bundle: .forAppLanguage(), comment: "Star rating button label; tapping it sets the dive rating to this many stars"), star)))
+                                        .accessibilityAddTraits(star <= workingRating ? [.isButton, .isSelected] : .isButton)
+                                        // onTapGesture isn't reliably fired by VoiceOver's activate
+                                        // gesture; this makes double-tap set the rating.
+                                        .accessibilityAction {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                workingRating = star == workingRating ? 0 : star
+                                            }
+                                        }
                                 }
                             }
                         }
@@ -1213,11 +1253,17 @@ struct EditMenuStatsView: View {
                                                         removeTag(tag)
                                                     }
                                                 } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
+                                                    // Same chip grid geometry as the buddy chips:
+                                                    // grows 4 pt (half of the 8 pt gap) toward the
+                                                    // next chip and the next row. 36 × 34 pt.
+                                                    TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
+                                                        Image(systemName: "xmark.circle.fill")
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
+                                                    }
                                                 }
                                                 .buttonStyle(.plain)
+                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), tag)))
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
@@ -1241,8 +1287,7 @@ struct EditMenuStatsView: View {
                                 Button {
                                     newTag = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -1253,7 +1298,6 @@ struct EditMenuStatsView: View {
                                 }
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(.cyan)
                             .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
                     } header: {
@@ -1278,12 +1322,10 @@ struct EditMenuStatsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .foregroundStyle(.cyan)
                 }
             }
         }
@@ -1741,6 +1783,7 @@ struct EditSiteDetailsView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 6)
+                        .accessibilityLabel(Text("Clear"))
                     }
                 }
         }
@@ -1797,6 +1840,7 @@ struct EditSiteDetailsView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.trailing, 6)
+                            .accessibilityLabel(Text("Clear"))
                         }
                     }
             }
@@ -1929,8 +1973,7 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingLatitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -1949,8 +1992,7 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingLongitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -1968,8 +2010,7 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingAltitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2008,8 +2049,7 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingExitLatitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2028,8 +2068,7 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingExitLongitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2059,7 +2098,6 @@ struct EditSiteDetailsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
@@ -2278,12 +2316,10 @@ struct EditConditionsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .foregroundStyle(.cyan)
                 }
             }
         }
@@ -2345,6 +2381,8 @@ struct EditConditionsView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
                     }
                     .buttonStyle(.plain)
                 }
@@ -2420,6 +2458,7 @@ struct EditConditionsView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 6)
+                        .accessibilityLabel(Text("Clear"))
                     }
                 }
         }
@@ -2451,6 +2490,7 @@ struct EditConditionsView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.trailing, 6)
+                            .accessibilityLabel(Text("Clear"))
                         }
                     }
             }
@@ -2863,6 +2903,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -2893,6 +2934,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -2947,6 +2989,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -2975,6 +3018,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -3028,6 +3072,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -3060,6 +3105,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -3191,8 +3237,7 @@ struct EditGazView: View {
                                     workingCylinderSize = nil
                                     cylinderSizeText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3217,8 +3262,7 @@ struct EditGazView: View {
                                     workingWorkingPressure = nil
                                     workingPressureText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3265,8 +3309,7 @@ struct EditGazView: View {
                                     workingStartPressureText = ""
                                     workingStartPressure = nil
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3289,8 +3332,7 @@ struct EditGazView: View {
                                     workingEndPressureText = ""
                                     workingEndPressure = nil
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3338,8 +3380,7 @@ struct EditGazView: View {
                                     workingUsageStartTime = nil
                                     usageStartTimeText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3365,8 +3406,7 @@ struct EditGazView: View {
                                     workingUsageEndTime = nil
                                     usageEndTimeText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3387,7 +3427,6 @@ struct EditGazView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }

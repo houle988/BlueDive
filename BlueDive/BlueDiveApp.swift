@@ -117,6 +117,7 @@ struct BlueDiveApp: App {
                 MainTabView()
             }
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
+            .tint(.cyan)
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
             .environment(diveStore)
             .environment(syncMonitor)

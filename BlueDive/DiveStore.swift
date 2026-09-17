@@ -764,7 +764,7 @@ final class DiveStore {
             hasher.combine(dive.timestamp.timeIntervalSince1970.bitPattern)
 
             if dive.hasFish { withFish.insert(dive.id) }
-            for name in dive.seenFishNames { marineLifeSet.insert(name) }
+            for name in dive.seenFishNames where !name.isEmpty { marineLifeSet.insert(name) }
 
             yearSet.insert(dive.year)
             if !dive.gasType.isEmpty { gasTypeSet.insert(dive.gasType) }

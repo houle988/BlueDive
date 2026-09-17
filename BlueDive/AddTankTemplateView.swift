@@ -146,6 +146,8 @@ struct AddTankTemplateView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
+                                .clearButtonTapTarget()
+                                .accessibilityLabel(Text("Clear"))
                         }
                         .buttonStyle(.plain)
                     }
@@ -179,6 +181,8 @@ struct AddTankTemplateView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
+                                .clearButtonTapTarget()
+                                .accessibilityLabel(Text("Clear"))
                         }
                         .buttonStyle(.plain)
                     }
@@ -317,6 +321,7 @@ struct AddTankTemplateView: View {
                 .disabled(!isFormValid)
                 #if os(iOS)
                 .fontWeight(.semibold)
+                .buttonStyle(.borderedProminent)
                 #endif
         }
     }

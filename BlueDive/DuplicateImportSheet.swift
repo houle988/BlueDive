@@ -80,6 +80,21 @@ extension DuplicateMatchReason {
     }
 }
 
+extension DuplicateMatchReason.Confidence {
+    /// Spoken alternative to the colour-only confidence cue (green/orange/red) on duplicate-match rows.
+    var accessibilityLabel: String {
+        let bundle = Bundle.forAppLanguage()
+        switch self {
+        case .high:
+            return NSLocalizedString("High confidence match", bundle: bundle, value: "High confidence match", comment: "Accessibility label describing the confidence level of a detected duplicate dive")
+        case .medium:
+            return NSLocalizedString("Medium confidence match", bundle: bundle, value: "Medium confidence match", comment: "Accessibility label describing the confidence level of a detected duplicate dive")
+        case .low:
+            return NSLocalizedString("Low confidence match", bundle: bundle, value: "Low confidence match", comment: "Accessibility label describing the confidence level of a detected duplicate dive")
+        }
+    }
+}
+
 // MARK: - Duplicate Import Sheet
 
 struct DuplicateImportSheet: View {
@@ -152,6 +167,7 @@ struct DuplicateImportSheet: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 20))
                     .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: NSLocalizedString("Duplicates Detected", bundle: .forAppLanguage(), comment: "Header title for the duplicate import sheet"))
@@ -166,8 +182,12 @@ struct DuplicateImportSheet: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
                     .foregroundStyle(.secondary)
+                    // Only control in the header card: empty Spacer leading, 16 pt of card
+                    // padding on the other three sides. 44 × 44 pt.
+                    .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Close"))
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.primary.opacity(0.05)))
@@ -214,6 +234,7 @@ struct DuplicateImportSheet: View {
                     Image(systemName: "doc.text")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     Text(fileName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -236,6 +257,7 @@ struct DuplicateImportSheet: View {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
                 Text(verbatim: value)
                     .font(.title3.bold())
                     .foregroundStyle(.primary)
@@ -264,6 +286,7 @@ struct DuplicateImportSheet: View {
                 Image(systemName: "list.bullet.rectangle")
                     .font(.subheadline)
                     .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
                 Text(verbatim: NSLocalizedString("Already in your logbook", bundle: .forAppLanguage(), comment: "Section header for the list of duplicate dives"))
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
@@ -305,6 +328,7 @@ struct DuplicateImportSheet: View {
             HStack(spacing: 6) {
                 Image(systemName: showAllDuplicates ? "chevron.up" : "chevron.down")
                     .font(.caption.bold())
+                    .accessibilityHidden(true)
                 if showAllDuplicates {
                     Text(verbatim: NSLocalizedString("Show Less", bundle: .forAppLanguage(), comment: "Button to collapse the expanded duplicate list"))
                 } else {
@@ -346,6 +370,7 @@ struct DuplicateImportSheet: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(match.reason.tintColor)
                     .frame(width: 20)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(match.incomingSiteName.isEmpty
                          ? existing.siteName
@@ -380,6 +405,7 @@ struct DuplicateImportSheet: View {
                 Image(systemName: match.reason.icon)
                     .font(.caption2)
                     .foregroundStyle(match.reason.tintColor.opacity(0.8))
+                    .accessibilityLabel(Text(verbatim: match.reason.confidence.accessibilityLabel))
                 Text(verbatim: match.reason.label)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -413,6 +439,7 @@ struct DuplicateImportSheet: View {
                 Image(systemName: "sparkles")
                     .font(.subheadline)
                     .foregroundStyle(.green)
+                    .accessibilityHidden(true)
                 Text(verbatim: NSLocalizedString("New dives to import", bundle: .forAppLanguage(), comment: "Section header for the list of new dives that are not yet in the logbook"))
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
@@ -462,6 +489,7 @@ struct DuplicateImportSheet: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.green)
                     .frame(width: 20)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: dive.site?.name.isEmpty == false ? dive.site!.name : NSLocalizedString("Unknown site", bundle: .forAppLanguage(), comment: "Fallback site name when an imported dive has no site name"))
                         .font(.subheadline.weight(.semibold))
@@ -497,6 +525,7 @@ struct DuplicateImportSheet: View {
             Button(action: onSkipDuplicates) {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.shield.fill")
+                        .accessibilityHidden(true)
                     Text(verbatim: uniqueCount > 0
                          ? NSLocalizedString("Skip Duplicates and Import the Rest", bundle: .forAppLanguage(), comment: "Button: skip duplicate dives and import only new ones")
                          : NSLocalizedString("Skip — Nothing New to Import", bundle: .forAppLanguage(), comment: "Button: skip when all dives in the file are duplicates"))
@@ -515,6 +544,7 @@ struct DuplicateImportSheet: View {
             Button(action: onImportAll) {
                 HStack(spacing: 8) {
                     Image(systemName: "square.and.arrow.down.on.square.fill")
+                        .accessibilityHidden(true)
                     Text(verbatim: NSLocalizedString("Import All Anyway", bundle: .forAppLanguage(), comment: "Button: import all dives including duplicates")).fontWeight(.bold)
                 }
                 .font(.subheadline)

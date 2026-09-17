@@ -465,11 +465,18 @@ extension DiveDetailView {
                             isEditingPhotos.toggle()
                         }
                     } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.pink)
+                        // Header HStack spacing is 8 pt, so this grows only 4 pt (half the
+                        // gap) toward the adjacent Add menu and 12 pt leading into the empty
+                        // Spacer. Vertically: 16 pt of card padding above, 12 pt to the photo
+                        // strip below. 40 × 44 pt.
+                        TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.pink)
+                        }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Edit Photos"))
                 }
                 Menu {
                     Button {
@@ -483,11 +490,16 @@ extension DiveDetailView {
                         Label("Import from Files", systemImage: "folder")
                     }
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.pink)
+                    // Mirror of the Edit toggle: 4 pt toward it (half the 8 pt gap),
+                    // 12 pt trailing into the card's 16 pt padding. 40 × 44 pt.
+                    TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.pink)
+                    }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Add Photo"))
             }
 
             if dive.photosData?.isEmpty ?? true {
@@ -521,14 +533,24 @@ extension DiveDetailView {
                                             photoIndexToDelete = index
                                             showDeletePhotoAlert = true
                                         } label: {
-                                            Image(systemName: "minus.circle.fill")
-                                                .font(.system(size: 18))
-                                                .symbolRenderingMode(.palette)
-                                                .foregroundStyle(.white, .red)
+                                            // Badge sits at the photo's top-trailing corner,
+                                            // already 6 pt outside it. Grows 6 pt further
+                                            // trailing (the remaining half of the 12 pt gap to
+                                            // the next photo) and inward over the photo, whose
+                                            // own tap is disabled while editing. Not upward:
+                                            // the strip only has 4 pt of padding there and the
+                                            // section header's buttons are just above. 40 × 34 pt.
+                                            TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
+                                                Image(systemName: "minus.circle.fill")
+                                                    .font(.system(size: 18))
+                                                    .symbolRenderingMode(.palette)
+                                                    .foregroundStyle(.white, .red)
+                                            }
                                         }
                                         #if os(macOS)
                                         .buttonStyle(.plain)
                                         #endif
+                                        .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove Photo %lld", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes one photo, naming its position in the photo strip"), index + 1)))
                                         .offset(x: 6, y: -6)
                                         .transition(.scale.combined(with: .opacity))
                                     }
@@ -737,11 +759,17 @@ extension DiveDetailView {
                             isEditingEquipment.toggle()
                         }
                     } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.orange)
+                        // Three-control cluster (Edit / Gear group / Add) at 8 pt spacing:
+                        // each control grows only 4 pt (half a gap) toward its neighbour, so
+                        // the three targets tile without overlapping. 40 × 44 pt.
+                        TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.orange)
+                        }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Edit Equipment"))
                 }
                 if !gearGroups.isEmpty {
                     Menu {
@@ -753,16 +781,26 @@ extension DiveDetailView {
                             }
                         }
                     } label: {
-                        Image(systemName: "tray.2.fill")
+                        // Middle control of the cluster: neighbours on both sides, so 4 pt
+                        // (half the 8 pt gap) each way. 36 × 47 pt.
+                        TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 4) {
+                            Image(systemName: "tray.2.fill")
+                                .font(.title3)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .accessibilityLabel(Text("Apply Gear Group"))
+                }
+                Button(action: { showAddGear = true }) {
+                    // Last control of the cluster: 4 pt toward its neighbour, 12 pt
+                    // trailing into the card's 16 pt padding. 40 × 44 pt.
+                    TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
+                        Image(systemName: "plus.circle.fill")
                             .font(.title3)
                             .foregroundStyle(.orange)
                     }
                 }
-                Button(action: { showAddGear = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
-                }
+                .accessibilityLabel(Text("Add Equipment"))
             }
 
             if (dive.usedGear ?? []).isEmpty {
@@ -770,6 +808,7 @@ extension DiveDetailView {
                     Image(systemName: "tray")
                         .font(.title2)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
 
                     Text("No Equipment Recorded")
                         .font(.caption)
@@ -804,14 +843,20 @@ extension DiveDetailView {
                                         gearToDelete = gear
                                         showDeleteGearAlert = true
                                     } label: {
-                                        Image(systemName: "minus.circle.fill")
-                                            .font(.system(size: 18))
-                                            .symbolRenderingMode(.palette)
-                                            .foregroundStyle(.white, .red)
+                                        // Same geometry as the photo badge: 6 pt trailing (half
+                                        // of the 12 pt gap to the next chip), inward over the
+                                        // chip, and nothing upward. 40 × 34 pt.
+                                        TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
+                                            Image(systemName: "minus.circle.fill")
+                                                .font(.system(size: 18))
+                                                .symbolRenderingMode(.palette)
+                                                .foregroundStyle(.white, .red)
+                                        }
                                     }
                                     #if os(macOS)
                                     .buttonStyle(.plain)
                                     #endif
+                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), gear.name)))
                                     .offset(x: 6, y: -6)
                                     .transition(.scale.combined(with: .opacity))
                                 }
@@ -857,17 +902,27 @@ extension DiveDetailView {
                             isEditingMarineLife.toggle()
                         }
                     } label: {
-                        Image(systemName: "minus.circle.fill")
+                        // Header HStack spacing is 8 pt: 4 pt (half the gap) toward the Add
+                        // button, 12 pt leading into the empty Spacer. 40 × 44 pt.
+                        TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.cyan)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Edit Marine Life"))
+                }
+                Button(action: { showAddFish = true }) {
+                    // Mirror of the Edit toggle: 4 pt toward it, 12 pt trailing into the
+                    // card's 16 pt padding. 40 × 44 pt.
+                    TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
+                        Image(systemName: "plus.circle.fill")
                             .font(.title3)
                             .foregroundStyle(.cyan)
                     }
-                    .buttonStyle(.plain)
                 }
-                Button(action: { showAddFish = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.cyan)
-                }
+                .accessibilityLabel(Text("Add Marine Life"))
             }
 
             if (dive.seenFish ?? []).isEmpty {
@@ -930,14 +985,20 @@ extension DiveDetailView {
                                 fishToDelete = fish
                                 showDeleteFishAlert = true
                             } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.system(size: 18))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, .red)
+                                // Same geometry as the photo badge: 6 pt trailing (half of the
+                                // 12 pt gap to the next chip), inward over the chip, and
+                                // nothing upward. 40 × 34 pt.
+                                TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
+                                    Image(systemName: "minus.circle.fill")
+                                        .font(.system(size: 18))
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, .red)
+                                }
                             }
                             #if os(macOS)
                             .buttonStyle(.plain)
                             #endif
+                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), fish.name)))
                             .offset(x: 6, y: -6)
                             .transition(.scale.combined(with: .opacity))
                         }

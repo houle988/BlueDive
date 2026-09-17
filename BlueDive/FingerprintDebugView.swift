@@ -43,9 +43,8 @@ struct FingerprintDebugView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
             }
         }
@@ -80,6 +79,7 @@ struct FingerprintDebugView: View {
                             endPoint: .bottomTrailing
                         )
                     )
+                    .accessibilityHidden(true)
             }
             .padding(.top, 20)
 
@@ -116,6 +116,7 @@ struct FingerprintDebugView: View {
                 Image(systemName: "antenna.radiowaves.left.and.right.slash")
                     .font(.system(size: 40))
                     .foregroundStyle(.blue.opacity(0.35))
+                    .accessibilityHidden(true)
 
                 VStack(spacing: 6) {
                     Text("No fingerprints stored")
@@ -215,6 +216,7 @@ private struct FingerprintDebugRow: View {
                         Image(systemName: "number")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                         Group {
                             if record.serial.isEmpty {
                                 Text("No serial")
@@ -242,11 +244,16 @@ private struct FingerprintDebugRow: View {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
             .padding()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Set directly on the Button rather than on a descendant inside its label,
+        // since it's undocumented whether SwiftUI promotes a descendant's
+        // .accessibilityValue to the enclosing Button's own accessibility element.
+        .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
     }
 
     // MARK: Expanded detail
@@ -357,6 +364,7 @@ private struct FingerprintDebugRow: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
                     Text(err)
                         .foregroundStyle(.orange)
                 }

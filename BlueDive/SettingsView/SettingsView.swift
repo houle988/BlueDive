@@ -519,8 +519,7 @@ struct SettingsView: View {
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                    closeToolbarButton { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
                 }
             }
@@ -531,7 +530,7 @@ struct SettingsView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showDisclaimer) {
-                DisclaimerView()
+                DisclaimerView(isReview: true)
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -569,6 +568,7 @@ struct SettingsListRow: View {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -600,6 +600,7 @@ struct SectionHeaderModern: View {
                 Image(systemName: icon)
                     .font(.body)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
             }
 
             Text(title)
@@ -630,6 +631,7 @@ struct ModernToggleRow: View {
                 Image(systemName: icon)
                     .font(.body)
                     .foregroundStyle(iconColor)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -645,9 +647,8 @@ struct ModernToggleRow: View {
 
             Spacer()
 
-            Toggle("", isOn: $isOn)
+            Toggle(title, isOn: $isOn)
                 .labelsHidden()
-                .tint(.cyan)
         }
         .padding()
         .background(

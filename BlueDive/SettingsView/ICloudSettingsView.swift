@@ -21,6 +21,7 @@ struct ICloudSettingsView: View {
                             Image(systemName: syncMonitor.ckAccountStatusIcon)
                                 .foregroundStyle(syncMonitor.ckAccountStatusColor)
                                 .frame(width: 20)
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("iCloud account")
                                     .font(.subheadline)
@@ -41,7 +42,6 @@ struct ICloudSettingsView: View {
                         Toggle(isOn: $iCloudSyncEnabled) {
                             Label("iCloud sync", systemImage: "arrow.triangle.2.circlepath.icloud.fill")
                         }
-                        .tint(.cyan)
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))

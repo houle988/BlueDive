@@ -16,7 +16,6 @@ func calcBestMix(po2: Double, depthMetres: Double, isSeawater: Bool = true) -> B
 
 struct BestMixCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.locale) private var locale
     @AppStorage("lastAcknowledgedCalculatorWarningVersion") private var lastAcknowledgedCalculatorWarningVersion = ""
     @State private var showCalculatorWarning = false
 
@@ -60,24 +59,28 @@ struct BestMixCalculatorView: View {
                 inputSection
                 resultsSection
             }
+            .navigationTitle("Best Mix")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Best Mix")
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    closeToolbarButton { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showInfo = true } label: {
+                        Image(systemName: "info")
+                    }
+                    .accessibilityLabel(Text("Information"))
+                }
+                #else
+                ToolbarItem(placement: .automatic) {
                     Button { showInfo = true } label: {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.cyan)
                     }
+                    .accessibilityLabel(Text("Information"))
                 }
+                #endif
                 #if os(iOS)
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -145,7 +148,7 @@ struct BestMixCalculatorView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .percent
         formatter.maximumFractionDigits = 0
-        formatter.locale = locale
+        formatter.locale = Locale.current
         return formatter.string(from: NSNumber(value: Double(integer) / 100.0)) ?? "\(integer)%"
     }
 
@@ -227,6 +230,8 @@ struct BestMixCalculatorView: View {
                         Button { text.wrappedValue = "" } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
+                                .clearButtonTapTarget()
+                                .accessibilityLabel(Text("Clear"))
                         }
                         .buttonStyle(.plain)
                     }
@@ -286,6 +291,9 @@ struct BestMixCalculatorView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // A plain .navigationTitle truncates to one line; longer translations of
+                // this title (fr-CA, de) need to wrap, so this keeps the explicit two-line
+                // .principal title instead.
                 ToolbarItem(placement: .principal) {
                     Text("How Best Mix Works")
                         .font(.headline)
@@ -293,8 +301,8 @@ struct BestMixCalculatorView: View {
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { showInfo = false }
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { showInfo = false }
                 }
             }
         }

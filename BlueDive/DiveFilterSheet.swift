@@ -437,10 +437,19 @@ struct DiveFilterSheet: View {
                                             filterMarineLife.removeAll { $0 == species }
                                         }
                                     } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.caption)
+                                        // Chip: 10 pt horizontal / 6 pt vertical padding, 8 pt
+                                        // between chips. Grows 4 pt into the inter-chip gap
+                                        // (half of 8) and 8 pt above/below the chip, which stays
+                                        // clear of the 16 pt gap to the header picker and the
+                                        // 8 pt gap to the search field. 34 × 42 pt.
+                                        // No .foregroundStyle: inherits the chip's own tint.
+                                        TapTargetInset(top: 14, leading: 6, bottom: 14, trailing: 14) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.caption)
+                                        }
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), species)))
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
@@ -464,8 +473,7 @@ struct DiveFilterSheet: View {
                         Button {
                             withAnimation { marineLifeInput = "" }
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                            ClearButtonGlyph()
                         }
                         .buttonStyle(.plain)
                     }
@@ -650,10 +658,17 @@ struct DiveFilterSheet: View {
                                 maxDepthText   = ""
                             }
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                            // Sits after a Spacer in the status row: 16 pt of card padding
+                            // trailing, empty Spacer leading, 12 pt to the section header above
+                            // and to the min/max row below (whose fields add 8 pt of their own
+                            // padding). 44 × 44 pt.
+                            TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 12) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Clear"))
                     }
                 }
 
@@ -697,11 +712,17 @@ struct DiveFilterSheet: View {
                                 minDepthText   = ""
                                 filterMinDepth = 0
                             } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                // Same geometry as clearButtonTapTarget() (12 pt vertical +
+                                // trailing), spelled out so the caption-sized glyph is preserved
+                                // — ClearButtonGlyph() is body-sized and would enlarge it.
+                                TapTargetInset(top: 12, bottom: 12, trailing: 12) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(Text("Clear"))
                         }
                         Text(verbatim: prefs.depthUnit.symbol)
                             .font(.caption)
@@ -736,11 +757,17 @@ struct DiveFilterSheet: View {
                                 maxDepthText   = ""
                                 filterMaxDepth = 0
                             } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                // Same geometry as clearButtonTapTarget() (12 pt vertical +
+                                // trailing), spelled out so the caption-sized glyph is preserved
+                                // — ClearButtonGlyph() is body-sized and would enlarge it.
+                                TapTargetInset(top: 12, bottom: 12, trailing: 12) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(Text("Clear"))
                         }
                         Text(verbatim: prefs.depthUnit.symbol)
                             .font(.caption)
@@ -866,22 +893,10 @@ struct DiveFilterSheet: View {
     
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .confirmationAction) {
-            Button {
+        ToolbarItem(placement: .cancellationAction) {
+            closeToolbarButton {
                 dismiss()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text("Close")
-                }
-                .fontWeight(.semibold)
             }
-            #if os(iOS)
-            .buttonStyle(.borderedProminent)
-            .tint(.cyan)
-            #else
-            .foregroundStyle(.cyan)
-            #endif
         }
     }
 }

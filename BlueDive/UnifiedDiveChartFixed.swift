@@ -996,6 +996,114 @@ private struct StaticChartLayer: View, Equatable {
     }
 }
 
+// MARK: - Legend Row Types
+
+/// Small colour-swatch-plus-label rows used by `legendView`. Each used to be a plain
+/// function that inlined its HStack/Circle/Text tree at every call site; `legendView`
+/// calls up to 11 of them statically in one property (plus `ChartTooltipView.body` calls
+/// its own `TooltipRow` up to 13 times), the same class of bug that caused an
+/// `EXC_BAD_ACCESS` crash in `DiveDetailView+MenuTab.swift` (many modifier/view-tree sites
+/// combined in one `some View` property overflowed the stack during Swift's runtime
+/// value-witness copy of the resulting deeply-nested type). Packaging these as nominal
+/// structs — the same fix used there and for `ConditionRow` — stops each call's internal
+/// complexity at its own `body`'s boundary instead of letting it inline into the
+/// combined legend's compound type.
+struct LegendDot: View {
+    let color: Color
+    let text: Text
+
+    init(_ color: Color, _ text: LocalizedStringKey) {
+        self.color = color
+        self.text = Text(text)
+    }
+
+    init(_ color: Color, verbatim text: String) {
+        self.color = color
+        self.text = Text(verbatim: text)
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            text
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Rectangular swatch used for background-band legend entries (e.g. deco phase).
+/// `alpha` must be passed the alpha of the band actually drawn for that case, so the
+/// legend key isn't a different shade than what's on the chart.
+struct LegendBand: View {
+    let color: Color
+    let text: LocalizedStringKey
+    let alpha: Double
+
+    var body: some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color.opacity(alpha))
+                .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(color.opacity(0.6), lineWidth: 0.5))
+                .frame(width: 14, height: 8)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Circle swatch for gas switch legend entries.
+struct LegendGasChange: View {
+    let color: Color
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Diamond swatch used for point-marker legend entries (e.g. mandatory deco stops).
+struct LegendDiamond: View {
+    let color: Color
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Rectangle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+                .rotationEffect(.degrees(45))
+                .frame(width: 10, height: 10)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct MetricLegendRow: View {
+    let color: Color
+    let label: LocalizedStringKey
+    let range: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            (Text(label) + Text(": \(range)"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 // MARK: - UnifiedDiveChartOptimized
 
 /// Graphique unifié interactif pour le profil de plongée - VERSION OPTIMISÉE
@@ -1458,38 +1566,38 @@ struct UnifiedDiveChartOptimized: View {
             VStack(alignment: .leading, spacing: 6) {
                 if visibility.showDepth {
                     HStack(spacing: 8) {
-                        legendDot(.cyan, "Normal")
-                        legendDot(.orange, ascentRateLegendFast)
-                        legendDot(.red, ascentRateLegendDangerous)
+                        LegendDot(.cyan, "Normal")
+                        LegendDot(.orange, ascentRateLegendFast)
+                        LegendDot(.red, ascentRateLegendDangerous)
                     }
                 }
-                
+
                 if visibility.showTemperature && hasTemperatureData {
-                    metricLegendRow(color: .green, label: "Temperature", range: temperatureRange)
+                    MetricLegendRow(color: .green, label: "Temperature", range: temperatureRange)
                 }
-                
+
                 if visibility.showPressure && hasPressureData {
                     let tankIndices = chartTankIndicesForLegend
                     if tankIndices.count > 1 {
                         ForEach(tankIndices, id: \.self) { idx in
-                            metricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
+                            MetricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
                         }
                     } else {
-                        metricLegendRow(color: .red, label: "Pressure", range: pressureRange)
+                        MetricLegendRow(color: .red, label: "Pressure", range: pressureRange)
                     }
                 }
-                
+
                 if visibility.showNDL && hasNDLData {
-                    metricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
+                    MetricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
                 }
 
                 if visibility.showPPO2 && ppo2Available {
                     let sensorIndices = sensorPPO2Indices(for: dive)
                     if sensorIndices.isEmpty {
-                        legendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
+                        LegendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
                     } else {
                         ForEach(sensorIndices, id: \.self) { idx in
-                            legendDot(ppo2SensorColor(for: idx), verbatim: String(format: NSLocalizedString("S%ld PPO₂ (0–2 bar)", bundle: Bundle.forAppLanguage(), comment: "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)"), idx + 1))
+                            LegendDot(ppo2SensorColor(for: idx), verbatim: String(format: NSLocalizedString("S%ld PPO₂ (0–2 bar)", bundle: Bundle.forAppLanguage(), comment: "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)"), idx + 1))
                         }
                     }
                 }
@@ -1497,16 +1605,16 @@ struct UnifiedDiveChartOptimized: View {
                 if visibility.showDeco && hasDecoData {
                     HStack(spacing: 8) {
                         if hasCeilingData {
-                            legendBand(.orange, "Deco ceiling", alpha: 0.4)
+                            LegendBand(color: .orange, text: "Deco ceiling", alpha: 0.4)
                         } else {
-                            legendBand(.orange, "Deco obligation", alpha: 0.2)
+                            LegendBand(color: .orange, text: "Deco obligation", alpha: 0.2)
                         }
-                        legendDiamond(.orange, "Mandatory stop")
+                        LegendDiamond(color: .orange, text: "Mandatory stop")
                     }
                 }
 
                 if hasGasChangeData {
-                    legendGasChange(.brown, "Gas switch")
+                    LegendGasChange(color: .brown, text: "Gas switch")
                 }
             }
         }
@@ -1526,74 +1634,6 @@ struct UnifiedDiveChartOptimized: View {
             return "Dangerous (≥59 ft/min)"
         } else {
             return "Dangerous (≥18 m/min)"
-        }
-    }
-    
-    private func legendDot(_ color: Color, _ text: LocalizedStringKey) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func legendDot(_ color: Color, verbatim text: String) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(verbatim: text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Rectangular swatch used for background-band legend entries (e.g. deco phase).
-    /// `alpha` must be passed the alpha of the band actually drawn for that case, so the
-    /// legend key isn't a different shade than what's on the chart.
-    private func legendBand(_ color: Color, _ text: LocalizedStringKey, alpha: Double) -> some View {
-        HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color.opacity(alpha))
-                .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(color.opacity(0.6), lineWidth: 0.5))
-                .frame(width: 14, height: 8)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Circle swatch for gas switch legend entries.
-    private func legendGasChange(_ color: Color, _ text: LocalizedStringKey) -> some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Diamond swatch used for point-marker legend entries (e.g. mandatory deco stops).
-    private func legendDiamond(_ color: Color, _ text: LocalizedStringKey) -> some View {
-        HStack(spacing: 4) {
-            Rectangle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-                .rotationEffect(.degrees(45))
-                .frame(width: 10, height: 10)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-    
-    private func metricLegendRow(color: Color, label: LocalizedStringKey, range: String) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            (Text(label) + Text(": \(range)"))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
     }
     
@@ -1838,32 +1878,32 @@ struct ChartTooltipView: View {
             Divider().background(Color.white.opacity(0.25))
 
             // Depth — always shown
-            tooltipRow(icon: "arrow.down.to.line", color: .cyan, label: depthLabel)
+            TooltipRow(icon: "arrow.down.to.line", color: .cyan, label: depthLabel)
 
             // Ascent speed — always shown below depth
             if let speedLabel = ascentSpeedLabel {
-                tooltipRow(icon: ascentSpeedIcon, color: ascentSpeedColor, label: speedLabel)
+                TooltipRow(icon: ascentSpeedIcon, color: ascentSpeedColor, label: speedLabel)
             }
 
             // Temperature — shown if enabled and data available
             if visibility.showTemperature, let tLabel = temperatureLabel {
-                tooltipRow(icon: "thermometer.medium", color: .green, label: tLabel)
+                TooltipRow(icon: "thermometer.medium", color: .green, label: tLabel)
             }
 
             // Pressure — shown if enabled and data available
             if visibility.showPressure {
                 if let perTank = perTankPressureLabels {
                     ForEach(perTank, id: \.index) { entry in
-                        tooltipRow(icon: "gauge.with.needle.fill", color: .red, label: "T\(entry.index + 1): \(entry.label)")
+                        TooltipRow(icon: "gauge.with.needle.fill", color: .red, label: "T\(entry.index + 1): \(entry.label)")
                     }
                 } else if let pLabel = pressureLabel {
-                    tooltipRow(icon: "gauge.with.needle.fill", color: .red, label: pLabel)
+                    TooltipRow(icon: "gauge.with.needle.fill", color: .red, label: pLabel)
                 }
             }
             
             // NDL — shown if enabled and data available
             if visibility.showNDL, let nLabel = ndlLabel {
-                tooltipRow(icon: "timer", color: .ndlYellow, label: nLabel)
+                TooltipRow(icon: "timer", color: .ndlYellow, label: nLabel)
             }
 
             // PPO2 — shown if enabled; voted row always shown, then per-sensor rows for CCR
@@ -1874,11 +1914,11 @@ struct ChartTooltipView: View {
                             : p < DiveProfileEvent.ppo2WarnThreshold ? .green
                             : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
                             : .red
-                        tooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
+                        TooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
                     }
                     ForEach(sensorData.keys.sorted(), id: \.self) { idx in
                         if let p = sensorData[idx] {
-                            tooltipRow(icon: "lungs.fill", color: ppo2SensorColor(for: idx),
+                            TooltipRow(icon: "lungs.fill", color: ppo2SensorColor(for: idx),
                                        label: String(format: NSLocalizedString("S%ld: ", bundle: Bundle.forAppLanguage(), comment: "Tooltip label prefix for per-O2-sensor PPO2 in the dive chart; %ld = sensor number (1-based)"), idx + 1) + p.localizedString(decimals: 2, minDecimals: 2) + " bar")
                         }
                     }
@@ -1887,27 +1927,27 @@ struct ChartTooltipView: View {
                         : p < DiveProfileEvent.ppo2WarnThreshold ? .green
                         : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
                         : .red
-                    tooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
+                    TooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
                 }
             }
 
             // Deco event — shown if enabled and this sample carries a deco obligation.
             if visibility.showDeco && point.events.contains(.decoStop) {
-                tooltipRow(icon: "exclamationmark.triangle.fill", color: .orange, label: decoDiveLabel)
+                TooltipRow(icon: "exclamationmark.triangle.fill", color: .orange, label: decoDiveLabel)
                 // When on a mandatory stop point, show depth + duration on a sub-row.
                 if let detail = decoStopDetail {
-                    tooltipRow(icon: "smallcircle.filled.circle", color: .orange.opacity(0.7), label: detail)
+                    TooltipRow(icon: "smallcircle.filled.circle", color: .orange.opacity(0.7), label: detail)
                 }
             }
 
             // Deco ceiling — shown if enabled and the computer reported one at this point.
             if visibility.showDeco, let cLabel = ceilingLabel {
-                tooltipRow(icon: "arrow.up.to.line", color: .orange, label: cLabel)
+                TooltipRow(icon: "arrow.up.to.line", color: .orange, label: cLabel)
             }
 
             // Gas switch — always shown when present (gas change markers are always on).
             if let gasName = gasChangeName {
-                tooltipRow(icon: "cylinder.fill", color: .brown, label: String(format: NSLocalizedString("→ %@", bundle: .forAppLanguage(), comment: "Gas switch tooltip row: arrow followed by gas mix name"), gasName))
+                TooltipRow(icon: "cylinder.fill", color: .brown, label: String(format: NSLocalizedString("→ %@", bundle: .forAppLanguage(), comment: "Gas switch tooltip row: arrow followed by gas mix name"), gasName))
             }
         }
         .padding(.horizontal, 10)
@@ -1924,7 +1964,21 @@ struct ChartTooltipView: View {
         )
     }
 
-    private func tooltipRow(icon: String, color: Color, label: String) -> some View {
+}
+
+/// A labelled icon row inside `ChartTooltipView`. Used to be a plain function inlining
+/// its HStack/Image/Text tree at every call site; `ChartTooltipView.body` calls it up to
+/// 13 times statically (depth, ascent rate, temperature, per-tank/voted pressure, NDL,
+/// PPO₂ (voted + per-sensor), deco event + detail, deco ceiling, gas switch) — see the
+/// `LegendDot` doc comment above for why that risks the same stack-overflow crash class
+/// this app has already hit once. Packaging it as a nominal struct bounds the complexity
+/// at its own `body`.
+struct TooltipRow: View {
+    let icon: String
+    let color: Color
+    let label: String
+
+    var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 11))

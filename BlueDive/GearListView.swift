@@ -194,7 +194,7 @@ struct GearListView: View {
                 ZStack {
                     Color.black.opacity(0.6).ignoresSafeArea()
                     VStack(spacing: 16) {
-                        ProgressView().tint(.cyan).scaleEffect(1.5)
+                        ProgressView().scaleEffect(1.5)
                         Text("Importing...")
                             .font(.headline)
                             .foregroundStyle(.primary)
@@ -419,7 +419,8 @@ struct GearListView: View {
         HStack {
             Image(systemName: gearOverdue.isEmpty ? "exclamationmark.triangle.fill" : "xmark.shield.fill")
                 .foregroundStyle(bannerColor)
-            
+                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: 2) {
                 Group {
                     if gearOverdue.isEmpty {
@@ -488,6 +489,7 @@ struct GearListView: View {
                     HStack {
                         if let gearCategory = GearCategory.allCases.first(where: { $0.rawValue == category }) {
                             Image(systemName: gearCategory.icon)
+                                .accessibilityHidden(true)
                             Text(gearCategory.localizedName)
                         } else {
                             Text(category)
@@ -569,16 +571,17 @@ struct GearListView: View {
                 .help(showInactive
                       ? NSLocalizedString("Hide Inactive Equipment", bundle: Bundle.forAppLanguage(), comment: "")
                       : NSLocalizedString("Show Inactive Equipment", bundle: Bundle.forAppLanguage(), comment: ""))
+                .accessibilityLabel(showInactive ? Text("Hide Inactive Equipment") : Text("Show Inactive Equipment"))
             }
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
                 showAddGear = true
             } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+                Image(systemName: "plus")
                     .foregroundStyle(.cyan)
             }
+            .accessibilityLabel(Text("Add Equipment"))
         }
         ToolbarItem(placement: .primaryAction) {
             Menu {
@@ -601,13 +604,13 @@ struct GearListView: View {
                     Label("Import", systemImage: "square.and.arrow.down")
                 }
             } label: {
-                Image(systemName: "ellipsis.circle.fill")
-                    .font(.title3)
+                Image(systemName: "ellipsis")
                     .foregroundStyle(.cyan)
             }
+            .accessibilityLabel(Text("More"))
         }
     }
-    
+
     // MARK: - Actions
     
     private func deleteGear(items: [Gear], at offsets: IndexSet) {
@@ -1054,7 +1057,8 @@ struct GearRow: View {
                     Circle()
                         .fill(gear.isInactive ? .red : .green)
                         .frame(width: 8, height: 8)
-                    
+                        .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
+
                     Text(gear.name)
                         .font(.headline)
                         .foregroundStyle(gear.isInactive ? .secondary : .primary)
@@ -1077,6 +1081,7 @@ struct GearRow: View {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(indicatorColor)
                     .font(.title3)
+                    .accessibilityLabel(indicatorColor == .red ? Text("Service Overdue") : Text("Service Due Soon"))
             }
         }
         .padding(.vertical, 8)
@@ -1137,7 +1142,8 @@ struct CategoryFilterChip: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption)
-                
+                    .accessibilityHidden(true)
+
                 Text(LocalizedStringKey(title))
                     .font(.subheadline)
                     .fontWeight(isSelected ? .semibold : .regular)
@@ -1168,5 +1174,6 @@ struct CategoryFilterChip: View {
             .animation(.easeInOut(duration: 0.2), value: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

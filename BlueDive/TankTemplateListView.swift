@@ -86,16 +86,16 @@ struct TankTemplateListView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Done") { dismiss() }
+            closeToolbarButton { dismiss() }
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
                 showAddTemplate = true
             } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+                Image(systemName: "plus")
                     .foregroundStyle(.cyan)
             }
+            .accessibilityLabel(Text("Add Tank Template"))
         }
     }
 

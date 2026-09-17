@@ -92,6 +92,8 @@ struct MoveDiverSheet: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.secondary)
+                                        .clearButtonTapTarget()
+                                        .accessibilityLabel(Text("Clear"))
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -115,11 +117,9 @@ struct MoveDiverSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.cyan)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Move") { save() }
-                        .foregroundStyle(.cyan)
                         .disabled(isUnchanged)
                 }
             }

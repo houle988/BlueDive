@@ -86,16 +86,16 @@ struct GearGroupListView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Done") { dismiss() }
+            closeToolbarButton { dismiss() }
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
                 showAddGearGroup = true
             } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+                Image(systemName: "plus")
                     .foregroundStyle(.cyan)
             }
+            .accessibilityLabel(Text("Add Gear Group"))
         }
     }
 
@@ -152,6 +152,7 @@ struct GearGroupRow: View {
                         Circle()
                             .fill(item.isInactive ? .red : .green)
                             .frame(width: 6, height: 6)
+                            .accessibilityLabel(item.isInactive ? Text("Inactive") : Text("Active"))
                         Text(item.name)
                             .font(.caption)
                             .foregroundStyle(item.isInactive ? .secondary : .primary)

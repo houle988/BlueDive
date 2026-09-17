@@ -149,8 +149,8 @@ struct DocumentsView: View {
                         Text("No certifications or insurance were found for the selected diver.")
                     } actions: {
                         VStack(spacing: 12) {
-                            addDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
-                            addDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                            AddDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                            AddDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
                         }
                         .padding(.horizontal, 40)
                     }
@@ -202,7 +202,7 @@ struct DocumentsView: View {
                         if selectedSection != .insurance && !certifications.isEmpty && (selectedSection == .certifications || filteredCertifications.isEmpty || !groupedCertifications.isEmpty) {
                             if selectedSection == .all {
                                 Section {
-                                    domainHeaderRow(
+                                    DomainHeaderRow(
                                         title: "Certifications",
                                         icon: "graduationcap.fill",
                                         color: .cyan
@@ -215,7 +215,7 @@ struct DocumentsView: View {
 
                             if filteredCertifications.isEmpty {
                                 Section {
-                                    inlineDomainEmptyRow(
+                                    InlineDomainEmptyRow(
                                         systemImage: "graduationcap",
                                         message: "No certifications for the selected diver."
                                     )
@@ -223,7 +223,7 @@ struct DocumentsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                addDocumentSection(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                                AddDocumentSection(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
                             } else if !groupedCertifications.isEmpty {
                                 ForEach(groupedCertifications, id: \.key) { agency, certs in
                                     Section(isExpanded: sectionBinding("cert:" + agency)) {
@@ -239,7 +239,7 @@ struct DocumentsView: View {
                                 }
                             } else {
                                 Section {
-                                    inlineDomainEmptyRow(
+                                    InlineDomainEmptyRow(
                                         systemImage: "checkmark.seal",
                                         message: "All certifications have expired."
                                     )
@@ -254,7 +254,7 @@ struct DocumentsView: View {
                         if selectedSection != .certifications && !insurances.isEmpty && (selectedSection == .insurance || filteredInsurances.isEmpty || !groupedInsurances.isEmpty) {
                             if selectedSection == .all {
                                 Section {
-                                    domainHeaderRow(
+                                    DomainHeaderRow(
                                         title: "Insurance",
                                         icon: "shield.fill",
                                         color: .blue
@@ -267,7 +267,7 @@ struct DocumentsView: View {
 
                             if filteredInsurances.isEmpty {
                                 Section {
-                                    inlineDomainEmptyRow(
+                                    InlineDomainEmptyRow(
                                         systemImage: "shield",
                                         message: "No insurance for the selected diver."
                                     )
@@ -275,7 +275,7 @@ struct DocumentsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                addDocumentSection(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                                AddDocumentSection(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
                             } else if !groupedInsurances.isEmpty {
                                 ForEach(groupedInsurances, id: \.key) { insurer, policies in
                                     let displayName = insurer.isEmpty
@@ -294,7 +294,7 @@ struct DocumentsView: View {
                                 }
                             } else {
                                 Section {
-                                    inlineDomainEmptyRow(
+                                    InlineDomainEmptyRow(
                                         systemImage: "shield",
                                         message: "All insurance records have expired."
                                     )
@@ -308,7 +308,7 @@ struct DocumentsView: View {
                         // ── SECTION-SPECIFIC EMPTY STATES ─────────────────────────
                         if selectedSection == .certifications && certifications.isEmpty {
                             Section {
-                                inlineDomainEmptyRow(
+                                InlineDomainEmptyRow(
                                     systemImage: "graduationcap",
                                     message: "No certifications"
                                 )
@@ -316,12 +316,12 @@ struct DocumentsView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                            addDocumentSection(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                            AddDocumentSection(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
                         }
 
                         if selectedSection == .insurance && insurances.isEmpty {
                             Section {
-                                inlineDomainEmptyRow(
+                                InlineDomainEmptyRow(
                                     systemImage: "shield",
                                     message: "No insurance recorded"
                                 )
@@ -329,7 +329,7 @@ struct DocumentsView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                            addDocumentSection(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                            AddDocumentSection(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
                         }
                     }
                     // .sidebar is required for Section(isExpanded:) collapse/expand to function
@@ -367,8 +367,8 @@ struct DocumentsView: View {
             }
             .toolbar {
                 if let onClose {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Close") { onClose() }
+                    ToolbarItem(placement: .cancellationAction) {
+                        closeToolbarButton { onClose() }
                     }
                 }
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
@@ -381,10 +381,10 @@ struct DocumentsView: View {
                             Label("Add Insurance", systemImage: "shield.fill")
                         }
                     } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "plus")
                             .foregroundStyle(.cyan)
                     }
+                    .accessibilityLabel(Text("Add Document"))
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -420,10 +420,10 @@ struct DocumentsView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "ellipsis")
                             .foregroundStyle(.cyan)
                     }
+                    .accessibilityLabel(Text("More"))
                 }
             }
             // --- Certification Sheets ---
@@ -664,60 +664,6 @@ struct DocumentsView: View {
         )
     }
 
-    // MARK: - Domain Header Row
-
-    private func domainHeaderRow(title: LocalizedStringKey, icon: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-            Text(title)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundStyle(.primary)
-            Spacer()
-        }
-        .padding(.vertical, 4)
-    }
-
-    // MARK: - Add Document Button
-
-    private func addDocumentButton(label: LocalizedStringKey, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(label, systemImage: icon)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 12).fill(color))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func addDocumentSection(label: LocalizedStringKey, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Section {
-            addDocumentButton(label: label, icon: icon, color: color, action: action)
-        }
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-    }
-
-    // MARK: - Inline Empty Domain Row
-
-    private func inlineDomainEmptyRow(systemImage: String, message: LocalizedStringKey) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
-                .font(.body)
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 12)
-    }
-
     // MARK: - Expiry Alert Sections
 
     private var certExpiredAlertSection: some View {
@@ -804,7 +750,7 @@ struct DocumentsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: headerIcon).foregroundStyle(accentColor)
+                Image(systemName: headerIcon).foregroundStyle(accentColor).accessibilityHidden(true)
                 Text(headerText).font(.headline).foregroundStyle(.primary)
                 Spacer()
                 Label(domainTitle, systemImage: domainIcon)
@@ -828,7 +774,7 @@ struct DocumentsView: View {
                             }
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(accentColor.opacity(0.15)))
@@ -851,11 +797,13 @@ struct DocumentsView: View {
                     .foregroundStyle(.cyan.opacity(0.5))
                     .scaleEffect(emptyAppeared ? 1.0 : 0.5)
                     .opacity(emptyAppeared ? 1.0 : 0.0)
+                    .accessibilityHidden(true)
                 Image(systemName: "shield.fill")
                     .font(.system(size: 40))
                     .foregroundStyle(.blue.opacity(0.5))
                     .scaleEffect(emptyAppeared ? 1.0 : 0.5)
                     .opacity(emptyAppeared ? 1.0 : 0.0)
+                    .accessibilityHidden(true)
             }
 
             Text("No Documents")
@@ -874,11 +822,11 @@ struct DocumentsView: View {
                 .offset(y: emptyAppeared ? 0 : 10)
 
             VStack(spacing: 12) {
-                addDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                AddDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
                     .scaleEffect(emptyAppeared ? 1.0 : 0.8)
                     .opacity(emptyAppeared ? 1.0 : 0.0)
 
-                addDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                AddDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
                     .scaleEffect(emptyAppeared ? 1.0 : 0.8)
                     .opacity(emptyAppeared ? 1.0 : 0.0)
             }
@@ -1186,6 +1134,92 @@ struct DocumentsView: View {
     }
 }
 
+// MARK: - Documents List Row Types
+
+/// Each of these used to be a plain function on `DocumentsView` that inlined its
+/// HStack/Text/Image tree at every call site. `DocumentsView.body` combines up to 14
+/// static calls across them (spread over several conditionally-rendered `Section`s in one
+/// `List`) — the same class of bug that caused two confirmed `EXC_BAD_ACCESS` crashes
+/// elsewhere in this app (too many inlined view trees combined in one `some View`
+/// property overflow the stack during Swift's runtime value-witness copy, since neither a
+/// `List`/`Section` nor a plain computed-property boundary stops that accumulation — only
+/// a nominal `struct`'s own `body` does). Packaging these as nominal structs bounds each
+/// one's complexity at its own `body`.
+struct DomainHeaderRow: View {
+    let title: LocalizedStringKey
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(.primary)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct AddDocumentButton: View {
+    let label: LocalizedStringKey
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 12).fill(color))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct AddDocumentSection: View {
+    let label: LocalizedStringKey
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Section {
+            AddDocumentButton(label: label, icon: icon, color: color, action: action)
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+    }
+}
+
+struct InlineDomainEmptyRow: View {
+    let systemImage: String
+    let message: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+                .font(.body)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 12)
+    }
+}
+
 // MARK: - Certification Card
 
 struct CertificationCard: View {
@@ -1262,6 +1296,7 @@ struct CertificationCard: View {
             Circle()
                 .fill(showExpired ? Color.red : (certification.isExpiringSoon ? Color.orange : Color.green))
                 .frame(width: 12, height: 12)
+                .accessibilityLabel(showExpired ? Text("Expired") : (certification.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
@@ -1370,15 +1405,16 @@ struct CertificationDetailView: View {
             .navigationTitle(certification.name)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    closeToolbarButton { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .destructiveAction) {
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
                     } label: {
                         Image(systemName: "trash")
                     }
+                    .accessibilityLabel(Text("Delete Certification"))
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -1388,7 +1424,6 @@ struct CertificationDetailView: View {
                     }
                     #if os(iOS)
                     .buttonStyle(.borderedProminent)
-                    .tint(.cyan)
                     #endif
                 }
             }
@@ -1600,7 +1635,6 @@ struct AddCertificationView: View {
                                 Divider().overlay(Color.primary.opacity(0.06))
 
                                 Toggle("Has an expiration date", isOn: $hasExpiration.animation(.easeInOut(duration: 0.2)))
-                                    .tint(.cyan)
                                     .foregroundStyle(.primary)
 
                                 if hasExpiration {
@@ -1673,19 +1707,12 @@ struct AddCertificationView: View {
                         .keyboardShortcut(.escape, modifiers: [])
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button {
+                    Button(isEditing ? LocalizedStringKey("Save") : LocalizedStringKey("Add")) {
                         saveCertification()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text(isEditing ? LocalizedStringKey("Save") : LocalizedStringKey("Add"))
-                        }
-                        .fontWeight(.semibold)
                     }
                     .disabled(!isValid)
                     #if os(iOS)
                     .buttonStyle(.borderedProminent)
-                    .tint(.cyan)
                     #endif
                 }
             }
@@ -1725,6 +1752,7 @@ struct AddCertificationView: View {
                 Image(systemName: icon)
                     .font(.subheadline)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -1753,6 +1781,8 @@ struct AddCertificationView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
                     }
                     .buttonStyle(.plain)
                 }
@@ -1785,6 +1815,7 @@ struct AddCertificationView: View {
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)

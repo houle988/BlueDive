@@ -461,7 +461,6 @@ struct ContentView: View {
                         if importProgressTotal > 0 {
                             ProgressView(value: Double(importProgressCurrent), total: Double(importProgressTotal))
                                 .progressViewStyle(.linear)
-                                .tint(.cyan)
                                 .frame(width: 220)
                             Text(String(format: NSLocalizedString("%@ of %@ dives imported", bundle: .forAppLanguage(), comment: "Progress label during dive import showing current and total count"), Double(importProgressCurrent).localizedString(decimals: 0), Double(importProgressTotal).localizedString(decimals: 0)))
                                 .font(.headline)
@@ -469,7 +468,7 @@ struct ContentView: View {
                                 .monospacedDigit()
                                 .transaction { $0.animation = nil }
                         } else {
-                            ProgressView().tint(.cyan).scaleEffect(1.5)
+                            ProgressView().scaleEffect(1.5)
                             Text("Importing...")
                                 .font(.headline)
                                 .foregroundStyle(.primary)
@@ -499,7 +498,6 @@ struct ContentView: View {
                         if exportProgressTotal > 0 {
                             ProgressView(value: Double(exportProgressCurrent), total: Double(exportProgressTotal))
                                 .progressViewStyle(.linear)
-                                .tint(.cyan)
                                 .frame(width: 220)
                             Text(String(format: NSLocalizedString("%@ of %@ dives exported", bundle: .forAppLanguage(), comment: "Progress label during dive export showing current and total count"),
                                  Double(exportProgressCurrent).localizedString(decimals: 0),
@@ -509,7 +507,7 @@ struct ContentView: View {
                                 .monospacedDigit()
                                 .transaction { $0.animation = nil }
                         } else {
-                            ProgressView().tint(.cyan).scaleEffect(1.5)
+                            ProgressView().scaleEffect(1.5)
                             Text("Exporting...")
                                 .font(.headline)
                                 .foregroundStyle(.primary)
@@ -804,6 +802,25 @@ struct ContentView: View {
     private var cloudSyncToolbarItem: some View {
         Button { showSyncStatusPopover = true } label: { cloudSyncIcon }
             .help("iCloud Sync Status")
+            .accessibilityLabel(Text("iCloud Sync Status"))
+            // Set directly on the Button rather than on a descendant inside its label,
+            // since it's undocumented whether SwiftUI promotes a descendant's
+            // .accessibilityValue to the enclosing Button's own accessibility element.
+            .accessibilityValue(cloudSyncAccessibilityValue)
+    }
+
+    private var cloudSyncAccessibilityValue: Text {
+        if !iCloudSyncEnabled {
+            return Text("iCloud sync is turned off")
+        } else if syncMonitor.isSyncing {
+            return Text("Syncing")
+        } else if syncMonitor.hasError {
+            return Text("Sync error")
+        } else if let d = syncMonitor.lastSyncDate, Date().timeIntervalSince(d) < 300 {
+            return Text("Recently synced")
+        } else {
+            return Text("Idle")
+        }
     }
 
     @ViewBuilder
@@ -845,6 +862,7 @@ struct ContentView: View {
                     .foregroundStyle(.cyan)
             }
             .help("Settings")
+            .accessibilityLabel(Text("Settings"))
         }
         ToolbarItem(placement: .topBarLeading) {
             cloudSyncToolbarItem
@@ -861,6 +879,7 @@ struct ContentView: View {
                     .foregroundStyle(.cyan)
             }
             .help("Settings")
+            .accessibilityLabel(Text("Settings"))
         }
         ToolbarItem(placement: .navigation) {
             cloudSyncToolbarItem
@@ -880,28 +899,33 @@ struct ContentView: View {
                     .foregroundStyle(.cyan)
             }
             .help("Diver Profile")
+            .accessibilityLabel(Text("Diver Profile"))
 
             Button(action: { showFileImporter = true }) {
                 Image(systemName: "doc.badge.plus")
                     .foregroundStyle(.cyan)
             }
             .help("Import Dives")
+            .accessibilityLabel(Text("Import Dives"))
 
             Button(action: addManualDive) {
                 Image(systemName: "plus.circle.fill")
                     .foregroundStyle(.cyan)
             }
             .help("Add Dive Manually")
+            .accessibilityLabel(Text("Add Dive Manually"))
 
             Button(action: { showScannerSheet = true }) {
                 Image(systemName: "antenna.radiowaves.left.and.right")
                     .foregroundStyle(.cyan)
             }
             .help("Sync Bluetooth Dive Computer")
+            .accessibilityLabel(Text("Sync Bluetooth Dive Computer"))
 
             if !dives.isEmpty {
                 exportMenuButton
                     .help("Export")
+                    .accessibilityLabel(Text("Export"))
             }
 
             Button(action: { showMergeDivesSheet = true }) {
@@ -909,6 +933,7 @@ struct ContentView: View {
                     .foregroundStyle(.cyan)
             }
             .help("Merge two dives")
+            .accessibilityLabel(Text("Merge two dives"))
             .disabled(dives.count < 2)
 
             Button(action: { showFilterSheet = true }) {
@@ -926,6 +951,10 @@ struct ContentView: View {
                 }
             }
             .help("Filter Dives")
+            .accessibilityLabel(store.activeFilterCount == 0
+                ? Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
+                : Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), store.activeFilterCount))
+            )
 
             if !dives.isEmpty {
                 Button(action: { showDeleteSheet = true }) {
@@ -933,81 +962,90 @@ struct ContentView: View {
                         .foregroundStyle(.red)
                 }
                 .help("Delete a dive")
+                .accessibilityLabel(Text("Delete a dive"))
             }
         }
         #else
         // iOS: + menu (Add/Import/Bluetooth) + Filter + overflow menu.
+        // Each control is its own ToolbarItem (not a shared HStack) so the system's
+        // toolbar-overflow layout can manage/overflow them independently instead of
+        // clipping the whole group when the window is narrow (e.g. Mac Designed for iPad).
         ToolbarItem(placement: .primaryAction) {
-            HStack(spacing: 16) {
-                Menu {
-                    Button(action: addManualDive) {
-                        Label("Add a dive (Manual)", systemImage: "plus.circle")
-                    }
-                    Button(action: { showScannerSheet = true }) {
-                        Label("Add a dive (Bluetooth)", systemImage: "antenna.radiowaves.left.and.right")
-                    }
-                    Button(action: { showFileImporter = true }) {
-                        Label("Import", systemImage: "doc.badge.plus")
-                    }
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.cyan)
+            Menu {
+                Button(action: addManualDive) {
+                    Label("Add a dive (Manual)", systemImage: "plus.circle")
                 }
-
-                Button(action: { store.showFilterSheet = true }) {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(store.activeFilterCount > 0 ? .orange : .cyan)
-                        if store.activeFilterCount > 0 {
-                            Text("\(store.activeFilterCount)")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.black)
-                                .padding(3)
-                                .background(Color.orange, in: Circle())
-                                .offset(x: 6, y: -6)
-                        }
-                    }
+                Button(action: { showScannerSheet = true }) {
+                    Label("Add a dive (Bluetooth)", systemImage: "antenna.radiowaves.left.and.right")
                 }
+                Button(action: { showFileImporter = true }) {
+                    Label("Import", systemImage: "doc.badge.plus")
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .foregroundStyle(.cyan)
+            }
+            .accessibilityLabel(Text("Add Dive"))
+        }
 
-                Menu {
-                    Button(action: { showProfile = true }) {
-                        Label("Profile", systemImage: "person.circle.fill")
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: { store.showFilterSheet = true }) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .foregroundStyle(store.activeFilterCount > 0 ? .orange : .cyan)
+                    if store.activeFilterCount > 0 {
+                        Text("\(store.activeFilterCount)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.black)
+                            .padding(3)
+                            .background(Color.orange, in: Circle())
+                            .offset(x: 6, y: -6)
                     }
-                    Divider()
-                    Button(action: { showDashboard = true }) {
-                        Label("Stats", systemImage: "chart.bar.fill")
-                    }
-                    Button(action: { showDiveTrips = true }) {
-                        Label("My Trips", systemImage: "map.fill")
-                    }
-                    Button(action: { showCalendarHeatmap = true }) {
-                        Label("Calendar", systemImage: "calendar")
-                    }
-                    Button(action: { showMarineLife = true }) {
-                        Label("Marine Life", systemImage: "fish.fill")
-                    }
-                    if !dives.isEmpty {
-                        Divider()
-                        Button(action: exportAllDivesToXML) {
-                            Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
-                        }
-                        Button(action: exportAllDivesToUDDF) {
-                            Label("Export All Dives to UDDF", systemImage: "water.waves")
-                        }
-                    }
-                    if dives.count >= 2 {
-                        Button(action: { showMergeDivesSheet = true }) {
-                            Label("Merge Dives", systemImage: "arrow.triangle.merge")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.cyan)
                 }
             }
+            .accessibilityLabel(store.activeFilterCount == 0
+                ? Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
+                : Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), store.activeFilterCount))
+            )
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button(action: { showProfile = true }) {
+                    Label("Profile", systemImage: "person.circle.fill")
+                }
+                Divider()
+                Button(action: { showDashboard = true }) {
+                    Label("Stats", systemImage: "chart.bar.fill")
+                }
+                Button(action: { showDiveTrips = true }) {
+                    Label("My Trips", systemImage: "map.fill")
+                }
+                Button(action: { showCalendarHeatmap = true }) {
+                    Label("Calendar", systemImage: "calendar")
+                }
+                Button(action: { showMarineLife = true }) {
+                    Label("Marine Life", systemImage: "fish.fill")
+                }
+                if !dives.isEmpty {
+                    Divider()
+                    Button(action: exportAllDivesToXML) {
+                        Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                    Button(action: exportAllDivesToUDDF) {
+                        Label("Export All Dives to UDDF", systemImage: "water.waves")
+                    }
+                }
+                if dives.count >= 2 {
+                    Button(action: { showMergeDivesSheet = true }) {
+                        Label("Merge Dives", systemImage: "arrow.triangle.merge")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundStyle(.cyan)
+            }
+            .accessibilityLabel(Text("More"))
         }
         #endif
     }
@@ -1021,6 +1059,7 @@ struct ContentView: View {
                 .foregroundStyle(.cyan)
         }
         .help("Calculators")
+        .accessibilityLabel(Text("Calculators"))
         .popover(isPresented: $showCalculatorsPopover, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 0) {
                 toolsPopoverButton("Minimum Gas", icon: "wrench.and.screwdriver.fill") {
@@ -1056,6 +1095,7 @@ struct ContentView: View {
             Image(systemName: "wrench.and.screwdriver.fill")
                 .foregroundStyle(.cyan)
         }
+        .accessibilityLabel(Text("Calculators"))
         #endif
     }
 

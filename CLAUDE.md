@@ -94,6 +94,55 @@ BlueDive supports running as an iPad app on Apple Silicon Macs via "Designed for
 - **Date pickers**: Use `.adaptiveDatePickerStyle()` (defined in `CrossPlatformImage.swift`) instead of `.datePickerStyle(.compact)`. This shows a full graphical calendar on Mac and compact style on iPhone/iPad.
 - **Platform detection**: Use `ProcessInfo.processInfo.isiOSAppOnMac` to detect "Designed for iPad" mode at runtime. Note that `#if os(iOS)` is `true` in this mode.
 
+## Liquid Glass & HIG Toolbar Compliance
+
+Under iOS/macOS 26+ "Liquid Glass," toolbar buttons render inside a translucent glass capsule. Follow these rules for any toolbar, sheet, or button work.
+
+### Root-Cause Rule: No Local Tint on Bare Toolbar Buttons
+
+A local `.tint(...)` placed directly on a bare toolbar `Button` (one **not** using `.buttonStyle(.borderedProminent)` or another explicit button style) fills the Liquid Glass capsule **background**, not just the label — this is what caused toolbar buttons to render white/wrong instead of the app's cyan brand color, especially on macOS "Designed for iPad." This is the single most important rule in this section; when in doubt, grep the whole tree for `.tint(` and check each hit against the categories below.
+
+- The app's brand color (cyan) is supplied ambiently by two mechanisms kept deliberately together: the `AccentColor` asset catalog (`Assets.xcassets/AccentColor.colorset` and `BlueDiveWidgetExtension/Assets.xcassets/AccentColor.colorset`, both populated with explicit light/dark sRGB cyan values) and a root `.tint(.cyan)` on `BlueDiveApp`'s `WindowGroup` content. `.tint()` is always respected in-process; `AccentColor` is what reaches out-of-process system UI (share sheets, pickers) that `.tint()` can't. Do not remove either as "redundant" — they cover different surfaces.
+- On a bare toolbar button, color only the `Image` inside the label via `.foregroundStyle(...)` (glyph color) — never the button itself via `.tint()`.
+- `.buttonStyle(.borderedProminent)` buttons may legitimately carry a local `.tint()` to explicitly set their fill color — a different, correct mechanism from the bare-button case. Example: `DiveDetailView+EditSheets.swift` gives each edit tab's Save/Add buttons a `.tint()` matching that tab's brand color (`.blue` for Site Details, `.green` for Gas, etc. — see the tab color mapping in `DiveDetailView.swift`). Never strip these as "redundant cyan cleanup" — verify against the tab color mapping before touching any tint in that file.
+- Documented exception: `MapUserLocationButton` (a native MapKit control, used in `DiveMapView.swift`) requires an explicit `.tint()` to pick up the brand color — this is not the anti-pattern.
+
+### Toolbar Button Placement
+
+- Close/Cancel (dismiss without saving) → `.cancellationAction` (leading edge). Use the `closeToolbarButton(action:)` helper (`CrossPlatformImage.swift`) for standard dismiss buttons — it uses `Button(role: .close, action:)` on iOS 26+/macOS 26+ (the system's "doesn't lose progress" affordance, distinct from `.cancel`), falling back to a plain "Close" button pre-26.
+- Done/Save (confirm) → `.confirmationAction` (trailing edge).
+- Exception: when a sheet's *sole* toolbar action is a non-destructive "Done" with no separate save step (e.g. a simple list-picker sheet), `.confirmationAction` (trailing) is still HIG-correct — matches Apple's own simple-list-picker convention even though it's the only button.
+- Destructive actions (delete) → `.destructiveAction`. This placement is platform-divergent by Apple's own design: iOS/tvOS/watchOS render it on the **trailing** edge; macOS/Mac Catalyst render it on the **leading** edge (next to Cancel/Close) with a cautionary appearance. Do not "fix" this by moving it elsewhere on macOS — it's documented, intentional behavior.
+- Only one prominent/primary action per sheet.
+- Any `@available` gate added around `role: .close` or another 26+ API must list every platform the code actually ships on (`iOS 26.0, macOS 26.0, *`) — omitting one is a compile error waiting for the first build on that platform.
+
+### Icon Simplification (iOS / shared code only)
+
+- The Liquid Glass capsule already provides a visual container — do not additionally wrap toolbar icons in `.circle`/`.circle.fill` SF Symbol variants (use `plus`, `ellipsis`, `info`, not `plus.circle.fill`, `ellipsis.circle.fill`, `info.circle`) inside `#if os(iOS)` or unguarded/shared code.
+- Never apply this simplification inside a `#if os(macOS)` branch — see "macOS Branch Preservation" below.
+- Icon+text (`HStack { Image; Text }`) toolbar labels collapse to icon-only on regular-width idiom (iPad/Mac) by Apple's documented default; no modifier prevents this. If the text must always stay visible, drop the icon entirely rather than fighting the collapse.
+
+### Toolbar Layout & Accessibility
+
+- Never group multiple interactive controls inside one `HStack` that itself sits inside a single `ToolbarItem`. Under SDK 26/27 toolbar-overflow layout this silently clips every control but the first when space is constrained (e.g. Mac "Designed for iPad" at narrower widths). Give each control its own `ToolbarItem`/`ToolbarItemGroup` entry.
+- `.topBarLeading`/`.topBarTrailing` are iOS-only placements — never use them unguarded on code that also compiles for macOS; gate with `#if os(iOS) ... #else .automatic ... #endif` or use a cross-platform placement (`.cancellationAction`, `.confirmationAction`, `.destructiveAction`, `.primaryAction`, `.automatic`).
+- Every icon-only toolbar control (a `Button`/`Menu` whose label is only an `Image`, no text) must carry `.accessibilityLabel(Text("..."))`, translated per the Localization workflow. When the label depends on state (e.g. a show/hide toggle), write two literal `Text("Key A")`/`Text("Key B")` branches — never a ternary or variable passed as the key (`Text(condition ? LocalizedStringKey("A") : LocalizedStringKey("B"))` bypasses Xcode's literal-string extraction).
+
+### macOS Branch Preservation
+
+BlueDive plans a native macOS release. Every `#if os(macOS)` / `#else` branch is intentional and must be preserved exactly, even when it looks like unfinished HIG cleanup (older icon style, different button placement, different string casing) — do not simplify, re-tint, reword, or restructure code inside a macOS branch as a side effect of an iOS-focused fix, and do not delete a macOS branch's content when applying a fix meant only for iOS/shared code. Verify the true boundaries with `grep -n "#if os\|#else\|#endif"` before editing near one — do not assume a diff hunk stayed within its intended platform.
+
+There is currently no real macOS build target: "My Mac (Designed for iPad)" still compiles as `#if os(iOS)`, and a native "My Mac" destination is reported incompatible with the current scheme. Consequently, Xcode's string catalog extractor can never pick up a *brand-new* string that exists only inside a `#if os(macOS)` block through the normal build-and-extract workflow (see Localization above). Such a key requires `Scripts/xcstrings.py set --create` as a deliberate, narrow exception to the "don't use `--create`" rule — accept the one-time move-diff risk this defers until a real macOS target is eventually built.
+
+### What NOT To Do
+
+- Never add a local `.tint()` to a bare (non-`.buttonStyle`) toolbar `Button` — color the `Image` inside the label with `.foregroundStyle()` instead, or rely on the ambient `AccentColor`.
+- Never remove a `.tint()` from a `.buttonStyle(.borderedProminent)` button without checking whether it encodes intentional per-section/per-tab color-coding.
+- Never place multiple controls in one `HStack` inside a single `ToolbarItem`.
+- Never use `.topBarLeading`/`.topBarTrailing` without a macOS-compatible fallback.
+- Never simplify a circle-bordered icon, reword a string, or otherwise edit content inside a `#if os(macOS)` branch as an incidental side effect of an iOS fix.
+- Never add a new `@available` gate for a 26+ API without including every platform the code target actually ships on.
+
 ## App Group & Widget Data Sharing
 
 BlueDive shares data with the widget extension via an App Group. When a change affects data that the widget reads, update the App Group store as well — do not only update the main app's local storage. Only touch App Group storage when the change is directly relevant to widget-displayed data; do not write to the App Group for data the widget does not consume.
