@@ -2,28 +2,69 @@ import SwiftUI
 import SwiftData
 import WidgetKit
 
-// MARK: - DiveSortOrder
+// MARK: - Dive Sorting
 
-enum DiveSortOrder: String, CaseIterable, Identifiable {
-    case dateDesc       = "dateDesc"
-    case dateAsc        = "dateAsc"
-    case depthDesc      = "depthDesc"
-    case durationDesc   = "durationDesc"
-    case diveNumberDesc = "diveNumberDesc"
-    case diveNumberAsc  = "diveNumberAsc"
+/// The field the dive list is sorted by. Direction is a separate axis
+/// (`DiveSortDirection`) so every field supports both orders — see issue #77.
+enum DiveSortField: String, CaseIterable, Identifiable {
+    case date       = "date"
+    case depth      = "depth"
+    case duration   = "duration"
+    case diveNumber = "diveNumber"
 
     var id: String { rawValue }
 
     var localizedTitle: LocalizedStringKey {
         switch self {
-        case .dateDesc:       return "Date ↓"
-        case .dateAsc:        return "Date ↑"
-        case .depthDesc:      return "Depth ↓"
-        case .durationDesc:   return "Duration ↓"
-        case .diveNumberDesc: return "Dive # ↓"
-        case .diveNumberAsc:  return "Dive # ↑"
+        case .date:       return "Date"
+        case .depth:      return "Depth"
+        case .duration:   return "Duration"
+        case .diveNumber: return "Dive #"
         }
     }
+
+    /// The direction a field starts in when it is newly selected. Descending for every
+    /// field, which reproduces the pre-toggle defaults exactly: newest, deepest,
+    /// longest and highest-numbered first.
+    var defaultDirection: DiveSortDirection { .descending }
+}
+
+enum DiveSortDirection: String, CaseIterable {
+    case ascending  = "Asc"
+    case descending = "Desc"
+
+    mutating func toggle() {
+        self = (self == .ascending) ? .descending : .ascending
+    }
+}
+
+/// A sort field paired with a direction.
+///
+/// Deliberately a struct rather than one enum case per field/direction combination:
+/// adding a field does not double the case count, the filter sheet can render one
+/// toggleable row per field, and reversing is `direction.toggle()` rather than an
+/// 8-entry mapping table. It must stay a *struct* — as a class, an in-place
+/// `direction` mutation would not reassign `DiveStore.sortOrder` and `@Observable`
+/// would never notify `ContentView`'s `onChange(of: store.sortOrder)`. Never
+/// hand-write `==` — the synthesized memberwise version comparing both `field` and
+/// `direction` is what keeps the date-descending fast path (below) from firing for
+/// any other order.
+struct DiveSortOrder: Equatable, Hashable {
+    var field: DiveSortField
+    var direction: DiveSortDirection
+
+    // Named to match the previous enum's cases. In practice only `.dateDesc` has
+    // an existing call site (`= .dateDesc`, `== .dateDesc`, `.constant(.dateDesc)`)
+    // — the rest are kept as convenience constants for the other seven
+    // field/direction combinations, e.g. for future direct construction or tests.
+    static let dateDesc       = DiveSortOrder(field: .date,       direction: .descending)
+    static let dateAsc        = DiveSortOrder(field: .date,       direction: .ascending)
+    static let depthDesc      = DiveSortOrder(field: .depth,      direction: .descending)
+    static let depthAsc       = DiveSortOrder(field: .depth,      direction: .ascending)
+    static let durationDesc   = DiveSortOrder(field: .duration,   direction: .descending)
+    static let durationAsc    = DiveSortOrder(field: .duration,   direction: .ascending)
+    static let diveNumberDesc = DiveSortOrder(field: .diveNumber, direction: .descending)
+    static let diveNumberAsc  = DiveSortOrder(field: .diveNumber, direction: .ascending)
 }
 
 // MARK: - DiveStore
@@ -696,16 +737,63 @@ final class DiveStore {
             return true
         }
 
-        switch sortOrder {
-        case .dateDesc:     break // @Query already delivers dives sorted by timestamp descending
-        case .dateAsc:      result.sort { $0.timestamp < $1.timestamp }
-        case .depthDesc:    result.sort { $0.displayMaxDepth > $1.displayMaxDepth }
-        case .durationDesc: result.sort { $0.duration > $1.duration }
-        case .diveNumberDesc: result.sort { ($0.diveNumber ?? 0) > ($1.diveNumber ?? 0) }
-        case .diveNumberAsc:
-            result.sort {
-                switch ($0.diveNumber, $1.diveNumber) {
-                case let (a?, b?): return a < b
+        // Sorting. Switching on the (field, direction) tuple keeps every combination
+        // compiler-checked for exhaustiveness. `.diveNumber` collapses both
+        // directions into one arm because it shares a single nil-last comparator
+        // with a flipped `<`/`>` check. `.depth` collapses both directions for a
+        // different reason: so both share the one decorate step below.
+        switch (sortOrder.field, sortOrder.direction) {
+        case (.date, .descending):
+            break // @Query already delivers dives sorted by timestamp descending
+        case (.date, .ascending):
+            result.sort { $0.timestamp < $1.timestamp }
+
+        // Depth is compared in *display* units so the ordering matches the numbers
+        // shown in the rows, and so a library mixing metric and imperial imports
+        // orders correctly. The depth-range filter above compares displayMaxDepth
+        // for the same reason. Decorate-sort-undecorate: displayMaxDepth is a
+        // computed property (unit conversion plus a UserPreferences read), so it's
+        // evaluated once per dive here rather than repeatedly inside the comparator.
+        case (.depth, let direction):
+            var decorated = result.map { ($0, $0.displayMaxDepth) }
+            switch direction {
+            case .descending:
+                decorated.sort { $0.1 > $1.1 }
+            case .ascending:
+                // maxDepth is a non-optional Double defaulting to 0 for dives with
+                // no recorded depth — treat 0 as "unrecorded" and sort those last,
+                // matching the diveNumber policy below, so they don't bury real
+                // shallow dives.
+                decorated.sort { lhs, rhs in
+                    switch (lhs.1 == 0, rhs.1 == 0) {
+                    case (false, false): return lhs.1 < rhs.1
+                    case (true, false):  return false
+                    case (false, true):  return true
+                    case (true, true):   return false
+                    }
+                }
+            }
+            result = decorated.map { $0.0 }
+
+        case (.duration, .descending):
+            result.sort { $0.duration > $1.duration }
+        case (.duration, .ascending):
+            // Same "0 means unrecorded, sort last" policy as depth ascending above.
+            result.sort { lhs, rhs in
+                switch (lhs.duration == 0, rhs.duration == 0) {
+                case (false, false): return lhs.duration < rhs.duration
+                case (true, false):  return false
+                case (false, true):  return true
+                case (true, true):   return false
+                }
+            }
+
+        // Dives without a dive number sort last in *both* directions, so the
+        // unnumbered tail never splits the numbered run.
+        case (.diveNumber, let direction):
+            result.sort { lhs, rhs in
+                switch (lhs.diveNumber, rhs.diveNumber) {
+                case let (a?, b?): return direction == .ascending ? a < b : a > b
                 case (_?, nil):    return true
                 case (nil, _?):    return false
                 case (nil, nil):   return false

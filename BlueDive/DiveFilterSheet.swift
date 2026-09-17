@@ -117,49 +117,16 @@ struct DiveFilterSheet: View {
     private var sortSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             FilterSectionHeader(title: "Sort", icon: "arrow.up.arrow.down")
-            
+
             VStack(spacing: 8) {
-                ForEach(DiveSortOrder.allCases) { order in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            sortOrder = order
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: order.icon)
-                                .foregroundStyle(sortOrder == order ? .cyan : .secondary)
-                                .frame(width: 24)
-                            
-                            Text(order.localizedTitle)
-                                .fontWeight(sortOrder == order ? .semibold : .regular)
-                                .foregroundStyle(sortOrder == order ? .primary : .secondary)
-                            
-                            Spacer()
-                            
-                            if sortOrder == order {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.cyan)
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                        }
-                        .padding()
-                        .background(
-                            sortOrder == order ?
-                            Color.cyan.opacity(0.15) : Color.platformSecondaryBackground
-                        )
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(sortOrder == order ? Color.cyan : Color.clear, lineWidth: 2)
-                        )
-                    }
-                    .buttonStyle(.plain)
+                ForEach(DiveSortField.allCases) { field in
+                    SortFieldRow(field: field, sortOrder: $sortOrder)
                 }
             }
         }
         .filterCardStyle()
     }
-    
+
     @ViewBuilder
     private var filterSections: some View {
         yearFilterSection
@@ -901,6 +868,117 @@ struct DiveFilterSheet: View {
     }
 }
 
+// MARK: - Sort Field Row
+
+/// One row in the Sort card. Tapping an unselected field selects it (descending by
+/// default); tapping the already-selected field reverses its direction. A brief
+/// pulse on the direction arrow, replayed every time a field becomes selected
+/// (including on first appearance for whichever field starts selected), hints that
+/// it can be tapped again to reverse — a plain arrow glyph doesn't convey that on
+/// its own. Extracted to its own view (rather than a helper method on
+/// `DiveFilterSheet`) specifically so the pulse can own `@State` local to its row.
+struct SortFieldRow: View {
+    let field: DiveSortField
+    @Binding var sortOrder: DiveSortOrder
+
+    @State private var isPulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isSelected: Bool { sortOrder.field == field }
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if isSelected {
+                    // Tapping the active field reverses it rather than being a no-op.
+                    sortOrder.direction.toggle()
+                } else {
+                    sortOrder = DiveSortOrder(field: field, direction: field.defaultDirection)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: field.icon)
+                    .foregroundStyle(isSelected ? .cyan : .secondary)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+
+                Text(field.localizedTitle)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+
+                if isSelected {
+                    // Direction as a symbol, not a text suffix: adds no translatable
+                    // *visible* string (direction is announced via the accessibility
+                    // value below) and keeps the four field labels reusing existing
+                    // keys. The square-arrow glyph gives the direction a standing
+                    // "tappable" look that survives after the pulse (below) finishes.
+                    // Cyan matches the row's own selection border.
+                    Image(systemName: sortOrder.direction.symbolName)
+                        .font(.title.weight(.light))
+                        .foregroundStyle(.cyan)
+                        .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.pulse, options: .repeat(2), isActive: isPulsing)
+                        .accessibilityHidden(true)
+                        .transition(.scale.combined(with: .opacity))
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.cyan)
+                        .accessibilityHidden(true)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .padding()
+            .background(
+                isSelected ? Color.cyan.opacity(0.15) : Color.platformSecondaryBackground
+            )
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.cyan : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(field.localizedTitle))
+        .accessibilityValue(accessibilityValueText)
+        .accessibilityHint(
+            isSelected
+                ? Text("Reverses the sort direction")
+                : Text("Sorts dives by this field")
+        )
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .onChange(of: isSelected, initial: true) { _, newValue in
+            guard newValue else { return }
+            // Reset unconditionally (even under Reduce Motion) so a stale `true`
+            // from an earlier selection can never re-arm the pulse later.
+            isPulsing = false
+            guard !reduceMotion else { return }
+            // Force a false→true edge so the pulse replays every time this row
+            // becomes selected, not just the first time — including right now via
+            // `initial: true`, for whichever field starts out selected.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(50))
+                isPulsing = true
+            }
+        }
+    }
+
+    /// Two literal `Text` branches — never a ternary over `LocalizedStringKey` —
+    /// so Xcode's extractor sees both keys.
+    private var accessibilityValueText: Text {
+        guard isSelected else { return Text(verbatim: "") }
+        if sortOrder.direction == .ascending {
+            return Text("Ascending", comment: "Accessibility value: the dive list's sort direction is ascending (low to high) — not a diver ascending in the water column.")
+        } else {
+            return Text("Descending", comment: "Accessibility value: the dive list's sort direction is descending (high to low) — not a diver descending in the water column.")
+        }
+    }
+}
+
 // MARK: - Filter Section Header
 
 struct FilterSectionHeader: View {
@@ -977,23 +1055,30 @@ extension View {
     }
 }
 
-// MARK: - DiveSortOrder Extension
+// MARK: - Dive Sort Icons
 
-extension DiveSortOrder {
+extension DiveSortField {
+    /// Identifies the *field*, not the sort direction (direction is shown
+    /// separately by `DiveSortDirection.symbolName` in the same row). `.depth` is
+    /// the one exception that looks like a directional arrow: it reuses the
+    /// app-wide depth glyph (see `FilterSectionHeader(title: "Depth range", icon:
+    /// "arrow.down.to.line")` above) rather than introducing a second depth icon,
+    /// so Depth + ascending can render alongside an up-pointing direction arrow.
     var icon: String {
         switch self {
-        case .dateDesc:
-            return "arrow.down"
-        case .dateAsc:
-            return "arrow.up"
-        case .depthDesc:
-            return "arrow.down.to.line"
-        case .durationDesc:
-            return "clock.arrow.2.circlepath"
-        case .diveNumberDesc:
-            return "arrow.down.to.line"
-        case .diveNumberAsc:
-            return "arrow.up.to.line"
+        case .date:       return "calendar"
+        case .depth:      return "arrow.down.to.line"
+        case .duration:   return "clock"
+        case .diveNumber: return "number"
+        }
+    }
+}
+
+extension DiveSortDirection {
+    var symbolName: String {
+        switch self {
+        case .ascending:  return "arrow.up.square"
+        case .descending: return "arrow.down.square"
         }
     }
 }
