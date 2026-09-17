@@ -455,7 +455,7 @@ extension DiveDetailView {
     var photosSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Photos", systemImage: "photo.fill")
+                Label("Photos", systemImage: "photo")
                     .font(.headline)
                     .foregroundStyle(.pink)
                 Spacer()
@@ -470,7 +470,7 @@ extension DiveDetailView {
                         // Spacer. Vertically: 16 pt of card padding above, 12 pt to the photo
                         // strip below. 40 × 44 pt.
                         TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
-                            Image(systemName: "minus.circle.fill")
+                            Image(systemName: "minus.circle")
                                 .font(.title3)
                                 .foregroundStyle(.pink)
                         }
@@ -493,7 +493,7 @@ extension DiveDetailView {
                     // Mirror of the Edit toggle: 4 pt toward it (half the 8 pt gap),
                     // 12 pt trailing into the card's 16 pt padding. 40 × 44 pt.
                     TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus.circle")
                             .font(.title3)
                             .foregroundStyle(.pink)
                     }
@@ -749,7 +749,7 @@ extension DiveDetailView {
     var equipmentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Equipment Used", systemImage: "wrench.and.screwdriver.fill")
+                Label("Equipment Used", systemImage: "wrench.and.screwdriver")
                     .font(.headline)
                     .foregroundStyle(.orange)
                 Spacer()
@@ -763,7 +763,7 @@ extension DiveDetailView {
                         // each control grows only 4 pt (half a gap) toward its neighbour, so
                         // the three targets tile without overlapping. 40 × 44 pt.
                         TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
-                            Image(systemName: "minus.circle.fill")
+                            Image(systemName: "minus.circle")
                                 .font(.title3)
                                 .foregroundStyle(.orange)
                         }
@@ -777,14 +777,14 @@ extension DiveDetailView {
                             Button {
                                 applyGearGroup(group)
                             } label: {
-                                Label("\(group.name) (\(group.gearCount))", systemImage: "tray.2.fill")
+                                Label("\(group.name) (\(group.gearCount))", systemImage: "tray.2")
                             }
                         }
                     } label: {
                         // Middle control of the cluster: neighbours on both sides, so 4 pt
                         // (half the 8 pt gap) each way. 36 × 47 pt.
                         TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 4) {
-                            Image(systemName: "tray.2.fill")
+                            Image(systemName: "tray.2")
                                 .font(.title3)
                                 .foregroundStyle(.orange)
                         }
@@ -795,7 +795,7 @@ extension DiveDetailView {
                     // Last control of the cluster: 4 pt toward its neighbour, 12 pt
                     // trailing into the card's 16 pt padding. 40 × 44 pt.
                     TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus.circle")
                             .font(.title3)
                             .foregroundStyle(.orange)
                     }
@@ -892,7 +892,7 @@ extension DiveDetailView {
     var marineSightingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Marine Life Seen", systemImage: "fish.fill")
+                Label("Marine Life Seen", systemImage: "fish")
                     .font(.headline)
                     .foregroundStyle(.cyan)
                 Spacer()
@@ -905,7 +905,7 @@ extension DiveDetailView {
                         // Header HStack spacing is 8 pt: 4 pt (half the gap) toward the Add
                         // button, 12 pt leading into the empty Spacer. 40 × 44 pt.
                         TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
-                            Image(systemName: "minus.circle.fill")
+                            Image(systemName: "minus.circle")
                                 .font(.title3)
                                 .foregroundStyle(.cyan)
                         }
@@ -917,7 +917,7 @@ extension DiveDetailView {
                     // Mirror of the Edit toggle: 4 pt toward it, 12 pt trailing into the
                     // card's 16 pt padding. 40 × 44 pt.
                     TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus.circle")
                             .font(.title3)
                             .foregroundStyle(.cyan)
                     }
@@ -1050,7 +1050,7 @@ extension DiveDetailView {
             DetailCard(
                 title: "COMPUTER",
                 value: dive.computerName.isEmpty ? "—" : dive.computerName,
-                icon: "cpu.fill",
+                icon: "cpu",
                 color: .blue
             )
 
@@ -1066,7 +1066,7 @@ extension DiveDetailView {
                 value: depthMax,
                 specifier: "%.1f",
                 unit: depthSymbol,
-                icon: "arrow.down.circle.fill",
+                icon: "arrow.down.circle",
                 color: .blue
             )
 
@@ -1082,7 +1082,7 @@ extension DiveDetailView {
             DetailCard(
                 title: "DURATION",
                 value: dive.formattedDuration,
-                icon: "clock.fill",
+                icon: "clock",
                 color: .green
             )
 
@@ -1104,7 +1104,7 @@ extension DiveDetailView {
                     }
                     return nil
                 }(),
-                icon: "lungs.fill",
+                icon: "lungs",
                 color: .pink
             )
 
@@ -1133,14 +1133,14 @@ extension DiveDetailView {
             DetailCard(
                 title: "GAS MIX",
                 value: allTanksGasMixSummary,
-                icon: "bubbles.and.sparkles.fill",
+                icon: "bubbles.and.sparkles",
                 color: .purple
             )
 
             DetailCard(
                 title: "START PRESS.",
                 value: allTanksStartPressureSummary(symbol: pressSymbol),
-                icon: "gauge.with.needle.fill",
+                icon: "gauge.with.needle",
                 color: .red
             )
 
@@ -1154,7 +1154,7 @@ extension DiveDetailView {
             DetailCard(
                 title: "WEIGHT",
                 value: dive.weights.map { UserPreferences.shared.weightUnit.formatted($0, from: dive.storedWeightUnit) } ?? "—",
-                icon: "scalemass.fill",
+                icon: "scalemass",
                 color: .gray
             )
         }
@@ -1202,7 +1202,7 @@ extension DiveDetailView {
                     Circle()
                         .fill(Color.cyan.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "person.fill")
+                    Image(systemName: "person")
                         .foregroundStyle(.cyan)
                         .font(.system(size: 18))
                 }
@@ -1229,7 +1229,7 @@ extension DiveDetailView {
                     Circle()
                         .fill(Color.green.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "person.2.fill")
+                    Image(systemName: "person.2")
                         .foregroundStyle(.green)
                         .font(.system(size: 16))
                 }
@@ -1285,7 +1285,7 @@ extension DiveDetailView {
                     Circle()
                         .fill(Color.blue.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "building.2.fill")
+                    Image(systemName: "building.2")
                         .foregroundStyle(.blue)
                         .font(.system(size: 16))
                 }
@@ -1312,7 +1312,7 @@ extension DiveDetailView {
                     Circle()
                         .fill(Color.teal.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "person.badge.shield.checkmark.fill")
+                    Image(systemName: "person.badge.shield.checkmark")
                         .foregroundStyle(.teal)
                         .font(.system(size: 16))
                 }
@@ -1366,7 +1366,7 @@ extension DiveDetailView {
                     Circle()
                         .fill(Color.mint.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "ferry.fill")
+                    Image(systemName: "ferry")
                         .foregroundStyle(.mint)
                         .font(.system(size: 16))
                 }
@@ -1393,7 +1393,7 @@ extension DiveDetailView {
                     Circle()
                         .fill(Color.pink.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "tag.fill")
+                    Image(systemName: "tag")
                         .foregroundStyle(.pink)
                         .font(.system(size: 16))
                 }
@@ -1420,7 +1420,7 @@ extension DiveDetailView {
                     Circle()
                         .fill(Color.yellow.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: "arrow.down.to.line.circle.fill")
+                    Image(systemName: "arrow.down.to.line.circle")
                         .foregroundStyle(.yellow)
                         .font(.system(size: 16))
                 }
@@ -1447,23 +1447,23 @@ extension DiveDetailView {
     func diveTypeIcon(for type: String) -> String {
         switch type.lowercased() {
         case let t where t.contains("récif") || t.contains("reef"):
-            return "leaf.fill"
+            return "leaf"
         case let t where t.contains("épave") || t.contains("wreck"):
-            return "shippingbox.fill"
+            return "shippingbox"
         case let t where t.contains("dérive") || t.contains("drift"):
             return "wind"
         case let t where t.contains("mur") || t.contains("wall"):
-            return "square.stack.3d.up.fill"
+            return "square.stack.3d.up"
         case let t where t.contains("nuit") || t.contains("night"):
-            return "moon.stars.fill"
+            return "moon.stars"
         case let t where t.contains("caverne") || t.contains("cave") || t.contains("grotte"):
-            return "mountain.2.fill"
+            return "mountain.2"
         case let t where t.contains("photo"):
-            return "camera.fill"
+            return "camera"
         case let t where t.contains("profond") || t.contains("deep"):
-            return "arrow.down.circle.fill"
+            return "arrow.down.circle"
         case let t where t.contains("formation") || t.contains("training"):
-            return "graduationcap.fill"
+            return "graduationcap"
         default:
             return "figure.open.water.swim"
         }

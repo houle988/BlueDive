@@ -750,7 +750,7 @@ struct DiveMapPin: View {
                         .font(.system(size: isSelected ? 16 : 12, weight: .semibold))
                         .foregroundStyle(Color.black)
                 } else {
-                    Image(systemName: "flag.fill")
+                    Image(systemName: "flag")
                         .font(isSelected ? .title3 : .caption)
                         .foregroundStyle(.primary)
                 }
@@ -836,7 +836,7 @@ struct DiveClusterListCard: View {
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color.cyan))
         } else {
-            Image(systemName: "flag.fill")
+            Image(systemName: "flag")
                 .font(.caption)
                 .foregroundStyle(.white)
                 .frame(width: 28, height: 28)

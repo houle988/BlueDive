@@ -149,8 +149,8 @@ struct DocumentsView: View {
                         Text("No certifications or insurance were found for the selected diver.")
                     } actions: {
                         VStack(spacing: 12) {
-                            AddDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
-                            AddDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                            AddDocumentButton(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
+                            AddDocumentButton(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }
                         }
                         .padding(.horizontal, 40)
                     }
@@ -204,7 +204,7 @@ struct DocumentsView: View {
                                 Section {
                                     DomainHeaderRow(
                                         title: "Certifications",
-                                        icon: "graduationcap.fill",
+                                        icon: "graduationcap",
                                         color: .cyan
                                     )
                                 }
@@ -223,7 +223,7 @@ struct DocumentsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                AddDocumentSection(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                                AddDocumentSection(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
                             } else if !groupedCertifications.isEmpty {
                                 ForEach(groupedCertifications, id: \.key) { agency, certs in
                                     Section(isExpanded: sectionBinding("cert:" + agency)) {
@@ -256,7 +256,7 @@ struct DocumentsView: View {
                                 Section {
                                     DomainHeaderRow(
                                         title: "Insurance",
-                                        icon: "shield.fill",
+                                        icon: "shield",
                                         color: .blue
                                     )
                                 }
@@ -275,7 +275,7 @@ struct DocumentsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                                AddDocumentSection(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                                AddDocumentSection(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }
                             } else if !groupedInsurances.isEmpty {
                                 ForEach(groupedInsurances, id: \.key) { insurer, policies in
                                     let displayName = insurer.isEmpty
@@ -316,7 +316,7 @@ struct DocumentsView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                            AddDocumentSection(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                            AddDocumentSection(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
                         }
 
                         if selectedSection == .insurance && insurances.isEmpty {
@@ -329,7 +329,7 @@ struct DocumentsView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                            AddDocumentSection(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                            AddDocumentSection(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }
                         }
                     }
                     // .sidebar is required for Section(isExpanded:) collapse/expand to function
@@ -375,10 +375,10 @@ struct DocumentsView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button { showAddCertification = true } label: {
-                            Label("Add Certification", systemImage: "graduationcap.fill")
+                            Label("Add Certification", systemImage: "graduationcap")
                         }
                         Button { showAddInsurance = true } label: {
-                            Label("Add Insurance", systemImage: "shield.fill")
+                            Label("Add Insurance", systemImage: "shield")
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -495,7 +495,7 @@ struct DocumentsView: View {
             // --- Import Preview ---
             .sheet(isPresented: $showImportPreview) {
                 ImportPreviewSheet(
-                    icon: importTarget == .certifications ? "rosette" : "shield.lefthalf.filled",
+                    icon: importTarget == .certifications ? "rosette" : "shield",
                     iconColor: importTarget == .certifications ? .blue : .teal,
                     newItems: importPreviewNew,
                     duplicateItems: importPreviewDuplicates,
@@ -668,11 +668,11 @@ struct DocumentsView: View {
 
     private var certExpiredAlertSection: some View {
         alertBannerSection(
-            headerIcon: "xmark.circle.fill",
+            headerIcon: "xmark.circle",
             headerText: "Expired",
             accentColor: .red,
             domainTitle: "Certifications",
-            domainIcon: "graduationcap.fill",
+            domainIcon: "graduationcap",
             domainColor: .cyan,
             items: certExpired,
             name: \.name,
@@ -683,11 +683,11 @@ struct DocumentsView: View {
 
     private var insuranceExpiredAlertSection: some View {
         alertBannerSection(
-            headerIcon: "xmark.circle.fill",
+            headerIcon: "xmark.circle",
             headerText: "Expired",
             accentColor: .red,
             domainTitle: "Insurance",
-            domainIcon: "shield.fill",
+            domainIcon: "shield",
             domainColor: .blue,
             items: insuranceExpired,
             name: \.insurerName,
@@ -698,11 +698,11 @@ struct DocumentsView: View {
 
     private var certExpiryAlertSection: some View {
         alertBannerSection(
-            headerIcon: "exclamationmark.triangle.fill",
+            headerIcon: "exclamationmark.triangle",
             headerText: "Expiring Soon",
             accentColor: .orange,
             domainTitle: "Certifications",
-            domainIcon: "graduationcap.fill",
+            domainIcon: "graduationcap",
             domainColor: .cyan,
             items: certExpiringSoon,
             name: \.name,
@@ -718,11 +718,11 @@ struct DocumentsView: View {
 
     private var insuranceExpiryAlertSection: some View {
         alertBannerSection(
-            headerIcon: "exclamationmark.triangle.fill",
+            headerIcon: "exclamationmark.triangle",
             headerText: "Expiring Soon",
             accentColor: .orange,
             domainTitle: "Insurance",
-            domainIcon: "shield.fill",
+            domainIcon: "shield",
             domainColor: .blue,
             items: insuranceExpiringSoon,
             name: \.insurerName,
@@ -792,13 +792,13 @@ struct DocumentsView: View {
     private var bothEmptyStateView: some View {
         VStack(spacing: 24) {
             HStack(spacing: 20) {
-                Image(systemName: "graduationcap.fill")
+                Image(systemName: "graduationcap")
                     .font(.system(size: 40))
                     .foregroundStyle(.cyan.opacity(0.5))
                     .scaleEffect(emptyAppeared ? 1.0 : 0.5)
                     .opacity(emptyAppeared ? 1.0 : 0.0)
                     .accessibilityHidden(true)
-                Image(systemName: "shield.fill")
+                Image(systemName: "shield")
                     .font(.system(size: 40))
                     .foregroundStyle(.blue.opacity(0.5))
                     .scaleEffect(emptyAppeared ? 1.0 : 0.5)
@@ -822,11 +822,11 @@ struct DocumentsView: View {
                 .offset(y: emptyAppeared ? 0 : 10)
 
             VStack(spacing: 12) {
-                AddDocumentButton(label: "Add Certification", icon: "graduationcap.fill", color: .cyan) { showAddCertification = true }
+                AddDocumentButton(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
                     .scaleEffect(emptyAppeared ? 1.0 : 0.8)
                     .opacity(emptyAppeared ? 1.0 : 0.0)
 
-                AddDocumentButton(label: "Add Insurance", icon: "shield.fill", color: .blue) { showAddInsurance = true }
+                AddDocumentButton(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }
                     .scaleEffect(emptyAppeared ? 1.0 : 0.8)
                     .opacity(emptyAppeared ? 1.0 : 0.0)
             }

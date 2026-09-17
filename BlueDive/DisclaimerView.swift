@@ -35,7 +35,7 @@ struct DisclaimerView: View {
                                 .fill(Color.orange.opacity(0.12))
                                 .frame(width: 90, height: 90)
 
-                            Image(systemName: "exclamationmark.triangle.fill")
+                            Image(systemName: "exclamationmark.triangle")
                                 .font(.system(size: 40))
                                 .foregroundStyle(.orange)
                                 .accessibilityHidden(true)
@@ -62,21 +62,21 @@ struct DisclaimerView: View {
                         // Disclaimer content
                         VStack(alignment: .leading, spacing: 16) {
                             disclaimerRow(
-                                icon: "book.closed.fill",
+                                icon: "book.closed",
                                 color: .blue,
                                 title: "Dive Log Only",
                                 description: "BlueDive is strictly a dive logging application designed to record and organize your dive history. It is not a dive planning tool and must never be used as such."
                             )
 
                             disclaimerRow(
-                                icon: "graduationcap.fill",
+                                icon: "graduationcap",
                                 color: .green,
                                 title: "Proper Training Required",
                                 description: "All dives should be planned and conducted with proper training and certification from a recognized dive agency (e.g. PADI, SSI, NAUI, CMAS, BSAC, or equivalent)."
                             )
 
                             disclaimerRow(
-                                icon: "shield.lefthalf.filled",
+                                icon: "shield",
                                 color: .red,
                                 title: "No Liability",
                                 description: "BlueDive and its developers assume no responsibility or liability for dive planning, dive safety decisions, or any incidents related to diving activities. Always follow safe diving practices and your training."
@@ -146,7 +146,7 @@ struct DisclaimerView: View {
                     HStack {
                         Spacer()
                         Button { dismiss() } label: {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: "xmark.circle")
                                 .font(.title2)
                                 .foregroundStyle(.secondary)
                                 // Floating close affordance in the review overlay: 16 pt of
@@ -241,7 +241,7 @@ struct CalculatorSafetyWarningView: View {
                                 .fill(Color.orange.opacity(0.12))
                                 .frame(width: 90, height: 90)
 
-                            Image(systemName: "exclamationmark.triangle.fill")
+                            Image(systemName: "exclamationmark.triangle")
                                 .font(.system(size: 40))
                                 .foregroundStyle(.orange)
                                 .accessibilityHidden(true)
@@ -273,14 +273,14 @@ struct CalculatorSafetyWarningView: View {
                             )
 
                             warningRow(
-                                icon: "graduationcap.fill",
+                                icon: "graduationcap",
                                 color: .green,
                                 title: "Proper Training Required",
                                 description: "These calculators do not replace formal diver training or certification. Always plan dives with a qualified instructor or dive professional."
                             )
 
                             warningRow(
-                                icon: "shield.lefthalf.filled",
+                                icon: "shield",
                                 color: .red,
                                 title: "Your Responsibility",
                                 description: "You are solely responsible for verifying all results before any dive. Never use these tools as the sole basis for dive planning or safety decisions."

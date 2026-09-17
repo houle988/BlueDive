@@ -138,7 +138,7 @@ struct GearServiceView: View {
                             if case .edit(let record) = mode,
                                record.isLegacy,
                                record.date == .distantPast {
-                                Label("Original date unknown — verify before saving.", systemImage: "exclamationmark.triangle.fill")
+                                Label("Original date unknown — verify before saving.", systemImage: "exclamationmark.triangle")
                                     .font(.caption)
                                     .foregroundStyle(.orange)
                             }
@@ -590,9 +590,9 @@ struct GearServiceView: View {
 
     private var alertIcon: String {
         if isServiceDueOrPast {
-            return "xmark.shield.fill"
+            return "xmark.shield"
         }
-        return "exclamationmark.triangle.fill"
+        return "exclamationmark.triangle"
     }
 
     private var alertTitle: Text {
@@ -810,7 +810,7 @@ struct GearServiceView: View {
         if let nextDue = gear.nextServiceDue {
             let isPast = nextDue < Date()
             ModernStatRow(
-                icon: isPast ? "exclamationmark.triangle.fill" : "calendar.badge.checkmark",
+                icon: isPast ? "exclamationmark.triangle" : "calendar.badge.checkmark",
                 iconColor: isPast ? .red : .green,
                 title: "Next Maintenance",
                 value: formattedDate(nextDue),

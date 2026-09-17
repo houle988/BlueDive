@@ -55,7 +55,7 @@ extension DiveDetailView {
     var conditionsInfoCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
-                Image(systemName: "cloud.sun.fill")
+                Image(systemName: "cloud.sun")
                     .font(.title3)
                     .foregroundStyle(.yellow)
                 Text("Weather & Water Conditions")
@@ -89,7 +89,7 @@ extension DiveDetailView {
             )
 
             // Always display Weather field
-            ConditionRow(icon: "cloud.sun.fill", color: .yellow, label: "Weather",
+            ConditionRow(icon: "cloud.sun", color: .yellow, label: "Weather",
                         value: dive.weather.map { localizedWeather($0) } ?? "—")
 
             // Always display Surface conditions field
@@ -108,14 +108,14 @@ extension DiveDetailView {
                     return Double(trimmed) != nil ? "\(trimmed) \(depthUnit)" : trimmed
                 }()
                 ConditionRow(
-                    icon: "eye.fill",
+                    icon: "eye",
                     color: .green,
                     label: "Visibility",
                     value: visibilityDisplay
                 )
             } else {
                 ConditionRow(
-                    icon: "eye.fill",
+                    icon: "eye",
                     color: .green,
                     label: "Visibility",
                     value: "—"

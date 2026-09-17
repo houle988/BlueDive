@@ -23,7 +23,7 @@ struct TankTemplateListView: View {
                 if templates.isEmpty {
                     ContentUnavailableView(
                         "No Tank Templates",
-                        systemImage: "cylinder.fill",
+                        systemImage: "cylinder",
                         description: Text("Create templates for your frequently used tanks to quickly fill in tank details when logging dives.")
                     )
                 } else {
@@ -129,7 +129,7 @@ struct TankTemplateRow: View {
                     .fill(Color.blue.opacity(0.12))
                     .frame(width: 44, height: 44)
 
-                Image(systemName: "cylinder.fill")
+                Image(systemName: "cylinder")
                     .font(.title3)
                     .foregroundStyle(.blue)
             }

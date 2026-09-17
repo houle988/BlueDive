@@ -215,7 +215,7 @@ struct DiverFilterToolbar: ToolbarContent {
                 .accessibilityHidden(true)
             } else {
                 Image(systemName: "person.2")
-                    .foregroundStyle(Color.secondary)
+                    .foregroundStyle(Color.cyan)
             }
         }
         .accessibilityLabel(isActive

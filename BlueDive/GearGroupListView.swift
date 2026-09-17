@@ -23,7 +23,7 @@ struct GearGroupListView: View {
                 if gearGroups.isEmpty {
                     ContentUnavailableView(
                         "No Gear Groups",
-                        systemImage: "tray.2.fill",
+                        systemImage: "tray.2",
                         description: Text("Create groups of equipment for quick dive setup. Select a group to add all its gear to a dive at once.")
                     )
                 } else {
@@ -129,7 +129,7 @@ struct GearGroupRow: View {
                     .fill(Color.orange.opacity(0.12))
                     .frame(width: 44, height: 44)
 
-                Image(systemName: "tray.2.fill")
+                Image(systemName: "tray.2")
                     .font(.title3)
                     .foregroundStyle(.orange)
             }

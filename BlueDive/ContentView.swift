@@ -826,20 +826,20 @@ struct ContentView: View {
     @ViewBuilder
     private var cloudSyncIcon: some View {
         if !iCloudSyncEnabled {
-            Image(systemName: "icloud.slash.fill")
+            Image(systemName: "icloud.slash")
                 .foregroundStyle(.secondary)
         } else if syncMonitor.isSyncing {
             ProgressView()
                 .scaleEffect(0.75)
                 .frame(width: 20, height: 20)
         } else if syncMonitor.hasError {
-            Image(systemName: "exclamationmark.icloud.fill")
+            Image(systemName: "exclamationmark.icloud")
                 .foregroundStyle(.orange)
         } else if let d = syncMonitor.lastSyncDate, Date().timeIntervalSince(d) < 300 {
-            Image(systemName: "checkmark.icloud.fill")
+            Image(systemName: "checkmark.icloud")
                 .foregroundStyle(.cyan)
         } else {
-            Image(systemName: "icloud.fill")
+            Image(systemName: "icloud")
                 .foregroundStyle(.secondary)
         }
     }
@@ -858,7 +858,7 @@ struct ContentView: View {
         #if os(iOS)
         ToolbarItem(placement: .topBarLeading) {
             Button(action: { showSettings = true }) {
-                Image(systemName: "gearshape.fill")
+                Image(systemName: "gear")
                     .foregroundStyle(.cyan)
             }
             .help("Settings")
@@ -875,7 +875,7 @@ struct ContentView: View {
         #else
         ToolbarItem(placement: .navigation) {
             Button(action: { showSettings = true }) {
-                Image(systemName: "gearshape.fill")
+                Image(systemName: "gear")
                     .foregroundStyle(.cyan)
             }
             .help("Settings")

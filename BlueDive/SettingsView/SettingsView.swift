@@ -436,7 +436,7 @@ struct SettingsView: View {
                     NavigationLink {
                         AppearanceSettingsView(onNeedsRootDismiss: { dismiss() })
                     } label: {
-                        SettingsListRow(title: "Appearance", icon: "paintbrush.fill", color: .pink)
+                        SettingsListRow(title: "Appearance", icon: "paintbrush", color: .pink)
                     }
 
                     NavigationLink {
@@ -459,7 +459,7 @@ struct SettingsView: View {
                     NavigationLink {
                         NotificationsSettingsView()
                     } label: {
-                        SettingsListRow(title: "Notifications", icon: "bell.fill", color: .purple)
+                        SettingsListRow(title: "Notifications", icon: "bell", color: .purple)
                     }
 
                     NavigationLink {
@@ -471,13 +471,13 @@ struct SettingsView: View {
                     NavigationLink {
                         ICloudSettingsView()
                     } label: {
-                        SettingsListRow(title: "iCloud", icon: "icloud.fill", color: .cyan)
+                        SettingsListRow(title: "iCloud", icon: "icloud", color: .cyan)
                     }
 
                     NavigationLink {
                         DataManagementSettingsView()
                     } label: {
-                        SettingsListRow(title: "Data Management", icon: "externaldrive.fill", color: .red)
+                        SettingsListRow(title: "Data Management", icon: "externaldrive", color: .red)
                     }
                 }
 
@@ -488,12 +488,12 @@ struct SettingsView: View {
                     .foregroundStyle(.primary)
 
                     Button { showDisclaimer = true } label: {
-                        SettingsListRow(title: "Disclaimer", icon: "exclamationmark.triangle.fill", color: .orange)
+                        SettingsListRow(title: "Disclaimer", icon: "exclamationmark.triangle", color: .orange)
                     }
                     .foregroundStyle(.primary)
 
                     Button { showWelcomeWizard = true } label: {
-                        SettingsListRow(title: "Welcome Tour", icon: "hand.wave.fill", color: .orange)
+                        SettingsListRow(title: "Welcome Tour", icon: "hand.wave", color: .orange)
                     }
                     .foregroundStyle(.primary)
 
@@ -504,7 +504,7 @@ struct SettingsView: View {
                             UserDefaults.standard.set(DiveIntroConfig.replayValue, forKey: DiveIntroConfig.versionStorageKey)
                         }
                     } label: {
-                        SettingsListRow(title: "Intro Animation", icon: "play.circle.fill", color: .teal)
+                        SettingsListRow(title: "Intro Animation", icon: "play.circle", color: .teal)
                     }
                     .foregroundStyle(.primary)
                 }

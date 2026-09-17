@@ -40,7 +40,7 @@ struct ICloudSettingsView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Toggle(isOn: $iCloudSyncEnabled) {
-                            Label("iCloud sync", systemImage: "arrow.triangle.2.circlepath.icloud.fill")
+                            Label("iCloud sync", systemImage: "arrow.triangle.2.circlepath.icloud")
                         }
                     }
                     .padding()
@@ -122,7 +122,7 @@ struct ICloudSettingsView: View {
                             Text("iCloud sync is enabled but no iCloud account is available. Data will be stored locally until you sign in.")
                                 .foregroundStyle(.orange)
                         } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
+                            Image(systemName: "exclamationmark.triangle")
                                 .foregroundStyle(.orange)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

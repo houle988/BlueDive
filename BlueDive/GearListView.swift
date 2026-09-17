@@ -393,7 +393,7 @@ struct GearListView: View {
     private var emptyStateView: some View {
         ContentUnavailableView(
             "No Equipment",
-            systemImage: "wrench.and.screwdriver.fill",
+            systemImage: "wrench.and.screwdriver",
             description: Text("Add your tanks, suits, and regulators to track their usage and maintenance.")
         )
     }
@@ -417,7 +417,7 @@ struct GearListView: View {
 
     private var serviceAlertBanner: some View {
         HStack {
-            Image(systemName: gearOverdue.isEmpty ? "exclamationmark.triangle.fill" : "xmark.shield.fill")
+            Image(systemName: gearOverdue.isEmpty ? "exclamationmark.triangle" : "xmark.shield")
                 .foregroundStyle(bannerColor)
                 .accessibilityHidden(true)
 
@@ -564,7 +564,7 @@ struct GearListView: View {
                         showInactive.toggle()
                     }
                 } label: {
-                    Image(systemName: showInactive ? "eye.fill" : "eye.slash.fill")
+                    Image(systemName: showInactive ? "eye" : "eye.slash")
                         .font(.title3)
                         .foregroundStyle(showInactive ? .cyan : .secondary)
                 }
@@ -586,10 +586,10 @@ struct GearListView: View {
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 Button(action: { showTankTemplates = true }) {
-                    Label("Tank Templates", systemImage: "cylinder.fill")
+                    Label("Tank Templates", systemImage: "cylinder")
                 }
                 Button(action: { showGearGroups = true }) {
-                    Label("Gear Groups", systemImage: "tray.2.fill")
+                    Label("Gear Groups", systemImage: "tray.2")
                 }
                 Divider()
                 Button {
@@ -1078,7 +1078,7 @@ struct GearRow: View {
 
             // Indicateur d'entretien — orange within 30 days, red when due/past
             if let indicatorColor = serviceIndicatorColor {
-                Image(systemName: "exclamationmark.circle.fill")
+                Image(systemName: "exclamationmark.circle")
                     .foregroundStyle(indicatorColor)
                     .font(.title3)
                     .accessibilityLabel(indicatorColor == .red ? Text("Service Overdue") : Text("Service Due Soon"))

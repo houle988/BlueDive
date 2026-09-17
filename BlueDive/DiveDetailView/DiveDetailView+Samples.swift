@@ -104,7 +104,7 @@ extension DiveDetailView {
     var samplesFormatInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "internaldrive.fill")
+                Image(systemName: "internaldrive")
                     .foregroundStyle(.teal)
                 Text("Imported Data Format")
                     .font(.headline)
@@ -130,13 +130,13 @@ extension DiveDetailView {
                     color: .orange
                 )
                 FormatInfoCell(
-                    icon: "gauge.with.needle.fill",
+                    icon: "gauge.with.needle",
                     label: "Pressure",
                     value: dive.importPressureUnit,
                     color: .red
                 )
                 FormatInfoCell(
-                    icon: "cylinder.fill",
+                    icon: "cylinder",
                     label: "Volume",
                     value: {
                         switch dive.importVolumeUnit {
@@ -197,7 +197,7 @@ extension DiveDetailView {
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "tablecells.fill")
+                Image(systemName: "tablecells")
                     .foregroundStyle(.teal)
                 Text("Raw Data (\(dive.profileSamples.count) points)")
                     .font(.headline)

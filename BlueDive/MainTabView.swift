@@ -67,7 +67,7 @@ struct MainTabView: View {
                 // --- TAB 2 : MAP ---
                 DiveMapView()
                     .tabItem {
-                        Label("Map", systemImage: "map.fill")
+                        Label("Map", systemImage: "map")
                     }
                     .tag(1)
 
@@ -76,14 +76,14 @@ struct MainTabView: View {
                     GearListView()
                 }
                 .tabItem {
-                    Label("Equipment", systemImage: "wrench.and.screwdriver.fill")
+                    Label("Equipment", systemImage: "wrench.and.screwdriver")
                 }
                 .tag(2)
 
                 // --- TAB 4 : DOCUMENTS ---
                 DocumentsView()
                     .tabItem {
-                        Label("Documents", systemImage: "person.text.rectangle.fill")
+                        Label("Documents", systemImage: "person.text.rectangle")
                     }
                     .tag(3)
             }

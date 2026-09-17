@@ -5,6 +5,14 @@ import MapKit
 
 extension DiveDetailView {
 
+    // Mirrors `Dive.hasGPSCoordinates`'s definition of a valid pair (both
+    // components present and not the (0, 0) sentinel) so the map's per-pin
+    // branches never see a coordinate the gate itself would have rejected.
+    private func validGPSCoordinate(lat: Double?, lon: Double?) -> (lat: Double, lon: Double)? {
+        guard let lat, let lon, !(lat == 0 && lon == 0) else { return nil }
+        return (lat, lon)
+    }
+
     var siteDetailsTabContent: some View {
         VStack(spacing: 20) {
             siteDetailsInfoCard
@@ -14,7 +22,7 @@ extension DiveDetailView {
     var siteDetailsInfoCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
-                Image(systemName: "mappin.and.ellipse.circle.fill")
+                Image(systemName: "mappin.and.ellipse.circle")
                     .font(.title3)
                     .foregroundStyle(.blue)
                 Text("Site Details")
@@ -25,7 +33,7 @@ extension DiveDetailView {
             }
 
             // Dive Site
-            ConditionRow(icon: "location.fill", color: .cyan, label: "Dive Site",
+            ConditionRow(icon: "location", color: .cyan, label: "Dive Site",
                         value: dive.siteName.isEmpty ? "—" : dive.siteName)
 
             Divider().background(.primary.opacity(0.2))
@@ -67,7 +75,7 @@ extension DiveDetailView {
             Divider().background(.primary.opacity(0.2))
 
             // Water Type
-            ConditionRow(icon: "drop.fill", color: .blue, label: "Water Type",
+            ConditionRow(icon: "drop", color: .blue, label: "Water Type",
                         value: localizedWaterType(dive.siteWaterType))
 
             Divider().background(.primary.opacity(0.2))
@@ -86,9 +94,9 @@ extension DiveDetailView {
                       let eLat = dive.exitLatitude, let eLon = dive.exitLongitude else { return false }
                 return lat == eLat && lon == eLon
             }()
-            let entryIcon = coordsIdentical ? "arrow.up.arrow.down.circle.fill" : "arrow.down.circle.fill"
+            let entryIcon = coordsIdentical ? "arrow.up.arrow.down.circle" : "arrow.down.circle"
             let entryColor: Color = coordsIdentical ? .purple : .green
-            let exitIcon = coordsIdentical ? "arrow.up.arrow.down.circle.fill" : "arrow.up.circle.fill"
+            let exitIcon = coordsIdentical ? "arrow.up.arrow.down.circle" : "arrow.up.circle"
             let exitColor: Color = coordsIdentical ? .purple : .orange
 
             // GPS Coordinates (Entry)
@@ -116,19 +124,21 @@ extension DiveDetailView {
             // Altitude
             if let alt = dive.displaySiteAltitude {
                 let depthUnit = prefs.depthUnit.symbol
-                ConditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
+                ConditionRow(icon: "mountain.2", color: .brown, label: "Altitude",
                             value: alt.localizedString(decimals: 0) + " \(depthUnit)")
             } else {
-                ConditionRow(icon: "mountain.2.fill", color: .brown, label: "Altitude",
+                ConditionRow(icon: "mountain.2", color: .brown, label: "Altitude",
                             value: "—")
             }
 
             // Map view — tap to open a larger, zoomable map.
-            if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
+            if dive.hasGPSCoordinates {
                 Divider().background(.primary.opacity(0.2))
 
-                siteMap(entryLat: lat, entryLon: lon,
-                        exitLat: dive.exitLatitude, exitLon: dive.exitLongitude)
+                let entry = validGPSCoordinate(lat: dive.siteLatitude, lon: dive.siteLongitude)
+                let exit = validGPSCoordinate(lat: dive.exitLatitude, lon: dive.exitLongitude)
+                siteMap(entryLat: entry?.lat, entryLon: entry?.lon,
+                        exitLat: exit?.lat, exitLon: exit?.lon)
                     .frame(height: 200)
                     // Keep the preview itself non-interactive so the tap gesture
                     // below (not the map's own pan/zoom) receives the touch.
@@ -156,10 +166,12 @@ extension DiveDetailView {
         .detailCardBackground()
         .padding(.horizontal)
         .sheet(isPresented: $showFullScreenSiteMap) {
-            if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
+            if dive.hasGPSCoordinates {
+                let entry = validGPSCoordinate(lat: dive.siteLatitude, lon: dive.siteLongitude)
+                let exit = validGPSCoordinate(lat: dive.exitLatitude, lon: dive.exitLongitude)
                 SiteMapFullScreenView(
-                    entryLat: lat, entryLon: lon,
-                    exitLat: dive.exitLatitude, exitLon: dive.exitLongitude,
+                    entryLat: entry?.lat, entryLon: entry?.lon,
+                    exitLat: exit?.lat, exitLon: exit?.lon,
                     siteName: dive.siteName
                 )
                 .presentationSizing(.page)
@@ -170,10 +182,9 @@ extension DiveDetailView {
     }
 
     @ViewBuilder
-    private func siteMap(entryLat: Double, entryLon: Double, exitLat: Double?, exitLon: Double?) -> some View {
-        let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
-
-        if let eLat = exitLat, let eLon = exitLon {
+    private func siteMap(entryLat: Double?, entryLon: Double?, exitLat: Double?, exitLon: Double?) -> some View {
+        if let entryLat, let entryLon, let eLat = exitLat, let eLon = exitLon {
+            let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
             let exitCoord = CLLocationCoordinate2D(latitude: eLat, longitude: eLon)
             let center = CLLocationCoordinate2D(
                 latitude: (entryLat + eLat) / 2,
@@ -223,19 +234,41 @@ extension DiveDetailView {
                     }
                 }
             }
-        } else {
+        } else if let entryLat, let entryLon {
+            // Entry only — same green as the combined-map entry pin.
+            let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
             Map(initialPosition: .region(MKCoordinateRegion(
                 center: entryCoord,
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
             ))) {
                 Annotation(coordinate: entryCoord, anchor: .bottom) {
-                    Image(systemName: "mappin.circle.fill")
+                    Image(systemName: "arrow.down.circle.fill")
                         .font(.title2)
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .red)
+                        .foregroundStyle(.white, .green)
                 } label: {
                     if dive.siteName.isEmpty {
-                        Text("Dive Site")
+                        Text("Entry")
+                    } else {
+                        Text(verbatim: dive.siteName)
+                    }
+                }
+            }
+        } else if let eLat = exitLat, let eLon = exitLon {
+            // Exit only — same orange as the combined-map exit pin.
+            let exitCoord = CLLocationCoordinate2D(latitude: eLat, longitude: eLon)
+            Map(initialPosition: .region(MKCoordinateRegion(
+                center: exitCoord,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            ))) {
+                Annotation(coordinate: exitCoord, anchor: .bottom) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .orange)
+                } label: {
+                    if dive.siteName.isEmpty {
+                        Text("Exit")
                     } else {
                         Text(verbatim: dive.siteName)
                     }
@@ -257,7 +290,7 @@ extension DiveDetailView {
                 Circle()
                     .fill(Color.purple.opacity(0.2))
                     .frame(width: 36, height: 36)
-                Image(systemName: "star.fill")
+                Image(systemName: "star")
                     .font(.system(size: 15))
                     .foregroundStyle(.purple)
             }
@@ -294,8 +327,8 @@ extension DiveDetailView {
 /// the Site Details preview. Takes plain coordinates so it needs no `Dive` or
 /// `DiveStore` access — it is a pure read of the values passed in.
 struct SiteMapFullScreenView: View {
-    let entryLat: Double
-    let entryLon: Double
+    let entryLat: Double?
+    let entryLon: Double?
     let exitLat: Double?
     let exitLon: Double?
     let siteName: String
@@ -307,7 +340,7 @@ struct SiteMapFullScreenView: View {
 
     // The framed region for this site, computed once from the coordinates.
     private var targetRegion: MKCoordinateRegion {
-        if let eLat = exitLat, let eLon = exitLon {
+        if let entryLat, let entryLon, let eLat = exitLat, let eLon = exitLon {
             return MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: (entryLat + eLat) / 2,
                                                longitude: (entryLon + eLon) / 2),
@@ -316,9 +349,23 @@ struct SiteMapFullScreenView: View {
                     longitudeDelta: max(abs(entryLon - eLon) * 1.5, 0.005)
                 )
             )
-        } else {
+        } else if let entryLat, let entryLon {
             return MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon),
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            )
+        } else if let eLat = exitLat, let eLon = exitLon {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: eLat, longitude: eLon),
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            )
+        } else {
+            // Unreachable: the sole caller only presents this view when
+            // `dive.hasGPSCoordinates` is true, and passes entry/exit through
+            // the same (0, 0)-excluding check, so at least one pair is always
+            // present here. Required only for exhaustiveness.
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
             )
         }
@@ -331,8 +378,8 @@ struct SiteMapFullScreenView: View {
             // region leaves MapKit not laying out pins until the first camera
             // change (they only appear after a pan); `initialPosition` avoids that.
             Map(initialPosition: .region(targetRegion)) {
-                let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
-                if let eLat = exitLat, let eLon = exitLon {
+                if let entryLat, let entryLon, let eLat = exitLat, let eLon = exitLon {
+                    let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
                     if entryLat == eLat && entryLon == eLon {
                         // Identical entry/exit: one combined pin instead of two
                         // overlapping markers.
@@ -370,15 +417,30 @@ struct SiteMapFullScreenView: View {
                             Text("Exit")
                         }
                     }
-                } else {
-                    Annotation(coordinate: entryCoord, anchor: .bottom) {
-                        Image(systemName: "mappin.circle.fill")
+                } else if let entryLat, let entryLon {
+                    // Entry only — same green as the combined-map entry pin.
+                    Annotation(coordinate: CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon), anchor: .bottom) {
+                        Image(systemName: "arrow.down.circle.fill")
                             .font(.title2)
                             .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .red)
+                            .foregroundStyle(.white, .green)
                     } label: {
                         if siteName.isEmpty {
-                            Text("Dive Site")
+                            Text("Entry")
+                        } else {
+                            Text(verbatim: siteName)
+                        }
+                    }
+                } else if let eLat = exitLat, let eLon = exitLon {
+                    // Exit only — same orange as the combined-map exit pin.
+                    Annotation(coordinate: CLLocationCoordinate2D(latitude: eLat, longitude: eLon), anchor: .bottom) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .orange)
+                    } label: {
+                        if siteName.isEmpty {
+                            Text("Exit")
                         } else {
                             Text(verbatim: siteName)
                         }

@@ -923,7 +923,7 @@ struct EditMenuStatsView: View {
                 }
             }
         } header: {
-            MenuSectionHeader(title: "Dive Stats", icon: "chart.bar.fill", color: .cyan)
+            MenuSectionHeader(title: "Dive Stats", icon: "chart.bar", color: .cyan)
         } footer: {
             Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
                 .font(.caption2)
@@ -943,7 +943,7 @@ struct EditMenuStatsView: View {
 
                 Form {
                     Section {
-                        AutocompleteMenuTextField(label: "Diver", text: $workingDiverName, icon: "person.fill", color: .cyan, suggestions: uniqueDiverNames)
+                        AutocompleteMenuTextField(label: "Diver", text: $workingDiverName, icon: "person", color: .cyan, suggestions: uniqueDiverNames)
                         HStack(spacing: 12) {
                             Image(systemName: "number")
                                 .foregroundStyle(.orange)
@@ -966,7 +966,7 @@ struct EditMenuStatsView: View {
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Diver", icon: "person.fill", color: .blue)
+                        MenuSectionHeader(title: "Diver", icon: "person", color: .blue)
                     }
 
                     Section {
@@ -977,13 +977,13 @@ struct EditMenuStatsView: View {
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2.fill", color: .blue, suggestions: uniqueOptionalValues(for: \.diveOperator))
-                        AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark.fill", color: .teal, suggestions: uniqueOptionalValues(for: \.diveMaster))
+                        AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2", color: .blue, suggestions: uniqueOptionalValues(for: \.diveOperator))
+                        AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark", color: .teal, suggestions: uniqueOptionalValues(for: \.diveMaster))
                         AutocompleteMenuTextField(label: "Captain", text: $workingSkipper, icon: "person.fill.turn.right", color: .indigo, suggestions: uniqueOptionalValues(for: \.skipper))
-                        AutocompleteMenuTextField(label: "Boat", text: $workingBoat, icon: "ferry.fill", color: .mint, suggestions: uniqueOptionalValues(for: \.boat))
-                        AutocompleteMenuTextField(label: "Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle.fill", color: .yellow, suggestions: uniqueOptionalValues(for: \.entryType))
+                        AutocompleteMenuTextField(label: "Boat", text: $workingBoat, icon: "ferry", color: .mint, suggestions: uniqueOptionalValues(for: \.boat))
+                        AutocompleteMenuTextField(label: "Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle", color: .yellow, suggestions: uniqueOptionalValues(for: \.entryType))
                     } header: {
-                        MenuSectionHeader(title: "Operator", icon: "building.2.fill", color: .teal)
+                        MenuSectionHeader(title: "Operator", icon: "building.2", color: .teal)
                     }
 
                     Section {
@@ -1007,7 +1007,7 @@ struct EditMenuStatsView: View {
                                                     // gap (4 pt) so neighbouring chips' targets
                                                     // touch without overlapping. 36 × 34 pt.
                                                     TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
-                                                        Image(systemName: "xmark.circle.fill")
+                                                        Image(systemName: "xmark.circle")
                                                             .font(.caption)
                                                             .foregroundStyle(.secondary)
                                                     }
@@ -1029,7 +1029,7 @@ struct EditMenuStatsView: View {
                         // Add new buddy
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
+                                Image(systemName: "plus.circle")
                                     .foregroundStyle(.green)
                                 TextField("Add a buddy", text: $newBuddy)
                                     .autocorrectionDisabled()
@@ -1078,12 +1078,12 @@ struct EditMenuStatsView: View {
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Buddies", icon: "person.2.fill", color: .green)
+                        MenuSectionHeader(title: "Buddies", icon: "person.2", color: .green)
                     }
 
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "scalemass.fill")
+                            Image(systemName: "scalemass")
                                 .foregroundStyle(.gray)
                                 .frame(width: 24)
                             Text("Weight (\(dive.storedWeightUnit.symbol))")
@@ -1105,7 +1105,7 @@ struct EditMenuStatsView: View {
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Weight", icon: "scalemass.fill", color: .gray)
+                        MenuSectionHeader(title: "Weight", icon: "scalemass", color: .gray)
                     } footer: {
                         Text("Unit (\(dive.storedWeightUnit.symbol)) matches the original import format and cannot be changed.")
                             .font(.caption2)
@@ -1134,7 +1134,7 @@ struct EditMenuStatsView: View {
                                                     // grows 4 pt (half of the 8 pt gap) toward the
                                                     // next chip and the next row. 36 × 34 pt.
                                                     TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
-                                                        Image(systemName: "xmark.circle.fill")
+                                                        Image(systemName: "xmark.circle")
                                                             .font(.caption)
                                                             .foregroundStyle(.secondary)
                                                     }
@@ -1156,7 +1156,7 @@ struct EditMenuStatsView: View {
                         // Add new dive type
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
+                                Image(systemName: "plus.circle")
                                     .foregroundStyle(.purple)
                                 TextField("Add a dive type", text: $newType)
                                     .autocorrectionDisabled()
@@ -1206,7 +1206,7 @@ struct EditMenuStatsView: View {
                         }
 
                         HStack {
-                            Image(systemName: "star.fill")
+                            Image(systemName: "star")
                                 .foregroundStyle(.yellow)
                             Text("Rating")
                                 .foregroundStyle(.primary)
@@ -1235,7 +1235,7 @@ struct EditMenuStatsView: View {
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Type & Rating", icon: "star.fill", color: .yellow)
+                        MenuSectionHeader(title: "Type & Rating", icon: "star", color: .yellow)
                     }
 
                     Section {
@@ -1257,7 +1257,7 @@ struct EditMenuStatsView: View {
                                                     // grows 4 pt (half of the 8 pt gap) toward the
                                                     // next chip and the next row. 36 × 34 pt.
                                                     TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
-                                                        Image(systemName: "xmark.circle.fill")
+                                                        Image(systemName: "xmark.circle")
                                                             .font(.caption)
                                                             .foregroundStyle(.secondary)
                                                     }
@@ -1278,7 +1278,7 @@ struct EditMenuStatsView: View {
 
                         // Add new tag
                         HStack(spacing: 8) {
-                            Image(systemName: "plus.circle.fill")
+                            Image(systemName: "plus.circle")
                                 .foregroundStyle(.cyan)
                             TextField("Add a tag", text: $newTag)
                                 .autocorrectionDisabled()
@@ -1301,7 +1301,7 @@ struct EditMenuStatsView: View {
                             .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
                     } header: {
-                        MenuSectionHeader(title: "Tags", icon: "tag.fill", color: .pink)
+                        MenuSectionHeader(title: "Tags", icon: "tag", color: .pink)
                     }
 
                     Section {
@@ -1877,7 +1877,7 @@ struct EditSiteDetailsView: View {
 
                 Toggle(isOn: $copyGPSCoordinates) {
                     HStack(spacing: 12) {
-                        Image(systemName: "location.circle.fill")
+                        Image(systemName: "location.circle")
                             .foregroundStyle(.green)
                             .frame(width: 24)
                         Text("Include GPS Coordinates (Entry & Exit)")
@@ -1891,14 +1891,14 @@ struct EditSiteDetailsView: View {
                     }
                 } label: {
                     HStack {
-                        Image(systemName: "doc.on.doc.fill")
+                        Image(systemName: "doc.on.doc")
                         Text("Copy Site Information")
                     }
                 }
                 .disabled(selectedSite == nil)
                 .foregroundStyle(.orange)
             } header: {
-                MenuSectionHeader(title: "Copy from Existing Site", icon: "doc.on.doc.fill", color: .orange)
+                MenuSectionHeader(title: "Copy from Existing Site", icon: "doc.on.doc", color: .orange)
             }
         }
     }
@@ -1912,8 +1912,8 @@ struct EditSiteDetailsView: View {
                     copyFromSiteSection
 
                     Section {
-                        AutocompleteMenuTextField(label: "Site Name", text: $workingSiteName, icon: "location.fill", color: .cyan, suggestions: uniqueValues(for: \.siteName))
-                        AutocompleteMenuTextField(label: "Country", text: $workingCountry, icon: "flag.fill", color: .blue, suggestions: uniqueOptionalValues(for: \.siteCountry))
+                        AutocompleteMenuTextField(label: "Site Name", text: $workingSiteName, icon: "location", color: .cyan, suggestions: uniqueValues(for: \.siteName))
+                        AutocompleteMenuTextField(label: "Country", text: $workingCountry, icon: "flag", color: .blue, suggestions: uniqueOptionalValues(for: \.siteCountry))
                         AutocompleteMenuTextField(label: "Location", text: $workingLocation, icon: "mappin.and.ellipse", color: .orange, suggestions: uniqueValues(for: \.location))
                         Picker(selection: $workingDifficulty) {
                             Text("—").tag("")
@@ -1922,7 +1922,7 @@ struct EditSiteDetailsView: View {
                             }
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "star.fill")
+                                Image(systemName: "star")
                                     .foregroundStyle(.purple)
                                     .frame(width: 24)
                                 Text("Difficulty")
@@ -1945,7 +1945,7 @@ struct EditSiteDetailsView: View {
                             }
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "drop.fill")
+                                Image(systemName: "drop")
                                     .foregroundStyle(.blue)
                                     .frame(width: 24)
                                 Text("Water Type")
@@ -1955,7 +1955,7 @@ struct EditSiteDetailsView: View {
                         .tint(.blue)
                         AutocompleteMenuTextField(label: "Body of Water", text: $workingBodyOfWater, icon: "water.waves", color: .teal, suggestions: uniqueOptionalValues(for: \.siteBodyOfWater))
                     } header: {
-                        MenuSectionHeader(title: "Water", icon: "drop.fill", color: .teal)
+                        MenuSectionHeader(title: "Water", icon: "drop", color: .teal)
                     }
 
                     Section {
@@ -1998,7 +1998,7 @@ struct EditSiteDetailsView: View {
                             }
                         }
                         HStack(spacing: 12) {
-                            Image(systemName: "mountain.2.fill")
+                            Image(systemName: "mountain.2")
                                 .foregroundStyle(.brown)
                                 .frame(width: 24)
                             Text("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))")
@@ -2017,7 +2017,7 @@ struct EditSiteDetailsView: View {
                         }
                     } header: {
                         HStack {
-                            MenuSectionHeader(title: "GPS Coordinates (Entry)", icon: "location.circle.fill", color: .green)
+                            MenuSectionHeader(title: "GPS Coordinates (Entry)", icon: "location.circle", color: .green)
                             if dive.rawDiveComputerData != nil {
                                 Spacer()
                                 Button { resetEntryGPS() } label: {
@@ -2294,17 +2294,17 @@ struct EditConditionsView: View {
                     }
 
                     Section {
-                        ConditionsPickerRow(label: "Weather", selection: $workingWeather, options: weatherOptions, icon: "cloud.sun.fill")
+                        ConditionsPickerRow(label: "Weather", selection: $workingWeather, options: weatherOptions, icon: "cloud.sun")
                         ConditionsPickerRow(label: "Surface", selection: $workingSurface, options: surfaceOptions, icon: "water.waves")
                         ConditionsPickerRow(label: "Current", selection: $workingCurrent, options: currentOptions, icon: "wind")
                     } header: {
-                        ConditionsSectionHeader(title: "Weather & Sea", icon: "cloud.sun.fill", color: .blue)
+                        ConditionsSectionHeader(title: "Weather & Sea", icon: "cloud.sun", color: .blue)
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye.fill", color: .green, suggestions: visibilitySuggestions)
+                        AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye", color: .green, suggestions: visibilitySuggestions)
                     } header: {
-                        ConditionsSectionHeader(title: "Visibility", icon: "eye.fill", color: .green)
+                        ConditionsSectionHeader(title: "Visibility", icon: "eye", color: .green)
                     }
                 }
                 .scrollContentBackground(.hidden)
@@ -3137,7 +3137,7 @@ struct EditGazView: View {
                             }
                             Toggle("Update Samples", isOn: $rewriteSamples)
                         } header: {
-                            Label("Tank Slot", systemImage: "number.circle.fill")
+                            Label("Tank Slot", systemImage: "number.circle")
                                 .foregroundStyle(.orange)
                                 .font(.caption)
                                 .fontWeight(.semibold)
@@ -3165,14 +3165,14 @@ struct EditGazView: View {
                                 }
                             } label: {
                                 HStack {
-                                    Image(systemName: "doc.on.doc.fill")
+                                    Image(systemName: "doc.on.doc")
                                     Text("Copy Tank Information")
                                 }
                             }
                             .disabled(selectedTemplateName.isEmpty)
                             .foregroundStyle(.orange)
                         } header: {
-                            Label("Copy from Tank Template", systemImage: "doc.on.doc.fill")
+                            Label("Copy from Tank Template", systemImage: "doc.on.doc")
                                 .foregroundStyle(.orange)
                                 .font(.caption)
                                 .fontWeight(.semibold)
@@ -3183,7 +3183,13 @@ struct EditGazView: View {
                     Section("Gas blend") {
                         // Auto-calculated type
                         HStack {
-                            Label("Gas Type", systemImage: "bubbles.and.sparkles.fill")
+                            Label {
+                                Text("Gas Type")
+                                    .foregroundStyle(.primary)
+                            } icon: {
+                                Image(systemName: "bubbles.and.sparkles")
+                                    .foregroundStyle(.purple)
+                            }
                             Spacer()
                             Text(verbatim: autoGasLabel)
                                 .font(.subheadline)
@@ -3193,8 +3199,13 @@ struct EditGazView: View {
 
                         // Oxygen
                         HStack {
-                            Label("Oxygen (O₂)", systemImage: "o.circle.fill")
-                                .foregroundStyle(.primary)
+                            Label {
+                                Text("Oxygen (O₂)")
+                                    .foregroundStyle(.primary)
+                            } icon: {
+                                Image(systemName: "o.circle")
+                                    .foregroundStyle(.green)
+                            }
                             Spacer()
                             Text((Double(workingO2) / 100).formatted(.percent.precision(.fractionLength(0))))
                                 .font(.subheadline)
@@ -3207,8 +3218,13 @@ struct EditGazView: View {
 
                         // Helium
                         HStack {
-                            Label("Helium (He)", systemImage: "h.circle.fill")
-                                .foregroundStyle(.primary)
+                            Label {
+                                Text("Helium (He)")
+                                    .foregroundStyle(.primary)
+                            } icon: {
+                                Image(systemName: "h.circle")
+                                    .foregroundStyle(.cyan)
+                            }
                             Spacer()
                             Text((Double(workingHe) / 100).formatted(.percent.precision(.fractionLength(0))))
                                 .font(.subheadline)
@@ -3221,7 +3237,7 @@ struct EditGazView: View {
                     }
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "cylinder.fill")
+                            Image(systemName: "cylinder")
                                 .foregroundStyle(.blue)
                                 .frame(width: 24)
                             Text("Volume (\(dive.storedVolumeUnit.symbol))")
@@ -3292,7 +3308,7 @@ struct EditGazView: View {
                     }
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "gauge.with.needle.fill")
+                            Image(systemName: "gauge.with.needle")
                                 .foregroundStyle(.red)
                                 .frame(width: 24)
                             Text("Start pressure (\(dive.storedPressureUnit.symbol))")
@@ -3360,7 +3376,7 @@ struct EditGazView: View {
                         }
 
                         HStack(spacing: 12) {
-                            Image(systemName: "play.fill")
+                            Image(systemName: "play")
                                 .foregroundStyle(.cyan)
                                 .frame(width: 24)
                             Text(verbatim: NSLocalizedString("Usage Start", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
@@ -3386,7 +3402,7 @@ struct EditGazView: View {
                             }
                         }
                         HStack(spacing: 12) {
-                            Image(systemName: "stop.fill")
+                            Image(systemName: "stop")
                                 .foregroundStyle(.cyan)
                                 .frame(width: 24)
                             Text(verbatim: NSLocalizedString("Usage End", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")

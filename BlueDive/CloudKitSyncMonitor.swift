@@ -123,11 +123,11 @@ final class CloudKitSyncMonitor {
 
     var ckAccountStatusIcon: String {
         switch ckAccountStatus {
-        case .available:              return "checkmark.icloud.fill"
-        case .noAccount:              return "xmark.icloud.fill"
-        case .restricted:             return "lock.icloud.fill"
-        case .temporarilyUnavailable: return "exclamationmark.icloud.fill"
-        default:                      return "questionmark.icloud.fill"
+        case .available:              return "checkmark.icloud"
+        case .noAccount:              return "xmark.icloud"
+        case .restricted:             return "lock.icloud"
+        case .temporarilyUnavailable: return "exclamationmark.icloud"
+        default:                      return "questionmark.icloud"
         }
     }
 
@@ -805,10 +805,10 @@ struct CloudKitSyncStatusView: View {
                     heroHeader
 
                     VStack(spacing: 12) {
-                        syncCard(icon: "icloud.and.arrow.up.fill",   title: "Upload",   state: monitor.uploadState)
-                        syncCard(icon: "icloud.and.arrow.down.fill", title: "Download", state: monitor.downloadState)
+                        syncCard(icon: "icloud.and.arrow.up",   title: "Upload",   state: monitor.uploadState)
+                        syncCard(icon: "icloud.and.arrow.down", title: "Download", state: monitor.downloadState)
                         if monitor.setupState.hasError || monitor.setupState.isActive {
-                            syncCard(icon: "gearshape.fill", title: "Setup", state: monitor.setupState)
+                            syncCard(icon: "gear", title: "Setup", state: monitor.setupState)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -872,7 +872,7 @@ struct CloudKitSyncStatusView: View {
                     ProgressView()
                         .scaleEffect(1.2)
                 } else {
-                    Image(systemName: monitor.hasError ? "exclamationmark.icloud.fill" : "icloud.fill")
+                    Image(systemName: monitor.hasError ? "exclamationmark.icloud" : "icloud")
                         .font(.system(size: 34))
                         .foregroundStyle(
                             LinearGradient(
