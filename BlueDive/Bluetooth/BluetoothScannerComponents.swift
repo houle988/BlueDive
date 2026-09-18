@@ -201,6 +201,8 @@ struct KnownDeviceRow: View {
     let diverName: String?
     let onTap: () -> Void
 
+    @Environment(\.locale) private var locale
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
@@ -217,11 +219,11 @@ struct KnownDeviceRow: View {
                             .foregroundStyle(.teal)
                     }
 
-                    Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.uppercased()))
+                    Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Text("Last synced \(lastSynced, format: .relative(presentation: .named))")
+                    Text("Last synced \(lastSynced, format: .relative(presentation: .named).locale(locale))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

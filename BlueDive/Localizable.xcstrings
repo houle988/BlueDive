@@ -356,6 +356,52 @@
         }
       }
     },
+    "%@ dives already in logbook" : {
+      "comment" : "A footnote showing how many dives were skipped because they were already in the logbook. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Tauchgänge bereits im Logbuch"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées déjà dans le carnet"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ duiken al aanwezig in logboek"
+          }
+        }
+      }
+    },
+    "%@ dives already present" : {
+      "comment" : "Subtitle showing the number of dives already present in the logbook. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Tauchgänge bereits vorhanden"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées déjà présentes"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ duiken al aanwezig"
+          }
+        }
+      }
+    },
     "%@ dives at this location" : {
       "comment" : "Number of dives at a cluster location",
       "localizations" : {
@@ -381,6 +427,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ duiken op deze locatie"
+          }
+        }
+      }
+    },
+    "%@ dives imported" : {
+      "comment" : "A label in the Bluetooth sync results showing how many dives were imported. %@ is the locale-formatted dive count.\nSubtitle showing how many dives were imported when a cutoff also discarded older dives during the same sync. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Tauchgänge importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées importées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ duiken geïmporteerd"
+          }
+        }
+      }
+    },
+    "%@ dives updated" : {
+      "comment" : "A label indicating dives have been updated. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Tauchgänge aktualisiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées mises à jour"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ duiken bijgewerkt"
           }
         }
       }
@@ -439,6 +531,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ van %@ duiken geïmporteerd"
+          }
+        }
+      }
+    },
+    "%@ older dives not imported" : {
+      "comment" : "A footnote in the Bluetooth sync results showing how many downloaded dives were discarded because they were recorded before the user's import cutoff date. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ältere Tauchgänge nicht importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées plus anciennes non importées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ oudere duiken niet geïmporteerd"
+          }
+        }
+      }
+    },
+    "%@ older dives skipped" : {
+      "comment" : "Subtitle footnote showing how many downloaded dives were discarded because they were recorded before the user's import cutoff date. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ältere Tauchgänge übersprungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées plus anciennes ignorées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ oudere duiken overgeslagen"
           }
         }
       }
@@ -585,6 +723,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@: automatische detectie niet beschikbaar"
+          }
+        }
+      }
+    },
+    "%1$@ more dives were downloaded but will not be imported — they were recorded before %2$@." : {
+      "comment" : "Note appended to the Bluetooth import confirmation alert when several downloaded dives fall before the user's import cutoff date. %1$@ is the locale-formatted dive count, %2$@ is the cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ weitere Tauchgänge wurden heruntergeladen, werden aber nicht importiert — sie wurden vor dem %2$@ aufgezeichnet."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ plongées supplémentaires ont été téléchargées, mais ne seront pas importées — elles ont été enregistrées avant le %2$@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ extra duiken zijn gedownload, maar worden niet geïmporteerd — ze zijn vastgelegd vóór %2$@."
           }
         }
       }
@@ -914,64 +1075,6 @@
         }
       }
     },
-    "%lld dives already in logbook" : {
-      "comment" : "A footnote showing how many dives were skipped because they were already in the logbook.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Tauchgänge bereits im Logbuch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld dives already in logbook"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plongées déjà dans le carnet"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld duiken al in het logboek"
-          }
-        }
-      }
-    },
-    "%lld dives already present" : {
-      "comment" : "Subtitle showing the number of dives already present in the logbook.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Tauchgänge bereits vorhanden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld dives already present"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plongées déjà présentes"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld duiklogs reeds aanwezig"
-          }
-        }
-      }
-    },
     "%lld dives downloaded" : {
       "comment" : "A text label displaying the number of dives that have been successfully downloaded.",
       "localizations" : {
@@ -997,64 +1100,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld duiklogs gedownload"
-          }
-        }
-      }
-    },
-    "%lld dives imported" : {
-      "comment" : "A label displaying the number of dives imported.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Tauchgänge importiert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld dives imported"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plongées importées"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld duiklogs geïmporteerd"
-          }
-        }
-      }
-    },
-    "%lld dives updated" : {
-      "comment" : "A label indicating dives have been updated.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Tauchgänge aktualisiert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld dives updated"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plongées mises à jour"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld duiklogs bijgewerkt"
           }
         }
       }
@@ -2485,6 +2530,75 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 verzekeringsrecord succesvol geïmporteerd."
+          }
+        }
+      }
+    },
+    "1 more dive was downloaded but will not be imported — it was recorded before %@." : {
+      "comment" : "Note appended to the Bluetooth import confirmation alert when exactly one downloaded dive falls before the user's import cutoff date. %@ is the cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 weiterer Tauchgang wurde heruntergeladen, wird aber nicht importiert — er wurde vor dem %@ aufgezeichnet."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 plongée supplémentaire a été téléchargée, mais ne sera pas importée — elle a été enregistrée avant le %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog 1 duik is gedownload, maar wordt niet geïmporteerd — deze is vastgelegd vóór %@."
+          }
+        }
+      }
+    },
+    "1 older dive not imported" : {
+      "comment" : "A footnote in the Bluetooth sync results when exactly one downloaded dive was discarded because it was recorded before the user's import cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 älterer Tauchgang nicht importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 plongée plus ancienne non importée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 oudere duik niet geïmporteerd"
+          }
+        }
+      }
+    },
+    "1 older dive skipped" : {
+      "comment" : "Subtitle footnote when exactly one downloaded dive was discarded because it was recorded before the user's import cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 älterer Tauchgang übersprungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 plongée plus ancienne ignorée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 oudere duik overgeslagen"
           }
         }
       }
@@ -5199,6 +5313,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beschikbare apparaten"
+          }
+        }
+      }
+    },
+    "Available when searching for new devices, and alongside Download All Dives for a known computer — the common cases where a dive computer sends its whole history. A never-synced computer has no sync bookmark, so it sends everything by default; that can mean hundreds of dives you already logged by hand or imported from another app. If a computer you've already synced turns out not to need a full re-download, the limit simply has nothing to do." : {
+      "comment" : "A description of the limit on the number of dives to download.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verfügbar bei der Suche nach neuen Geräten und zusammen mit Alle Tauchgänge herunterladen für einen bekannten Computer — die üblichen Fälle, in denen ein Tauchcomputer seinen gesamten Verlauf sendet. Ein noch nie synchronisierter Computer hat kein Sync-Lesezeichen und sendet daher standardmäßig alles; das können Hunderte von Tauchgängen sein, die du bereits manuell erfasst oder aus einer anderen App importiert hast. Wenn ein bereits synchronisierter Computer letztlich keinen vollständigen erneuten Download benötigt, hat die Begrenzung einfach nichts zu tun."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disponible lors de la recherche de nouveaux appareils et avec « Télécharger toutes les plongées » pour un ordinateur connu — les cas courants où un ordinateur de plongée envoie tout son historique. Un ordinateur jamais synchronisé n'a pas de repère de synchronisation; il envoie donc tout par défaut, ce qui peut représenter des centaines de plongées déjà consignées manuellement ou importées d'une autre application. Si un ordinateur déjà synchronisé n'a finalement pas besoin d'un téléchargement complet, la limite n'a tout simplement rien à faire."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beschikbaar bij het zoeken naar nieuwe apparaten en samen met 'Alle duiken downloaden' voor een bekende computer — de gebruikelijke gevallen waarin een duikcomputer zijn volledige geschiedenis verstuurt. Een nooit-gesynchroniseerde computer heeft geen synchronisatiebladwijzer en verstuurt daarom standaard alles; dat kunnen honderden duiken zijn die je al handmatig hebt vastgelegd of vanuit een andere app hebt geïmporteerd. Als een computer die je al hebt gesynchroniseerd uiteindelijk geen volledige herdownload nodig heeft, valt er voor de limiet simpelweg niets te doen."
           }
         }
       }
@@ -11554,6 +11692,76 @@
         }
       }
     },
+    "Dives recorded before the date you choose are discarded after they arrive, instead of being added to your logbook. Every dive is still transferred from the computer, so the sync takes exactly as long — only your logbook stays clean. When re-downloading a known computer, older dives are also not refreshed with the computer's data." : {
+      "comment" : "A description of the Dive Computer Sync Options.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge, die vor dem gewählten Datum aufgezeichnet wurden, werden nach dem Empfang verworfen, anstatt zu deinem Logbuch hinzugefügt zu werden. Jeder Tauchgang wird trotzdem vom Computer übertragen, die Synchronisierung dauert also genauso lange — nur dein Logbuch bleibt sauber. Beim erneuten Herunterladen eines bekannten Computers werden ältere Tauchgänge außerdem nicht mit den Daten des Computers aktualisiert."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plongées enregistrées avant la date choisie sont rejetées à leur arrivée, au lieu d'être ajoutées à votre carnet. Chaque plongée est tout de même transférée depuis l'ordinateur, donc la synchronisation prend exactement le même temps — seul votre carnet reste propre. Lors d'un nouveau téléchargement d'un ordinateur connu, les plongées plus anciennes ne sont pas non plus mises à jour avec les données de l'ordinateur."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken die zijn vastgelegd vóór de gekozen datum worden na ontvangst verwijderd in plaats van aan je logboek te worden toegevoegd. Elke duik wordt nog steeds van de computer overgebracht, dus de synchronisatie duurt precies even lang — alleen je logboek blijft schoon. Bij het opnieuw downloaden van een bekende computer worden oudere duiken ook niet bijgewerkt met de gegevens van de computer."
+          }
+        }
+      }
+    },
+    "Dives recorded before this date are still transferred from the dive computer, then discarded — they are neither re-imported nor updated. This does not make the sync faster, and applies to this sync only." : {
+      "comment" : "A description of the import cutoff date.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge, die vor diesem Datum aufgezeichnet wurden, werden weiterhin vom Tauchcomputer übertragen und anschließend verworfen — sie werden weder erneut importiert noch aktualisiert. Dadurch wird die Synchronisierung nicht schneller, und dies gilt nur für diese Synchronisierung."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plongées enregistrées avant cette date sont tout de même transférées depuis l'ordinateur de plongée, puis rejetées — elles ne sont ni réimportées ni mises à jour. Cela ne rend pas la synchronisation plus rapide et s'applique uniquement à cette synchronisation."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken die vóór deze datum zijn vastgelegd, worden nog steeds van de duikcomputer overgebracht en vervolgens verwijderd — ze worden niet opnieuw geïmporteerd of bijgewerkt. Dit maakt de synchronisatie niet sneller en geldt alleen voor deze synchronisatie."
+          }
+        }
+      }
+    },
+    "Dives recorded before this date are still transferred from the dive computer, then discarded instead of being added to your logbook — this does not make the sync faster. The date defaults to the most recent dive in your logbook, or one year ago if your logbook is empty, and applies to this sync only. Has no effect on a device you've already synced." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge, die vor diesem Datum aufgezeichnet wurden, werden weiterhin vom Tauchcomputer übertragen und dann verworfen, anstatt zu deinem Logbuch hinzugefügt zu werden — dadurch wird die Synchronisierung nicht schneller. Das Datum wird standardmäßig auf den zuletzt erfassten Tauchgang in deinem Logbuch gesetzt, oder auf ein Jahr zuvor, wenn dein Logbuch leer ist, und gilt nur für diese Synchronisierung. Hat keine Auswirkung auf ein bereits synchronisiertes Gerät."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plongées enregistrées avant cette date sont tout de même transférées depuis l'ordinateur de plongée, puis rejetées au lieu d'être ajoutées à votre carnet — cela ne rend pas la synchronisation plus rapide. La date correspond par défaut à la plongée la plus récente de votre carnet, ou à un an en arrière si votre carnet est vide, et s'applique uniquement à cette synchronisation. N'a aucun effet sur un appareil déjà synchronisé."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken die vóór deze datum zijn vastgelegd, worden nog steeds van de duikcomputer overgebracht en vervolgens verwijderd in plaats van aan je logboek te worden toegevoegd — dit maakt de synchronisatie niet sneller. De datum wordt standaard ingesteld op de meest recente duik in je logboek, of op één jaar geleden als je logboek leeg is, en geldt alleen voor deze synchronisatie. Heeft geen effect op een apparaat dat al is gesynchroniseerd."
+          }
+        }
+      }
+    },
     "Dives without a diver name are not affected." : {
       "localizations" : {
         "de" : {
@@ -11894,6 +12102,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle duiken downloaden"
+          }
+        }
+      }
+    },
+    "Download All Dives is on for this sync, carried over from the known-devices screen — it re-downloads the full history and merges matched dives. Turn it off from the main screen." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Tauchgänge herunterladen ist für diese Synchronisierung aktiviert, übernommen vom Bildschirm der bekannten Tauchcomputer — dadurch wird der gesamte Verlauf erneut heruntergeladen und übereinstimmende Tauchgänge werden zusammengeführt. Schalte die Option auf dem Hauptbildschirm aus."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Télécharger toutes les plongées est activé pour cette synchronisation, reporté depuis l'écran des ordinateurs connus — cela retélécharge l'historique complet et fusionne les plongées correspondantes. Désactivez cette option depuis l'écran principal."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "'Alle duiken downloaden' staat aan voor deze synchronisatie, overgenomen van het scherm met bekende duikcomputers — hierdoor wordt de volledige geschiedenis opnieuw gedownload en worden overeenkomende duiken samengevoegd. Schakel deze uit via het hoofdscherm."
           }
         }
       }
@@ -18657,6 +18887,30 @@
         }
       }
     },
+    "Import Dives On or After" : {
+      "comment" : "A label that appears above a date picker.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge importieren ab"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer les plongées à partir du"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken importeren vanaf"
+          }
+        }
+      }
+    },
     "Import error" : {
       "comment" : "The title of an alert that appears when an error occurs during a file import.",
       "isCommentAutoGenerated" : true,
@@ -20277,6 +20531,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Licht"
+          }
+        }
+      }
+    },
+    "Limit Import by Date" : {
+      "comment" : "A toggle that limits the import of dives to a specific date.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import nach Datum begrenzen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limiter l'importation par date"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import beperken op datum"
           }
         }
       }
@@ -25773,6 +26051,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
+          }
+        }
+      }
+    },
+    "Older Dives Skipped" : {
+      "comment" : "Title shown after a Bluetooth sync in which every downloaded dive was discarded because it predated the user's import cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ältere Tauchgänge übersprungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plongées plus anciennes ignorées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oudere duiken overgeslagen"
           }
         }
       }
@@ -34921,6 +35222,30 @@
         }
       }
     },
+    "The date defaults to the most recent dive in your logbook, or one year ago if your logbook is empty. The limit applies to a single sync and is never remembered: once a computer is known, the sync bookmark fetches only new dives on its own, so a saved date limit could silently hide dives later." : {
+      "comment" : "A description of the date limit for Dive Computer Sync.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Datum wird standardmäßig auf den zuletzt erfassten Tauchgang in deinem Logbuch gesetzt, oder auf ein Jahr zuvor, wenn dein Logbuch leer ist. Die Begrenzung gilt nur für eine einzelne Synchronisierung und wird nie gespeichert: Sobald ein Computer bekannt ist, ruft das Sync-Lesezeichen von selbst nur neue Tauchgänge ab, sodass eine gespeicherte Datumsbegrenzung später unbemerkt Tauchgänge verbergen könnte."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La date correspond par défaut à la plongée la plus récente de votre carnet, ou à un an en arrière si votre carnet est vide. La limite s'applique à une seule synchronisation et n'est jamais mémorisée : une fois l'ordinateur reconnu, le repère de synchronisation ne récupère que les nouvelles plongées de lui-même, donc une limite de date enregistrée pourrait masquer silencieusement des plongées plus tard."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De datum wordt standaard ingesteld op de meest recente duik in je logboek, of op één jaar geleden als je logboek leeg is. De limiet geldt voor één synchronisatie en wordt nooit onthouden: zodra een computer bekend is, haalt de synchronisatiebladwijzer vanzelf alleen nieuwe duiken op, waardoor een opgeslagen datumlimiet later stilletjes duiken zou kunnen verbergen."
+          }
+        }
+      }
+    },
     "The file could not be read correctly." : {
       "localizations" : {
         "de" : {
@@ -35031,6 +35356,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "De werkdruk wordt gebruikt om de gascapaciteit (ft³) om te rekenen naar het werkelijke watervolume (L) voor AMV- en SAC-berekeningen. Typische waarde: 3000 PSI."
+          }
+        }
+      }
+    },
+    "The sync bookmark is saved even when every downloaded dive falls before your date, so the next sync still fetches only genuinely new dives." : {
+      "comment" : "The text above the sync bookmark.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Sync-Lesezeichen wird auch dann gespeichert, wenn alle heruntergeladenen Tauchgänge vor deinem Datum liegen, sodass die nächste Synchronisierung weiterhin nur wirklich neue Tauchgänge abruft."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le repère de synchronisation est enregistré même si toutes les plongées téléchargées sont antérieures à votre date, afin que la prochaine synchronisation ne récupère que les plongées réellement nouvelles."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De synchronisatiebladwijzer wordt opgeslagen, zelfs als alle gedownloade duiken vóór je datum vallen, zodat de volgende synchronisatie alleen echt nieuwe duiken ophaalt."
           }
         }
       }
@@ -35179,6 +35528,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deze drempelwaarden dienen als richtlijn voor dieptelimieten en gaskeuze bij technisch duiken (Anthony & Mitchell, 2016)."
+          }
+        }
+      }
+    },
+    "They were downloaded from your dive computer, then discarded because they were recorded before %@." : {
+      "comment" : "Explanation in the Bluetooth sync results for dives discarded by the import cutoff date. %@ is the cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie wurden von deinem Tauchcomputer heruntergeladen und dann verworfen, weil sie vor dem %@ aufgezeichnet wurden."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elles ont été téléchargées depuis votre ordinateur de plongée, puis rejetées car elles ont été enregistrées avant le %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ze zijn gedownload van je duikcomputer en vervolgens verwijderd omdat ze zijn vastgelegd vóór %@."
           }
         }
       }

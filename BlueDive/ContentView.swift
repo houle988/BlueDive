@@ -30,6 +30,10 @@ struct ContentView: View {
     @Environment(DiveStore.self) private var store
 
     @State var showScannerSheet = false
+    /// Driven by BluetoothScannerView's sync state. True while a BLE connection is open and a
+    /// retrieval may be in flight, where a swipe-dismiss would tear down and free the device
+    /// pointer out from under the background read.
+    @State private var isBluetoothSyncTeardownUnsafe = false
     @State var showFileImporter = false
     @State var importError: ImportError?
     @State var showErrorAlert = false
@@ -230,10 +234,11 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showScannerSheet) {
-                BluetoothScannerView()
+                BluetoothScannerView(isTeardownUnsafe: $isBluetoothSyncTeardownUnsafe)
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+                    .interactiveDismissDisabled(isBluetoothSyncTeardownUnsafe)
             }
             // Widget deep-link hooks (bluedive://add/manual | bluedive://add/bluetooth)
             .onReceive(NotificationCenter.default.publisher(for: .addDiveManual)) { _ in

@@ -99,6 +99,11 @@ struct BlueDiveApp: App {
         #if DEBUG
         // listPendingNotifications()
         // scheduleDebugNotification()
+        if let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first {
+            let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
+            let defaultsPath = libraryURL.appendingPathComponent("Preferences/\(bundleID).plist").path
+            print("🗂️ UserDefaults plist path: \(defaultsPath)")
+        }
         #endif
     }
     

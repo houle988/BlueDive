@@ -20,8 +20,46 @@ extension BluetoothScannerView {
         Self.logger.info("Stopping Bluetooth scan")
     }
 
+    // MARK: - Import Cutoff Session State
+
+    /// Disarms the cutoff toggle so it cannot silently apply to whatever sync happens next.
+    func disarmImportCutoff() {
+        importCutoffEnabled = false
+    }
+
+    /// Clears the previous sync's cutoff-filtering results so a stale count or date can never
+    /// survive onto a later screen.
+    func clearCutoffResults() {
+        cutoffFilteredCount = 0
+        cutoffAppliedDate = nil
+    }
+
+    /// Fully exits the search flow and disarms both halves of the full-history configuration —
+    /// Download All Dives and the date cutoff — so none of it survives into whatever the user
+    /// does next. They have to be reset together: clearing only the cutoff would leave the
+    /// expensive half armed and turn the user's next device tap into an unprotected full-history
+    /// re-download. Used by both the scanning toolbar's Cancel button and the error screen's
+    /// Retry button — the two places a user backs out of an in-flight or failed scan without
+    /// completing a sync.
+    func abandonScanSession() {
+        stopScanning()
+        isSearching = false
+        cachedTargetFingerprint = nil
+        discardPendingSeed()
+        downloadAllDives = false
+        disarmImportCutoff()
+        syncState = .idle
+    }
+
     /// Connects directly to a known device using its stored BLE UUID (no scanning required).
     func connectToKnownDevice(_ device: DeviceFingerprint) {
+        // Now that the device is known, anchor the cutoff on the newest dive belonging to *its*
+        // diver instead of the newest dive in the logbook. diverNameBySerial is already computed
+        // for the known-device list (and keyed on the trimmed, lowercased serial), so this costs
+        // no extra fetch beyond the scoped newest-dive lookup itself. Runs before both the direct
+        // connect and the scan fallback, since either can end in a full-history download.
+        prepareImportCutoffDefault(forDiver: diverNameBySerial[device.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()])
+
         // Look up the StoredDevice by serial to find the BLE UUID.
         // If DeviceStorage was wiped (reinstall / UserDefaults reset) but
         // the DeviceFingerprint record has family+model, we cannot recover
@@ -29,7 +67,7 @@ extension BluetoothScannerView {
         // seedDeviceStorageFromDatabase will re-create the entry once the
         // peripheral is discovered.
         guard let allDevices = DeviceStorage.shared.getAllStoredDevices(),
-              let storedDevice = allDevices.first(where: { $0.serial == device.serial }),
+              let storedDevice = allDevices.first(where: { $0.serial?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == device.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }),
               let uuid = UUID(uuidString: storedDevice.uuid),
               let peripheral = bleManager.centralManager.retrievePeripherals(withIdentifiers: [uuid]).first else {
             Self.logger.warning("Could not retrieve peripheral for \(device.computerName) — falling back to scan")
@@ -70,7 +108,7 @@ extension BluetoothScannerView {
         for peripheral in bleManager.discoveredPeripherals {
             let uuid = peripheral.identifier.uuidString
             if let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: uuid),
-               storedDevice.serial == serial {
+               storedDevice.serial?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
                 Self.logger.info("Found target device: \(peripheral.name ?? "Unknown") matching serial \(serial)")
                 let savedName = cachedTargetFingerprint?.computerName
                 cachedTargetFingerprint = nil
@@ -136,6 +174,8 @@ extension BluetoothScannerView {
 
     func connectToDevice(_ peripheral: CBPeripheral) {
         guard !syncState.isActive || syncState == .scanning else { return }
+
+        clearCutoffResults()
 
         let deviceName = peripheral.name ?? "Unknown Device"
         let deviceAddress = peripheral.identifier.uuidString
@@ -209,6 +249,7 @@ extension BluetoothScannerView {
                     self.syncState = .error(message: String(format: NSLocalizedString("Unable to connect to %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when a Bluetooth connection to a dive computer fails. %@ is the device name."), deviceName))
                     self.selectedDevice = nil
                     self.discardPendingSeed(matchingUUID: deviceAddress)
+                    self.restorePendingReassociationPrune()
                 }
                 return
             }
@@ -253,8 +294,13 @@ extension BluetoothScannerView {
                             Self.logger.info("[BLE] Removed nil-serial orphan DeviceStorage entry for \(deviceAddress.prefix(8))… after pointer timeout")
                         }
                     }
+                    self.restorePendingReassociationPrune()
                     return
                 }
+                // Past this point the connection is confirmed viable, so the double-free race
+                // window the prune protects against has closed and the new UUID mapping
+                // legitimately supersedes the old one. Drop the restore without applying it.
+                self.pendingReassociationPruneRestore = nil
                 self.retrieveDiveLogs(from: peripheral)
             }
         }
@@ -287,6 +333,7 @@ extension BluetoothScannerView {
             }
 
         // If the user wants to re-download all dives, clear only the fingerprints for this device
+        let watermarkRestored: Bool
         if downloadAllDives {
             Self.logger.info("'Download all dives' mode enabled — clearing fingerprints for current device")
             let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString)
@@ -301,6 +348,11 @@ extension BluetoothScannerView {
             }
 
             // Use the hardware serial number (not the Bluetooth UUID)
+            // A single-key clear (rather than the serial-wide sweep used elsewhere) is sufficient
+            // here: this whole download runs with useFingerprint: false (set below when calling
+            // DiveLogRetriever.retrieveDiveLogs), so none of the library's fingerprint-lookup paths
+            // consult the UserDefaults cache at all. A stale entry surviving under a different
+            // deviceType key cannot affect this sync — the clear just tidies the most likely key.
             if let serial = storedDevice?.serial {
                 Self.logger.info("Clearing fingerprint for \(deviceType) (serial: \(serial))")
                 DeviceFingerprintStorage.shared.clearFingerprint(forDeviceType: deviceType, serial: serial)
@@ -311,17 +363,28 @@ extension BluetoothScannerView {
                 // Self.logger.warning("No hardware serial number stored — clearing all fingerprints for \(deviceType)")
                 // DeviceFingerprintStorage.shared.clearFingerprintsForDeviceType(deviceType)
             // }
+            // The cache entry for this device was just cleared and useFingerprint is false
+            // below, so the library has nothing to compare against: always full history.
+            watermarkRestored = false
+        } else {
+            // Always sync fingerprint from SwiftData before downloading.
+            // UserDefaults is used as a session-level cache by the library; SwiftData is the
+            // source of truth. This covers reinstalls, iCloud restores, and deleted dives.
+            watermarkRestored = (syncFingerprintFromDatabase(for: peripheral) == .restored)
         }
+
+        // Whether this download covers the whole device history is only knowable here, once the
+        // watermark has been resolved — every earlier UI event can merely guess at it. A cutoff
+        // is meaningful for a full-history download only: an incremental sync is already limited
+        // to dives recorded since the last one, so discarding older dives there would drop dives
+        // the user expects to keep.
+        let isFullHistoryDownload = downloadAllDives || !watermarkRestored
+        let effectiveCutoff: Date? = (isFullHistoryDownload && importCutoffEnabled)
+            ? Calendar.current.startOfDay(for: importCutoffDate)
+            : nil
 
         bleManager.isRetrievingLogs = true
         bleManager.currentRetrievalDevice = peripheral
-
-        // Always sync fingerprint from SwiftData before downloading.
-        // UserDefaults is used as a session-level cache by the library; SwiftData is the
-        // source of truth. This covers reinstalls, iCloud restores, and deleted dives.
-        if !downloadAllDives {
-            syncFingerprintFromDatabase(for: peripheral)
-        }
 
         // Observe the number of downloaded dives via the viewModel
         // (onProgress reports transfer bytes, not dives)
@@ -360,20 +423,62 @@ extension BluetoothScannerView {
                     DispatchQueue.main.async {
                         Self.logger.info("Retrieval successful: \(viewModel.dives.count) dives")
 
-                        if viewModel.dives.isEmpty {
-                            // No new dives, close the connection
+                        // Filtering happens AFTER download — every dive still transfers over
+                        // BLE, this only keeps the logbook clean.
+                        let cutoff = effectiveCutoff
+
+                        let downloaded = viewModel.dives
+                        let kept: [DiveData]
+                        if let cutoff {
+                            kept = downloaded.filter { $0.datetime >= cutoff }
+                            self.cutoffFilteredCount = downloaded.count - kept.count
+                            self.cutoffAppliedDate = self.cutoffFilteredCount > 0 ? cutoff : nil
+                            Self.logger.info("Import cutoff \(cutoff): kept \(kept.count) of \(downloaded.count) downloaded dive(s), discarded \(downloaded.count - kept.count)")
+                        } else {
+                            kept = downloaded
+                            self.cutoffFilteredCount = 0
+                            self.cutoffAppliedDate = nil
+                        }
+
+                        if kept.isEmpty {
+                            // No dives to import, close the connection
                             self.downloadProgressCancellable = nil
                             self.commitPendingSeed()
                             BLEDiagnosticSession.shared.stop()
                             self.bleManager.close(clearDevicePtr: true)
                             self.bleManager.clearRetrievalState()
+                            // Two very different situations land in this branch. When nothing was
+                            // downloaded at all the device simply had nothing new to send, and a
+                            // partial-sync flag carries no meaning there — it stays false, as it
+                            // always has. When dives were downloaded but every one of them fell
+                            // before the cutoff, the library's partial-sync signal is about real
+                            // dives it could not read, so it must be preserved for the warning
+                            // completedView shows on this path.
+                            self.isPartialSync = downloaded.isEmpty ? false : viewModel.isPartialSync
+                            // Dives WERE downloaded but all fell before the cutoff. In the normal
+                            // incremental-fingerprint case the library already advanced its
+                            // UserDefaults watermark (DiveLogRetriever saveFingerprint), so copy it
+                            // into SwiftData here — importDownloadedDives never runs on this path.
+                            // Without this, syncFingerprintFromDatabase would find no DB record on
+                            // the next sync, clear UserDefaults, and re-download the entire history.
+                            //
+                            // Caveat: that "library already advanced its watermark" premise only
+                            // holds when fingerprinting is on. With downloadAllDives the enclosing
+                            // DiveLogRetriever.retrieveDiveLogs call passes useFingerprint: false,
+                            // so the library's shouldSaveFingerprint logic never writes a watermark
+                            // in the first place — there is nothing to mirror. The call still runs
+                            // here, but persistFingerprintRecord's own guard (no cached fingerprint
+                            // under the library's key) makes it a harmless no-op rather than
+                            // persisting anything incorrect.
+                            if !downloaded.isEmpty {
+                                self.persistFingerprintRecord(for: self.selectedDevice)
+                            }
                             self.selectedDevice = nil
-                            self.isPartialSync = false
                             self.syncState = .completed(imported: 0, merged: 0, skipped: 0)
                         } else {
                             self.downloadProgressCancellable = nil
                             self.commitPendingSeed()
-                            self.downloadedDives = viewModel.dives
+                            self.downloadedDives = kept
                             self.isPartialSync = viewModel.isPartialSync
                             BLEDiagnosticSession.shared.stop()
                             self.bleManager.close(clearDevicePtr: true)
@@ -418,25 +523,25 @@ extension BluetoothScannerView {
     func commitPendingSeed() {
         guard let seed = pendingDeviceStorageSeed else { return }
         // Verify the hardware serial the library reported matches the fingerprint record.
-        // If they differ, we connected to the wrong unit — abort to prevent cross-device corruption.
+        // The reported serial was written by the library itself (DiveLogRetriever calls
+        // DeviceStorage.updateDeviceSerial with the hardware-reported serial during serial/
+        // fingerprint detection), so it is ground truth about which physical unit is on the
+        // other end of this connection — not our own guess. A mismatch therefore means the
+        // reassociation candidate we guessed at was wrong, and the entry already on file is
+        // the correct one. Discard our seed and leave DeviceStorage untouched: overwriting or
+        // deleting that entry would destroy a correct mapping and break dedup, diver
+        // resolution, and watermark persistence for a device that was identified correctly.
         if let reportedSerial = DeviceStorage.shared.getStoredDevice(uuid: seed.uuid)?.serial,
            !reportedSerial.isEmpty,
-           reportedSerial.lowercased() != seed.serial.lowercased() {
-            Self.logger.error("[BLE] Serial mismatch at commit — seed=\(seed.serial) reported=\(reportedSerial). Aborting to prevent cross-device fingerprint corruption.")
-            if let allDevices = DeviceStorage.shared.getAllStoredDevices() {
-                let filtered = allDevices.filter { $0.uuid != seed.uuid }
-                if filtered.count < allDevices.count {
-                    DeviceStorage.shared.updateStoredDevices(filtered)
-                    Self.logger.info("[BLE] Removed DeviceStorage entry for mismatched UUID \(seed.uuid.prefix(8))…")
-                }
-            }
+           reportedSerial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != seed.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            Self.logger.error("[BLE] Serial mismatch at commit — seed=\(seed.serial) reported=\(reportedSerial). Reported serial is ground truth; discarding our seed and keeping the existing DeviceStorage entry unchanged.")
             discardPendingSeed()
             return
         }
         DeviceStorage.shared.storeDevice(uuid: seed.uuid, name: seed.name, family: seed.family, model: seed.modelID, serial: seed.serial)
-        if !seed.serial.isEmpty && !Self.knownSentinelSerials.contains(seed.serial.lowercased()),
+        if !seed.serial.isEmpty && !Self.knownSentinelSerials.contains(seed.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()),
            let allDevices = DeviceStorage.shared.getAllStoredDevices() {
-            let filtered = allDevices.filter { !($0.serial?.lowercased() == seed.serial.lowercased() && $0.uuid != seed.uuid) }
+            let filtered = allDevices.filter { !($0.serial?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == seed.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() && $0.uuid != seed.uuid) }
             if filtered.count < allDevices.count {
                 DeviceStorage.shared.updateStoredDevices(filtered)
                 Self.logger.info("Removed stale DeviceStorage UUID for \(seed.name) (serial: \(seed.serial))")
@@ -457,6 +562,31 @@ extension BluetoothScannerView {
         discardPendingSeed()
     }
 
+    /// Puts back the DeviceStorage entries removed by a legacy reassociation prune whose
+    /// connection attempt then failed. Without this the device becomes unreachable via
+    /// `connectToKnownDevice`/`checkForTargetDevice` (both look it up in DeviceStorage by
+    /// serial) until the user manually redoes reassociation — the legacy path sets no
+    /// `pendingDeviceStorageSeed`, so nothing else can recommit the mapping.
+    /// No-op when nothing is armed. Must be called on the main actor.
+    func restorePendingReassociationPrune() {
+        guard let pruned = pendingReassociationPruneRestore, !pruned.isEmpty else {
+            pendingReassociationPruneRestore = nil
+            return
+        }
+        pendingReassociationPruneRestore = nil
+        var merged = DeviceStorage.shared.getAllStoredDevices() ?? []
+        var existingUUIDs = Set(merged.map { $0.uuid })
+        var restoredCount = 0
+        for entry in pruned where !existingUUIDs.contains(entry.uuid) {
+            merged.append(entry)
+            existingUUIDs.insert(entry.uuid)
+            restoredCount += 1
+        }
+        guard restoredCount > 0 else { return }
+        DeviceStorage.shared.updateStoredDevices(merged)
+        Self.logger.info("[Reassociation] Connection failed — restored \(restoredCount) pruned DeviceStorage entry/entries")
+    }
+
     // MARK: - Reassociation
 
     /// Intercepts a manual tap on a discovered peripheral. Shows a reassociation prompt
@@ -465,9 +595,24 @@ extension BluetoothScannerView {
     /// directly when no match is found.
     func handleDeviceTap(_ peripheral: CBPeripheral) {
         let uuid = peripheral.identifier.uuidString
-        // UUID already in DeviceStorage → device is known, connect directly.
-        guard DeviceStorage.shared.getStoredDevice(uuid: uuid) == nil else {
+        // An identity mapping already exists for this exact BLE UUID, so there is no ambiguity
+        // to resolve and reassociation matching is skipped entirely. This deliberately stays a
+        // pure DeviceStorage question: an earlier version of this code also required a
+        // DeviceFingerprint record here, which let an unfinished-import peripheral (DeviceStorage
+        // entry present, no DeviceFingerprint yet) fall through into name-based candidate
+        // matching, where it can spuriously match a *different*, unrelated known device sharing
+        // the same model name — and if accepted, corrupt that other device's DeviceStorage
+        // mapping via the pruning step in confirmReassociation below.
+        let existingStoredDevice = DeviceStorage.shared.getStoredDevice(uuid: uuid)
+        guard existingStoredDevice == nil else {
             Self.logger.info("[Reassociation] UUID \(uuid.prefix(8))… already in DeviceStorage — direct connect")
+            // Same reasoning as connectToKnownDevice: this peripheral's identity is already known,
+            // so the cutoff can be anchored on the newest dive belonging to *its* diver rather than
+            // on the whole logbook. Keyed exactly like the candidate-matching path below (trimmed,
+            // lowercased serial). An unresolvable serial falls through to the generic seed.
+            if let serial = existingStoredDevice?.serial {
+                prepareImportCutoffDefault(forDiver: diverNameBySerial[serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()])
+            }
             connectToDevice(peripheral)
             return
         }
@@ -480,7 +625,7 @@ extension BluetoothScannerView {
         // but the user has already identified the correct model via the model picker.
         // Falls back to BLE-name resolution for the secondary family+modelID match.
         let resolvedModel = modelOverrides[uuid] ?? DeviceConfiguration.supportedModels.first(where: { $0.name == bleName })
-        let candidates: [ReassociationCandidate] = knownDevices.compactMap { fp in
+        let candidates: [ReassociationCandidate] = dedupedKnownDevices.compactMap { fp in
             let nameMatch = bleName == fp.computerName
             let modelMatch: Bool
             if !nameMatch, let fpFamily = fp.family, let rm = resolvedModel {
@@ -489,10 +634,14 @@ extension BluetoothScannerView {
                 modelMatch = false
             }
             guard nameMatch || modelMatch else { return nil }
-            let trimmedSerial = fp.serial.trimmingCharacters(in: .whitespaces)
+            let trimmedSerial = fp.serial.trimmingCharacters(in: .whitespacesAndNewlines)
             Self.logger.debug("[Reassociation] Candidate: '\(fp.computerName)' serial=\(trimmedSerial) via \(nameMatch ? "name" : "family+modelID")")
+            // The id must stay unique even when two candidates share a sentinel serial (e.g. "0"),
+            // which dedupedKnownDevices deliberately does not collapse — a duplicate Identifiable
+            // id in the picker's ForEach is undefined list diffing. `serial` stays the plain
+            // trimmed serial; only the identity is qualified.
             return ReassociationCandidate(
-                id: trimmedSerial,
+                id: "\(trimmedSerial)#\(fp.persistentModelID)",
                 serial: trimmedSerial,
                 computerName: fp.computerName,
                 family: fp.family,
@@ -522,16 +671,55 @@ extension BluetoothScannerView {
     /// deferred seed with the new UUID, and connects. The model override ensures
     /// connectToDevice resolves the correct display name without a full download.
     func confirmReassociation(_ peripheral: CBPeripheral, candidate: ReassociationCandidate) {
+        // Runs before the prune below: when this guard fails the function returns without ever
+        // calling connectToDevice, so there is no connection attempt for a prune to protect —
+        // pruning first would destroy the old-UUID mapping for zero benefit.
+        guard !syncState.isActive || syncState == .scanning else {
+            Self.logger.warning("[Reassociation] Confirmation aborted — sync already active (\(String(describing: syncState)))")
+            return
+        }
+
+        // Same reasoning as connectToKnownDevice: the candidate identifies the computer, so
+        // anchor the cutoff on the newest dive belonging to *its* diver rather than on the
+        // whole logbook. Runs first so it also covers the legacy no-family fallback below,
+        // which still ends in a plain connect and therefore a full-history download.
+        prepareImportCutoffDefault(forDiver: candidate.diverName)
+
+        let newUUID = peripheral.identifier.uuidString
+        // A legacy fingerprint record carries no family/modelID, so the guard below returns early
+        // and pendingDeviceStorageSeed is never set — that path has no way to recommit the pruned
+        // mapping if the connect fails. Capture the removed entries for it instead.
+        let isLegacyRecord = candidate.family == nil
+        // Prune stale DeviceStorage entries for this serial immediately.
+        // The old UUID (e.g. left over after an OS Bluetooth deletion + re-pair)
+        // would cause didDisconnectPeripheral to trigger auto-reconnect during
+        // the openBLEDevice window, racing with this connection and causing a
+        // double-free of device_data_t. commitPendingSeed would prune it on
+        // success, but that's too late to prevent the crash.
+        // Runs before the legacy no-family early return below so that path — which also
+        // ends in a plain connect — is protected from the same race.
+        if !candidate.serial.isEmpty && !Self.knownSentinelSerials.contains(candidate.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()),
+           let allDevices = DeviceStorage.shared.getAllStoredDevices() {
+            let filtered = allDevices.filter { !($0.serial?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == candidate.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() && $0.uuid != newUUID) }
+            if filtered.count < allDevices.count {
+                if isLegacyRecord {
+                    // Arm the restore before the write, so connectToDevice's failure branches can
+                    // put these back. The prune still happens before connectToDevice — the
+                    // double-free race window is unchanged.
+                    pendingReassociationPruneRestore = allDevices.filter {
+                        $0.serial?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == candidate.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() && $0.uuid != newUUID
+                    }
+                }
+                DeviceStorage.shared.updateStoredDevices(filtered)
+                Self.logger.info("[Reassociation] Pruned \(allDevices.count - filtered.count) stale DeviceStorage entry/entries for serial \(candidate.serial) before connect")
+            }
+        }
+
         guard let family = candidate.family else {
             Self.logger.warning("[Reassociation] '\(candidate.computerName)' (serial \(candidate.serial)) has no family/modelID — legacy record, falling back to plain connect")
             connectToDevice(peripheral)
             return
         }
-        guard !syncState.isActive || syncState == .scanning else {
-            Self.logger.warning("[Reassociation] Confirmation aborted — sync already active (\(String(describing: syncState)))")
-            return
-        }
-        let newUUID = peripheral.identifier.uuidString
         Self.logger.info("[Reassociation] Confirming reassociation: '\(candidate.computerName)' serial=\(candidate.serial) newUUID=\(newUUID.prefix(8))…")
         pendingDeviceStorageSeed = (uuid: newUUID, name: candidate.computerName,
                                     family: family, modelID: candidate.modelID,
@@ -543,20 +731,6 @@ extension BluetoothScannerView {
             modelOverrides[newUUID] = model
         } else {
             Self.logger.warning("[Reassociation] Model (family=\(String(describing: family)) modelID=\(candidate.modelID)) not in supportedModels — seed set, no forcedModel hint")
-        }
-        // Prune stale DeviceStorage entries for this serial immediately.
-        // The old UUID (e.g. left over after an OS Bluetooth deletion + re-pair)
-        // would cause didDisconnectPeripheral to trigger auto-reconnect during
-        // the openBLEDevice window, racing with this connection and causing a
-        // double-free of device_data_t. commitPendingSeed would prune it on
-        // success, but that's too late to prevent the crash.
-        if !candidate.serial.isEmpty && !Self.knownSentinelSerials.contains(candidate.serial.lowercased()),
-           let allDevices = DeviceStorage.shared.getAllStoredDevices() {
-            let filtered = allDevices.filter { !($0.serial?.lowercased() == candidate.serial.lowercased() && $0.uuid != newUUID) }
-            if filtered.count < allDevices.count {
-                DeviceStorage.shared.updateStoredDevices(filtered)
-                Self.logger.info("[Reassociation] Pruned \(allDevices.count - filtered.count) stale DeviceStorage entry/entries for serial \(candidate.serial) before connect")
-            }
         }
         connectToDevice(peripheral)
         connectedDeviceName = candidate.computerName
