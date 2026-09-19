@@ -270,7 +270,9 @@ struct DiverProfileView: View {
                 // Name
                 VStack(spacing: 6) {
                     Group {
-                        if selectedDiver.isEmpty {
+                        if selectedDiver.isEmpty && store.cachedUniqueDivers.count == 1  && !store.cachedHasUnnamedDives {
+                            Text(verbatim: store.cachedUniqueDivers.first!)
+                        } else if selectedDiver.isEmpty {
                             Text("All Divers")
                         } else {
                             Text(verbatim: selectedDiver)
