@@ -417,6 +417,7 @@ class UserPreferences {
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
         UserDefaults.standard.set(false, forKey: "filterUnusedTanks")
         UserDefaults.standard.set(false, forKey: "autoSequenceEnabled")
+        DiveSortOrder.resetPersisted()
     }
 }
 
@@ -741,4 +742,5 @@ struct ExportableFileDocument: FileDocument {
 
 #Preview {
     SettingsView()
+        .environment(DiveStore())
 }

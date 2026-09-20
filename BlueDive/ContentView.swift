@@ -850,6 +850,25 @@ struct ContentView: View {
     }
 
 
+    // Sort order is a persisted, durable preference (unlike filters, which are
+    // scoped to a single browsing session) — see DiveStore.sortOrder. The filter
+    // toolbar button doubles as the entry point to both filters and sort, so it
+    // must visually flag a non-default sort even when no filter is active, or a
+    // persisted custom sort looks indistinguishable from the default on every launch.
+    private var filterToolbarIsActive: Bool {
+        store.activeFilterCount > 0 || store.sortOrder != .dateDesc
+    }
+
+    private var filterToolbarAccessibilityLabel: Text {
+        if store.activeFilterCount > 0 {
+            return Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), store.activeFilterCount))
+        } else if store.sortOrder != .dateDesc {
+            return Text(verbatim: NSLocalizedString("Custom sort applied", bundle: .forAppLanguage(), value: "Custom sort applied", comment: "Accessibility label for the filter button when no filters are active but the sort order differs from the default"))
+        } else {
+            return Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
+        }
+    }
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver, hasUnnamedDives: store.cachedHasUnnamedDives)
@@ -941,10 +960,10 @@ struct ContentView: View {
             .accessibilityLabel(Text("Merge two dives"))
             .disabled(dives.count < 2)
 
-            Button(action: { showFilterSheet = true }) {
+            Button(action: { store.showFilterSheet = true }) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .foregroundStyle(store.activeFilterCount > 0 ? .orange : .cyan)
+                        .foregroundStyle(filterToolbarIsActive ? .orange : .cyan)
                     if store.activeFilterCount > 0 {
                         Text("\(store.activeFilterCount)")
                             .font(.system(size: 9, weight: .bold))
@@ -956,10 +975,7 @@ struct ContentView: View {
                 }
             }
             .help("Filter Dives")
-            .accessibilityLabel(store.activeFilterCount == 0
-                ? Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
-                : Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), store.activeFilterCount))
-            )
+            .accessibilityLabel(filterToolbarAccessibilityLabel)
 
             if !dives.isEmpty {
                 Button(action: { showDeleteSheet = true }) {
@@ -997,7 +1013,7 @@ struct ContentView: View {
             Button(action: { store.showFilterSheet = true }) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "line.3.horizontal.decrease")
-                        .foregroundStyle(store.activeFilterCount > 0 ? .orange : .cyan)
+                        .foregroundStyle(filterToolbarIsActive ? .orange : .cyan)
                     if store.activeFilterCount > 0 {
                         Text("\(store.activeFilterCount)")
                             .font(.system(size: 9, weight: .bold))
@@ -1008,10 +1024,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .accessibilityLabel(store.activeFilterCount == 0
-                ? Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
-                : Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), store.activeFilterCount))
-            )
+            .accessibilityLabel(filterToolbarAccessibilityLabel)
         }
 
         ToolbarItem(placement: .primaryAction) {

@@ -786,32 +786,17 @@ struct DiveFilterSheet: View {
         .filterCardStyle()
     }
     
-    private var hasSortChange: Bool {
-        showSort && sortOrder != .dateDesc
+    private var filterResetButtonLabel: String {
+        activeFilterCount == 1
+            ? NSLocalizedString("Reset 1 filter", bundle: Bundle.forAppLanguage(), comment: "Reset button label when exactly one filter is active.")
+            : String(format: NSLocalizedString("Reset %lld filters", bundle: Bundle.forAppLanguage(), comment: "Reset button label showing the number of active filters (plural)."), activeFilterCount)
     }
 
-    private var hasAnythingToReset: Bool {
-        activeFilterCount > 0 || hasSortChange
-    }
-
-    private var resetButtonLabel: String {
-        let hasFilters = activeFilterCount > 0
-        if hasFilters && hasSortChange {
-            return activeFilterCount == 1
-                ? NSLocalizedString("Reset 1 filter & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when exactly one filter and sort order are both active.")
-                : String(format: NSLocalizedString("Reset %lld filters & sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when both multiple filters and sort order are active."), activeFilterCount)
-        } else if hasFilters {
-            return activeFilterCount == 1
-                ? NSLocalizedString("Reset 1 filter", bundle: Bundle.forAppLanguage(), comment: "Reset button label when exactly one filter is active.")
-                : String(format: NSLocalizedString("Reset %lld filters", bundle: Bundle.forAppLanguage(), comment: "Reset button label showing the number of active filters (plural)."), activeFilterCount)
-        } else {
-            return NSLocalizedString("Reset sort", bundle: Bundle.forAppLanguage(), comment: "Reset button label when only the sort order is changed")
-        }
-    }
-
+    // Sort order is intentionally not reset here — it is a durable preference persisted
+    // across launches, unlike filters, which are scoped to a single browsing session.
     private var resetSection: some View {
         Group {
-            if hasAnythingToReset {
+            if activeFilterCount > 0 {
                 Button(role: .destructive) {
                     withAnimation {
                         filterYear           = nil
@@ -831,15 +816,12 @@ struct DiveFilterSheet: View {
                         filterMarineLife     = []
                         filterMarineLifeMode = .any
                         marineLifeInput      = ""
-                        if showSort {
-                            sortOrder        = .dateDesc
-                        }
                     }
                 } label: {
                     HStack {
                         Image(systemName: "arrow.counterclockwise.circle.fill")
                             .font(.title3)
-                        Text(verbatim: resetButtonLabel)
+                        Text(verbatim: filterResetButtonLabel)
                             .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)

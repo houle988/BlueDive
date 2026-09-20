@@ -6,6 +6,10 @@ import WidgetKit
 
 /// The field the dive list is sorted by. Direction is a separate axis
 /// (`DiveSortDirection`) so every field supports both orders — see issue #77.
+///
+/// Warning: these raw values are persisted `UserDefaults` identifiers (see
+/// `DiveSortOrder.persisted`), not display strings — never rename one, or every
+/// existing user's saved sort order silently resets to the default on next launch.
 enum DiveSortField: String, CaseIterable, Identifiable {
     case date       = "date"
     case depth      = "depth"
@@ -29,6 +33,9 @@ enum DiveSortField: String, CaseIterable, Identifiable {
     var defaultDirection: DiveSortDirection { .descending }
 }
 
+/// Warning: these raw values are persisted `UserDefaults` identifiers (see
+/// `DiveSortOrder.persisted`), not display strings — never rename one, or every
+/// existing user's saved sort order silently resets to the default on next launch.
 enum DiveSortDirection: String, CaseIterable {
     case ascending  = "Asc"
     case descending = "Desc"
@@ -67,6 +74,43 @@ struct DiveSortOrder: Equatable, Hashable {
     static let diveNumberAsc  = DiveSortOrder(field: .diveNumber, direction: .ascending)
 }
 
+// MARK: - Dive Sort Persistence
+
+extension DiveSortOrder {
+    // The `UserDefaults` keys the dive list's sort field and direction are persisted under.
+    private static let fieldDefaultsKey     = "diveListSortField"
+    private static let directionDefaultsKey = "diveListSortDirection"
+
+    /// Loads the persisted sort order, falling back to the date-descending default when
+    /// no value has ever been saved (fresh install) or a saved value fails to decode.
+    static var persisted: DiveSortOrder {
+        let defaults = UserDefaults.standard
+        // The direction is only meaningful paired with the field it was saved alongside.
+        // If the field is missing or fails to decode, ignore any leftover direction and
+        // fall back to the date-descending default as a unit.
+        guard let field = DiveSortField(rawValue: defaults.string(forKey: fieldDefaultsKey) ?? "") else {
+            return .dateDesc
+        }
+        let direction = DiveSortDirection(rawValue: defaults.string(forKey: directionDefaultsKey) ?? "") ?? field.defaultDirection
+        return DiveSortOrder(field: field, direction: direction)
+    }
+
+    func persist() {
+        let defaults = UserDefaults.standard
+        defaults.set(field.rawValue, forKey: Self.fieldDefaultsKey)
+        defaults.set(direction.rawValue, forKey: Self.directionDefaultsKey)
+    }
+
+    /// Clears the persisted sort order so the next `persisted` read falls back to
+    /// `.dateDesc`. Used by `UserPreferences.resetToDefaults()`, which has no handle
+    /// to the live `DiveStore` and so cannot assign `sortOrder` directly.
+    static func resetPersisted() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: fieldDefaultsKey)
+        defaults.removeObject(forKey: directionDefaultsKey)
+    }
+}
+
 // MARK: - DiveStore
 
 @MainActor
@@ -90,7 +134,9 @@ final class DiveStore {
     var filterTag: String? = nil
     var filterMarineLife: [String] = []
     var filterMarineLifeMode: FilterMarineLifeMode = .any
-    var sortOrder: DiveSortOrder = .dateDesc
+    var sortOrder: DiveSortOrder = .persisted {
+        didSet { sortOrder.persist() }
+    }
 
     // MARK: - Derived / Cached State
     private(set) var dives: [Dive] = []
@@ -144,6 +190,8 @@ final class DiveStore {
 
     // MARK: - Filter Reset
 
+    // Resets only the filter criteria — sort order is a durable, persisted preference
+    // and is deliberately left untouched here.
     func resetFilters() {
         filterYear           = nil
         filterYearNegate     = false
@@ -159,7 +207,6 @@ final class DiveStore {
         filterTag            = nil
         filterMarineLife     = []
         filterMarineLifeMode = .any
-        sortOrder            = .dateDesc
     }
 
     // MARK: - Commit
