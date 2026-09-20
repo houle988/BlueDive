@@ -60,6 +60,7 @@ extension DiveDetailView {
                 }
                 Spacer()
             }
+            .accessibilityElement(children: .combine)
 
             Divider().background(.primary.opacity(0.2))
 
@@ -194,46 +195,14 @@ extension DiveDetailView {
                 latitudeDelta: max(abs(entryLat - eLat) * 1.5, 0.005),
                 longitudeDelta: max(abs(entryLon - eLon) * 1.5, 0.005)
             )
-            Map(initialPosition: .region(MKCoordinateRegion(center: center, span: span))) {
-                // When entry and exit share the exact same coordinate, a single
-                // combined pin avoids the two markers overlapping (which would hide
-                // the entry pin under the exit pin).
-                if entryLat == eLat && entryLon == eLon {
-                    Annotation(coordinate: entryCoord, anchor: .bottom) {
-                        Image(systemName: "arrow.up.arrow.down.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .purple)
-                    } label: {
-                        if dive.siteName.isEmpty {
-                            Text("Entry & exit")
-                        } else {
-                            Text(verbatim: dive.siteName)
-                        }
-                    }
-                } else {
-                    Annotation(coordinate: entryCoord, anchor: .bottom) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .green)
-                    } label: {
-                        if dive.siteName.isEmpty {
-                            Text("Entry")
-                        } else {
-                            Text(verbatim: dive.siteName)
-                        }
-                    }
-                    Annotation(coordinate: exitCoord, anchor: .bottom) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .orange)
-                    } label: {
-                        Text("Exit")
-                    }
-                }
-            }
+            // `SiteEntryExitMap` owns the identical / overlapping / separate pin cases —
+            // see its documentation for why overlapping pins must share one annotation.
+            SiteEntryExitMap(
+                entryCoord: entryCoord,
+                exitCoord: exitCoord,
+                region: MKCoordinateRegion(center: center, span: span),
+                pinDiameter: 26
+            )
         } else if let entryLat, let entryLon {
             // Entry only — same green as the combined-map entry pin.
             let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
@@ -242,10 +211,7 @@ extension DiveDetailView {
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
             ))) {
                 Annotation(coordinate: entryCoord, anchor: .bottom) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.title2)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .green)
+                    MapPointerPin(systemImage: "arrow.down", tint: .green, diameter: 26)
                 } label: {
                     if dive.siteName.isEmpty {
                         Text("Entry")
@@ -262,10 +228,7 @@ extension DiveDetailView {
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
             ))) {
                 Annotation(coordinate: exitCoord, anchor: .bottom) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .orange)
+                    MapPointerPin(systemImage: "arrow.up", tint: .orange, diameter: 26)
                 } label: {
                     if dive.siteName.isEmpty {
                         Text("Exit")
@@ -293,6 +256,10 @@ extension DiveDetailView {
                 Image(systemName: "star")
                     .font(.system(size: 15))
                     .foregroundStyle(.purple)
+                    // Purely decorative: without this, VoiceOver announces the SF
+                    // Symbol's own system description ("star" reads as "Add to
+                    // Favourites") before the real content below.
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Difficulty")
@@ -317,6 +284,149 @@ extension DiveDetailView {
                 }
             }
             Spacer()
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Entry / Exit Site Map
+
+/// The Site Details map for a dive that has **both** an entry and an exit coordinate,
+/// shared by the compact preview and the full-screen sheet so the two stay in step.
+///
+/// This view exists because the z-order of two overlapping pins is MapKit's decision,
+/// not SwiftUI's. `Annotation` conforms to `MapContent`, not `View`, so `.zIndex()`
+/// cannot be applied to it (it is a compile error), and the whole public `MapContent`
+/// modifier surface — `tint`, `tag`, `foregroundStyle`, `stroke`, `strokeStyle`,
+/// `annotationTitles`, `annotationSubtitles`, `mapOverlayLevel`,
+/// `mapItemDetailSelectionAccessory` — exposes no equivalent of
+/// `MKAnnotationView.zPriority` / `displayPriority`. MapKit orders overlapping
+/// annotation views itself, drawing the southernmost in front, so the order the
+/// annotations are declared in the content builder has **no** effect (verified on
+/// device: swapping the two `Annotation` calls changed nothing).
+///
+/// So when the two pins are close enough to overlap, both are drawn from a *single*
+/// `Annotation`. Inside one annotation's content view the stacking is a plain `ZStack`,
+/// which is ours to control: the orange exit pin goes in first (behind), shifted by the
+/// projected screen-space distance between the two coordinates so it still marks its own
+/// position, and the green entry pin is drawn last (in front) and undisplaced. Once the
+/// pins are far enough apart to read as two separate markers they go back to being two
+/// independent annotations, each with its own anchor and its own label.
+struct SiteEntryExitMap: View {
+    let entryCoord: CLLocationCoordinate2D
+    let exitCoord: CLLocationCoordinate2D
+    /// Region the map opens on, supplied by the caller so the compact preview and the
+    /// full-screen sheet keep framing the site identically.
+    let region: MKCoordinateRegion
+    /// `MapPointerPin` circle diameter — 26 on the compact preview, 32 full screen.
+    let pinDiameter: CGFloat
+
+    /// The map's laid-out size in points. `.zero` until the first layout pass, which is
+    /// why `mergedExitOffset` returns `nil` (two plain annotations) until it is known.
+    @State private var mapSize: CGSize = .zero
+    /// The map rect actually on screen, tracked continuously so both the overlap test
+    /// and the exit pin's offset stay correct while the user zooms the full-screen map.
+    @State private var visibleRect: MKMapRect?
+
+    /// Centre-to-centre screen distance, in points, below which the two pins are treated
+    /// as overlapping and merged into one annotation. A pin circle is `pinDiameter`
+    /// across, so anything closer than about one pin width hides part of the pin behind.
+    private var overlapThreshold: CGFloat { pinDiameter + 12 }
+
+    private var coordinatesIdentical: Bool {
+        entryCoord.latitude == exitCoord.latitude && entryCoord.longitude == exitCoord.longitude
+    }
+
+    /// Screen-space vector from the entry pin to the exit pin, in points — or `nil` when
+    /// the pins are identical, the map has not been laid out yet, or the two are far
+    /// enough apart that they should stay two independent annotations.
+    private var mergedExitOffset: CGSize? {
+        guard !coordinatesIdentical, mapSize.width > 0, mapSize.height > 0 else { return nil }
+        // Until the first camera callback arrives, project against the region we asked
+        // for, so the merged pins are already correct on the very first frame.
+        let rect = visibleRect ?? Self.mapRect(for: region)
+        guard rect.width > 0, rect.height > 0 else { return nil }
+        // Points per `MKMapPoint`. `min` mirrors how MapKit fits a requested region into
+        // a view of a different aspect ratio; for a rect read back from the camera the
+        // two ratios are already equal, so it is exact there too.
+        let scale = min(mapSize.width / rect.width, mapSize.height / rect.height)
+        let entryPoint = MKMapPoint(entryCoord)
+        let exitPoint = MKMapPoint(exitCoord)
+        let offset = CGSize(width: (exitPoint.x - entryPoint.x) * scale,
+                            height: (exitPoint.y - entryPoint.y) * scale)
+        guard hypot(offset.width, offset.height) < overlapThreshold else { return nil }
+        return offset
+    }
+
+    /// `MKCoordinateRegion` has no `MKMapRect` bridge, so project its north-west and
+    /// south-east corners instead.
+    private static func mapRect(for region: MKCoordinateRegion) -> MKMapRect {
+        let northWest = MKMapPoint(CLLocationCoordinate2D(
+            latitude: region.center.latitude + region.span.latitudeDelta / 2,
+            longitude: region.center.longitude - region.span.longitudeDelta / 2))
+        let southEast = MKMapPoint(CLLocationCoordinate2D(
+            latitude: region.center.latitude - region.span.latitudeDelta / 2,
+            longitude: region.center.longitude + region.span.longitudeDelta / 2))
+        return MKMapRect(x: min(northWest.x, southEast.x),
+                         y: min(northWest.y, southEast.y),
+                         width: abs(southEast.x - northWest.x),
+                         height: abs(southEast.y - northWest.y))
+    }
+
+    private var entryPin: MapPointerPin {
+        MapPointerPin(systemImage: "arrow.down", tint: .green, diameter: pinDiameter)
+    }
+
+    private var exitPin: MapPointerPin {
+        MapPointerPin(systemImage: "arrow.up", tint: .orange, diameter: pinDiameter)
+    }
+
+    var body: some View {
+        Map(initialPosition: .region(region)) {
+            if coordinatesIdentical {
+                // Exactly the same point: one combined pin rather than two markers
+                // stacked perfectly on top of each other.
+                Annotation(coordinate: entryCoord, anchor: .bottom) {
+                    MapPointerPin(systemImage: "arrow.up.arrow.down", tint: .purple,
+                                  diameter: pinDiameter)
+                } label: {
+                    Text("Entry & exit")
+                }
+            } else if let mergedExitOffset {
+                // Close enough to overlap: one annotation, two pins, and a ZStack whose
+                // order we control — exit behind at its own projected position, entry
+                // in front.
+                Annotation(coordinate: entryCoord, anchor: .bottom) {
+                    ZStack(alignment: .bottom) {
+                        exitPin
+                            .offset(x: mergedExitOffset.width, y: mergedExitOffset.height)
+                        entryPin
+                    }
+                } label: {
+                    Text("Entry & exit")
+                }
+            } else {
+                // Far enough apart to read as two pins: keep them independent so each
+                // one keeps its own anchor and its own accurate label.
+                Annotation(coordinate: exitCoord, anchor: .bottom) {
+                    exitPin
+                } label: {
+                    Text("Exit")
+                }
+                Annotation(coordinate: entryCoord, anchor: .bottom) {
+                    entryPin
+                } label: {
+                    Text("Entry")
+                }
+            }
+        }
+        .onGeometryChange(for: CGSize.self) { proxy in
+            proxy.size
+        } action: { newSize in
+            mapSize = newSize
+        }
+        .onMapCameraChange(frequency: .continuous) { context in
+            visibleRect = context.rect
         }
     }
 }
@@ -371,59 +481,30 @@ struct SiteMapFullScreenView: View {
         }
     }
 
-    var body: some View {
-        NavigationStack {
+    /// The map itself. `mapStyle` / `mapControls` are `View` modifiers that reach any
+    /// `Map` below them through the environment, so `body` can apply them to this
+    /// property whether the map comes from `SiteEntryExitMap` or is built inline here.
+    @ViewBuilder
+    private var siteMapContent: some View {
+        if let entryLat, let entryLon, let eLat = exitLat, let eLon = exitLon {
+            // `SiteEntryExitMap` owns the identical / overlapping / separate pin cases —
+            // see its documentation for why overlapping pins must share one annotation.
+            SiteEntryExitMap(
+                entryCoord: CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon),
+                exitCoord: CLLocationCoordinate2D(latitude: eLat, longitude: eLon),
+                region: targetRegion,
+                pinDiameter: 32
+            )
+        } else {
             // Uncontrolled initial camera (like the Site Details preview) so the
             // annotations render immediately. A bound `position` with an initial
             // region leaves MapKit not laying out pins until the first camera
             // change (they only appear after a pan); `initialPosition` avoids that.
             Map(initialPosition: .region(targetRegion)) {
-                if let entryLat, let entryLon, let eLat = exitLat, let eLon = exitLon {
-                    let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
-                    if entryLat == eLat && entryLon == eLon {
-                        // Identical entry/exit: one combined pin instead of two
-                        // overlapping markers.
-                        Annotation(coordinate: entryCoord, anchor: .bottom) {
-                            Image(systemName: "arrow.up.arrow.down.circle.fill")
-                                .font(.title2)
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .purple)
-                        } label: {
-                            if siteName.isEmpty {
-                                Text("Entry & exit")
-                            } else {
-                                Text(verbatim: siteName)
-                            }
-                        }
-                    } else {
-                        Annotation(coordinate: entryCoord, anchor: .bottom) {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.title2)
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .green)
-                        } label: {
-                            if siteName.isEmpty {
-                                Text("Entry")
-                            } else {
-                                Text(verbatim: siteName)
-                            }
-                        }
-                        Annotation(coordinate: CLLocationCoordinate2D(latitude: eLat, longitude: eLon), anchor: .bottom) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.title2)
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .orange)
-                        } label: {
-                            Text("Exit")
-                        }
-                    }
-                } else if let entryLat, let entryLon {
+                if let entryLat, let entryLon {
                     // Entry only — same green as the combined-map entry pin.
                     Annotation(coordinate: CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon), anchor: .bottom) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .green)
+                        MapPointerPin(systemImage: "arrow.down", tint: .green)
                     } label: {
                         if siteName.isEmpty {
                             Text("Entry")
@@ -434,10 +515,7 @@ struct SiteMapFullScreenView: View {
                 } else if let eLat = exitLat, let eLon = exitLon {
                     // Exit only — same orange as the combined-map exit pin.
                     Annotation(coordinate: CLLocationCoordinate2D(latitude: eLat, longitude: eLon), anchor: .bottom) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .orange)
+                        MapPointerPin(systemImage: "arrow.up", tint: .orange)
                     } label: {
                         if siteName.isEmpty {
                             Text("Exit")
@@ -447,9 +525,16 @@ struct SiteMapFullScreenView: View {
                     }
                 }
             }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            siteMapContent
             .mapStyle(mapStyle)
             .mapControls {
                 MapUserLocationButton()
+                    .tint(.cyan)
                 MapCompass()
                 MapScaleView()
             }

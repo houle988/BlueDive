@@ -7,6 +7,38 @@ private enum MapCoordinateMode: CaseIterable {
     case entry, exit
 }
 
+// Clustering radius as a fraction of the visible span: computeRawClusters merges a
+// point into a cluster when it is within span / this value of the centroid, per axis.
+private let clusterRadiusDivisor: Double = 20.0
+
+// Bounding-box diagonal below which a cluster's dives are treated as literally the
+// same coordinate, so no zoom could ever separate them and the list is the only
+// useful outcome. Deliberately 1 m, not the old 10 m: two dives 8 m apart are genuinely
+// distinct points and must at least get a zoom attempt. Deciding whether that attempt
+// *achieved* anything is no longer predicted up front — handleClusterTap zooms and then
+// verifies against the real recluster (see verifyZoomSplit).
+private let sameSpotThresholdMeters: Double = 1.0
+
+// Degenerate-span clamp only. Its sole job is stopping a zero-width cluster (all dives
+// on one axis) from producing a zero or absurdly tiny target span; it is NOT a
+// prediction input and must never appear in a "would this still merge?" calculation.
+// ~5 m of latitude, far below any realistic dive spacing, so — unlike the old 0.0015
+// floor, which was the practical target for nearly every real cluster — it effectively
+// never becomes the target span in practice.
+private let deepStopZoomSpan: Double = 0.00005
+
+// Zoom ratio below which a span change counts as a real zoom. Shared by the passive
+// recluster gate and handleClusterTap's "is this zoom perceptible?" test.
+private let zoomPerceptibleRatio: Double = 0.7
+
+// Largest pin count a recluster may animate. The soft-fade between pin sets is a
+// deliberate UX touch for the common case (a handful of pins regrouping), but
+// withAnimation makes SwiftUI diff and animate every annotation insert/remove — at tight
+// zoom over a large library the cluster count approaches the dive count, and animating
+// thousands of annotation changes is pure main-thread cost for a fade nobody can follow.
+// Above this, assign the new set directly (hard cut, the pre-soft-fade behaviour).
+private let maxAnimatedClusterCount: Int = 300
+
 struct DiveMapView: View {
     @Environment(DiveStore.self) private var store
     @Query(sort: \Gear.name) private var allGear: [Gear]
@@ -52,7 +84,37 @@ struct DiveMapView: View {
 
     // MARK: - Clustering & Snapshot Cache
 
+    // Gate-quantized span: only advances when a zoom crosses the recluster threshold,
+    // so small pan-induced span drift doesn't churn the clusters. Drives reclustering.
     @State private var currentSpan: MKCoordinateSpan = MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
+    // The camera's actual span, updated on every onMapCameraChange(.onEnd) event — still
+    // fresher than currentSpan's gated value. Tap handling must use this rather than
+    // currentSpan, whose lag is what let a cluster tap become a permanent no-op (see
+    // handleClusterTap).
+    @State private var liveSpan: MKCoordinateSpan = MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
+    // Set right before a tap-triggered zoom starts; cleared (and the recluster
+    // performed) by the next onMapCameraChange event, which carries the real,
+    // MapKit-delivered span rather than the requested one handleClusterTap
+    // computed. Zooming to a *requested* span and reclustering against it
+    // immediately caused two problems: (1) the pins split within a couple
+    // frames while the camera was still barely moving — a visible pop, well
+    // before the 0.35s animation visually finished — and (2) MapKit aspect-fits
+    // requested regions to the view, so the real delivered span usually differs
+    // from the requested one; writing the requested span into currentSpan made
+    // the passive gate below fire *again* once the real settle event arrived,
+    // causing a second recluster ("double regroup") a moment after the first.
+    @State private var awaitingZoomRecluster = false
+    // Safety net for the (very unlikely) case where MapKit delivers no camera
+    // event at all after an armed zoom, which would otherwise leave the pins
+    // permanently un-reclustered. Held so a second tap can cancel a pending
+    // watchdog from a previous tap.
+    @State private var zoomReclusterWatchdog: Task<Void, Never>? = nil
+    // Member IDs of the cluster whose tap armed the pending zoom. After the zoom's
+    // recluster completes, verifyZoomSplit checks whether a cluster with exactly this
+    // membership still exists: if it does, the zoom demonstrably split nothing and the
+    // list is shown. Same UUID identity the clusterer itself uses (DiveCoordPoint.id /
+    // store.diveByID), so there is only ever one identity scheme in play here.
+    @State private var pendingZoomMemberIDs: Set<UUID> = []
     @State private var clusterDives: [Dive]? = nil
     @State private var cachedClusters: [DiveCluster] = []
     @State private var cachedUniqueDivers: [String] = []
@@ -66,9 +128,18 @@ struct DiveMapView: View {
         let id: String
         let coordinate: CLLocationCoordinate2D
         let dives: [Dive]
-        // Single-diver initials for the pin, computed once at build time (see
-        // singleDiverInitials) so rendering stays O(1) per pin at scale.
-        let initials: String?
+        // Whether every dive in the cluster belongs to the same named diver — drives the
+        // pin's tint (cyan vs. orange). Computed once per cluster during the filter/
+        // recluster pass — never from `body` — so per-render pin rendering stays O(1)
+        // even for large single-site clusters.
+        let isSingleDiver: Bool
+    }
+
+    // True when every dive in the cluster shares one non-empty diver name.
+    private nonisolated static func isSingleDiverCluster(for dives: [Dive]) -> Bool {
+        let names = Set(dives.map { $0.diverName.trimmingCharacters(in: .whitespaces) })
+        guard names.count == 1, let name = names.first else { return false }
+        return !name.isEmpty
     }
 
     // Normalizes longitude into [-180, 180) so dives near the antimeridian
@@ -103,6 +174,25 @@ struct DiveMapView: View {
         let memberIDs: [UUID]
         let centroidLat: Double
         let centroidLon: Double
+    }
+
+    // MARK: - Cluster Identity
+
+    // Identity derived from every member, not just the lowest UUID: the previous
+    // "min UUID + count" form collided whenever two distinct clusters shared their
+    // lowest-UUID member and their size, which confused ForEach identity. Folded
+    // order-independently so a large single-site cluster doesn't have to sort and
+    // concatenate thousands of UUID strings on every recluster.
+    private nonisolated static func clusterID(for memberIDs: [UUID]) -> String {
+        var high: UInt64 = 0
+        var low: UInt64 = 0
+        for id in memberIDs {
+            withUnsafeBytes(of: id.uuid) { raw in
+                high ^= raw.loadUnaligned(fromByteOffset: 0, as: UInt64.self)
+                low  ^= raw.loadUnaligned(fromByteOffset: 8, as: UInt64.self)
+            }
+        }
+        return String(format: "%016lx%016lx_%d", high, low, memberIDs.count)
     }
 
     // MARK: - State Rebuilders
@@ -217,12 +307,11 @@ struct DiveMapView: View {
             cachedClusters = rawResults.compactMap { raw in
                 let dives = raw.memberIDs.compactMap { byID[$0] }
                 guard !dives.isEmpty else { return nil }
-                let minID = raw.memberIDs.min(by: { $0.uuidString < $1.uuidString })?.uuidString ?? ""
                 return DiveCluster(
-                    id: "\(minID)_\(raw.memberIDs.count)",
+                    id: DiveMapView.clusterID(for: raw.memberIDs),
                     coordinate: CLLocationCoordinate2D(latitude: raw.centroidLat, longitude: raw.centroidLon),
                     dives: dives,
-                    initials: DiveMapView.singleDiverInitials(for: dives)
+                    isSingleDiver: DiveMapView.isSingleDiverCluster(for: dives)
                 )
             }.sorted { $0.id < $1.id }
             isFilterTaskActive = false
@@ -252,17 +341,29 @@ struct DiveMapView: View {
                 DiveMapView.computeRawClusters(points: points, span: span)
             }.value
             guard !Task.isCancelled else { return }
-            cachedClusters = rawResults.compactMap { raw in
+            // Computed once, outside any animation block, so neither branch below
+            // recomputes it.
+            let newClusters: [DiveCluster] = rawResults.compactMap { raw in
                 let dives = raw.memberIDs.compactMap { byID[$0] }
                 guard !dives.isEmpty else { return nil }
-                let minID = raw.memberIDs.min(by: { $0.uuidString < $1.uuidString })?.uuidString ?? ""
                 return DiveCluster(
-                    id: "\(minID)_\(raw.memberIDs.count)",
+                    id: DiveMapView.clusterID(for: raw.memberIDs),
                     coordinate: CLLocationCoordinate2D(latitude: raw.centroidLat, longitude: raw.centroidLon),
                     dives: dives,
-                    initials: DiveMapView.singleDiverInitials(for: dives)
+                    isSingleDiver: DiveMapView.isSingleDiverCluster(for: dives)
                 )
             }.sorted { $0.id < $1.id }
+            // Soft-fade the pin change instead of hard-popping the new set in — but only
+            // while the set is small. Animating the assignment makes SwiftUI diff and
+            // animate every annotation insert/remove; past a few hundred pins that is real
+            // main-thread work on every recluster, and the fade is imperceptible anyway.
+            if max(newClusters.count, cachedClusters.count) <= maxAnimatedClusterCount {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    cachedClusters = newClusters
+                }
+            } else {
+                cachedClusters = newClusters
+            }
         }
     }
 
@@ -362,8 +463,8 @@ struct DiveMapView: View {
     private nonisolated static func computeRawClusters(
         points: [DiveCoordPoint], span: MKCoordinateSpan
     ) -> [RawClusterResult] {
-        let radiusLat = max(span.latitudeDelta, 0.00001) / 20.0
-        let baseLonRadius = max(span.longitudeDelta, 0.00001) / 20.0
+        let radiusLat = max(span.latitudeDelta, 0.00001) / clusterRadiusDivisor
+        let baseLonRadius = max(span.longitudeDelta, 0.00001) / clusterRadiusDivisor
         struct WorkingCluster {
             var sumLat: Double
             var sumLon: Double
@@ -462,17 +563,70 @@ struct DiveMapView: View {
         filterObserversB
     }
 
-    // Initials to carry on a cluster: the diver's initials when every dive in the
-    // cluster belongs to a single named diver, otherwise nil (pin shows the count).
-    // Called once per cluster during the filter/recluster pass — never from `body` —
-    // so per-render pin rendering stays O(1) even for large single-site clusters.
-    private static func singleDiverInitials(for dives: [Dive]) -> String? {
-        let names = Set(dives.map { $0.diverName.trimmingCharacters(in: .whitespaces) })
-        guard names.count == 1, let name = names.first, !name.isEmpty else { return nil }
-        return DiverFilter.initials(for: name)
+    // Re-clusters against the freshest camera span and then *verifies*, rather than
+    // predicts, whether the tap-triggered zoom actually split the tapped cluster.
+    //
+    // The old code predicted the outcome up front with a bounding-box-vs-radius test
+    // (`wouldReMerge`), which was provably wrong in real data: computeRawClusters merges
+    // points one at a time against a *shifting running centroid* (a first-fit chain), so
+    // a group far wider than the merge radius can still chain-merge into one cluster.
+    // e.g. dives at 0/8/12/16/20 m with an 8.3 m radius: 8 m joins 0 m (centroid 4 m),
+    // 12 m is 8 m from that new centroid so it joins too (centroid 6.7 m), and so on —
+    // a 20 m-wide group survives a test that said it must split. The user saw a zoom
+    // that visually changed nothing, then a second tap that fell through to the list.
+    //
+    // So: zoom first, let the real clusterer answer, and only then decide. Shared by the
+    // real camera-settle path and the watchdog so both resolve identically.
+    private func verifyZoomSplit() {
+        let expected = pendingZoomMemberIDs
+        pendingZoomMemberIDs = []
+        // scheduleRecluster() early-returns without creating a task when a filter pass is
+        // already in flight or there are no points — the same two conditions checked here,
+        // synchronously on the MainActor, so this mirrors it exactly. In that case
+        // clusteringTask is either nil or some *other* piece of work, and there is no zoom
+        // recluster whose result we could verify. Acceptable edge case: the in-flight
+        // filter task reclusters with the current span on its own when it finishes, and
+        // the user can simply tap again. Still recluster, just skip the verification.
+        let willCreateTask = !isFilterTaskActive && !filteredCoordPoints.isEmpty
+        scheduleRecluster()
+        guard !expected.isEmpty, willCreateTask, let task = clusteringTask else { return }
+        Task {
+            await task.value
+            // The recluster we were waiting on was cancelled by a newer one (a filter
+            // change or another camera event), so it never wrote cachedClusters: what's
+            // there is the pre-zoom set, which trivially still contains the tapped
+            // cluster and would produce a bogus "it didn't split" verdict. The newer
+            // recluster's pins are the visible outcome instead.
+            guard !task.isCancelled else { return }
+            // A newer tap armed another zoom while this recluster ran: its outcome
+            // supersedes ours, so don't pop a list over the top of a camera move.
+            guard !Task.isCancelled, !awaitingZoomRecluster else { return }
+            // Did the tapped cluster survive the zoom intact? If yes, the zoom split
+            // nothing, so fall back to the list — a tap must always produce a visible
+            // outcome. If no match, it split (or membership changed), and the visual
+            // separation on the map is the outcome; do nothing further.
+            // Cheap count check first: `&&` short-circuits, so the Set allocation only
+            // happens for the handful of clusters that could possibly match. Without it,
+            // every cluster in the map — potentially the whole filtered dataset at
+            // 10 000+ dives — pays for a Set build during this single lookup.
+            guard let survivor = cachedClusters.first(where: {
+                $0.dives.count == expected.count && Set($0.dives.map(\.id)) == expected
+            })
+            else { return }
+            withAnimation(.easeInOut(duration: 0.35)) {
+                clusterDives = survivor.dives
+            }
+        }
     }
 
     private func handleClusterTap(_ cluster: DiveCluster) {
+        // A previous tap's zoom is still in flight: the camera is mid-animation, so
+        // liveSpan is stale and any decision made from it would be computed against a
+        // span the user is no longer looking at. Worse, arming a second zoom would
+        // overwrite pendingZoomMemberIDs and orphan the first tap's verification. Let the
+        // real camera event (or the watchdog) resolve the pending zoom first.
+        guard !awaitingZoomRecluster else { return }
+
         let lats: [Double]
         let lons: [Double]
         switch coordinateMode {
@@ -486,53 +640,140 @@ struct DiveMapView: View {
         guard let minLat = lats.min(), let maxLat = lats.max(),
               let minLon = lons.min(), let maxLon = lons.max() else { return }
 
-        // "Same spot" test in meters (robust at all latitudes).
+        let latSpread = maxLat - minLat
+        let lonSpread = maxLon - minLon
+
+        // "Same spot" test in meters (robust at all latitudes). Only literally-identical
+        // coordinates short-circuit here; everything else at least gets a zoom attempt,
+        // whose success is then verified for real instead of forecast.
         let corner1 = CLLocation(latitude: minLat, longitude: minLon)
         let corner2 = CLLocation(latitude: maxLat, longitude: maxLon)
-        let spreadMeters = corner1.distance(from: corner2)
-        let sameSpot = spreadMeters < 10 // meters
-        // Also bail out of zooming once we're already very close in.
-        let alreadyClose = currentSpan.latitudeDelta < 0.002
-        if sameSpot || alreadyClose {
+        if corner1.distance(from: corner2) < sameSpotThresholdMeters {
             withAnimation(.easeInOut(duration: 0.35)) {
                 clusterDives = cluster.dives
             }
             return
         }
 
-        // Zoom to the cluster's bounding box (with padding) so a single tap is
-        // always effective, regardless of how far out we started.
+        // Candidate zoom target: the cluster's bounding box plus padding, clamped only
+        // against a degenerate zero-width span.
+        let latDelta = max(latSpread * 2.5, deepStopZoomSpan)
+        let lonDelta = max(lonSpread * 2.5, deepStopZoomSpan)
+
+        // Would the move even be visible? Measured against the live camera span, not the
+        // lagging gate-quantized currentSpan. This is the check that fixes the original
+        // permanent no-op: re-requesting a region essentially identical to the current
+        // one changes nothing, fires no camera event, and reclusters nothing. If we can't
+        // get meaningfully closer, the list is the only remaining useful outcome.
+        let zoomImperceptible = latDelta >= liveSpan.latitudeDelta * zoomPerceptibleRatio
+            && lonDelta >= liveSpan.longitudeDelta * zoomPerceptibleRatio
+        if zoomImperceptible {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                clusterDives = cluster.dives
+            }
+            return
+        }
+
         let centerLat = (minLat + maxLat) / 2.0
         let centerLon = (minLon + maxLon) / 2.0
-        let latDelta = max((maxLat - minLat) * 2.5, 0.002)
-        let lonDelta = max((maxLon - minLon) * 2.5, 0.002)
+        let targetSpan = MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
+
+        // Arm the recluster instead of performing it here, and let the camera's own
+        // settle event (onMapCameraChange, .onEnd) do the work. That event is the only
+        // trustworthy "the camera actually finished moving" signal, and it carries the
+        // span MapKit really delivered — which, because MapKit aspect-fits a requested
+        // region to the view, is normally not `targetSpan`. Reclustering here against
+        // `targetSpan` split the pins a couple of frames into the 0.35s move (a visible
+        // pop) and then let the passive gate fire a second time on the real event (a
+        // "double regroup"). Armed before withAnimation purely for clarity: withAnimation
+        // runs its body synchronously, so no camera event can be delivered until this
+        // whole function has returned either way.
+        //
+        // Capture the tapped cluster's membership before the camera moves: after the
+        // recluster, verifyZoomSplit looks for a cluster with exactly this membership to
+        // decide whether the zoom achieved a visual split or not.
+        pendingZoomMemberIDs = Set(cluster.dives.map(\.id))
+        awaitingZoomRecluster = true
         withAnimation(.easeInOut(duration: 0.35)) {
             cameraPosition = .region(MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon),
-                span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
+                span: targetSpan
             ))
+        }
+
+        // Safety net only: if MapKit somehow delivers no camera event for this zoom, the
+        // pins would stay merged forever. The real event is the primary mechanism and
+        // must always win this race, so the delay only needs to be comfortably longer
+        // than a camera move — it deliberately does not try to track one. Note that
+        // MapKit runs the transition itself and ignores the 0.35s requested above:
+        // instrumented on device, the settle event lands at ~1.05s after the tap, so a
+        // 1.0s watchdog fired ~40ms *early* and pre-empted the real event every time.
+        // 3s leaves a wide margin. Cancels any watchdog left over from a previous tap
+        // (the guard at the top of this function means one can only linger after its
+        // zoom was already resolved).
+        zoomReclusterWatchdog?.cancel()
+        zoomReclusterWatchdog = Task {
+            try? await Task.sleep(for: .seconds(3.0))
+            guard !Task.isCancelled, awaitingZoomRecluster else { return }
+            awaitingZoomRecluster = false
+            zoomReclusterWatchdog = nil
+            // No real event arrived, so liveSpan is the freshest camera span we have.
+            // Same verify-after-recluster resolution as the real-event path, so a tap
+            // still produces a visible outcome even when MapKit goes silent.
+            currentSpan = liveSpan
+            verifyZoomSplit()
         }
     }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                Map(position: $cameraPosition, selection: $selectedDive) {
+                // No `selection:` binding: MapKit's native annotation-selection gesture
+                // competes with the cluster pins' nested onTapGesture and could swallow
+                // a tap near a cluster's anchor before handleClusterTap ever ran. Both
+                // pin kinds now go through the same explicit tap gesture instead.
+                Map(position: $cameraPosition) {
+                    // One pass over cachedClusters: single-dive and multi-dive pins
+                    // branch inside the loop rather than each re-scanning the array.
                     ForEach(cachedClusters) { cluster in
                         if cluster.dives.count == 1, let dive = cluster.dives.first {
+                            // Single-dive pins keep MapKit's normal collision-avoidance
+                            // (.automatic): their caption is a site name, which is neither
+                            // shortenable (truncating "Blue H…" is just confusing) nor costly
+                            // to occasionally hide (the name is still one tap away, and the pin
+                            // still marks the spot).
+                            //
+                            // DiveMapPin's triangle pointer tapers to a point at its flat
+                            // bottom edge, not its geometric center — anchor there explicitly
+                            // so the visual "tip" actually marks the coordinate, matching the
+                            // anchor convention used by the Site Details map and GPS picker.
                             Annotation(
                                 dive.siteName,
-                                coordinate: cluster.coordinate
+                                coordinate: cluster.coordinate,
+                                anchor: .bottom
                             ) {
                                 DiveMapPin(dive: dive, isSelected: selectedDive?.id == dive.id)
+                                    .onTapGesture {
+                                        selectedDive = dive
+                                    }
+                                    .accessibilityElement()
+                                    // A dive logged without a site name would otherwise
+                                    // announce nothing at all for this pin.
+                                    .accessibilityLabel(dive.siteName.isEmpty ? Text("Dive Site") : Text(verbatim: dive.siteName))
+                                    .accessibilityAddTraits(.isButton)
+                                    // onTapGesture isn't reliably fired by VoiceOver's
+                                    // activate gesture; this makes double-tap select the
+                                    // dive now that native selection is gone.
+                                    .accessibilityAction { selectedDive = dive }
                             }
-                            .tag(dive)
                         } else {
-                            Annotation(
-                                String(format: NSLocalizedString("%@ dives", bundle: .forAppLanguage(), comment: "Plural dive count in a cluster map annotation"), Double(cluster.dives.count).localizedString(decimals: 0)),
-                                coordinate: cluster.coordinate
-                            ) {
-                                DiveMapClusterPin(count: cluster.dives.count, initials: cluster.initials)
+                            // Cluster pins always show their count directly in the badge (no
+                            // more initials-vs-count split — see DiveMapClusterPin), so there's
+                            // no caption to render and nothing for MapKit's title-collision
+                            // avoidance to fight; hence no label at all here, rather than the
+                            // title-taking initializer other pins use.
+                            Annotation(coordinate: cluster.coordinate, anchor: .bottom) {
+                                DiveMapClusterPin(count: cluster.dives.count, isSingleDiver: cluster.isSingleDiver)
                                     .onTapGesture {
                                         handleClusterTap(cluster)
                                     }
@@ -542,12 +783,32 @@ struct DiveMapView: View {
                                     // onTapGesture isn't reliably fired by VoiceOver's activate
                                     // gesture; this makes double-tap open the cluster.
                                     .accessibilityAction { handleClusterTap(cluster) }
+                            } label: {
+                                EmptyView()
                             }
                         }
                     }
                     UserAnnotation()
                 }
                 .mapStyle(mapStyle)
+                // Tap empty water to dismiss whichever card is up. Removing the
+                // `selection:` binding above also removed MapKit's free "tap outside an
+                // annotation deselects" behaviour, leaving the card's X button as the only
+                // way out. This restores it without re-introducing that competing gesture:
+                // the tap lives on the Map itself, not on a full-screen overlay (which
+                // would intercept pan/zoom and the pins' own taps). SwiftUI routes a tap
+                // that lands on an annotation's content to that annotation's
+                // `.onTapGesture` first, so only a tap on bare map reaches this handler —
+                // pin and cluster selection above are untouched.
+                .onTapGesture {
+                    // No card showing: do nothing at all, so an ordinary tap on the map
+                    // doesn't kick off a pointless animation transaction.
+                    guard selectedDive != nil || clusterDives != nil else { return }
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        selectedDive = nil
+                        clusterDives = nil
+                    }
+                }
                 .onMapCameraChange(frequency: .onEnd) { context in
                     // Only re-cluster when the user has actually zoomed. Panning
                     // (especially north/south) produces small Mercator-projection
@@ -555,8 +816,27 @@ struct DiveMapView: View {
                     // Sub-threshold zooms naturally accumulate because the
                     // baseline only advances when we cross the threshold.
                     let newSpan = context.region.span
+                    // Tracked unconditionally: tap handling needs the camera's real
+                    // span, which the gated baseline below deliberately lags behind.
+                    liveSpan = newSpan
+                    // A tap-triggered zoom is pending: this event *is* its completion, so
+                    // resolve it here with the real delivered span and skip the ratio gate
+                    // entirely. The requested-vs-delivered span difference could otherwise
+                    // make the gate either miss this zoom or double-fire on it.
+                    // verifyZoomSplit reclusters against the delivered span and then checks
+                    // whether the tapped cluster actually came apart, falling back to the
+                    // list if it did not. Mutually exclusive with the gate below by
+                    // construction (early return).
+                    if awaitingZoomRecluster {
+                        awaitingZoomRecluster = false
+                        zoomReclusterWatchdog?.cancel()
+                        zoomReclusterWatchdog = nil
+                        currentSpan = newSpan
+                        verifyZoomSplit()
+                        return
+                    }
                     let ratio = newSpan.latitudeDelta / max(currentSpan.latitudeDelta, 0.00001)
-                    if ratio < 0.7 || ratio > 1.4 {
+                    if ratio < zoomPerceptibleRatio || ratio > 1.4 {
                         currentSpan = newSpan
                         scheduleRecluster()
                     }
@@ -755,17 +1035,20 @@ struct DiveMapPin: View {
                         .foregroundStyle(.primary)
                 }
             }
+            // VStack siblings still paint in declaration order where they overlap (same
+            // as a ZStack), so without this the triangle — declared second — would paint
+            // over the circle's bottom edge in the `-2` seam below. Keeping the circle on
+            // top lets its round edge cleanly cover the triangle's flat top corners.
+            .zIndex(1)
 
-            // Triangle pointer
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: 0))
-                path.addLine(to: CGPoint(x: 10, y: 15))
-                path.addLine(to: CGPoint(x: -10, y: 15))
-                path.closeSubpath()
-            }
-            .fill(tint)
-            .frame(width: 20, height: 15)
-            .offset(y: -2)
+            // Triangle pointer — apex at the bottom (flat edge at top, against the
+            // circle) so the tip is a single precise point, matching anchor: .bottom.
+            // The `-2` offset closes the seam against the circle above it. Shared shape
+            // (see MapPointerPin.swift) so this geometry lives in exactly one place.
+            PinTrianglePointer()
+                .fill(tint)
+                .frame(width: 20, height: 15)
+                .offset(y: -2)
         }
         .animation(.spring(response: 0.3), value: isSelected)
     }
@@ -775,12 +1058,13 @@ struct DiveMapPin: View {
 
 struct DiveMapClusterPin: View {
     let count: Int
-    // When every dive in the cluster belongs to one named diver, show that
-    // diver's initials (cyan); otherwise show the dive count (orange).
-    var initials: String? = nil
+    // Cyan when every dive in the cluster belongs to one named diver, orange when the
+    // cluster mixes divers (or none are named) — matches DiveMapPin's single-dive tint
+    // convention. The badge always shows the count regardless of tint.
+    var isSingleDiver: Bool = false
 
     var body: some View {
-        let tint: Color = initials == nil ? .orange : .cyan
+        let tint: Color = isSingleDiver ? .cyan : .orange
         VStack(spacing: 0) {
             ZStack {
                 Circle()
@@ -791,26 +1075,26 @@ struct DiveMapClusterPin: View {
                     )
                     .shadow(radius: 5)
 
-                if let initials {
-                    Text(verbatim: initials)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color.black)
-                } else {
-                    Text(verbatim: Double(count).localizedString(decimals: 0))
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                }
+                // Black-on-cyan matches DiveMapPin's initials convention; white-on-orange
+                // matches this pin's existing count convention.
+                Text(verbatim: Double(count).localizedString(decimals: 0))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(isSingleDiver ? Color.black : .white)
             }
+            // VStack siblings still paint in declaration order where they overlap (same
+            // as a ZStack), so without this the triangle — declared second — would paint
+            // over the circle's bottom edge in the `-2` seam below. Keeping the circle on
+            // top lets its round edge cleanly cover the triangle's flat top corners.
+            .zIndex(1)
 
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: 0))
-                path.addLine(to: CGPoint(x: 10, y: 15))
-                path.addLine(to: CGPoint(x: -10, y: 15))
-                path.closeSubpath()
-            }
-            .fill(tint)
-            .frame(width: 20, height: 15)
-            .offset(y: -2)
+            // Triangle pointer — apex at the bottom (flat edge at top, against the
+            // circle) so the tip is a single precise point, matching anchor: .bottom.
+            // The `-2` offset closes the seam against the circle above it. Shared shape
+            // (see MapPointerPin.swift) so this geometry lives in exactly one place.
+            PinTrianglePointer()
+                .fill(tint)
+                .frame(width: 20, height: 15)
+                .offset(y: -2)
         }
     }
 }

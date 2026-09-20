@@ -27,6 +27,11 @@ struct ConditionRow: View {
                 Image(systemName: icon)
                     .font(.system(size: 15))
                     .foregroundStyle(color)
+                    // Purely decorative: the label/value pair below carries the meaning.
+                    // Without this, VoiceOver announces the SF Symbol's own built-in
+                    // system description first (e.g. "arrow.up.arrow.down.circle" reads
+                    // as "Sort"), which is nonsensical ahead of the real content.
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
@@ -39,6 +44,9 @@ struct ConditionRow: View {
             }
             Spacer()
         }
+        // Read the row as one unit — "<label>, <value>" — instead of two separate
+        // elements. Combining keeps the label localized via its LocalizedStringKey.
+        .accessibilityElement(children: .combine)
     }
 }
 

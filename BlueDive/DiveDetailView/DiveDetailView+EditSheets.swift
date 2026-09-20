@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import CoreLocation
 
 // MARK: - Edit Popup Views
 
@@ -1049,7 +1050,7 @@ struct EditMenuStatsView: View {
                                     }
                                 }
                                 .buttonStyle(.borderless)
-                                .foregroundStyle(.green)
+                                .foregroundStyle(newBuddy.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.green)
                                 .disabled(newBuddy.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
                             let filteredBuddySuggestions = newBuddy.isEmpty ? [] : uniqueBuddyNames.filter {
@@ -1176,7 +1177,7 @@ struct EditMenuStatsView: View {
                                     }
                                 }
                                 .buttonStyle(.borderless)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(newType.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.purple)
                                 .disabled(newType.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
                             let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter {
@@ -1430,6 +1431,45 @@ struct EditSiteDetailsView: View {
     @State private var workingExitLatitude: String
     @State private var workingExitLongitude: String
 
+    @State private var showEntryCoordinatePicker = false
+    @State private var showExitCoordinatePicker = false
+    @State private var showSameAsEntryConfirm = false
+
+    /// The entry coordinate currently in the form fields, or nil if unset/invalid — mirrors
+    /// `Dive.hasGPSCoordinates`'s (0, 0)-sentinel handling.
+    private var entryCoordinate: CLLocationCoordinate2D? {
+        guard let lat = parseFlexibleDouble(workingLatitude),
+              let lon = parseFlexibleDouble(workingLongitude),
+              !(lat == 0 && lon == 0) else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    /// The exit coordinate currently in the form fields, or nil if unset/invalid.
+    private var exitCoordinate: CLLocationCoordinate2D? {
+        guard let lat = parseFlexibleDouble(workingExitLatitude),
+              let lon = parseFlexibleDouble(workingExitLongitude),
+              !(lat == 0 && lon == 0) else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    private func copyEntryToExit() {
+        workingExitLatitude = workingLatitude
+        workingExitLongitude = workingLongitude
+    }
+
+    /// Small text-button style shared by the Reset / Pick on Map / Same as Entry actions
+    /// in each GPS section header, matching the pre-existing "Reset" button's appearance.
+    private func gpsHeaderActionButton(_ title: LocalizedStringKey, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(enabled ? .blue : .secondary)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
     private var canResetEntryGPS: Bool {
         guard let rawData = dive.rawDiveComputerData else { return false }
         return ShearwaterPNFGPS.extractEntryGPS(from: rawData) != nil
@@ -1539,11 +1579,55 @@ struct EditSiteDetailsView: View {
     }
 
     var body: some View {
-        #if os(macOS)
-        macOSBody
-        #else
-        iOSBody
-        #endif
+        Group {
+            #if os(macOS)
+            macOSBody
+            #else
+            iOSBody
+            #endif
+        }
+        .sheet(isPresented: $showEntryCoordinatePicker) {
+            CoordinatePickerView(
+                navigationTitle: "Set Entry Coordinates",
+                existingCoordinate: entryCoordinate,
+                pinIcon: "arrow.down",
+                pinColor: .green,
+                secondaryCoordinate: exitCoordinate,
+                secondaryIcon: "arrow.up",
+                secondaryLabel: "Exit",
+                secondaryColor: .orange
+            ) { coordinate in
+                workingLatitude  = String(format: "%.6f", coordinate.latitude)
+                workingLongitude = String(format: "%.6f", coordinate.longitude)
+            }
+            .presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showExitCoordinatePicker) {
+            CoordinatePickerView(
+                navigationTitle: "Set Exit Coordinates",
+                existingCoordinate: exitCoordinate,
+                pinIcon: "arrow.up",
+                pinColor: .orange,
+                secondaryCoordinate: entryCoordinate,
+                secondaryIcon: "arrow.down",
+                secondaryLabel: "Entry",
+                secondaryColor: .green
+            ) { coordinate in
+                workingExitLatitude  = String(format: "%.6f", coordinate.latitude)
+                workingExitLongitude = String(format: "%.6f", coordinate.longitude)
+            }
+            .presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .alert("Replace Exit Coordinates", isPresented: $showSameAsEntryConfirm) {
+            Button("Replace", role: .destructive) { copyEntryToExit() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will replace the existing exit coordinates with the entry coordinates.")
+        }
     }
 
     #if os(macOS)
@@ -1701,6 +1785,7 @@ struct EditSiteDetailsView: View {
                     siteDetailsMacOSGroupBox("GPS Coordinates (Entry)", icon: "location.circle.fill", color: .green,
                         resetAction: dive.rawDiveComputerData != nil ? { resetEntryGPS() } : nil,
                         resetEnabled: canResetEntryGPS) {
+                        siteDetailsMacOSActionRow("Pick on Map", icon: "mappin.and.ellipse") { showEntryCoordinatePicker = true }
                         siteDetailsMacOSField("Latitude", text: $workingLatitude, icon: "arrow.up.arrow.down")
                         siteDetailsMacOSField("Longitude", text: $workingLongitude, icon: "arrow.left.arrow.right")
                         siteDetailsMacOSField(LocalizedStringKey("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))"), text: $workingAltitude, icon: "mountain.2.fill")
@@ -1712,6 +1797,14 @@ struct EditSiteDetailsView: View {
                     siteDetailsMacOSGroupBox("GPS Coordinates (Exit)", icon: "location.circle", color: .green,
                         resetAction: dive.rawDiveComputerData != nil ? { resetExitGPS() } : nil,
                         resetEnabled: canResetExitGPS) {
+                        siteDetailsMacOSActionRow("Pick on Map", icon: "mappin.and.ellipse") { showExitCoordinatePicker = true }
+                        siteDetailsMacOSActionRow("Same as Entry", icon: "arrow.turn.right.up", enabled: entryCoordinate != nil) {
+                            if exitCoordinate != nil {
+                                showSameAsEntryConfirm = true
+                            } else {
+                                copyEntryToExit()
+                            }
+                        }
                         siteDetailsMacOSField("Latitude", text: $workingExitLatitude, icon: "arrow.up.arrow.down")
                         siteDetailsMacOSField("Longitude", text: $workingExitLongitude, icon: "arrow.left.arrow.right")
                     }
@@ -1736,14 +1829,7 @@ struct EditSiteDetailsView: View {
                     .foregroundStyle(.primary)
                 if let resetAction {
                     Spacer()
-                    Button(action: resetAction) {
-                        Text("Reset")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(resetEnabled ? .blue : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!resetEnabled)
+                    gpsHeaderActionButton("Reset", enabled: resetEnabled, action: resetAction)
                 }
             }
             .padding(.bottom, 4)
@@ -1788,6 +1874,25 @@ struct EditSiteDetailsView: View {
                 }
         }
         .padding(.vertical, 4)
+    }
+
+    /// A full-width tappable row for GPS actions (Pick on Map, Same as Entry) — a larger,
+    /// more discoverable target than a small header text link.
+    private func siteDetailsMacOSActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(enabled ? .blue : .secondary)
+                    .frame(width: 20)
+                Text(title)
+                    .foregroundStyle(enabled ? .blue : .secondary)
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private func siteDetailsMacOSPicker(_ label: LocalizedStringKey, selection: Binding<String>, options: [String], icon: String) -> some View {
@@ -1959,6 +2064,7 @@ struct EditSiteDetailsView: View {
                     }
 
                     Section {
+                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showEntryCoordinatePicker = true }
                         HStack(spacing: 12) {
                             Image(systemName: "arrow.up.arrow.down")
                                 .foregroundStyle(.green)
@@ -2035,6 +2141,14 @@ struct EditSiteDetailsView: View {
                     }
 
                     Section {
+                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showExitCoordinatePicker = true }
+                        gpsActionRow("Same as Entry", icon: "arrow.turn.right.up", enabled: entryCoordinate != nil) {
+                            if exitCoordinate != nil {
+                                showSameAsEntryConfirm = true
+                            } else {
+                                copyEntryToExit()
+                            }
+                        }
                         HStack(spacing: 12) {
                             Image(systemName: "arrow.up.arrow.down")
                                 .foregroundStyle(.green)
@@ -2128,6 +2242,28 @@ struct EditSiteDetailsView: View {
         }
         .buttonStyle(.plain)
         #endif
+    }
+
+    /// A full-width tappable row for GPS actions (Pick on Map, Same as Entry) inside a Form
+    /// section — a larger, more discoverable target than a small header text link.
+    private func gpsActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(enabled ? .blue : .secondary)
+                    .frame(width: 24)
+                Text(title)
+                    .foregroundStyle(enabled ? .blue : .secondary)
+                Spacer()
+                if enabled {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private func resetEntryGPS() {
