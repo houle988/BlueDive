@@ -216,7 +216,7 @@ extension BluetoothScannerView {
             }
 
             // A merge mutates existing Dive objects in place, so the Dive ID set is unchanged and
-            // ContentView's @Query re-delivery short-circuits in scheduleRebuild's non-force path —
+            // ContentView's @Query re-delivery short-circuits in scheduleRebuild's dive-membership check —
             // the list, map, trips and widget would keep the pre-merge values. New inserts do change
             // the ID set, so they need no explicit signal here.
             if mergedCount > 0 {

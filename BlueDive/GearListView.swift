@@ -403,10 +403,9 @@ struct GearListView: View {
     }
 
     private var noGearForDiverView: some View {
-        ContentUnavailableView(
-            "No Equipment for Diver",
-            systemImage: "person.slash",
-            description: Text("No equipment was found for the selected diver.")
+        NoEntriesForDiverView(
+            title: Text(verbatim: String(format: NSLocalizedString("No Equipment for %@", bundle: Bundle.forAppLanguage(), value: "No Equipment for %@", comment: "Empty-state title when the selected diver has no gear; %@ is the diver's name"), selectedDiver)),
+            description: Text(verbatim: String(format: NSLocalizedString("No equipment was found for %@.", bundle: Bundle.forAppLanguage(), value: "No equipment was found for %@.", comment: "Empty-state description when the selected diver has no gear; %@ is the diver's name"), selectedDiver))
         )
     }
     

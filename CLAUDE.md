@@ -202,15 +202,15 @@ SwiftData `@Query` has no delta mechanism — every observer receives a full re-
 
 ### @Query Ownership
 
-- **`ContentView` is the only `@Query Dive` owner.** It owns `@Query dives: [Dive]`, `@Query allInsurances: [DivingInsurance]`, and `@Query allMarineSights: [MarineSight]`.
-- When those query results change, `ContentView` passes them to `store.scheduleRebuild(dives:allInsurances:allMarineSights:selectedDiver:force:)`.
+- **`ContentView` is the only `@Query Dive` owner.** It owns `@Query dives: [Dive]`, `@Query allInsurances: [DivingInsurance]`, `@Query allGear: [Gear]`, `@Query allCertifications: [Certification]`, and `@Query allMarineSights: [MarineSight]`.
+- When `dives`/`allMarineSights` change, `ContentView` passes them to `store.scheduleRebuild(dives:allMarineSights:selectedDiver:)`. When `allGear`/`allCertifications`/`allInsurances` change, it calls `store.updateDiverSources(gear:certifications:insurances:)` instead — a narrow path that only refreshes the diver-name list, not the full dive pipeline.
 - No other view may add a `@Query Dive`. Adding one reintroduces the full-re-delivery cascade freeze this architecture exists to prevent.
 
 ### The Three Commit Scopes
 
 On any save, call `store.commit(_ dive: Dive, affects: DiveChangeScope)` with the narrowest scope that covers the change:
 
-- **`.list`** — full rebuild via `scheduleRebuild(force: true)`. Use when a change reorders or renumbers the list: timestamp, depth, duration, dive number, or diver name (EditMenuStatsView).
+- **`.list`** — full rebuild via `rebuildDerivedDiveState(...)` (called directly, bypassing the debounce). Use when a change reorders or renumbers the list: timestamp, depth, duration, dive number, or diver name (EditMenuStatsView).
 - **`.rowFields`** — incremental single-dive summary patch. Rebuilds one `DiveSummary` and patches `cachedSummaries[idx]` in place; **`store.dives` is NOT reassigned.** If an active filter (search text, country, gas type, depth range, etc.) is set and the edited field could affect filter membership, `.rowFields` falls back to a full `rebuildFilteredDives` for that dive. Use for edits that change displayed row fields but not list order: site name, country, conditions, gas type (EditSiteDetailsView, EditConditionsView, EditGazView).
 - **`.rowBadges`** — badge-only patch via `refreshBadgeSets`. Faults `seenFish`/`photosData` for the one changed dive and patches `hasFish`/`hasPhotos`/`seenFishNames` on its summary. Use for fish and photo add/remove (AddFishView, EditFishView, DiveDetailView+MenuTab).
 - **`.nothing`** — no-op. Use for changes that affect neither list order, row fields, nor badges.
@@ -220,6 +220,7 @@ On any save, call `store.commit(_ dive: Dive, affects: DiveChangeScope)` with th
 
 - `store.cachedSummaries` changes on **all three** commit scopes (`.list`, `.rowFields`, `.rowBadges`). A view that must refresh on any dive-field change observes `onChange(of: store.cachedSummaries)` and bumps a local version counter.
 - `store.dives` is reassigned **only** on `.list` commits. Do **not** use `onChange(of: store.dives)` as the change signal in a view that must respond to `.rowFields` edits — it will miss them.
+- `store.searchText` updates synchronously as the user types, but `store.cachedFilteredSummaries` lags it by up to 150ms via `scheduleSearchRebuild`'s debounce. A view deciding what empty-state to show (e.g. "no results for this search" vs. "no results for this diver") based on whether search is active must check `store.appliedSearchText` — the debounce-synced value, updated inside `rebuildFilteredDives` — not the live `store.searchText`, or it can briefly render a state describing search results that haven't been computed yet.
 - `DiveMapView` already uses `onChange(of: store.cachedSummaries, initial: true)`. Do not change it.
 - `MarineLifeView` uses a fish-specific hash in its `.task(id:)` fingerprint and needs no summary observer.
 

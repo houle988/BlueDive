@@ -7483,6 +7483,28 @@
         }
       }
     },
+    "Clear filters and diver" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter und Taucher zurücksetzen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer les filtres et le plongeur"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filters en duiker wissen"
+          }
+        }
+      }
+    },
     "Clock sync is only performed on dive computers that support it. If your computer does not support clock setting, this option has no effect and the sync proceeds normally." : {
       "localizations" : {
         "de" : {
@@ -12273,7 +12295,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Ziehe die Karte, um den Pin zu positionieren, und tippe dann auf „Speichern“."
           }
         },
@@ -12285,7 +12307,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Sleep de kaart om de pin te plaatsen en tik vervolgens op Opslaan."
           }
         }
@@ -24072,31 +24094,25 @@
         }
       }
     },
-    "No certifications or insurance were found for the selected diver." : {
-      "comment" : "Description shown in the Documents view when a diver filter is active but no certifications or insurance exist for that diver.",
+    "No certifications or insurance were found for %@." : {
+      "comment" : "Empty-state description when the selected diver has no certifications or insurance; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Zertifizierungen oder Versicherungen für den ausgewählten Taucher gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No certifications or insurance were found for the selected diver."
+            "value" : "Für %@ wurden keine Zertifizierungen oder Versicherungen gefunden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune certification ni assurance trouvée pour le plongeur sélectionné."
+            "value" : "Aucune certification ou assurance n'a été trouvée pour %@."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen certificeringen of verzekering(en) gevonden voor de geselecteerde duiker."
+            "value" : "Geen certificeringen of verzekeringen gevonden voor %@."
           }
         }
       }
@@ -24218,30 +24234,25 @@
         }
       }
     },
-    "No Dives for Diver" : {
+    "No Dives for %@" : {
+      "comment" : "Empty-state title when the selected diver has no dives; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Tauchgänge für diesen Taucher"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Dives for Diver"
+            "value" : "Keine Tauchgänge für %@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune plongée pour ce plongeur"
+            "value" : "Aucune plongée pour %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duiken voor duiker"
+            "value" : "Geen duiken voor %@"
           }
         }
       }
@@ -24334,30 +24345,25 @@
         }
       }
     },
-    "No dives were found for the selected diver." : {
+    "No dives were found for %@." : {
+      "comment" : "Empty-state description when the selected diver has no dives; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Für den ausgewählten Taucher wurden keine Tauchgänge gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No dives were found for the selected diver."
+            "value" : "Für %@ wurden keine Tauchgänge gefunden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune plongée trouvée pour le plongeur sélectionné."
+            "value" : "Aucune plongée n'a été trouvée pour %@."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duiken gevonden voor de geselecteerde duiker."
+            "value" : "Geen duiken gevonden voor %@."
           }
         }
       }
@@ -24449,31 +24455,25 @@
         }
       }
     },
-    "No Documents for Diver" : {
-      "comment" : "Empty state title shown in the Documents view when a diver filter is active but no records match.",
+    "No Documents for %@" : {
+      "comment" : "Empty-state title when the selected diver has no certifications or insurance; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Dokumente für diesen Taucher"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Documents for Diver"
+            "value" : "Keine Dokumente für %@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun document pour ce plongeur"
+            "value" : "Aucun document pour %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen documenten voor duiker"
+            "value" : "Geen documenten voor %@"
           }
         }
       }
@@ -24567,30 +24567,25 @@
         }
       }
     },
-    "No Equipment for Diver" : {
+    "No Equipment for %@" : {
+      "comment" : "Empty-state title when the selected diver has no gear; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Ausrüstung für diesen Taucher"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Equipment for Diver"
+            "value" : "Keine Ausrüstung für %@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun équipement pour ce plongeur"
+            "value" : "Aucun équipement pour %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duikuitrusting voor duiker"
+            "value" : "Geen duikuitrusting voor %@"
           }
         }
       }
@@ -24655,30 +24650,25 @@
         }
       }
     },
-    "No equipment was found for the selected diver." : {
+    "No equipment was found for %@." : {
+      "comment" : "Empty-state description when the selected diver has no gear; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Für den ausgewählten Taucher wurde keine Ausrüstung gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No equipment was found for the selected diver."
+            "value" : "Für %@ wurde keine Ausrüstung gefunden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun équipement trouvé pour le plongeur sélectionné."
+            "value" : "Aucun équipement n'a été trouvé pour %@."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duikuitrusting gevonden voor de geselecteerde duiker."
+            "value" : "Geen duikuitrusting gevonden voor %@."
           }
         }
       }
@@ -25504,58 +25494,48 @@
         }
       }
     },
-    "No Trips for Diver" : {
+    "No Trips for %@" : {
+      "comment" : "Empty-state title when the selected diver has no trips; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Reisen für diesen Taucher"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Trips for Diver"
+            "value" : "Keine Reisen für %@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun voyage pour ce plongeur"
+            "value" : "Aucun voyage pour %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen trips voor duiker"
+            "value" : "Geen trips voor %@"
           }
         }
       }
     },
-    "No trips were found for the selected diver." : {
+    "No trips were found for %@." : {
+      "comment" : "Empty-state description when the selected diver has no trips; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Für den ausgewählten Taucher wurden keine Reisen gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No trips were found for the selected diver."
+            "value" : "Für %@ wurden keine Reisen gefunden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun voyage trouvé pour le plongeur sélectionné."
+            "value" : "Aucun voyage n'a été trouvé pour %@."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen trips gevonden voor de geselecteerde duiker."
+            "value" : "Geen trips gevonden voor %@."
           }
         }
       }
@@ -27020,7 +27000,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Auf der Karte auswählen"
           }
         },
@@ -27032,7 +27012,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Kiezen op de kaart"
           }
         }
@@ -28974,7 +28954,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Ersetzen"
           }
         },
@@ -28986,7 +28966,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Vervangen"
           }
         }
@@ -28996,7 +28976,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Koordinaten ersetzen"
           }
         },
@@ -29008,7 +28988,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Coördinaten vervangen"
           }
         }
@@ -29020,7 +29000,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Ausstiegskoordinaten ersetzen"
           }
         },
@@ -29032,7 +29012,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Uitstapcoördinaten vervangen"
           }
         }
@@ -30159,7 +30139,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Wie beim Einstieg"
           }
         },
@@ -30171,7 +30151,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Zelfde als instapplaats"
           }
         }
@@ -32253,7 +32233,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Einstiegskoordinaten festlegen"
           }
         },
@@ -32265,7 +32245,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Instapcoördinaten instellen"
           }
         }
@@ -32277,7 +32257,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Ausstiegskoordinaten festlegen"
           }
         },
@@ -32289,7 +32269,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Uitstapcoördinaten instellen"
           }
         }
@@ -32379,6 +32359,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kortste"
+          }
+        }
+      }
+    },
+    "Show All Divers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Taucher anzeigen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher tous les plongeurs"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toon alle duikers"
           }
         }
       }
@@ -35946,7 +35948,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Dadurch werden die vorhandenen Koordinaten durch den markierten Standort ersetzt."
           }
         },
@@ -35958,7 +35960,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Hiermee worden de bestaande coördinaten vervangen door de vastgezette locatie."
           }
         }
@@ -35970,7 +35972,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Dadurch werden die vorhandenen Ausstiegskoordinaten durch die Einstiegskoordinaten ersetzt."
           }
         },
@@ -35982,7 +35984,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Hiermee worden de bestaande uitstapcoördinaten vervangen door de instapcoördinaten."
           }
         }

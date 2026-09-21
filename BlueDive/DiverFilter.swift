@@ -26,6 +26,25 @@ enum DiverFilter {
         return Array(Set(names.filter { !$0.isEmpty })).sorted()
     }
 
+    /// Shared "No Dives for <name>" empty-state title, used identically by every screen
+    /// whose dive list is empty solely because of the diver filter (ContentView,
+    /// DiveCalendarHeatmapView, MarineLifeView, StatisticsView). Centralized so the 4
+    /// screens' wording can never drift out of sync with each other.
+    static func noDivesTitle(for diverName: String) -> Text {
+        Text(verbatim: String(
+            format: NSLocalizedString("No Dives for %@", bundle: Bundle.forAppLanguage(), value: "No Dives for %@", comment: "Empty-state title when the selected diver has no dives; %@ is the diver's name"),
+            diverName
+        ))
+    }
+
+    /// Shared "No dives were found for <name>." empty-state description — see `noDivesTitle`.
+    static func noDivesDescription(for diverName: String) -> Text {
+        Text(verbatim: String(
+            format: NSLocalizedString("No dives were found for %@.", bundle: Bundle.forAppLanguage(), value: "No dives were found for %@.", comment: "Empty-state description when the selected diver has no dives; %@ is the diver's name"),
+            diverName
+        ))
+    }
+
     /// First letters of up to two words in a name, uppercased (e.g. "Steve Houle" → "SH").
     /// Returns "?" when the name contains no letters or digits. Shared by the toolbar
     /// chip and the map pins so initials render identically everywhere.
@@ -159,20 +178,20 @@ func resolveGearDiverName(forSerial computerSerial: String?, in context: ModelCo
 // MARK: - Toolbar Picker
 
 /// Drop-in toolbar item that exposes the diver filter on iOS and macOS.
-/// Renders nothing when there are fewer than two divers (no choice to make).
+/// Always visible, on every screen, at any diver count — the menu always offers
+/// "All Divers", so the control is never in a state with nothing to show.
 struct DiverFilterToolbar: ToolbarContent {
     let uniqueDivers: [String]
     @Binding var selectedDiver: String
-    var hasUnnamedDives: Bool = false
 
     var body: some ToolbarContent {
         #if os(iOS)
         ToolbarItem(placement: .topBarLeading) {
-            if uniqueDivers.count > 1 || (!uniqueDivers.isEmpty && hasUnnamedDives) { picker }
+            picker
         }
         #else
         ToolbarItem(placement: .navigation) {
-            if uniqueDivers.count > 1 || (!uniqueDivers.isEmpty && hasUnnamedDives) { picker }
+            picker
         }
         #endif
     }
@@ -190,15 +209,17 @@ struct DiverFilterToolbar: ToolbarContent {
                     Text("All Divers")
                 }
             }
-            Divider()
-            ForEach(uniqueDivers, id: \.self) { diver in
-                Button {
-                    selectedDiver = diver
-                } label: {
-                    if selectedDiver == diver {
-                        Label(diver, systemImage: "checkmark")
-                    } else {
-                        Text(diver)
+            if !uniqueDivers.isEmpty {
+                Divider()
+                ForEach(uniqueDivers, id: \.self) { diver in
+                    Button {
+                        selectedDiver = diver
+                    } label: {
+                        if selectedDiver == diver {
+                            Label(diver, systemImage: "checkmark")
+                        } else {
+                            Text(diver)
+                        }
                     }
                 }
             }
@@ -341,15 +362,45 @@ struct DiverAutocompleteField: View {
 // MARK: - Empty State
 
 /// Consistent empty state shown when a filter excludes every record in a view.
-struct NoEntriesForDiverView: View {
-    let title: LocalizedStringKey
-    let description: LocalizedStringKey
+/// `title`/`description` are stored as `Text` so a caller can interpolate a diver's name via
+/// `Text(verbatim: String(format: NSLocalizedString(...), name))`. `Text` is not
+/// `ExpressibleByStringLiteral`, so a second `LocalizedStringKey` initializer keeps plain
+/// string-literal call sites (e.g. `title: "No Dives Recorded"`) compiling unchanged and still
+/// localized. `actions` defaults to none, so every existing call site needs no changes.
+struct NoEntriesForDiverView<Actions: View>: View {
+    let title: Text
+    let description: Text
+    let actions: () -> Actions
+
+    init(
+        title: Text,
+        description: Text,
+        @ViewBuilder actions: @escaping () -> Actions = { EmptyView() }
+    ) {
+        self.title = title
+        self.description = description
+        self.actions = actions
+    }
+
+    /// Convenience overload for static, non-interpolated titles/descriptions. The
+    /// `LocalizedStringKey` literals stay visible to Xcode's string-catalog extractor.
+    init(
+        title: LocalizedStringKey,
+        description: LocalizedStringKey,
+        @ViewBuilder actions: @escaping () -> Actions = { EmptyView() }
+    ) {
+        self.title = Text(title)
+        self.description = Text(description)
+        self.actions = actions
+    }
 
     var body: some View {
-        ContentUnavailableView(
-            title,
-            systemImage: "person.slash",
-            description: Text(description)
-        )
+        ContentUnavailableView {
+            Label { title } icon: { Image(systemName: "person.slash") }
+        } description: {
+            description
+        } actions: {
+            actions()
+        }
     }
 }

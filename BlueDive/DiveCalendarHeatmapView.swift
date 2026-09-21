@@ -7,9 +7,6 @@ struct DiveCalendarHeatmapView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @Environment(DiveStore.self) private var store
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
 
     @State private var selectedYear: Int = Calendar(identifier: .gregorian).component(.year, from: .now)
     @State private var selectedDay: Date? = nil
@@ -39,7 +36,6 @@ struct DiveCalendarHeatmapView: View {
     @State private var statsVersion: Int = 0
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
 
     private func recomputeAllStats(_ dives: [Dive]) {
@@ -123,8 +119,8 @@ struct DiveCalendarHeatmapView: View {
             Group {
                 if !store.dives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
                     NoEntriesForDiverView(
-                        title: "No Dives for Diver",
-                        description: "No dives were found for the selected diver."
+                        title: DiverFilter.noDivesTitle(for: selectedDiver),
+                        description: DiverFilter.noDivesDescription(for: selectedDiver)
                     )
                 } else if !statsReady {
                     ProgressView()
@@ -166,7 +162,7 @@ struct DiveCalendarHeatmapView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             }
             .task(id: "\(store.dives.count):\(selectedDiver):\(statsVersion):\(store.dives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
                 recomputeAllStats(filteredDives)
@@ -174,7 +170,7 @@ struct DiveCalendarHeatmapView: View {
             .onChange(of: store.cachedSummaries) { _, _ in
                 statsVersion += 1
             }
-            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             .onChange(of: selectedYear) {
                 recomputeYearStats(filteredDives)
             }

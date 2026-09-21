@@ -4,9 +4,6 @@ import Charts
 
 struct StatisticsView: View {
     @Environment(DiveStore.self) private var store
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
     @State private var prefs = UserPreferences.shared
     @Environment(\.dismiss) private var dismiss
     @State private var appeared = false
@@ -71,8 +68,6 @@ struct StatisticsView: View {
     @State private var cachedTotalAirConsumed: Double = 0
 
     @Environment(\.locale) private var locale
-
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
 
     private var filteredDives: [Dive] {
         DiverFilter.applyDiveFilters(
@@ -381,6 +376,11 @@ struct StatisticsView: View {
                         title: "No Dives Recorded",
                         description: "Add your first dive to see your statistics."
                     )
+                } else if filteredDives.isEmpty && !selectedDiver.isEmpty && activeFilterCount == 0 {
+                    NoEntriesForDiverView(
+                        title: DiverFilter.noDivesTitle(for: selectedDiver),
+                        description: DiverFilter.noDivesDescription(for: selectedDiver)
+                    )
                 } else if filteredDives.isEmpty {
                     NoEntriesForDiverView(
                         title: "No Dives Match Filters",
@@ -439,7 +439,7 @@ struct StatisticsView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showFilterSheet = true }) {
                         ZStack(alignment: .topTrailing) {
@@ -474,7 +474,7 @@ struct StatisticsView: View {
             .onChange(of: store.cachedSummaries) { _, _ in
                 statsVersion += 1
             }
-            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             .sheet(isPresented: $showFilterSheet) {
                 DiveFilterSheet(
                     availableYears: availableYears,

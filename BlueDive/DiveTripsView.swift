@@ -115,9 +115,6 @@ struct TripBuilder {
 struct DiveTripsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(DiveStore.self) private var store
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
     @State private var selectedTrip: DiveTrip? = nil
     @State private var prefs = UserPreferences.shared
     @State private var tripsAppeared = false
@@ -126,7 +123,6 @@ struct DiveTripsView: View {
     @State private var tripsVersion: Int = 0
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
 
     var body: some View {
@@ -140,8 +136,8 @@ struct DiveTripsView: View {
                     )
                 } else if filteredDives.isEmpty {
                     NoEntriesForDiverView(
-                        title: "No Trips for Diver",
-                        description: "No trips were found for the selected diver."
+                        title: Text(verbatim: String(format: NSLocalizedString("No Trips for %@", bundle: Bundle.forAppLanguage(), value: "No Trips for %@", comment: "Empty-state title when the selected diver has no trips; %@ is the diver's name"), selectedDiver)),
+                        description: Text(verbatim: String(format: NSLocalizedString("No trips were found for %@.", bundle: Bundle.forAppLanguage(), value: "No trips were found for %@.", comment: "Empty-state description when the selected diver has no trips; %@ is the diver's name"), selectedDiver))
                     )
                 } else if !tripsReady {
                     ProgressView("Organizing trips…")
@@ -192,7 +188,7 @@ struct DiveTripsView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             }
             .sheet(item: $selectedTrip) { trip in
                 TripDetailSheet(trip: trip, prefs: prefs)
@@ -211,7 +207,7 @@ struct DiveTripsView: View {
             .onChange(of: store.cachedSummaries) { _, _ in
                 tripsVersion += 1
             }
-            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
         }
     }
 }

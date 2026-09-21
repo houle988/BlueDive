@@ -145,7 +145,6 @@ final class DiveStore {
     private(set) var cachedShowGrouped: Bool = false
     private(set) var cachedGroupedDives: [(key: String, value: [Dive])] = []
     private(set) var cachedUniqueDivers: [String] = []
-    private(set) var cachedHasUnnamedDives: Bool = false
     private(set) var cachedWidgetFingerprint: Int = 0
     private(set) var hasCacheBuilt: Bool = false
     private(set) var cachedDivesWithFish: Set<UUID> = []
@@ -158,8 +157,18 @@ final class DiveStore {
     private(set) var cachedAvailableTags: [String] = []
     private(set) var cachedAvailableMarineLife: [String] = []
     private var cachedInsurances: [DivingInsurance] = []
+    private var cachedGear: [Gear] = []
+    private var cachedCertifications: [Certification] = []
     private var cachedMarineSights: [MarineSight] = []
     private var cachedSelectedDiver: String = ""
+    /// The trimmed searchText value actually applied to cachedFilteredSummaries as of the
+    /// last rebuildFilteredDives call — lags live searchText by up to scheduleSearchRebuild's
+    /// 150ms debounce. Sibling of cachedSelectedDiver above: both are "last value actually
+    /// applied," synced together in rebuildFilteredDives. Views deciding what empty-state to
+    /// show must check this, not searchText directly, or they can render a state describing
+    /// search results that haven't been computed yet (e.g. a diver-specific empty state while
+    /// a stale search is still applied).
+    private(set) var appliedSearchText: String = ""
 
     // MARK: - Summary Cache
     private(set) var cachedSummaries: [DiveSummary] = []
@@ -222,13 +231,14 @@ final class DiveStore {
         switch scope {
         case .list:
             // Bypass the debounce so a timestamp/depth/dive-number edit reorders the list
-            // immediately. scheduleRebuild(force:true) is cancelled within its 50ms window
-            // by the @Query re-delivery that fires force:false — which then short-circuits
-            // on matching IDs and never runs, leaving the list in the wrong order.
+            // immediately. A debounced rebuild would be cancelled within its 50ms window by
+            // the @Query re-delivery this edit triggers, and that re-delivery's own scheduled
+            // rebuild then short-circuits on matching IDs and never runs, leaving the list in
+            // the wrong order.
             rebuildTask?.cancel()
             rebuildTask = nil
             let sortedDives = dives.sorted { $0.timestamp > $1.timestamp }
-            rebuildDerivedDiveState(dives: sortedDives, allInsurances: cachedInsurances,
+            rebuildDerivedDiveState(dives: sortedDives,
                                     allMarineSights: cachedMarineSights,
                                     selectedDiver: cachedSelectedDiver)
         case .rowBadges:
@@ -267,11 +277,11 @@ final class DiveStore {
 
     func commitListRebuild() {
         // Same synchronous bypass as commit(.list) — avoids the debounce-cancellation race
-        // where a @Query re-delivery kills the force:true task before it runs.
+        // where a @Query re-delivery kills the pending debounced rebuild before it runs.
         rebuildTask?.cancel()
         rebuildTask = nil
         let sortedDives = dives.sorted { $0.timestamp > $1.timestamp }
-        rebuildDerivedDiveState(dives: sortedDives, allInsurances: cachedInsurances,
+        rebuildDerivedDiveState(dives: sortedDives,
                                 allMarineSights: cachedMarineSights,
                                 selectedDiver: cachedSelectedDiver)
     }
@@ -350,26 +360,23 @@ final class DiveStore {
     // MARK: - Pipeline
 
     // Coalesces rapid-fire triggers into a single rebuild after a 50ms quiet period.
-    // When force=false, skips the rebuild if dive membership is unchanged — this suppresses
-    // spurious @Query re-deliveries that fire when edit sheets open/close without modifying data.
-    // force=true is required when dive IDs are stable but data changed (field-level saves, insurance changes).
+    // Skips the rebuild if dive membership is unchanged — this suppresses spurious @Query
+    // re-deliveries that fire when edit sheets open/close without modifying data. Field-level
+    // dive edits (site, conditions, gas, etc.) go through commit(_:affects: .rowFields) instead
+    // and never reach this debounce at all, so an unconditional membership check is always correct here.
     func scheduleRebuild(
         dives: [Dive],
-        allInsurances: [DivingInsurance],
         allMarineSights: [MarineSight],
-        selectedDiver: String,
-        force: Bool = false
+        selectedDiver: String
     ) {
         rebuildTask?.cancel()
         rebuildTask = Task { @MainActor [weak self] in
             guard let self else { return }
             try? await Task.sleep(for: .milliseconds(50))
             guard !Task.isCancelled else { return }
-            if !force {
-                let currentIDs = Set(dives.map { $0.id })
-                guard currentIDs != self.lastPhotoSweepDiveIDs else { return }
-            }
-            self.rebuildDerivedDiveState(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
+            let currentIDs = Set(dives.map { $0.id })
+            guard currentIDs != self.lastPhotoSweepDiveIDs else { return }
+            self.rebuildDerivedDiveState(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
         }
     }
 
@@ -386,18 +393,15 @@ final class DiveStore {
 
     func rebuildDerivedDiveState(
         dives: [Dive],
-        allInsurances: [DivingInsurance],
         allMarineSights: [MarineSight],
         selectedDiver: String
     ) {
         self.dives = dives
-        self.cachedInsurances = allInsurances
         self.cachedSelectedDiver = selectedDiver
         self.cachedMarineSights = allMarineSights
         // Phase 1 — Fast synchronous work on MainActor. Must complete before returning
         // so callers see a consistent index and filtered list immediately.
-        cachedUniqueDivers = DiverFilter.uniqueDivers(in: dives, insurances: allInsurances)
-        cachedHasUnnamedDives = dives.contains { $0.diverName.trimmingCharacters(in: .whitespaces).isEmpty }
+        recomputeUniqueDivers()
 
         // diveIndexLookup maps dive.id → position in the timestamp-sorted @Query array. A timestamp
         // edit reorders the array without changing IDs, so this must be rebuilt on every pass (not
@@ -483,6 +487,37 @@ final class DiveStore {
         }
     }
 
+    // Diver-name sources — see updateDiverSources below.
+    /// Refreshes ONLY the cached diver-name list from the non-Dive sources.
+    ///
+    /// Deliberately bypasses scheduleRebuild()/rebuildDerivedDiveState(): a gear,
+    /// certification or insurance edit cannot change dive order, row fields or row
+    /// badges, so routing it through the full pipeline would rebuild every
+    /// DiveSummary (10 000+ dives) to refresh a name list. This replaces the per-screen
+    /// copies of the same narrow refresh (formerly DiveMapView.rebuildUniqueDivers(),
+    /// among others) for every screen whose gear/cert/insurance queries existed only to
+    /// feed the picker. DocumentsView, GearListView and DiverProfileView still compute
+    /// uniqueDivers locally — they already own those queries for their primary content.
+    func updateDiverSources(gear: [Gear], certifications: [Certification], insurances: [DivingInsurance]) {
+        cachedGear = gear
+        cachedCertifications = certifications
+        cachedInsurances = insurances
+        recomputeUniqueDivers()
+    }
+
+    private func recomputeUniqueDivers() {
+        let names = DiverFilter.uniqueDivers(
+            in: dives, gear: cachedGear,
+            certifications: cachedCertifications, insurances: cachedInsurances
+        )
+        // @Observable fires on every assignment regardless of equality. The @Query re-delivery
+        // that triggered this call already invalidated ContentView's body; this guard instead
+        // stops that no-op from propagating further downstream, to diverFilterReset's
+        // task(id: uniqueDivers) and the onChange(of: store.cachedUniqueDivers) handler that
+        // intersects collapsedDiverSections.
+        if names != cachedUniqueDivers { cachedUniqueDivers = names }
+    }
+
     // Recomputes only the filter-sheet option lists. Called both from
     // rebuildDerivedDiveState() and lazily when the filter sheet is about to open,
     // so that in-place edits (marine life, country, tags) are reflected immediately.
@@ -556,11 +591,12 @@ final class DiveStore {
         // Keep cachedSelectedDiver in sync on every call path — not just when routed through
         // rebuildDerivedDiveState. Direct calls from onChange(of: selectedDiver) / sort /
         // filter handlers would otherwise leave it stale, causing commit(.list) to rebuild
-        // with the wrong diver scope.
+        // with the wrong diver scope. appliedSearchText is synced here for the same reason.
         cachedSelectedDiver = selectedDiver
+        appliedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         // Does NOT rebuild diveIndexLookup (positional dive numbers). That is intentional:
         // only timestamp edits reorder the @Query array, and those always commit(_:affects: .list)
-        // → scheduleRebuild(force:) → rebuildDerivedDiveState(), which rebuilds the lookup.
+        // → rebuildDerivedDiveState(), which rebuilds the lookup.
         // Fields committed with .rowFields (site, conditions, gas) cannot change @Query order.
         //
         // Fast path: when nothing is filtered and using the default date-desc sort, the @Query

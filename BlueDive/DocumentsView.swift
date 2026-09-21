@@ -143,11 +143,10 @@ struct DocumentsView: View {
                 if certifications.isEmpty && insurances.isEmpty {
                     ScrollView { bothEmptyStateView }
                 } else if !selectedDiver.isEmpty && filteredCertifications.isEmpty && filteredInsurances.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Documents for Diver", systemImage: "person.slash")
-                    } description: {
-                        Text("No certifications or insurance were found for the selected diver.")
-                    } actions: {
+                    NoEntriesForDiverView(
+                        title: Text(verbatim: String(format: NSLocalizedString("No Documents for %@", bundle: Bundle.forAppLanguage(), value: "No Documents for %@", comment: "Empty-state title when the selected diver has no certifications or insurance; %@ is the diver's name"), selectedDiver)),
+                        description: Text(verbatim: String(format: NSLocalizedString("No certifications or insurance were found for %@.", bundle: Bundle.forAppLanguage(), value: "No certifications or insurance were found for %@.", comment: "Empty-state description when the selected diver has no certifications or insurance; %@ is the diver's name"), selectedDiver))
+                    ) {
                         VStack(spacing: 12) {
                             AddDocumentButton(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
                             AddDocumentButton(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }

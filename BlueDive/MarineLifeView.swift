@@ -3,9 +3,6 @@ import SwiftData
 
 struct MarineLifeView: View {
     @Environment(DiveStore.self) private var store
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
@@ -32,7 +29,6 @@ struct MarineLifeView: View {
         let quantityCounts: [SightingQuantity: Int]  // times each range was recorded
     }
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
     private var numberMap: [PersistentIdentifier: Int] {
         let total = store.dives.count
@@ -139,8 +135,8 @@ struct MarineLifeView: View {
             Group {
                 if !store.dives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
                     NoEntriesForDiverView(
-                        title: "No Dives for Diver",
-                        description: "No dives were found for the selected diver."
+                        title: DiverFilter.noDivesTitle(for: selectedDiver),
+                        description: DiverFilter.noDivesDescription(for: selectedDiver)
                     )
                 } else if !statsReady {
                     ProgressView()
@@ -168,7 +164,7 @@ struct MarineLifeView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             }
             .background(Color.platformBackground.ignoresSafeArea())
             .task(id: "\(store.dives.count):\(totalSightingsCount):\(sightingCountsHash):\(selectedDiver)") {
@@ -180,7 +176,7 @@ struct MarineLifeView: View {
                     appeared = true
                 }
             }
-            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             .sheet(item: $selectedSpecies) { species in
                 SpeciesDivesSheet(
                     speciesName: species.name,

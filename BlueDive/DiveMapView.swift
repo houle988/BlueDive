@@ -45,9 +45,6 @@ private let maxAnimatedClusterCount: Int = 300
 
 struct DiveMapView: View {
     @Environment(DiveStore.self) private var store
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var selectedDive: Dive?
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
@@ -121,7 +118,6 @@ struct DiveMapView: View {
     @State private var pendingZoomMemberIDs: Set<UUID> = []
     @State private var clusterDives: [Dive]? = nil
     @State private var cachedClusters: [DiveCluster] = []
-    @State private var cachedUniqueDivers: [String] = []
     @State private var clusteringTask: Task<Void, Never>? = nil
     @State private var isFilterTaskActive = false
     @State private var filterOptions = MapFilterOptions()
@@ -201,12 +197,6 @@ struct DiveMapView: View {
 
     // MARK: - State Rebuilders
 
-    private func rebuildUniqueDivers() {
-        cachedUniqueDivers = DiverFilter.uniqueDivers(
-            in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances
-        )
-    }
-
     // Builds filter sheet options from the store's cached summaries (no SwiftData access).
     // Only includes dives that have valid coordinates in the current mode.
     private func rebuildFilterOptions() {
@@ -243,10 +233,7 @@ struct DiveMapView: View {
         )
     }
 
-    // Full rebuild triggered by dives changes. Gear/cert/insurance changes use
-    // rebuildUniqueDivers() only — they don't affect the map pins.
     private func rebuildMapState() {
-        rebuildUniqueDivers()
         rebuildFilterOptions()
         scheduleFilterAndCluster()
     }
@@ -510,10 +497,6 @@ struct DiveMapView: View {
     private var mapObserversA: some View {
         Color.clear
             .onChange(of: store.cachedSummaries, initial: true) { _, _ in rebuildMapState() }
-            // Gear/cert/insurance only affect the diver picker, not map pins.
-            .onChange(of: allGear)           { _, _ in rebuildUniqueDivers() }
-            .onChange(of: allCertifications) { _, _ in rebuildUniqueDivers() }
-            .onChange(of: allInsurances)     { _, _ in rebuildUniqueDivers() }
     }
 
     @ViewBuilder
@@ -919,11 +902,11 @@ struct DiveMapView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .diverFilterReset(uniqueDivers: cachedUniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             .background(mapObservers)
             .background(filterObservers)
             .toolbar {
-                DiverFilterToolbar(uniqueDivers: cachedUniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
                 ToolbarItem(placement: .principal) {
                     Picker("Coordinate Mode", selection: $coordinateMode) {
                         Text("Entry").tag(MapCoordinateMode.entry)

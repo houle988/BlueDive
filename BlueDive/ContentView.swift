@@ -25,6 +25,8 @@ struct ContentView: View {
     @Environment(\.modelContext) var modelContext
     @Query(sort: \Dive.timestamp, order: .reverse) var dives: [Dive]
     @Query private var allInsurances: [DivingInsurance]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @Query(sort: \MarineSight.name) private var allMarineSights: [MarineSight]
     @State private var prefs = UserPreferences.shared
     @Environment(DiveStore.self) private var store
@@ -534,13 +536,14 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
+            syncDiverSources()
             if !store.hasCacheBuilt {
                 // First mount: build caches immediately (cold launch or first appearance).
-                store.rebuildDerivedDiveState(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
+                store.rebuildDerivedDiveState(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
             } else {
                 // NavigationStack pop or scene re-activation: use the membership-guarded
                 // debounced path so no-op pops (cancel, no changes) skip the full rebuild.
-                store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
+                store.scheduleRebuild(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
             }
             // Cold-launch: onOpenURL may fire before this view mounts, so check
             // for a pending file URL that was stashed in the coordinator at launch.
@@ -552,8 +555,16 @@ struct ContentView: View {
         .task {
             store.updateWidgetDiveData(dives: dives)
         }
-        .onChange(of: dives) { _, _ in store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver) }
-        .onChange(of: allInsurances) { _, _ in store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver, force: true) }
+        .onChange(of: dives) { _, _ in store.scheduleRebuild(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver) }
+        // Gear/cert/insurance edits change only the diver-name list — never dive order, row
+        // fields or badges — so they take DiveStore's narrow path, not the full summary rebuild.
+        // ContentView is the sole feeder for store.cachedUniqueDivers; every other
+        // diver-filtered screen reads it rather than recomputing.
+        // Keyed on the diver-name arrays, not the model arrays: SwiftData models compare by
+        // persistentModelID, so observing them directly misses an in-place diverName rename.
+        .onChange(of: allGear.map(\.diverName))           { _, _ in syncDiverSources() }
+        .onChange(of: allInsurances.map(\.diverName))     { _, _ in syncDiverSources() }
+        .onChange(of: allCertifications.map(\.diverName)) { _, _ in syncDiverSources() }
         .onChange(of: store.cachedWidgetFingerprint) { _, _ in store.updateWidgetDiveData(dives: dives) }
         .onChange(of: prefs.depthUnit) { _, _ in store.updateWidgetDiveData(dives: dives); store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
         .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
@@ -667,37 +678,82 @@ struct ContentView: View {
         let isGrouped: Bool
     }
 
+    /// Pushes the current gear/certification/insurance arrays into DiveStore so
+    /// cachedUniqueDivers stays complete. Called once at mount (.onAppear) and again
+    /// whenever any of the three sources changes (.onChange) — kept as one function so
+    /// both call sites can never drift out of sync with each other's argument list.
+    private func syncDiverSources() {
+        store.updateDiverSources(gear: allGear, certifications: allCertifications, insurances: allInsurances)
+    }
+
+    /// True when the diver filter is the only active constraint on the dive list —
+    /// no search text, no filter-sheet criterion. The generic search/filter empty state
+    /// below has no affordance for selectedDiver (a separate AppStorage value
+    /// store.activeFilterCount doesn't count), so this case gets its own escape hatch instead.
+    private var diverFilterIsSoleCause: Bool {
+        !selectedDiver.isEmpty && store.appliedSearchText.isEmpty && store.activeFilterCount == 0
+    }
+
+    private var noDivesForDiverView: some View {
+        NoEntriesForDiverView(
+            title: DiverFilter.noDivesTitle(for: selectedDiver),
+            description: DiverFilter.noDivesDescription(for: selectedDiver)
+        ) {
+            Button {
+                selectedDiver = ""
+            } label: {
+                Label("Show All Divers", systemImage: "person.2")
+            }
+        }
+    }
+
+    private var noResultsView: some View {
+        // No results for search / filters
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 52))
+                .foregroundStyle(.secondary)
+            Text("No dives found")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text("Try other keywords or modify the filters.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            if store.activeFilterCount > 0 {
+                Button {
+                    store.resetFilters()
+                    selectedDiver = ""
+                } label: {
+                    Group {
+                        if !selectedDiver.isEmpty {
+                            Label("Clear filters and diver", systemImage: "xmark.circle.fill")
+                        } else {
+                            Label("Clear filters", systemImage: "xmark.circle.fill")
+                        }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.cyan)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+            Spacer()
+        }
+    }
+
     private var diveList: some View {
         let displayedSummaries = store.cachedFilteredSummaries
         return Group {
             if displayedSummaries.isEmpty && store.hasCacheBuilt {
-                // No results for search / filters
-                VStack(spacing: 16) {
-                    Spacer()
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 52))
-                        .foregroundStyle(.secondary)
-                    Text("No dives found")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text("Try other keywords or modify the filters.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
-                    if store.activeFilterCount > 0 {
-                        Button {
-                            store.resetFilters()
-                        } label: {
-                            Label("Clear filters", systemImage: "xmark.circle.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.cyan)
-                        }
-                        .transition(.scale.combined(with: .opacity))
-                    }
-                    Spacer()
+                if diverFilterIsSoleCause {
+                    noDivesForDiverView
+                        .transition(.opacity)
+                } else {
+                    noResultsView
+                        .transition(.opacity)
                 }
-                .transition(.opacity)
             } else {
                 let showGrouped = store.cachedShowGrouped
                 if showGrouped {
@@ -871,7 +927,7 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver, hasUnnamedDives: store.cachedHasUnnamedDives)
+        DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         // On iOS use `.topBarLeading` (not `.navigation`) so these items stay
