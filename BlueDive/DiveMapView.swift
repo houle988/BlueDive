@@ -9,7 +9,11 @@ private enum MapCoordinateMode: CaseIterable {
 
 // Clustering radius as a fraction of the visible span: computeRawClusters merges a
 // point into a cluster when it is within span / this value of the centroid, per axis.
-private let clusterRadiusDivisor: Double = 20.0
+// Explicitly nonisolated: computeRawClusters is `nonisolated static` so it can run off
+// the main actor, and this project's default actor isolation would otherwise infer this
+// file-scope `let` as main-actor-isolated. A plain Double constant is trivially Sendable,
+// so opting out this way (not `nonisolated(unsafe)`) is sound.
+private nonisolated let clusterRadiusDivisor: Double = 20.0
 
 // Bounding-box diagonal below which a cluster's dives are treated as literally the
 // same coordinate, so no zoom could ever separate them and the list is the only
