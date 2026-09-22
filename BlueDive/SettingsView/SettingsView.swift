@@ -389,6 +389,13 @@ class UserPreferences {
             WidgetCenter.shared.reloadAllTimelines()
         }
     }
+    /// When true, the dive profile chart and the PDF logbook omit mandatory-deco-stop
+    /// markers whose obligation had already cleared before the diver reached that depth.
+    /// Deliberately no App Group write and no widget reload: the shared container carries
+    /// only depthUnit/appearanceMode/languageMode, and the widget renders no chart.
+    var hideClearedDecoStops: Bool {
+        didSet { UserDefaults.standard.set(hideClearedDecoStops, forKey: "hideClearedDecoStops") }
+    }
 
     init() {
         self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "meters") ?? .meters
@@ -398,6 +405,9 @@ class UserPreferences {
         self.weightUnit       = WeightUnit(rawValue: UserDefaults.standard.string(forKey: "weightUnit") ?? "kilograms") ?? .kilograms
         self.appearanceMode   = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "system") ?? .system
         self.languageMode     = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "languageMode") ?? "system") ?? .system
+        // bool(forKey:) returns false when the key is absent, which is exactly the required
+        // OFF default — no registerDefaults entry needed.
+        self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         // Seed shared container after self is fully initialised (required by @Observable)
         let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
         shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
@@ -413,6 +423,7 @@ class UserPreferences {
         weightUnit      = .kilograms
         appearanceMode  = .system
         languageMode    = .system
+        hideClearedDecoStops = false
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
         UserDefaults.standard.set(false, forKey: "filterUnusedTanks")
@@ -467,6 +478,12 @@ struct SettingsView: View {
                         DiveSequenceSettingsView()
                     } label: {
                         SettingsListRow(title: "Dive Sequence", icon: "arrow.triangle.2.circlepath", color: .indigo)
+                    }
+
+                    NavigationLink {
+                        DiveProfileSettingsView()
+                    } label: {
+                        SettingsListRow(title: "Dive Profile", icon: "chart.xyaxis.line", color: .green)
                     }
 
                     NavigationLink {

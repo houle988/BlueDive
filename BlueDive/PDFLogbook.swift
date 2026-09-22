@@ -820,7 +820,16 @@ struct PDFDiveLogbook {
             searchFloorTime = time
             result.append((time: time, depth: stopInStoredUnit))
         }
-        return result
+        // Post-resolution filter only, for the same reason as the two in-app copies
+        // (StaticChartLayer.mandatoryDecoStopPoints and buildDecoStopCache in
+        // UnifiedDiveChartFixed.swift): the deepest-first loop advances searchFloorTime to
+        // each resolved crossing, so a `continue` inside it would move every shallower
+        // stop. All three copies must carry this filter or the PDF and the screen disagree.
+        // Filtering here covers both the diamonds and drawDecoLegend's "Mandatory stop"
+        // entry, since both read this one result array.
+        guard UserPreferences.shared.hideClearedDecoStops,
+              let cutoff = decoObligationEndTime(in: allSamples) else { return result }
+        return result.filter { $0.time <= cutoff }
     }
 
     /// Draws the decompression visualization behind the depth curve: either a stepped

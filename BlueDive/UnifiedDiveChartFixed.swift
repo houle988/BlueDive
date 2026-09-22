@@ -163,6 +163,45 @@ fileprivate func ppo2Dash(forSensorAtPosition position: Int) -> [CGFloat] {
     return dashes[position % dashes.count]
 }
 
+// MARK: - Deco obligation window
+
+/// The chart time (minutes) after which the dive computer no longer reported any
+/// decompression obligation, or `nil` when the dive never carried one.
+///
+/// A sample is treated as obligation-bearing when it carries the `.decoStop` event **or**
+/// a ceiling greater than zero. The two signals are unioned, not intersected, because the
+/// importers disagree about which one they populate: `GarminFITParser` appends `.decoStop`
+/// with a nil ceiling when the watch stops reporting `nextStopDepth`, while
+/// `BluetoothScannerView+ProfileProcessing` sets both together. Unioning yields the
+/// *latest* possible cutoff, which makes every caller as conservative as possible — a
+/// diamond wrongly hidden is far worse than one wrongly kept.
+///
+/// The `> 0` ceiling gate (rather than a plain non-nil check) matches every other site in
+/// the app (see `hasCeilingData` below, and `ceilingLabel` in the tooltip): the importers
+/// exclude a reported-but-zero ceiling at the source today, but dives imported before that
+/// gate existed can still have a literal `0` persisted, and a non-nil zero must read as
+/// "no real obligation" here.
+///
+/// The returned cutoff is the smallest sample time strictly greater than the last
+/// obligation-bearing sample (falling back to that sample's own time when it is the final
+/// sample). That one-interval grace is a real recorded timestamp, never an invented
+/// constant, and it protects the legitimate case where the computer clears the obligation
+/// at 3.4 m while the interpolated 3 m crossing lands a few seconds later inside that same
+/// sample interval.
+///
+/// Both passes are order-independent operations over the whole array — never
+/// `samples[i + 1]` — because importer sample order is not guaranteed.
+///
+/// `nil` means "filter nothing": callers must leave their results untouched.
+func decoObligationEndTime(in samples: [DiveProfilePoint]) -> Double? {
+    var last: Double? = nil
+    for s in samples where s.events.contains(.decoStop) || (s.ceilingDepth ?? 0) > 0 {
+        if last == nil || s.time > last! { last = s.time }
+    }
+    guard let last else { return nil }
+    return samples.lazy.map(\.time).filter { $0 > last }.min() ?? last
+}
+
 /// Bouton de toggle personnalisé pour les contrôles du graphique
 struct ToggleButton: View {
     @Binding var isOn: Bool
@@ -230,11 +269,17 @@ private struct StaticChartLayer: View, Equatable {
     /// the user switches units, so the Equatable check re-renders the axis labels and
     /// mark positions even though `dive.id` and `prefs` (a shared reference) are stable.
     let unitsHash: Int
+    /// Passed in as a value rather than read from `prefs` inside the body so the Equatable
+    /// contract below stays honest: `prefs` is the shared `UserPreferences` singleton, so a
+    /// newly-flipped Bool on it could never make two `StaticChartLayer` values compare
+    /// unequal on its own.
+    let hideClearedDecoStops: Bool
 
     static func == (lhs: StaticChartLayer, rhs: StaticChartLayer) -> Bool {
         lhs.dive.id == rhs.dive.id &&
         lhs.tanksO2Hash == rhs.tanksO2Hash &&
         lhs.unitsHash == rhs.unitsHash &&
+        lhs.hideClearedDecoStops == rhs.hideClearedDecoStops &&
         lhs.visibility.showDepth == rhs.visibility.showDepth &&
         lhs.visibility.showTemperature == rhs.visibility.showTemperature &&
         lhs.visibility.showPressure == rhs.visibility.showPressure &&
@@ -869,7 +914,15 @@ private struct StaticChartLayer: View, Equatable {
                 displayDepth: dive.displayProfileDepth(stopInStoredUnit)
             ))
         }
-        return result
+        // Post-resolution filter only — never a `continue` inside the loop above: the
+        // deepest-first walk advances searchFloorTime to each resolved crossing, so
+        // skipping a stop mid-loop would shift every shallower stop's crossing time.
+        // Mirrored in buildDecoStopCache() and PDFLogbook.mandatoryDecoStopPoints(for:);
+        // all three must carry this filter or the tooltip, legend and PDF contradict
+        // the diamonds drawn here.
+        guard hideClearedDecoStops,
+              let cutoff = decoObligationEndTime(in: allSamples) else { return result }
+        return result.filter { $0.time <= cutoff }
     }
 
     /// True when at least one sample carries a dive-computer-reported decompression ceiling.
@@ -1139,7 +1192,7 @@ struct UnifiedDiveChartOptimized: View {
                 legendView
             }
         }
-        .task(id: "\(dive.id)\(tanksO2Hash)") {
+        .task(id: "\(dive.id)\(tanksO2Hash)\(prefs.hideClearedDecoStops)") {
             buildPressureCache()
             buildDecoStopCache()
             if visibility.showPPO2 { rebuildPPO2Cache() }
@@ -1250,7 +1303,7 @@ struct UnifiedDiveChartOptimized: View {
             : Double(dive.duration)
         let xMax = max(lastSampleTime, storedDurationMinutes)
 
-        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash)
+        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops)
             .equatable()
             // chartOverlay gives us a ChartProxy so we can read the exact plot-area
             // frame — the rectangle inside both Y-axis label gutters.  Everything
@@ -1420,6 +1473,13 @@ struct UnifiedDiveChartOptimized: View {
             }
         }
 
+        // Same post-resolution-only filter as StaticChartLayer.mandatoryDecoStopPoints and
+        // PDFLogbook.mandatoryDecoStopPoints(for:) — applied after the loop because the
+        // deepest-first searchFloorTime anchoring needs every stop resolved. Keeping this
+        // cache in step with the diamonds is what keeps the tooltip's "Stop X" row honest.
+        if prefs.hideClearedDecoStops, let cutoff = decoObligationEndTime(in: samples) {
+            result = result.filter { $0.entryTime <= cutoff }
+        }
         cachedDecoStopEntries = result.sorted { $0.entryTime < $1.entryTime }
     }
 
@@ -1609,7 +1669,12 @@ struct UnifiedDiveChartOptimized: View {
                         } else {
                             LegendBand(color: .orange, text: "Deco obligation", alpha: 0.2)
                         }
-                        LegendDiamond(color: .orange, text: "Mandatory stop")
+                        // Only consult the async cache when the filter is active, so the
+                        // default (OFF) path stays synchronous and completely unchanged:
+                        // cachedDecoStopEntries is built in .task and is empty on frame one.
+                        if !prefs.hideClearedDecoStops || !cachedDecoStopEntries.isEmpty {
+                            LegendDiamond(color: .orange, text: "Mandatory stop")
+                        }
                     }
                 }
 
