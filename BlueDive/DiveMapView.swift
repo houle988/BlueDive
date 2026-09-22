@@ -959,19 +959,19 @@ struct DiveMapView: View {
                             Button {
                                 mapStyle = .standard(elevation: .realistic)
                             } label: {
-                                Label("Standard Map", systemImage: "map")
+                                Label("Standard", systemImage: "map")
                             }
 
                             Button {
                                 mapStyle = .hybrid(elevation: .realistic)
                             } label: {
-                                Label("Hybrid View", systemImage: "map.fill")
+                                Label("Hybrid", systemImage: "map.fill")
                             }
 
                             Button {
                                 mapStyle = .imagery(elevation: .realistic)
                             } label: {
-                                Label("Satellite View", systemImage: "globe.americas.fill")
+                                Label("Satellite", systemImage: "globe.americas.fill")
                             }
                         }
                     } label: {
