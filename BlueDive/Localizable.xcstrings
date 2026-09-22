@@ -18369,7 +18369,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hybride weergave"
+            "value" : "Hybride"
           }
         }
       }
@@ -30386,7 +30386,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Satellietweergave"
+            "value" : "Satelliet"
           }
         }
       }
@@ -33387,7 +33387,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Standaardkaart"
+            "value" : "Standaard"
           }
         }
       }
