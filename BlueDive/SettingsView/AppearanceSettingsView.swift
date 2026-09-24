@@ -61,7 +61,6 @@ struct AppearanceSettingsView: View {
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
-                        .tint(.cyan)
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))

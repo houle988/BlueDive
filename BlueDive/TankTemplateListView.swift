@@ -23,7 +23,7 @@ struct TankTemplateListView: View {
                 if templates.isEmpty {
                     ContentUnavailableView(
                         "No Tank Templates",
-                        systemImage: "cylinder.fill",
+                        systemImage: "cylinder",
                         description: Text("Create templates for your frequently used tanks to quickly fill in tank details when logging dives.")
                     )
                 } else {
@@ -86,16 +86,16 @@ struct TankTemplateListView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Done") { dismiss() }
+            closeToolbarButton { dismiss() }
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
                 showAddTemplate = true
             } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+                Image(systemName: "plus")
                     .foregroundStyle(.cyan)
             }
+            .accessibilityLabel(Text("Add Tank Template"))
         }
     }
 
@@ -129,7 +129,7 @@ struct TankTemplateRow: View {
                     .fill(Color.blue.opacity(0.12))
                     .frame(width: 44, height: 44)
 
-                Image(systemName: "cylinder.fill")
+                Image(systemName: "cylinder")
                     .font(.title3)
                     .foregroundStyle(.blue)
             }

@@ -389,6 +389,13 @@ class UserPreferences {
             WidgetCenter.shared.reloadAllTimelines()
         }
     }
+    /// When true, the dive profile chart and the PDF logbook omit mandatory-deco-stop
+    /// markers whose obligation had already cleared before the diver reached that depth.
+    /// Deliberately no App Group write and no widget reload: the shared container carries
+    /// only depthUnit/appearanceMode/languageMode, and the widget renders no chart.
+    var hideClearedDecoStops: Bool {
+        didSet { UserDefaults.standard.set(hideClearedDecoStops, forKey: "hideClearedDecoStops") }
+    }
 
     init() {
         self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "meters") ?? .meters
@@ -398,6 +405,9 @@ class UserPreferences {
         self.weightUnit       = WeightUnit(rawValue: UserDefaults.standard.string(forKey: "weightUnit") ?? "kilograms") ?? .kilograms
         self.appearanceMode   = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "system") ?? .system
         self.languageMode     = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "languageMode") ?? "system") ?? .system
+        // bool(forKey:) returns false when the key is absent, which is exactly the required
+        // OFF default — no registerDefaults entry needed.
+        self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         // Seed shared container after self is fully initialised (required by @Observable)
         let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
         shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
@@ -413,10 +423,12 @@ class UserPreferences {
         weightUnit      = .kilograms
         appearanceMode  = .system
         languageMode    = .system
+        hideClearedDecoStops = false
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
         UserDefaults.standard.set(false, forKey: "filterUnusedTanks")
         UserDefaults.standard.set(false, forKey: "autoSequenceEnabled")
+        DiveSortOrder.resetPersisted()
     }
 }
 
@@ -436,7 +448,7 @@ struct SettingsView: View {
                     NavigationLink {
                         AppearanceSettingsView(onNeedsRootDismiss: { dismiss() })
                     } label: {
-                        SettingsListRow(title: "Appearance", icon: "paintbrush.fill", color: .pink)
+                        SettingsListRow(title: "Appearance", icon: "paintbrush", color: .pink)
                     }
 
                     NavigationLink {
@@ -459,7 +471,7 @@ struct SettingsView: View {
                     NavigationLink {
                         NotificationsSettingsView()
                     } label: {
-                        SettingsListRow(title: "Notifications", icon: "bell.fill", color: .purple)
+                        SettingsListRow(title: "Notifications", icon: "bell", color: .purple)
                     }
 
                     NavigationLink {
@@ -469,15 +481,21 @@ struct SettingsView: View {
                     }
 
                     NavigationLink {
+                        DiveProfileSettingsView()
+                    } label: {
+                        SettingsListRow(title: "Dive Profile", icon: "chart.xyaxis.line", color: .green)
+                    }
+
+                    NavigationLink {
                         ICloudSettingsView()
                     } label: {
-                        SettingsListRow(title: "iCloud", icon: "icloud.fill", color: .cyan)
+                        SettingsListRow(title: "iCloud", icon: "icloud", color: .cyan)
                     }
 
                     NavigationLink {
                         DataManagementSettingsView()
                     } label: {
-                        SettingsListRow(title: "Data Management", icon: "externaldrive.fill", color: .red)
+                        SettingsListRow(title: "Data Management", icon: "externaldrive", color: .red)
                     }
                 }
 
@@ -488,12 +506,12 @@ struct SettingsView: View {
                     .foregroundStyle(.primary)
 
                     Button { showDisclaimer = true } label: {
-                        SettingsListRow(title: "Disclaimer", icon: "exclamationmark.triangle.fill", color: .orange)
+                        SettingsListRow(title: "Disclaimer", icon: "exclamationmark.triangle", color: .orange)
                     }
                     .foregroundStyle(.primary)
 
                     Button { showWelcomeWizard = true } label: {
-                        SettingsListRow(title: "Welcome Tour", icon: "hand.wave.fill", color: .orange)
+                        SettingsListRow(title: "Welcome Tour", icon: "hand.wave", color: .orange)
                     }
                     .foregroundStyle(.primary)
 
@@ -504,7 +522,7 @@ struct SettingsView: View {
                             UserDefaults.standard.set(DiveIntroConfig.replayValue, forKey: DiveIntroConfig.versionStorageKey)
                         }
                     } label: {
-                        SettingsListRow(title: "Intro Animation", icon: "play.circle.fill", color: .teal)
+                        SettingsListRow(title: "Intro Animation", icon: "play.circle", color: .teal)
                     }
                     .foregroundStyle(.primary)
                 }
@@ -519,8 +537,7 @@ struct SettingsView: View {
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                    closeToolbarButton { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
                 }
             }
@@ -531,7 +548,7 @@ struct SettingsView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showDisclaimer) {
-                DisclaimerView()
+                DisclaimerView(isReview: true)
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -569,6 +586,7 @@ struct SettingsListRow: View {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -600,6 +618,7 @@ struct SectionHeaderModern: View {
                 Image(systemName: icon)
                     .font(.body)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
             }
 
             Text(title)
@@ -630,6 +649,7 @@ struct ModernToggleRow: View {
                 Image(systemName: icon)
                     .font(.body)
                     .foregroundStyle(iconColor)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -645,9 +665,8 @@ struct ModernToggleRow: View {
 
             Spacer()
 
-            Toggle("", isOn: $isOn)
+            Toggle(title, isOn: $isOn)
                 .labelsHidden()
-                .tint(.cyan)
         }
         .padding()
         .background(
@@ -740,4 +759,5 @@ struct ExportableFileDocument: FileDocument {
 
 #Preview {
     SettingsView()
+        .environment(DiveStore())
 }

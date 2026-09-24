@@ -25,11 +25,17 @@ struct ContentView: View {
     @Environment(\.modelContext) var modelContext
     @Query(sort: \Dive.timestamp, order: .reverse) var dives: [Dive]
     @Query private var allInsurances: [DivingInsurance]
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @Query(sort: \MarineSight.name) private var allMarineSights: [MarineSight]
     @State private var prefs = UserPreferences.shared
     @Environment(DiveStore.self) private var store
 
     @State var showScannerSheet = false
+    /// Driven by BluetoothScannerView's sync state. True while a BLE connection is open and a
+    /// retrieval may be in flight, where a swipe-dismiss would tear down and free the device
+    /// pointer out from under the background read.
+    @State private var isBluetoothSyncTeardownUnsafe = false
     @State var showFileImporter = false
     @State var importError: ImportError?
     @State var showErrorAlert = false
@@ -230,10 +236,11 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showScannerSheet) {
-                BluetoothScannerView()
+                BluetoothScannerView(isTeardownUnsafe: $isBluetoothSyncTeardownUnsafe)
                     .presentationSizing(.page)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+                    .interactiveDismissDisabled(isBluetoothSyncTeardownUnsafe)
             }
             // Widget deep-link hooks (bluedive://add/manual | bluedive://add/bluetooth)
             .onReceive(NotificationCenter.default.publisher(for: .addDiveManual)) { _ in
@@ -461,7 +468,6 @@ struct ContentView: View {
                         if importProgressTotal > 0 {
                             ProgressView(value: Double(importProgressCurrent), total: Double(importProgressTotal))
                                 .progressViewStyle(.linear)
-                                .tint(.cyan)
                                 .frame(width: 220)
                             Text(String(format: NSLocalizedString("%@ of %@ dives imported", bundle: .forAppLanguage(), comment: "Progress label during dive import showing current and total count"), Double(importProgressCurrent).localizedString(decimals: 0), Double(importProgressTotal).localizedString(decimals: 0)))
                                 .font(.headline)
@@ -469,7 +475,7 @@ struct ContentView: View {
                                 .monospacedDigit()
                                 .transaction { $0.animation = nil }
                         } else {
-                            ProgressView().tint(.cyan).scaleEffect(1.5)
+                            ProgressView().scaleEffect(1.5)
                             Text("Importing...")
                                 .font(.headline)
                                 .foregroundStyle(.primary)
@@ -499,7 +505,6 @@ struct ContentView: View {
                         if exportProgressTotal > 0 {
                             ProgressView(value: Double(exportProgressCurrent), total: Double(exportProgressTotal))
                                 .progressViewStyle(.linear)
-                                .tint(.cyan)
                                 .frame(width: 220)
                             Text(String(format: NSLocalizedString("%@ of %@ dives exported", bundle: .forAppLanguage(), comment: "Progress label during dive export showing current and total count"),
                                  Double(exportProgressCurrent).localizedString(decimals: 0),
@@ -509,7 +514,7 @@ struct ContentView: View {
                                 .monospacedDigit()
                                 .transaction { $0.animation = nil }
                         } else {
-                            ProgressView().tint(.cyan).scaleEffect(1.5)
+                            ProgressView().scaleEffect(1.5)
                             Text("Exporting...")
                                 .font(.headline)
                                 .foregroundStyle(.primary)
@@ -531,13 +536,14 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
+            syncDiverSources()
             if !store.hasCacheBuilt {
                 // First mount: build caches immediately (cold launch or first appearance).
-                store.rebuildDerivedDiveState(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
+                store.rebuildDerivedDiveState(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
             } else {
                 // NavigationStack pop or scene re-activation: use the membership-guarded
                 // debounced path so no-op pops (cancel, no changes) skip the full rebuild.
-                store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
+                store.scheduleRebuild(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
             }
             // Cold-launch: onOpenURL may fire before this view mounts, so check
             // for a pending file URL that was stashed in the coordinator at launch.
@@ -549,8 +555,16 @@ struct ContentView: View {
         .task {
             store.updateWidgetDiveData(dives: dives)
         }
-        .onChange(of: dives) { _, _ in store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver) }
-        .onChange(of: allInsurances) { _, _ in store.scheduleRebuild(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver, force: true) }
+        .onChange(of: dives) { _, _ in store.scheduleRebuild(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver) }
+        // Gear/cert/insurance edits change only the diver-name list — never dive order, row
+        // fields or badges — so they take DiveStore's narrow path, not the full summary rebuild.
+        // ContentView is the sole feeder for store.cachedUniqueDivers; every other
+        // diver-filtered screen reads it rather than recomputing.
+        // Keyed on the diver-name arrays, not the model arrays: SwiftData models compare by
+        // persistentModelID, so observing them directly misses an in-place diverName rename.
+        .onChange(of: allGear.map(\.diverName))           { _, _ in syncDiverSources() }
+        .onChange(of: allInsurances.map(\.diverName))     { _, _ in syncDiverSources() }
+        .onChange(of: allCertifications.map(\.diverName)) { _, _ in syncDiverSources() }
         .onChange(of: store.cachedWidgetFingerprint) { _, _ in store.updateWidgetDiveData(dives: dives) }
         .onChange(of: prefs.depthUnit) { _, _ in store.updateWidgetDiveData(dives: dives); store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
         .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
@@ -664,37 +678,82 @@ struct ContentView: View {
         let isGrouped: Bool
     }
 
+    /// Pushes the current gear/certification/insurance arrays into DiveStore so
+    /// cachedUniqueDivers stays complete. Called once at mount (.onAppear) and again
+    /// whenever any of the three sources changes (.onChange) — kept as one function so
+    /// both call sites can never drift out of sync with each other's argument list.
+    private func syncDiverSources() {
+        store.updateDiverSources(gear: allGear, certifications: allCertifications, insurances: allInsurances)
+    }
+
+    /// True when the diver filter is the only active constraint on the dive list —
+    /// no search text, no filter-sheet criterion. The generic search/filter empty state
+    /// below has no affordance for selectedDiver (a separate AppStorage value
+    /// store.activeFilterCount doesn't count), so this case gets its own escape hatch instead.
+    private var diverFilterIsSoleCause: Bool {
+        !selectedDiver.isEmpty && store.appliedSearchText.isEmpty && store.activeFilterCount == 0
+    }
+
+    private var noDivesForDiverView: some View {
+        NoEntriesForDiverView(
+            title: DiverFilter.noDivesTitle(for: selectedDiver),
+            description: DiverFilter.noDivesDescription(for: selectedDiver)
+        ) {
+            Button {
+                selectedDiver = ""
+            } label: {
+                Label("Show All Divers", systemImage: "person.2")
+            }
+        }
+    }
+
+    private var noResultsView: some View {
+        // No results for search / filters
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 52))
+                .foregroundStyle(.secondary)
+            Text("No dives found")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text("Try other keywords or modify the filters.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            if store.activeFilterCount > 0 {
+                Button {
+                    store.resetFilters()
+                    selectedDiver = ""
+                } label: {
+                    Group {
+                        if !selectedDiver.isEmpty {
+                            Label("Clear filters and diver", systemImage: "xmark.circle.fill")
+                        } else {
+                            Label("Clear filters", systemImage: "xmark.circle.fill")
+                        }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.cyan)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+            Spacer()
+        }
+    }
+
     private var diveList: some View {
         let displayedSummaries = store.cachedFilteredSummaries
         return Group {
             if displayedSummaries.isEmpty && store.hasCacheBuilt {
-                // No results for search / filters
-                VStack(spacing: 16) {
-                    Spacer()
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 52))
-                        .foregroundStyle(.secondary)
-                    Text("No dives found")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text("Try other keywords or modify the filters.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
-                    if store.activeFilterCount > 0 {
-                        Button {
-                            store.resetFilters()
-                        } label: {
-                            Label("Clear filters", systemImage: "xmark.circle.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.cyan)
-                        }
-                        .transition(.scale.combined(with: .opacity))
-                    }
-                    Spacer()
+                if diverFilterIsSoleCause {
+                    noDivesForDiverView
+                        .transition(.opacity)
+                } else {
+                    noResultsView
+                        .transition(.opacity)
                 }
-                .transition(.opacity)
             } else {
                 let showGrouped = store.cachedShowGrouped
                 if showGrouped {
@@ -804,33 +863,71 @@ struct ContentView: View {
     private var cloudSyncToolbarItem: some View {
         Button { showSyncStatusPopover = true } label: { cloudSyncIcon }
             .help("iCloud Sync Status")
+            .accessibilityLabel(Text("iCloud Sync Status"))
+            // Set directly on the Button rather than on a descendant inside its label,
+            // since it's undocumented whether SwiftUI promotes a descendant's
+            // .accessibilityValue to the enclosing Button's own accessibility element.
+            .accessibilityValue(cloudSyncAccessibilityValue)
+    }
+
+    private var cloudSyncAccessibilityValue: Text {
+        if !iCloudSyncEnabled {
+            return Text("iCloud sync is turned off")
+        } else if syncMonitor.isSyncing {
+            return Text("Syncing")
+        } else if syncMonitor.hasError {
+            return Text("Sync error")
+        } else if let d = syncMonitor.lastSyncDate, Date().timeIntervalSince(d) < 300 {
+            return Text("Recently synced")
+        } else {
+            return Text("Idle")
+        }
     }
 
     @ViewBuilder
     private var cloudSyncIcon: some View {
         if !iCloudSyncEnabled {
-            Image(systemName: "icloud.slash.fill")
+            Image(systemName: "icloud.slash")
                 .foregroundStyle(.secondary)
         } else if syncMonitor.isSyncing {
             ProgressView()
                 .scaleEffect(0.75)
                 .frame(width: 20, height: 20)
         } else if syncMonitor.hasError {
-            Image(systemName: "exclamationmark.icloud.fill")
+            Image(systemName: "exclamationmark.icloud")
                 .foregroundStyle(.orange)
         } else if let d = syncMonitor.lastSyncDate, Date().timeIntervalSince(d) < 300 {
-            Image(systemName: "checkmark.icloud.fill")
+            Image(systemName: "checkmark.icloud")
                 .foregroundStyle(.cyan)
         } else {
-            Image(systemName: "icloud.fill")
+            Image(systemName: "icloud")
                 .foregroundStyle(.secondary)
         }
     }
 
 
+    // Sort order is a persisted, durable preference (unlike filters, which are
+    // scoped to a single browsing session) — see DiveStore.sortOrder. The filter
+    // toolbar button doubles as the entry point to both filters and sort, so it
+    // must visually flag a non-default sort even when no filter is active, or a
+    // persisted custom sort looks indistinguishable from the default on every launch.
+    private var filterToolbarIsActive: Bool {
+        store.activeFilterCount > 0 || store.sortOrder != .dateDesc
+    }
+
+    private var filterToolbarAccessibilityLabel: Text {
+        if store.activeFilterCount > 0 {
+            return Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), store.activeFilterCount))
+        } else if store.sortOrder != .dateDesc {
+            return Text(verbatim: NSLocalizedString("Custom sort applied", bundle: .forAppLanguage(), value: "Custom sort applied", comment: "Accessibility label for the filter button when no filters are active but the sort order differs from the default"))
+        } else {
+            return Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
+        }
+    }
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver, hasUnnamedDives: store.cachedHasUnnamedDives)
+        DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         // On iOS use `.topBarLeading` (not `.navigation`) so these items stay
@@ -841,10 +938,11 @@ struct ContentView: View {
         #if os(iOS)
         ToolbarItem(placement: .topBarLeading) {
             Button(action: { showSettings = true }) {
-                Image(systemName: "gearshape.fill")
+                Image(systemName: "gear")
                     .foregroundStyle(.cyan)
             }
             .help("Settings")
+            .accessibilityLabel(Text("Settings"))
         }
         ToolbarItem(placement: .topBarLeading) {
             cloudSyncToolbarItem
@@ -857,10 +955,11 @@ struct ContentView: View {
         #else
         ToolbarItem(placement: .navigation) {
             Button(action: { showSettings = true }) {
-                Image(systemName: "gearshape.fill")
+                Image(systemName: "gear")
                     .foregroundStyle(.cyan)
             }
             .help("Settings")
+            .accessibilityLabel(Text("Settings"))
         }
         ToolbarItem(placement: .navigation) {
             cloudSyncToolbarItem
@@ -880,28 +979,33 @@ struct ContentView: View {
                     .foregroundStyle(.cyan)
             }
             .help("Diver Profile")
+            .accessibilityLabel(Text("Diver Profile"))
 
             Button(action: { showFileImporter = true }) {
                 Image(systemName: "doc.badge.plus")
                     .foregroundStyle(.cyan)
             }
             .help("Import Dives")
+            .accessibilityLabel(Text("Import Dives"))
 
             Button(action: addManualDive) {
                 Image(systemName: "plus.circle.fill")
                     .foregroundStyle(.cyan)
             }
             .help("Add Dive Manually")
+            .accessibilityLabel(Text("Add Dive Manually"))
 
             Button(action: { showScannerSheet = true }) {
                 Image(systemName: "antenna.radiowaves.left.and.right")
                     .foregroundStyle(.cyan)
             }
             .help("Sync Bluetooth Dive Computer")
+            .accessibilityLabel(Text("Sync Bluetooth Dive Computer"))
 
             if !dives.isEmpty {
                 exportMenuButton
                     .help("Export")
+                    .accessibilityLabel(Text("Export"))
             }
 
             Button(action: { showMergeDivesSheet = true }) {
@@ -909,12 +1013,13 @@ struct ContentView: View {
                     .foregroundStyle(.cyan)
             }
             .help("Merge two dives")
+            .accessibilityLabel(Text("Merge two dives"))
             .disabled(dives.count < 2)
 
-            Button(action: { showFilterSheet = true }) {
+            Button(action: { store.showFilterSheet = true }) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .foregroundStyle(store.activeFilterCount > 0 ? .orange : .cyan)
+                        .foregroundStyle(filterToolbarIsActive ? .orange : .cyan)
                     if store.activeFilterCount > 0 {
                         Text("\(store.activeFilterCount)")
                             .font(.system(size: 9, weight: .bold))
@@ -926,6 +1031,7 @@ struct ContentView: View {
                 }
             }
             .help("Filter Dives")
+            .accessibilityLabel(filterToolbarAccessibilityLabel)
 
             if !dives.isEmpty {
                 Button(action: { showDeleteSheet = true }) {
@@ -933,81 +1039,87 @@ struct ContentView: View {
                         .foregroundStyle(.red)
                 }
                 .help("Delete a dive")
+                .accessibilityLabel(Text("Delete a dive"))
             }
         }
         #else
         // iOS: + menu (Add/Import/Bluetooth) + Filter + overflow menu.
+        // Each control is its own ToolbarItem (not a shared HStack) so the system's
+        // toolbar-overflow layout can manage/overflow them independently instead of
+        // clipping the whole group when the window is narrow (e.g. Mac Designed for iPad).
         ToolbarItem(placement: .primaryAction) {
-            HStack(spacing: 16) {
-                Menu {
-                    Button(action: addManualDive) {
-                        Label("Add a dive (Manual)", systemImage: "plus.circle")
-                    }
-                    Button(action: { showScannerSheet = true }) {
-                        Label("Add a dive (Bluetooth)", systemImage: "antenna.radiowaves.left.and.right")
-                    }
-                    Button(action: { showFileImporter = true }) {
-                        Label("Import", systemImage: "doc.badge.plus")
-                    }
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.cyan)
+            Menu {
+                Button(action: addManualDive) {
+                    Label("Add a dive (Manual)", systemImage: "plus.circle")
                 }
-
-                Button(action: { store.showFilterSheet = true }) {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(store.activeFilterCount > 0 ? .orange : .cyan)
-                        if store.activeFilterCount > 0 {
-                            Text("\(store.activeFilterCount)")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.black)
-                                .padding(3)
-                                .background(Color.orange, in: Circle())
-                                .offset(x: 6, y: -6)
-                        }
-                    }
+                Button(action: { showScannerSheet = true }) {
+                    Label("Add a dive (Bluetooth)", systemImage: "antenna.radiowaves.left.and.right")
                 }
+                Button(action: { showFileImporter = true }) {
+                    Label("Import", systemImage: "doc.badge.plus")
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .foregroundStyle(.cyan)
+            }
+            .accessibilityLabel(Text("Add Dive"))
+        }
 
-                Menu {
-                    Button(action: { showProfile = true }) {
-                        Label("Profile", systemImage: "person.circle.fill")
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: { store.showFilterSheet = true }) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .foregroundStyle(filterToolbarIsActive ? .orange : .cyan)
+                    if store.activeFilterCount > 0 {
+                        Text("\(store.activeFilterCount)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.black)
+                            .padding(3)
+                            .background(Color.orange, in: Circle())
+                            .offset(x: 6, y: -6)
                     }
-                    Divider()
-                    Button(action: { showDashboard = true }) {
-                        Label("Stats", systemImage: "chart.bar.fill")
-                    }
-                    Button(action: { showDiveTrips = true }) {
-                        Label("My Trips", systemImage: "map.fill")
-                    }
-                    Button(action: { showCalendarHeatmap = true }) {
-                        Label("Calendar", systemImage: "calendar")
-                    }
-                    Button(action: { showMarineLife = true }) {
-                        Label("Marine Life", systemImage: "fish.fill")
-                    }
-                    if !dives.isEmpty {
-                        Divider()
-                        Button(action: exportAllDivesToXML) {
-                            Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
-                        }
-                        Button(action: exportAllDivesToUDDF) {
-                            Label("Export All Dives to UDDF", systemImage: "water.waves")
-                        }
-                    }
-                    if dives.count >= 2 {
-                        Button(action: { showMergeDivesSheet = true }) {
-                            Label("Merge Dives", systemImage: "arrow.triangle.merge")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.cyan)
                 }
             }
+            .accessibilityLabel(filterToolbarAccessibilityLabel)
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button(action: { showProfile = true }) {
+                    Label("Profile", systemImage: "person.circle.fill")
+                }
+                Divider()
+                Button(action: { showDashboard = true }) {
+                    Label("Stats", systemImage: "chart.bar.fill")
+                }
+                Button(action: { showDiveTrips = true }) {
+                    Label("My Trips", systemImage: "map.fill")
+                }
+                Button(action: { showCalendarHeatmap = true }) {
+                    Label("Calendar", systemImage: "calendar")
+                }
+                Button(action: { showMarineLife = true }) {
+                    Label("Marine Life", systemImage: "fish.fill")
+                }
+                if !dives.isEmpty {
+                    Divider()
+                    Button(action: exportAllDivesToXML) {
+                        Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                    Button(action: exportAllDivesToUDDF) {
+                        Label("Export All Dives to UDDF", systemImage: "water.waves")
+                    }
+                }
+                if dives.count >= 2 {
+                    Button(action: { showMergeDivesSheet = true }) {
+                        Label("Merge Dives", systemImage: "arrow.triangle.merge")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundStyle(.cyan)
+            }
+            .accessibilityLabel(Text("More"))
         }
         #endif
     }
@@ -1021,6 +1133,7 @@ struct ContentView: View {
                 .foregroundStyle(.cyan)
         }
         .help("Calculators")
+        .accessibilityLabel(Text("Calculators"))
         .popover(isPresented: $showCalculatorsPopover, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 0) {
                 toolsPopoverButton("Minimum Gas", icon: "wrench.and.screwdriver.fill") {
@@ -1056,6 +1169,7 @@ struct ContentView: View {
             Image(systemName: "wrench.and.screwdriver.fill")
                 .foregroundStyle(.cyan)
         }
+        .accessibilityLabel(Text("Calculators"))
         #endif
     }
 

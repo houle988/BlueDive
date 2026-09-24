@@ -41,6 +41,7 @@ struct GearIconView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .padding(padding)
+                    .accessibilityHidden(true)
             }
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
@@ -51,6 +52,7 @@ struct GearIconView: View {
                 Image(systemName: iconName)
                     .font(.system(size: symbolSize))
                     .foregroundStyle(iconColor)
+                    .accessibilityHidden(true)
             }
             .frame(width: size, height: size)
         }

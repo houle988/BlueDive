@@ -115,9 +115,6 @@ struct TripBuilder {
 struct DiveTripsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(DiveStore.self) private var store
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
     @State private var selectedTrip: DiveTrip? = nil
     @State private var prefs = UserPreferences.shared
     @State private var tripsAppeared = false
@@ -126,7 +123,6 @@ struct DiveTripsView: View {
     @State private var tripsVersion: Int = 0
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
 
     var body: some View {
@@ -140,8 +136,8 @@ struct DiveTripsView: View {
                     )
                 } else if filteredDives.isEmpty {
                     NoEntriesForDiverView(
-                        title: "No Trips for Diver",
-                        description: "No trips were found for the selected diver."
+                        title: Text(verbatim: String(format: NSLocalizedString("No Trips for %@", bundle: Bundle.forAppLanguage(), value: "No Trips for %@", comment: "Empty-state title when the selected diver has no trips; %@ is the diver's name"), selectedDiver)),
+                        description: Text(verbatim: String(format: NSLocalizedString("No trips were found for %@.", bundle: Bundle.forAppLanguage(), value: "No trips were found for %@.", comment: "Empty-state description when the selected diver has no trips; %@ is the diver's name"), selectedDiver))
                     )
                 } else if !tripsReady {
                     ProgressView("Organizing trips…")
@@ -165,6 +161,11 @@ struct DiveTripsView: View {
                                 TripCard(trip: trip, prefs: prefs)
                                     .padding(.horizontal)
                                     .onTapGesture { selectedTrip = trip }
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityAddTraits(.isButton)
+                                    // onTapGesture isn't reliably fired by VoiceOver's activate
+                                    // gesture; this makes double-tap open the trip.
+                                    .accessibilityAction { selectedTrip = trip }
                                     .opacity(tripsAppeared ? 1.0 : 0.0)
                                     .offset(y: tripsAppeared ? 0 : 20)
                             }
@@ -184,11 +185,10 @@ struct DiveTripsView: View {
             #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             }
             .sheet(item: $selectedTrip) { trip in
                 TripDetailSheet(trip: trip, prefs: prefs)
@@ -207,7 +207,7 @@ struct DiveTripsView: View {
             .onChange(of: store.cachedSummaries) { _, _ in
                 tripsVersion += 1
             }
-            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
         }
     }
 }
@@ -249,7 +249,7 @@ struct TripSummaryStat: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: icon).foregroundStyle(color).font(.title3)
+            Image(systemName: icon).foregroundStyle(color).font(.title3).accessibilityHidden(true)
             Text(value).font(.title2.weight(.black)).foregroundStyle(.primary)
             Text(label).font(.caption2).foregroundStyle(.secondary)
         }
@@ -304,6 +304,7 @@ struct TripCard: View {
                     HStack(spacing: 8) {
                         Image(systemName: "calendar")
                             .font(.caption)
+                            .accessibilityHidden(true)
                         Text(tripDateRange(trip))
                             .font(.caption)
                     }
@@ -333,6 +334,7 @@ struct TripCard: View {
                         Image(systemName: Double(star) <= trip.averageRating ? "star.fill" : "star")
                             .font(.caption)
                             .foregroundStyle(Double(star) <= trip.averageRating ? .yellow : .secondary)
+                            .accessibilityHidden(true)
                     }
                     Text(verbatim: trip.averageRating.localizedString(decimals: 1) + " / 5")
                         .font(.caption)
@@ -341,6 +343,7 @@ struct TripCard: View {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -392,7 +395,7 @@ struct TripStatMini: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            Image(systemName: icon).font(.caption2).foregroundStyle(.secondary)
+            Image(systemName: icon).font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
             Text(value).font(.subheadline.weight(.bold)).monospacedDigit()
             Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
         }
@@ -446,9 +449,8 @@ struct TripDetailSheet: View {
             #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
             }
         }
@@ -535,7 +537,7 @@ struct TripHeroStat: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: icon).font(.title2).foregroundStyle(color)
+            Image(systemName: icon).font(.title2).foregroundStyle(color).accessibilityHidden(true)
             Text(value).font(.title3.weight(.black)).monospacedDigit()
             Text(label).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
@@ -555,7 +557,7 @@ struct HighlightRow: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(color.opacity(0.15)).frame(width: 36, height: 36)
-                Image(systemName: icon).foregroundStyle(color).font(.system(size: 15))
+                Image(systemName: icon).foregroundStyle(color).font(.system(size: 15)).accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline.weight(.semibold))

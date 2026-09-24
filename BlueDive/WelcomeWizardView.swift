@@ -21,16 +21,16 @@ struct WelcomeWizardView: View {
         ),
         // Page 2: Exploring & analyzing
         WelcomePage(
-            icon: "chart.bar.fill",
+            icon: "chart.bar",
             iconColor: .orange,
             title: "Explore Your Data",
             subtitle: "Powerful tools to analyze your dives",
             features: [
-                Feature(icon: "chart.bar.fill", color: .orange, title: "Dashboard", description: "View statistics, charts, and trends across all your dives."),
+                Feature(icon: "chart.bar", color: .orange, title: "Dashboard", description: "View statistics, charts, and trends across all your dives."),
                 Feature(icon: "chart.bar.xaxis", color: .yellow, title: "Statistics", description: "Track lifetime totals, personal bests, and dive trends — depth, time, gas consumption, and more."),
-                Feature(icon: "map.fill", color: .green, title: "Dive Map", description: "See all your dive sites plotted on an interactive world map."),
+                Feature(icon: "map", color: .green, title: "Dive Map", description: "See all your dive sites plotted on an interactive world map."),
                 Feature(icon: "calendar", color: .purple, title: "Calendar Heatmap", description: "Visualize your diving activity over time."),
-                Feature(icon: "map.fill", color: .teal, title: "Dive Trips", description: "Group your dives into trips and relive your dive travel adventures."),
+                Feature(icon: "map", color: .teal, title: "Dive Trips", description: "Group your dives into trips and relive your dive travel adventures."),
             ]
         ),
         // Page 3: Search, organize, manage
@@ -40,23 +40,23 @@ struct WelcomeWizardView: View {
             title: "Search & Organize",
             subtitle: "Find any dive in seconds",
             features: [
-                Feature(icon: "line.3.horizontal.decrease.circle.fill", color: .orange, title: "Search & Filters", description: "Search by site, buddy, country, or tag. Filter by year, depth, gas type, rating, and more."),
+                Feature(icon: "line.3.horizontal.decrease.circle", color: .orange, title: "Search & Filters", description: "Search by site, buddy, country, or tag. Filter by year, depth, gas type, rating, and more."),
                 Feature(icon: "arrow.triangle.merge", color: .indigo, title: "Merge Dives", description: "Combine duplicate dive entries into a single, complete record."),
-                Feature(icon: "fish.fill", color: .teal, title: "Marine Sightings", description: "Log fish and marine life spotted during each dive."),
+                Feature(icon: "fish", color: .teal, title: "Marine Sightings", description: "Log fish and marine life spotted during each dive."),
             ]
         ),
         // Page 4: Gear & certifications
         WelcomePage(
-            icon: "wrench.and.screwdriver.fill",
+            icon: "wrench.and.screwdriver",
             iconColor: .gray,
             title: "Track Your Gear",
             subtitle: "Equipment, tanks & certifications",
             features: [
-                Feature(icon: "wrench.and.screwdriver.fill", color: .gray, title: "Equipment", description: "Track your gear with service dates and get automatic maintenance reminders."),
-                Feature(icon: "tray.2.fill", color: .brown, title: "Gear Groups", description: "Organize equipment into groups — e.g. tropical kit, cold water setup."),
-                Feature(icon: "cylinder.fill", color: .mint, title: "Tank Templates", description: "Save your favorite tank configurations for quick reuse."),
-                Feature(icon: "graduationcap.fill", color: .blue, title: "Certifications", description: "Store diving certifications and get expiry alerts."),
-                Feature(icon: "shield.fill", color: .green, title: "Diving Insurance", description: "Store your dive insurance policies and keep renewal dates at hand."),
+                Feature(icon: "wrench.and.screwdriver", color: .gray, title: "Equipment", description: "Track your gear with service dates and get automatic maintenance reminders."),
+                Feature(icon: "tray.2", color: .brown, title: "Gear Groups", description: "Organize equipment into groups — e.g. tropical kit, cold water setup."),
+                Feature(icon: "cylinder", color: .mint, title: "Tank Templates", description: "Save your favorite tank configurations for quick reuse."),
+                Feature(icon: "graduationcap", color: .blue, title: "Certifications", description: "Store diving certifications and get expiry alerts."),
+                Feature(icon: "shield", color: .green, title: "Diving Insurance", description: "Store your dive insurance policies and keep renewal dates at hand."),
             ]
         ),
         // Page 5: Dive tools (Hidden – uncomment to re-enable calculators page)
@@ -72,17 +72,17 @@ struct WelcomeWizardView: View {
 //        ),
         // Page 6: Sync, export, profile, settings
         WelcomePage(
-            icon: "gearshape.fill",
+            icon: "gear",
             iconColor: .cyan,
             title: "Your Data, Your Way",
             subtitle: "Sync, export & personalize",
             features: [
-                Feature(icon: "icloud.fill", color: .cyan, title: "iCloud Sync", description: "Your dives sync automatically across all your Apple devices."),
+                Feature(icon: "icloud", color: .cyan, title: "iCloud Sync", description: "Your dives sync automatically across all your Apple devices."),
                 Feature(icon: "square.and.arrow.up", color: .indigo, title: "Export Anytime", description: "Export your logbook to XML, UDDF or PDF format whenever you need."),
-                Feature(icon: "rectangle.3.group.fill", color: .blue, title: "Home Screen Widgets", description: "Add BlueDive widgets to your home screen for quick access to your recent dives and dive stats."),
-                Feature(icon: "person.circle.fill", color: .pink, title: "Diver Profile", description: "Keep your diver info, emergency contacts, and insurance details handy."),
-                Feature(icon: "gearshape.fill", color: .gray, title: "Settings", description: "Choose your units (metric/imperial), appearance, language, and notification preferences."),
-                Feature(icon: "book.fill", color: .blue, title: "Documentation", description: "Guides, tips, and reference material to help you get the most out of BlueDive.", url: wikiDocumentationURL),
+                Feature(icon: "rectangle.3.group", color: .blue, title: "Home Screen Widgets", description: "Add BlueDive widgets to your home screen for quick access to your recent dives and dive stats."),
+                Feature(icon: "person.circle", color: .pink, title: "Diver Profile", description: "Keep your diver info, emergency contacts, and insurance details handy."),
+                Feature(icon: "gear", color: .gray, title: "Settings", description: "Choose your units (metric/imperial), appearance, language, and notification preferences."),
+                Feature(icon: "book", color: .blue, title: "Documentation", description: "Guides, tips, and reference material to help you get the most out of BlueDive.", url: wikiDocumentationURL),
             ]
         ),
     ]
@@ -126,6 +126,10 @@ struct WelcomeWizardView: View {
                                 .animation(.spring(response: 0.3), value: currentPage)
                         }
                     }
+                    // The dots are purely decorative; this exposes the position they convey
+                    // visually as a single spoken element instead of dropping it entirely.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Page %lld of %lld", bundle: .forAppLanguage(), comment: "Announces the current page's position in the welcome wizard's page indicator"), currentPage + 1, pages.count)))
 
                     // Buttons
                     HStack {
@@ -223,6 +227,7 @@ struct WelcomeWizardView: View {
                     Image(systemName: page.icon)
                         .font(.system(size: 40))
                         .foregroundStyle(page.iconColor)
+                        .accessibilityHidden(true)
                 }
 
                 // Title & subtitle
@@ -265,6 +270,7 @@ struct WelcomeWizardView: View {
                 Image(systemName: feature.icon)
                     .font(.body)
                     .foregroundStyle(feature.color)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {

@@ -21,6 +21,7 @@ struct ICloudSettingsView: View {
                             Image(systemName: syncMonitor.ckAccountStatusIcon)
                                 .foregroundStyle(syncMonitor.ckAccountStatusColor)
                                 .frame(width: 20)
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("iCloud account")
                                     .font(.subheadline)
@@ -39,9 +40,8 @@ struct ICloudSettingsView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Toggle(isOn: $iCloudSyncEnabled) {
-                            Label("iCloud sync", systemImage: "arrow.triangle.2.circlepath.icloud.fill")
+                            Label("iCloud sync", systemImage: "arrow.triangle.2.circlepath.icloud")
                         }
-                        .tint(.cyan)
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -122,7 +122,7 @@ struct ICloudSettingsView: View {
                             Text("iCloud sync is enabled but no iCloud account is available. Data will be stored locally until you sign in.")
                                 .foregroundStyle(.orange)
                         } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
+                            Image(systemName: "exclamationmark.triangle")
                                 .foregroundStyle(.orange)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -32,6 +32,7 @@ struct MacOSDeleteDiveSheet: View {
                         Image(systemName: "trash")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.red)
+                            .accessibilityHidden(true)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -54,6 +55,7 @@ struct MacOSDeleteDiveSheet: View {
                     }
                     .buttonStyle(.plain)
                     .keyboardShortcut(.escape, modifiers: [])
+                    .accessibilityLabel(Text("Close"))
                 }
 
                 // Search field
@@ -62,6 +64,7 @@ struct MacOSDeleteDiveSheet: View {
                         Image(systemName: "magnifyingglass")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                         TextField("Search dives…", text: $searchText)
                             .textFieldStyle(.plain)
                             .font(.subheadline)

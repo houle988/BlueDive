@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import CoreLocation
 
 // MARK: - Edit Popup Views
 
@@ -271,6 +272,7 @@ struct EditMenuStatsView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -315,6 +317,7 @@ struct EditMenuStatsView: View {
                                                     .foregroundStyle(.secondary)
                                             }
                                             .buttonStyle(.plain)
+                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), buddy)))
                                         }
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
@@ -343,6 +346,7 @@ struct EditMenuStatsView: View {
                                                 }
                                                 .buttonStyle(.plain)
                                                 .padding(.trailing, 6)
+                                                .accessibilityLabel(Text("Clear"))
                                             }
                                         }
                                         .onSubmit {
@@ -409,6 +413,7 @@ struct EditMenuStatsView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -443,6 +448,7 @@ struct EditMenuStatsView: View {
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.trailing, 6)
+                                            .accessibilityLabel(Text("Clear"))
                                         }
                                     }
                             }
@@ -470,6 +476,7 @@ struct EditMenuStatsView: View {
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.trailing, 6)
+                                            .accessibilityLabel(Text("Clear"))
                                         }
                                     }
                             }
@@ -497,6 +504,7 @@ struct EditMenuStatsView: View {
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.trailing, 6)
+                                            .accessibilityLabel(Text("Clear"))
                                         }
                                     }
                             }
@@ -540,6 +548,7 @@ struct EditMenuStatsView: View {
                                                         .foregroundStyle(.secondary)
                                                 }
                                                 .buttonStyle(.plain)
+                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), type)))
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
@@ -568,6 +577,7 @@ struct EditMenuStatsView: View {
                                                     }
                                                     .buttonStyle(.plain)
                                                     .padding(.trailing, 6)
+                                                    .accessibilityLabel(Text("Clear"))
                                                 }
                                             }
                                             .onSubmit {
@@ -632,6 +642,16 @@ struct EditMenuStatsView: View {
                                                     workingRating = star == workingRating ? 0 : star
                                                 }
                                             }
+                                            .accessibilityElement()
+                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%lld star", bundle: .forAppLanguage(), comment: "Star rating button label; tapping it sets the dive rating to this many stars"), star)))
+                                            .accessibilityAddTraits(star <= workingRating ? [.isButton, .isSelected] : .isButton)
+                                            // onTapGesture isn't reliably fired by VoiceOver's activate
+                                            // gesture; this makes double-tap set the rating.
+                                            .accessibilityAction {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    workingRating = star == workingRating ? 0 : star
+                                                }
+                                            }
                                     }
                                 }
                             }
@@ -661,6 +681,7 @@ struct EditMenuStatsView: View {
                                                     .foregroundStyle(.secondary)
                                             }
                                             .buttonStyle(.plain)
+                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), tag)))
                                         }
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
@@ -688,6 +709,7 @@ struct EditMenuStatsView: View {
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.trailing, 6)
+                                            .accessibilityLabel(Text("Clear"))
                                         }
                                     }
                                     .onSubmit {
@@ -771,6 +793,7 @@ struct EditMenuStatsView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 6)
+                        .accessibilityLabel(Text("Clear"))
                     }
                 }
         }
@@ -801,6 +824,7 @@ struct EditMenuStatsView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.trailing, 6)
+                            .accessibilityLabel(Text("Clear"))
                         }
                     }
             }
@@ -850,8 +874,7 @@ struct EditMenuStatsView: View {
                         workingMaxDepthText = ""
                         workingMaxDepth = 0
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        ClearButtonGlyph()
                     }
                     .buttonStyle(.plain)
                 }
@@ -873,8 +896,7 @@ struct EditMenuStatsView: View {
                         workingAvgDepthText = ""
                         workingAvgDepth = 0
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        ClearButtonGlyph()
                     }
                     .buttonStyle(.plain)
                 }
@@ -896,14 +918,13 @@ struct EditMenuStatsView: View {
                         workingDurationText = ""
                         workingDuration = 0
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        ClearButtonGlyph()
                     }
                     .buttonStyle(.plain)
                 }
             }
         } header: {
-            MenuSectionHeader(title: "Dive Stats", icon: "chart.bar.fill", color: .cyan)
+            MenuSectionHeader(title: "Dive Stats", icon: "chart.bar", color: .cyan)
         } footer: {
             Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
                 .font(.caption2)
@@ -923,7 +944,7 @@ struct EditMenuStatsView: View {
 
                 Form {
                     Section {
-                        AutocompleteMenuTextField(label: "Diver", text: $workingDiverName, icon: "person.fill", color: .cyan, suggestions: uniqueDiverNames)
+                        AutocompleteMenuTextField(label: "Diver", text: $workingDiverName, icon: "person", color: .cyan, suggestions: uniqueDiverNames)
                         HStack(spacing: 12) {
                             Image(systemName: "number")
                                 .foregroundStyle(.orange)
@@ -940,14 +961,13 @@ struct EditMenuStatsView: View {
                                 Button {
                                     workingDiveNumber = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Diver", icon: "person.fill", color: .blue)
+                        MenuSectionHeader(title: "Diver", icon: "person", color: .blue)
                     }
 
                     Section {
@@ -958,13 +978,13 @@ struct EditMenuStatsView: View {
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2.fill", color: .blue, suggestions: uniqueOptionalValues(for: \.diveOperator))
-                        AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark.fill", color: .teal, suggestions: uniqueOptionalValues(for: \.diveMaster))
+                        AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2", color: .blue, suggestions: uniqueOptionalValues(for: \.diveOperator))
+                        AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark", color: .teal, suggestions: uniqueOptionalValues(for: \.diveMaster))
                         AutocompleteMenuTextField(label: "Captain", text: $workingSkipper, icon: "person.fill.turn.right", color: .indigo, suggestions: uniqueOptionalValues(for: \.skipper))
-                        AutocompleteMenuTextField(label: "Boat", text: $workingBoat, icon: "ferry.fill", color: .mint, suggestions: uniqueOptionalValues(for: \.boat))
-                        AutocompleteMenuTextField(label: "Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle.fill", color: .yellow, suggestions: uniqueOptionalValues(for: \.entryType))
+                        AutocompleteMenuTextField(label: "Boat", text: $workingBoat, icon: "ferry", color: .mint, suggestions: uniqueOptionalValues(for: \.boat))
+                        AutocompleteMenuTextField(label: "Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle", color: .yellow, suggestions: uniqueOptionalValues(for: \.entryType))
                     } header: {
-                        MenuSectionHeader(title: "Operator", icon: "building.2.fill", color: .teal)
+                        MenuSectionHeader(title: "Operator", icon: "building.2", color: .teal)
                     }
 
                     Section {
@@ -982,11 +1002,19 @@ struct EditMenuStatsView: View {
                                                         removeBuddy(buddy)
                                                     }
                                                 } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
+                                                    // Chip grid: 12 pt horizontal / 6 pt vertical
+                                                    // chip padding, 8 pt between chips and 8 pt
+                                                    // between rows. Grows only half of each 8 pt
+                                                    // gap (4 pt) so neighbouring chips' targets
+                                                    // touch without overlapping. 36 × 34 pt.
+                                                    TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
+                                                        Image(systemName: "xmark.circle")
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
+                                                    }
                                                 }
                                                 .buttonStyle(.plain)
+                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), buddy)))
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
@@ -1002,7 +1030,7 @@ struct EditMenuStatsView: View {
                         // Add new buddy
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
+                                Image(systemName: "plus.circle")
                                     .foregroundStyle(.green)
                                 TextField("Add a buddy", text: $newBuddy)
                                     .autocorrectionDisabled()
@@ -1011,8 +1039,7 @@ struct EditMenuStatsView: View {
                                     Button {
                                         newBuddy = ""
                                     } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundStyle(.secondary)
+                                        ClearButtonGlyph()
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -1023,7 +1050,7 @@ struct EditMenuStatsView: View {
                                     }
                                 }
                                 .buttonStyle(.borderless)
-                                .foregroundStyle(.green)
+                                .foregroundStyle(newBuddy.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.green)
                                 .disabled(newBuddy.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
                             let filteredBuddySuggestions = newBuddy.isEmpty ? [] : uniqueBuddyNames.filter {
@@ -1052,12 +1079,12 @@ struct EditMenuStatsView: View {
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Buddies", icon: "person.2.fill", color: .green)
+                        MenuSectionHeader(title: "Buddies", icon: "person.2", color: .green)
                     }
 
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "scalemass.fill")
+                            Image(systemName: "scalemass")
                                 .foregroundStyle(.gray)
                                 .frame(width: 24)
                             Text("Weight (\(dive.storedWeightUnit.symbol))")
@@ -1073,14 +1100,13 @@ struct EditMenuStatsView: View {
                                     workingWeights = nil
                                     workingWeightsText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Weight", icon: "scalemass.fill", color: .gray)
+                        MenuSectionHeader(title: "Weight", icon: "scalemass", color: .gray)
                     } footer: {
                         Text("Unit (\(dive.storedWeightUnit.symbol)) matches the original import format and cannot be changed.")
                             .font(.caption2)
@@ -1105,11 +1131,17 @@ struct EditMenuStatsView: View {
                                                         removeDiveType(type)
                                                     }
                                                 } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
+                                                    // Same chip grid geometry as the buddy chips:
+                                                    // grows 4 pt (half of the 8 pt gap) toward the
+                                                    // next chip and the next row. 36 × 34 pt.
+                                                    TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
+                                                        Image(systemName: "xmark.circle")
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
+                                                    }
                                                 }
                                                 .buttonStyle(.plain)
+                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), type)))
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
@@ -1125,7 +1157,7 @@ struct EditMenuStatsView: View {
                         // Add new dive type
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
+                                Image(systemName: "plus.circle")
                                     .foregroundStyle(.purple)
                                 TextField("Add a dive type", text: $newType)
                                     .autocorrectionDisabled()
@@ -1134,8 +1166,7 @@ struct EditMenuStatsView: View {
                                     Button {
                                         newType = ""
                                     } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundStyle(.secondary)
+                                        ClearButtonGlyph()
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -1146,7 +1177,7 @@ struct EditMenuStatsView: View {
                                     }
                                 }
                                 .buttonStyle(.borderless)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(newType.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.purple)
                                 .disabled(newType.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
                             let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter {
@@ -1176,7 +1207,7 @@ struct EditMenuStatsView: View {
                         }
 
                         HStack {
-                            Image(systemName: "star.fill")
+                            Image(systemName: "star")
                                 .foregroundStyle(.yellow)
                             Text("Rating")
                                 .foregroundStyle(.primary)
@@ -1191,11 +1222,21 @@ struct EditMenuStatsView: View {
                                                 workingRating = star == workingRating ? 0 : star
                                             }
                                         }
+                                        .accessibilityElement()
+                                        .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%lld star", bundle: .forAppLanguage(), comment: "Star rating button label; tapping it sets the dive rating to this many stars"), star)))
+                                        .accessibilityAddTraits(star <= workingRating ? [.isButton, .isSelected] : .isButton)
+                                        // onTapGesture isn't reliably fired by VoiceOver's activate
+                                        // gesture; this makes double-tap set the rating.
+                                        .accessibilityAction {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                workingRating = star == workingRating ? 0 : star
+                                            }
+                                        }
                                 }
                             }
                         }
                     } header: {
-                        MenuSectionHeader(title: "Type & Rating", icon: "star.fill", color: .yellow)
+                        MenuSectionHeader(title: "Type & Rating", icon: "star", color: .yellow)
                     }
 
                     Section {
@@ -1213,11 +1254,17 @@ struct EditMenuStatsView: View {
                                                         removeTag(tag)
                                                     }
                                                 } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
+                                                    // Same chip grid geometry as the buddy chips:
+                                                    // grows 4 pt (half of the 8 pt gap) toward the
+                                                    // next chip and the next row. 36 × 34 pt.
+                                                    TapTargetInset(top: 10, leading: 6, bottom: 10, trailing: 16) {
+                                                        Image(systemName: "xmark.circle")
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
+                                                    }
                                                 }
                                                 .buttonStyle(.plain)
+                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), tag)))
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
@@ -1232,7 +1279,7 @@ struct EditMenuStatsView: View {
 
                         // Add new tag
                         HStack(spacing: 8) {
-                            Image(systemName: "plus.circle.fill")
+                            Image(systemName: "plus.circle")
                                 .foregroundStyle(.cyan)
                             TextField("Add a tag", text: $newTag)
                                 .autocorrectionDisabled()
@@ -1241,8 +1288,7 @@ struct EditMenuStatsView: View {
                                 Button {
                                     newTag = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -1253,11 +1299,10 @@ struct EditMenuStatsView: View {
                                 }
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(.cyan)
                             .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
                     } header: {
-                        MenuSectionHeader(title: "Tags", icon: "tag.fill", color: .pink)
+                        MenuSectionHeader(title: "Tags", icon: "tag", color: .pink)
                     }
 
                     Section {
@@ -1278,12 +1323,10 @@ struct EditMenuStatsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .foregroundStyle(.cyan)
                 }
             }
         }
@@ -1387,6 +1430,45 @@ struct EditSiteDetailsView: View {
     @State private var workingDifficulty: String
     @State private var workingExitLatitude: String
     @State private var workingExitLongitude: String
+
+    @State private var showEntryCoordinatePicker = false
+    @State private var showExitCoordinatePicker = false
+    @State private var showSameAsEntryConfirm = false
+
+    /// The entry coordinate currently in the form fields, or nil if unset/invalid — mirrors
+    /// `Dive.hasGPSCoordinates`'s (0, 0)-sentinel handling.
+    private var entryCoordinate: CLLocationCoordinate2D? {
+        guard let lat = parseFlexibleDouble(workingLatitude),
+              let lon = parseFlexibleDouble(workingLongitude),
+              !(lat == 0 && lon == 0) else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    /// The exit coordinate currently in the form fields, or nil if unset/invalid.
+    private var exitCoordinate: CLLocationCoordinate2D? {
+        guard let lat = parseFlexibleDouble(workingExitLatitude),
+              let lon = parseFlexibleDouble(workingExitLongitude),
+              !(lat == 0 && lon == 0) else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    private func copyEntryToExit() {
+        workingExitLatitude = workingLatitude
+        workingExitLongitude = workingLongitude
+    }
+
+    /// Small text-button style shared by the Reset / Pick on Map / Same as Entry actions
+    /// in each GPS section header, matching the pre-existing "Reset" button's appearance.
+    private func gpsHeaderActionButton(_ title: LocalizedStringKey, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(enabled ? .blue : .secondary)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
 
     private var canResetEntryGPS: Bool {
         guard let rawData = dive.rawDiveComputerData else { return false }
@@ -1497,11 +1579,55 @@ struct EditSiteDetailsView: View {
     }
 
     var body: some View {
-        #if os(macOS)
-        macOSBody
-        #else
-        iOSBody
-        #endif
+        Group {
+            #if os(macOS)
+            macOSBody
+            #else
+            iOSBody
+            #endif
+        }
+        .sheet(isPresented: $showEntryCoordinatePicker) {
+            CoordinatePickerView(
+                navigationTitle: "Set Entry Coordinates",
+                existingCoordinate: entryCoordinate,
+                pinIcon: "arrow.down",
+                pinColor: .green,
+                secondaryCoordinate: exitCoordinate,
+                secondaryIcon: "arrow.up",
+                secondaryLabel: "Exit",
+                secondaryColor: .orange
+            ) { coordinate in
+                workingLatitude  = String(format: "%.6f", coordinate.latitude)
+                workingLongitude = String(format: "%.6f", coordinate.longitude)
+            }
+            .presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showExitCoordinatePicker) {
+            CoordinatePickerView(
+                navigationTitle: "Set Exit Coordinates",
+                existingCoordinate: exitCoordinate,
+                pinIcon: "arrow.up",
+                pinColor: .orange,
+                secondaryCoordinate: entryCoordinate,
+                secondaryIcon: "arrow.down",
+                secondaryLabel: "Entry",
+                secondaryColor: .green
+            ) { coordinate in
+                workingExitLatitude  = String(format: "%.6f", coordinate.latitude)
+                workingExitLongitude = String(format: "%.6f", coordinate.longitude)
+            }
+            .presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .alert("Replace Exit Coordinates", isPresented: $showSameAsEntryConfirm) {
+            Button("Replace", role: .destructive) { copyEntryToExit() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will replace the existing exit coordinates with the entry coordinates.")
+        }
     }
 
     #if os(macOS)
@@ -1659,6 +1785,7 @@ struct EditSiteDetailsView: View {
                     siteDetailsMacOSGroupBox("GPS Coordinates (Entry)", icon: "location.circle.fill", color: .green,
                         resetAction: dive.rawDiveComputerData != nil ? { resetEntryGPS() } : nil,
                         resetEnabled: canResetEntryGPS) {
+                        siteDetailsMacOSActionRow("Pick on Map", icon: "mappin.and.ellipse") { showEntryCoordinatePicker = true }
                         siteDetailsMacOSField("Latitude", text: $workingLatitude, icon: "arrow.up.arrow.down")
                         siteDetailsMacOSField("Longitude", text: $workingLongitude, icon: "arrow.left.arrow.right")
                         siteDetailsMacOSField(LocalizedStringKey("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))"), text: $workingAltitude, icon: "mountain.2.fill")
@@ -1670,6 +1797,14 @@ struct EditSiteDetailsView: View {
                     siteDetailsMacOSGroupBox("GPS Coordinates (Exit)", icon: "location.circle", color: .green,
                         resetAction: dive.rawDiveComputerData != nil ? { resetExitGPS() } : nil,
                         resetEnabled: canResetExitGPS) {
+                        siteDetailsMacOSActionRow("Pick on Map", icon: "mappin.and.ellipse") { showExitCoordinatePicker = true }
+                        siteDetailsMacOSActionRow("Same as Entry", icon: "arrow.turn.right.up", enabled: entryCoordinate != nil) {
+                            if exitCoordinate != nil {
+                                showSameAsEntryConfirm = true
+                            } else {
+                                copyEntryToExit()
+                            }
+                        }
                         siteDetailsMacOSField("Latitude", text: $workingExitLatitude, icon: "arrow.up.arrow.down")
                         siteDetailsMacOSField("Longitude", text: $workingExitLongitude, icon: "arrow.left.arrow.right")
                     }
@@ -1694,14 +1829,7 @@ struct EditSiteDetailsView: View {
                     .foregroundStyle(.primary)
                 if let resetAction {
                     Spacer()
-                    Button(action: resetAction) {
-                        Text("Reset")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(resetEnabled ? .blue : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!resetEnabled)
+                    gpsHeaderActionButton("Reset", enabled: resetEnabled, action: resetAction)
                 }
             }
             .padding(.bottom, 4)
@@ -1741,10 +1869,30 @@ struct EditSiteDetailsView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 6)
+                        .accessibilityLabel(Text("Clear"))
                     }
                 }
         }
         .padding(.vertical, 4)
+    }
+
+    /// A full-width tappable row for GPS actions (Pick on Map, Same as Entry) — a larger,
+    /// more discoverable target than a small header text link.
+    private func siteDetailsMacOSActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(enabled ? .blue : .secondary)
+                    .frame(width: 20)
+                Text(title)
+                    .foregroundStyle(enabled ? .blue : .secondary)
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private func siteDetailsMacOSPicker(_ label: LocalizedStringKey, selection: Binding<String>, options: [String], icon: String) -> some View {
@@ -1797,6 +1945,7 @@ struct EditSiteDetailsView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.trailing, 6)
+                            .accessibilityLabel(Text("Clear"))
                         }
                     }
             }
@@ -1833,7 +1982,7 @@ struct EditSiteDetailsView: View {
 
                 Toggle(isOn: $copyGPSCoordinates) {
                     HStack(spacing: 12) {
-                        Image(systemName: "location.circle.fill")
+                        Image(systemName: "location.circle")
                             .foregroundStyle(.green)
                             .frame(width: 24)
                         Text("Include GPS Coordinates (Entry & Exit)")
@@ -1847,14 +1996,14 @@ struct EditSiteDetailsView: View {
                     }
                 } label: {
                     HStack {
-                        Image(systemName: "doc.on.doc.fill")
+                        Image(systemName: "doc.on.doc")
                         Text("Copy Site Information")
                     }
                 }
                 .disabled(selectedSite == nil)
                 .foregroundStyle(.orange)
             } header: {
-                MenuSectionHeader(title: "Copy from Existing Site", icon: "doc.on.doc.fill", color: .orange)
+                MenuSectionHeader(title: "Copy from Existing Site", icon: "doc.on.doc", color: .orange)
             }
         }
     }
@@ -1868,8 +2017,8 @@ struct EditSiteDetailsView: View {
                     copyFromSiteSection
 
                     Section {
-                        AutocompleteMenuTextField(label: "Site Name", text: $workingSiteName, icon: "location.fill", color: .cyan, suggestions: uniqueValues(for: \.siteName))
-                        AutocompleteMenuTextField(label: "Country", text: $workingCountry, icon: "flag.fill", color: .blue, suggestions: uniqueOptionalValues(for: \.siteCountry))
+                        AutocompleteMenuTextField(label: "Site Name", text: $workingSiteName, icon: "location", color: .cyan, suggestions: uniqueValues(for: \.siteName))
+                        AutocompleteMenuTextField(label: "Country", text: $workingCountry, icon: "flag", color: .blue, suggestions: uniqueOptionalValues(for: \.siteCountry))
                         AutocompleteMenuTextField(label: "Location", text: $workingLocation, icon: "mappin.and.ellipse", color: .orange, suggestions: uniqueValues(for: \.location))
                         Picker(selection: $workingDifficulty) {
                             Text("—").tag("")
@@ -1878,7 +2027,7 @@ struct EditSiteDetailsView: View {
                             }
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "star.fill")
+                                Image(systemName: "star")
                                     .foregroundStyle(.purple)
                                     .frame(width: 24)
                                 Text("Difficulty")
@@ -1901,7 +2050,7 @@ struct EditSiteDetailsView: View {
                             }
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "drop.fill")
+                                Image(systemName: "drop")
                                     .foregroundStyle(.blue)
                                     .frame(width: 24)
                                 Text("Water Type")
@@ -1911,10 +2060,11 @@ struct EditSiteDetailsView: View {
                         .tint(.blue)
                         AutocompleteMenuTextField(label: "Body of Water", text: $workingBodyOfWater, icon: "water.waves", color: .teal, suggestions: uniqueOptionalValues(for: \.siteBodyOfWater))
                     } header: {
-                        MenuSectionHeader(title: "Water", icon: "drop.fill", color: .teal)
+                        MenuSectionHeader(title: "Water", icon: "drop", color: .teal)
                     }
 
                     Section {
+                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showEntryCoordinatePicker = true }
                         HStack(spacing: 12) {
                             Image(systemName: "arrow.up.arrow.down")
                                 .foregroundStyle(.green)
@@ -1929,8 +2079,7 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingLatitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -1949,14 +2098,13 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingLongitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                         HStack(spacing: 12) {
-                            Image(systemName: "mountain.2.fill")
+                            Image(systemName: "mountain.2")
                                 .foregroundStyle(.brown)
                                 .frame(width: 24)
                             Text("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))")
@@ -1968,15 +2116,14 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingAltitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     } header: {
                         HStack {
-                            MenuSectionHeader(title: "GPS Coordinates (Entry)", icon: "location.circle.fill", color: .green)
+                            MenuSectionHeader(title: "GPS Coordinates (Entry)", icon: "location.circle", color: .green)
                             if dive.rawDiveComputerData != nil {
                                 Spacer()
                                 Button { resetEntryGPS() } label: {
@@ -1994,6 +2141,14 @@ struct EditSiteDetailsView: View {
                     }
 
                     Section {
+                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showExitCoordinatePicker = true }
+                        gpsActionRow("Same as Entry", icon: "arrow.turn.right.up", enabled: entryCoordinate != nil) {
+                            if exitCoordinate != nil {
+                                showSameAsEntryConfirm = true
+                            } else {
+                                copyEntryToExit()
+                            }
+                        }
                         HStack(spacing: 12) {
                             Image(systemName: "arrow.up.arrow.down")
                                 .foregroundStyle(.green)
@@ -2008,8 +2163,7 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingExitLatitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2028,8 +2182,7 @@ struct EditSiteDetailsView: View {
                                 Button {
                                     workingExitLongitude = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2059,7 +2212,6 @@ struct EditSiteDetailsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
@@ -2090,6 +2242,28 @@ struct EditSiteDetailsView: View {
         }
         .buttonStyle(.plain)
         #endif
+    }
+
+    /// A full-width tappable row for GPS actions (Pick on Map, Same as Entry) inside a Form
+    /// section — a larger, more discoverable target than a small header text link.
+    private func gpsActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(enabled ? .blue : .secondary)
+                    .frame(width: 24)
+                Text(title)
+                    .foregroundStyle(enabled ? .blue : .secondary)
+                Spacer()
+                if enabled {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private func resetEntryGPS() {
@@ -2256,17 +2430,17 @@ struct EditConditionsView: View {
                     }
 
                     Section {
-                        ConditionsPickerRow(label: "Weather", selection: $workingWeather, options: weatherOptions, icon: "cloud.sun.fill")
+                        ConditionsPickerRow(label: "Weather", selection: $workingWeather, options: weatherOptions, icon: "cloud.sun")
                         ConditionsPickerRow(label: "Surface", selection: $workingSurface, options: surfaceOptions, icon: "water.waves")
                         ConditionsPickerRow(label: "Current", selection: $workingCurrent, options: currentOptions, icon: "wind")
                     } header: {
-                        ConditionsSectionHeader(title: "Weather & Sea", icon: "cloud.sun.fill", color: .blue)
+                        ConditionsSectionHeader(title: "Weather & Sea", icon: "cloud.sun", color: .blue)
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye.fill", color: .green, suggestions: visibilitySuggestions)
+                        AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye", color: .green, suggestions: visibilitySuggestions)
                     } header: {
-                        ConditionsSectionHeader(title: "Visibility", icon: "eye.fill", color: .green)
+                        ConditionsSectionHeader(title: "Visibility", icon: "eye", color: .green)
                     }
                 }
                 .scrollContentBackground(.hidden)
@@ -2278,12 +2452,10 @@ struct EditConditionsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .foregroundStyle(.cyan)
                 }
             }
         }
@@ -2345,6 +2517,8 @@ struct EditConditionsView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
                     }
                     .buttonStyle(.plain)
                 }
@@ -2420,6 +2594,7 @@ struct EditConditionsView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 6)
+                        .accessibilityLabel(Text("Clear"))
                     }
                 }
         }
@@ -2451,6 +2626,7 @@ struct EditConditionsView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.trailing, 6)
+                            .accessibilityLabel(Text("Clear"))
                         }
                     }
             }
@@ -2863,6 +3039,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -2893,6 +3070,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -2947,6 +3125,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -2975,6 +3154,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -3028,6 +3208,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -3060,6 +3241,7 @@ struct EditGazView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 6)
+                                        .accessibilityLabel(Text("Clear"))
                                     }
                                 }
                         }
@@ -3091,7 +3273,7 @@ struct EditGazView: View {
                             }
                             Toggle("Update Samples", isOn: $rewriteSamples)
                         } header: {
-                            Label("Tank Slot", systemImage: "number.circle.fill")
+                            Label("Tank Slot", systemImage: "number.circle")
                                 .foregroundStyle(.orange)
                                 .font(.caption)
                                 .fontWeight(.semibold)
@@ -3119,14 +3301,14 @@ struct EditGazView: View {
                                 }
                             } label: {
                                 HStack {
-                                    Image(systemName: "doc.on.doc.fill")
+                                    Image(systemName: "doc.on.doc")
                                     Text("Copy Tank Information")
                                 }
                             }
                             .disabled(selectedTemplateName.isEmpty)
                             .foregroundStyle(.orange)
                         } header: {
-                            Label("Copy from Tank Template", systemImage: "doc.on.doc.fill")
+                            Label("Copy from Tank Template", systemImage: "doc.on.doc")
                                 .foregroundStyle(.orange)
                                 .font(.caption)
                                 .fontWeight(.semibold)
@@ -3137,7 +3319,13 @@ struct EditGazView: View {
                     Section("Gas blend") {
                         // Auto-calculated type
                         HStack {
-                            Label("Gas Type", systemImage: "bubbles.and.sparkles.fill")
+                            Label {
+                                Text("Gas Type")
+                                    .foregroundStyle(.primary)
+                            } icon: {
+                                Image(systemName: "bubbles.and.sparkles")
+                                    .foregroundStyle(.purple)
+                            }
                             Spacer()
                             Text(verbatim: autoGasLabel)
                                 .font(.subheadline)
@@ -3147,8 +3335,13 @@ struct EditGazView: View {
 
                         // Oxygen
                         HStack {
-                            Label("Oxygen (O₂)", systemImage: "o.circle.fill")
-                                .foregroundStyle(.primary)
+                            Label {
+                                Text("Oxygen (O₂)")
+                                    .foregroundStyle(.primary)
+                            } icon: {
+                                Image(systemName: "o.circle")
+                                    .foregroundStyle(.green)
+                            }
                             Spacer()
                             Text((Double(workingO2) / 100).formatted(.percent.precision(.fractionLength(0))))
                                 .font(.subheadline)
@@ -3161,8 +3354,13 @@ struct EditGazView: View {
 
                         // Helium
                         HStack {
-                            Label("Helium (He)", systemImage: "h.circle.fill")
-                                .foregroundStyle(.primary)
+                            Label {
+                                Text("Helium (He)")
+                                    .foregroundStyle(.primary)
+                            } icon: {
+                                Image(systemName: "h.circle")
+                                    .foregroundStyle(.cyan)
+                            }
                             Spacer()
                             Text((Double(workingHe) / 100).formatted(.percent.precision(.fractionLength(0))))
                                 .font(.subheadline)
@@ -3175,7 +3373,7 @@ struct EditGazView: View {
                     }
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "cylinder.fill")
+                            Image(systemName: "cylinder")
                                 .foregroundStyle(.blue)
                                 .frame(width: 24)
                             Text("Volume (\(dive.storedVolumeUnit.symbol))")
@@ -3191,8 +3389,7 @@ struct EditGazView: View {
                                     workingCylinderSize = nil
                                     cylinderSizeText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3217,8 +3414,7 @@ struct EditGazView: View {
                                     workingWorkingPressure = nil
                                     workingPressureText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3248,7 +3444,7 @@ struct EditGazView: View {
                     }
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "gauge.with.needle.fill")
+                            Image(systemName: "gauge.with.needle")
                                 .foregroundStyle(.red)
                                 .frame(width: 24)
                             Text("Start pressure (\(dive.storedPressureUnit.symbol))")
@@ -3265,8 +3461,7 @@ struct EditGazView: View {
                                     workingStartPressureText = ""
                                     workingStartPressure = nil
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3289,8 +3484,7 @@ struct EditGazView: View {
                                     workingEndPressureText = ""
                                     workingEndPressure = nil
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3318,7 +3512,7 @@ struct EditGazView: View {
                         }
 
                         HStack(spacing: 12) {
-                            Image(systemName: "play.fill")
+                            Image(systemName: "play")
                                 .foregroundStyle(.cyan)
                                 .frame(width: 24)
                             Text(verbatim: NSLocalizedString("Usage Start", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
@@ -3338,14 +3532,13 @@ struct EditGazView: View {
                                     workingUsageStartTime = nil
                                     usageStartTimeText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                         HStack(spacing: 12) {
-                            Image(systemName: "stop.fill")
+                            Image(systemName: "stop")
                                 .foregroundStyle(.cyan)
                                 .frame(width: 24)
                             Text(verbatim: NSLocalizedString("Usage End", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
@@ -3365,8 +3558,7 @@ struct EditGazView: View {
                                     workingUsageEndTime = nil
                                     usageEndTimeText = ""
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    ClearButtonGlyph()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -3387,7 +3579,6 @@ struct EditGazView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
@@ -3472,6 +3663,9 @@ struct EditGazView: View {
                 tankPressure: newTankPressure,
                 tankPressures: newTankPressures,
                 ndl: point.ndl,
+                ceilingDepth: point.ceilingDepth,
+                ceilingTime: point.ceilingTime,
+                cns: point.cns,
                 ppo2: point.ppo2,
                 sensorPPO2: point.sensorPPO2,
                 events: point.events,

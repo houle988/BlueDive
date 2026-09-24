@@ -251,6 +251,8 @@ struct EditTankTemplateView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
+                                .clearButtonTapTarget()
+                                .accessibilityLabel(Text("Clear"))
                         }
                         .buttonStyle(.plain)
                     }
@@ -284,6 +286,8 @@ struct EditTankTemplateView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
+                                .clearButtonTapTarget()
+                                .accessibilityLabel(Text("Clear"))
                         }
                         .buttonStyle(.plain)
                     }

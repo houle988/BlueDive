@@ -143,17 +143,21 @@ struct DiveIntroView: View {
                     backdrop(e: e)
                         .scaleEffect(1.14)
                         .offset(x: tx * unit * 0.02, y: ty * unit * 0.015)
+                        .accessibilityHidden(true)
                     FarOceanCanvas(e: e)
                         .scaleEffect(1.1)
                         .offset(x: tx * unit * 0.038, y: ty * unit * 0.03)
+                        .accessibilityHidden(true)
                     NearOceanCanvas(e: e)
                         .scaleEffect(1.06)
                         .offset(x: tx * unit * 0.062, y: ty * unit * 0.05)
+                        .accessibilityHidden(true)
                     heroLayer(e: e, size: proxy.size)
                         .offset(x: tx * unit * 0.04, y: ty * unit * 0.032)
                         .rotation3DEffect(.degrees(tx * 6), axis: (x: 0, y: 1, z: 0))
                         .rotation3DEffect(.degrees(-ty * 5), axis: (x: 1, y: 0, z: 0))
                     bloomOverlay(e: e)
+                        .accessibilityHidden(true)
                 }
                 .scaleEffect(surge)
                 .frame(width: proxy.size.width, height: proxy.size.height)
@@ -348,6 +352,7 @@ struct DiveIntroView: View {
                 anamorphicFlare(flash: flash, iconSize: iconSize)
 
                 iconView(e: e, iconSize: iconSize, cornerRadius: cornerRadius)
+                    .accessibilityHidden(true)
                     .background {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(

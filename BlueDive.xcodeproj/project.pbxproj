@@ -51,7 +51,6 @@
 		0CF0DA732FB24469008E0330 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		0CF0DA752FB24469008E0330 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		57EA9D4A2F42108A00486B7A /* BlueDive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlueDive.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		57EA9DA82F42109E00486B7A /* DeepBlue.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = DeepBlue.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -112,6 +111,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0C03F8143058D732002739AC /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		0C89AA6A2F49EF2400B7EEBE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -132,6 +138,7 @@
 				0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */,
 				0C89AA6A2F49EF2400B7EEBE /* Frameworks */,
 				57EA9D4B2F42108A00486B7A /* Products */,
+				0C03F8143058D732002739AC /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -140,13 +147,6 @@
 			children = (
 				57EA9D4A2F42108A00486B7A /* BlueDive.app */,
 				0CF0DA722FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		57EA9DAA2F42109E00486B7A /* Products */ = {
-			isa = PBXGroup;
-			children = (
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -210,7 +210,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2640;
-				LastUpgradeCheck = 2640;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					0CF0DA712FB24469008E0330 = {
 						CreatedOnToolsVersion = 26.4.1;
@@ -239,12 +239,6 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 57EA9D4B2F42108A00486B7A /* Products */;
 			projectDirPath = "";
-			projectReferences = (
-				{
-					ProductGroup = 57EA9DAA2F42109E00486B7A /* Products */;
-					ProjectRef = 57EA9DA82F42109E00486B7A /* DeepBlue.xcodeproj */;
-				},
-			);
 			projectRoot = "";
 			targets = (
 				57EA9D492F42108A00486B7A /* BlueDive */,
@@ -307,7 +301,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = BlueDiveWidgetExtension/BlueDiveWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 129;
+				CURRENT_PROJECT_VERSION = 133;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueDiveWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BlueDiveWidgetExtension;
@@ -318,7 +312,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.13;
+				MARKETING_VERSION = 1.14;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -342,7 +336,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = BlueDiveWidgetExtension/BlueDiveWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 129;
+				CURRENT_PROJECT_VERSION = 133;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueDiveWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BlueDiveWidgetExtension;
@@ -353,7 +347,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.13;
+				MARKETING_VERSION = 1.14;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -379,7 +373,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = BlueDive/BlueDive.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 129;
+				CURRENT_PROJECT_VERSION = 133;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -401,8 +395,8 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "BlueDive uses Bluetooth to connect to your dive computer and download your dives.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BlueDive uses your location to identify your current dive site on the map when requested.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "BlueDive uses Bluetooth to connect to your dive computer.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BlueDive uses your location to show your position on the dive map.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -417,7 +411,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.13;
+				MARKETING_VERSION = 1.14;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -432,9 +426,9 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TVOS_DEPLOYMENT_TARGET = "";
-				WATCHOS_DEPLOYMENT_TARGET = "";
-				XROS_DEPLOYMENT_TARGET = "";
+				TVOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_TVOS_DEPLOYMENT_TARGET)";
+				WATCHOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_WATCHOS_DEPLOYMENT_TARGET)";
+				XROS_DEPLOYMENT_TARGET = "$(RECOMMENDED_XROS_DEPLOYMENT_TARGET)";
 			};
 			name = Debug;
 		};
@@ -446,7 +440,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = BlueDive/BlueDive.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 129;
+				CURRENT_PROJECT_VERSION = 133;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -468,8 +462,8 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "BlueDive uses Bluetooth to connect to your dive computer and download your dives.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BlueDive uses your location to identify your current dive site on the map when requested.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "BlueDive uses Bluetooth to connect to your dive computer.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BlueDive uses your location to show your position on the dive map.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -484,7 +478,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.13;
+				MARKETING_VERSION = 1.14;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -499,9 +493,9 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TVOS_DEPLOYMENT_TARGET = "";
-				WATCHOS_DEPLOYMENT_TARGET = "";
-				XROS_DEPLOYMENT_TARGET = "";
+				TVOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_TVOS_DEPLOYMENT_TARGET)";
+				WATCHOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_WATCHOS_DEPLOYMENT_TARGET)";
+				XROS_DEPLOYMENT_TARGET = "$(RECOMMENDED_XROS_DEPLOYMENT_TARGET)";
 			};
 			name = Release;
 		};
@@ -674,7 +668,7 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/houle988/libdc-swift";
 			requirement = {
-				branch = working;
+				branch = main;
 				kind = branch;
 			};
 		};

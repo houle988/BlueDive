@@ -313,6 +313,9 @@ enum BlueDiveXMLExporter {
                     attrs.append(("sensorPPO2", serialized))
                 }
                 if let ndl      = sample.ndl            { attrs.append(("ndl", formatDouble(ndl))) }
+                if let ceiling  = sample.ceilingDepth   { attrs.append(("ceilingDepth", formatDouble(ceiling))) }
+                if let ceilTime = sample.ceilingTime    { attrs.append(("ceilingTime", formatDouble(ceilTime))) }
+                if let cns      = sample.cns            { attrs.append(("cns", formatDouble(cns))) }
                 if let gas      = sample.currentGas     { attrs.append(("currentGas", String(gas))) }
                 let eventsStr = sample.events.map { serializeEvent($0) }.joined(separator: ",")
                 attrs.append(("events", eventsStr))

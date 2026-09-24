@@ -22,6 +22,9 @@ struct ChartInterpolatedPoint {
     let tankPressure: Double?
     let tankPressures: [Int: Double]?
     let ndl: Double?
+    /// Ceiling held from the nearest earlier real sample — never interpolated between
+    /// two reported ceilings, so no value the dive computer did not report is shown.
+    let ceilingDepth: Double?
     let ppo2: Double?
     let sensorPPO2: [Int: Double]?
     let events: [DiveProfileEvent]
@@ -160,6 +163,45 @@ fileprivate func ppo2Dash(forSensorAtPosition position: Int) -> [CGFloat] {
     return dashes[position % dashes.count]
 }
 
+// MARK: - Deco obligation window
+
+/// The chart time (minutes) after which the dive computer no longer reported any
+/// decompression obligation, or `nil` when the dive never carried one.
+///
+/// A sample is treated as obligation-bearing when it carries the `.decoStop` event **or**
+/// a ceiling greater than zero. The two signals are unioned, not intersected, because the
+/// importers disagree about which one they populate: `GarminFITParser` appends `.decoStop`
+/// with a nil ceiling when the watch stops reporting `nextStopDepth`, while
+/// `BluetoothScannerView+ProfileProcessing` sets both together. Unioning yields the
+/// *latest* possible cutoff, which makes every caller as conservative as possible — a
+/// diamond wrongly hidden is far worse than one wrongly kept.
+///
+/// The `> 0` ceiling gate (rather than a plain non-nil check) matches every other site in
+/// the app (see `hasCeilingData` below, and `ceilingLabel` in the tooltip): the importers
+/// exclude a reported-but-zero ceiling at the source today, but dives imported before that
+/// gate existed can still have a literal `0` persisted, and a non-nil zero must read as
+/// "no real obligation" here.
+///
+/// The returned cutoff is the smallest sample time strictly greater than the last
+/// obligation-bearing sample (falling back to that sample's own time when it is the final
+/// sample). That one-interval grace is a real recorded timestamp, never an invented
+/// constant, and it protects the legitimate case where the computer clears the obligation
+/// at 3.4 m while the interpolated 3 m crossing lands a few seconds later inside that same
+/// sample interval.
+///
+/// Both passes are order-independent operations over the whole array — never
+/// `samples[i + 1]` — because importer sample order is not guaranteed.
+///
+/// `nil` means "filter nothing": callers must leave their results untouched.
+func decoObligationEndTime(in samples: [DiveProfilePoint]) -> Double? {
+    var last: Double? = nil
+    for s in samples where s.events.contains(.decoStop) || (s.ceilingDepth ?? 0) > 0 {
+        if last == nil || s.time > last! { last = s.time }
+    }
+    guard let last else { return nil }
+    return samples.lazy.map(\.time).filter { $0 > last }.min() ?? last
+}
+
 /// Bouton de toggle personnalisé pour les contrôles du graphique
 struct ToggleButton: View {
     @Binding var isOn: Bool
@@ -227,11 +269,17 @@ private struct StaticChartLayer: View, Equatable {
     /// the user switches units, so the Equatable check re-renders the axis labels and
     /// mark positions even though `dive.id` and `prefs` (a shared reference) are stable.
     let unitsHash: Int
+    /// Passed in as a value rather than read from `prefs` inside the body so the Equatable
+    /// contract below stays honest: `prefs` is the shared `UserPreferences` singleton, so a
+    /// newly-flipped Bool on it could never make two `StaticChartLayer` values compare
+    /// unequal on its own.
+    let hideClearedDecoStops: Bool
 
     static func == (lhs: StaticChartLayer, rhs: StaticChartLayer) -> Bool {
         lhs.dive.id == rhs.dive.id &&
         lhs.tanksO2Hash == rhs.tanksO2Hash &&
         lhs.unitsHash == rhs.unitsHash &&
+        lhs.hideClearedDecoStops == rhs.hideClearedDecoStops &&
         lhs.visibility.showDepth == rhs.visibility.showDepth &&
         lhs.visibility.showTemperature == rhs.visibility.showTemperature &&
         lhs.visibility.showPressure == rhs.visibility.showPressure &&
@@ -356,6 +404,26 @@ private struct StaticChartLayer: View, Equatable {
         return value.localizedString(decimals: 1, minDecimals: 1) + " bar"
     }
 
+    /// Right-axis label text for whichever secondary metric is active. The four metrics
+    /// are mutually exclusive in the toggle UI, so only one branch is ever live — but this
+    /// stays a plain value computation rather than branching inside the axis's ViewBuilder
+    /// content, which is what keeps that content's view-tree shape stable across toggles.
+    private func secondaryAxisLabel(for y: Double, axis: (min: Double, range: Double)) -> String {
+        if visibility.showPPO2 { return ppo2Label(for: y) }
+        if visibility.showPressure { return pressureLabel(for: y) }
+        if visibility.showTemperature { return temperatureLabel(for: y, axis: axis) }
+        if visibility.showNDL { return ndlLabel(for: y) }
+        return ""
+    }
+
+    private var secondaryAxisColor: Color {
+        if visibility.showPPO2 { return .indigo }
+        if visibility.showPressure { return .red }
+        if visibility.showTemperature { return .green }
+        if visibility.showNDL { return Color.ndlYellow }
+        return .secondary
+    }
+
     // The Y domain — depth values are negated so deeper = more negative = lower on chart.
     // Swift Charts naturally puts smaller values at the bottom, so negating gives us
     // surface (0) at top and max depth at bottom with no reversal tricks needed.
@@ -372,8 +440,9 @@ private struct StaticChartLayer: View, Equatable {
         // runs a single time instead of once per axis tick.
         let tempAxis = visibility.showTemperature ? temperatureAxis : (min: 0.0, range: 1.0)
         return Chart {
-            decoMarks
+            legacyDecoBand
             depthMarks
+            decoMarks
             gasChangeMarks
             temperatureMarks(axis: tempAxis)
             pressureMarks
@@ -427,39 +496,18 @@ private struct StaticChartLayer: View, Equatable {
             if visibility.showPressure || visibility.showTemperature || visibility.showNDL || visibility.showPPO2 {
                 AxisMarks(position: .trailing, values: rightAxisTicks) { value in
                     AxisGridLine().foregroundStyle(Color.clear)
+                    // A single structurally-stable Text, not a branching HStack: Swift Charts
+                    // does not redraw AxisValueLabel content when the active branch of an
+                    // if/switch inside it changes between updates (confirmed by direct
+                    // testing), which left the axis blank when switching between secondary
+                    // metrics until the whole AxisMarks was torn down and rebuilt. Computing
+                    // the string/colour as plain values keeps the view tree shape constant
+                    // across every toggle combination.
                     AxisValueLabel(anchor: .leading) {
                         if let depth = value.as(Double.self) {
-                            HStack(spacing: 3) {
-                                if visibility.showPPO2 {
-                                    Text(ppo2Label(for: depth))
-                                        .font(.caption2)
-                                        .foregroundStyle(.indigo)
-                                }
-                                if visibility.showPressure {
-                                    if visibility.showPPO2 {
-                                        Text("|").font(.caption2).foregroundStyle(.secondary)
-                                    }
-                                    Text(pressureLabel(for: depth))
-                                        .font(.caption2)
-                                        .foregroundStyle(.red)
-                                }
-                                if visibility.showTemperature {
-                                    if visibility.showPressure || visibility.showPPO2 {
-                                        Text("|").font(.caption2).foregroundStyle(.secondary)
-                                    }
-                                    Text(temperatureLabel(for: depth, axis: tempAxis))
-                                        .font(.caption2)
-                                        .foregroundStyle(.green)
-                                }
-                                if visibility.showNDL {
-                                    if visibility.showPressure || visibility.showTemperature || visibility.showPPO2 {
-                                        Text("|").font(.caption2).foregroundStyle(.secondary)
-                                    }
-                                    Text(ndlLabel(for: depth))
-                                        .font(.caption2)
-                                        .foregroundStyle(Color.ndlYellow)
-                                }
-                            }
+                            Text(secondaryAxisLabel(for: depth, axis: tempAxis))
+                                .font(.caption2)
+                                .foregroundStyle(secondaryAxisColor)
                         }
                     }
                 }
@@ -517,7 +565,8 @@ private struct StaticChartLayer: View, Equatable {
             ForEach(samples) { sample in
                 AreaMark(
                     x: .value("Time", sample.time),
-                    y: .value("Depth", -dive.displayProfileDepth(sample.depth))
+                    y: .value("Depth", -dive.displayProfileDepth(sample.depth)),
+                    series: .value("Sequence", "Depth")
                 )
                 .foregroundStyle(
                     LinearGradient(
@@ -634,17 +683,63 @@ private struct StaticChartLayer: View, Equatable {
         }
     }
 
+    /// NDL reading the dive computer actually reported at this sample, or `nil` when it
+    /// reported none. A value at or above `ndlSentinel` is the "no limit required" marker
+    /// rather than a reading, so it is excluded here exactly as it is from the samples
+    /// table, `hasNDLData` and `ndlRange`.
+    private func reportedNDL(_ sample: DiveProfilePoint) -> Double? {
+        guard let ndl = sample.ndl, ndl < ndlSentinel else { return nil }
+        return ndl
+    }
+
+    /// Profile samples that make up the NDL series, beginning at the first sample carrying
+    /// a real non-zero reading.
+    ///
+    /// Leading zero NDL samples are skipped — dive computers emit 0 until they compute the
+    /// first valid NDL value. When the computer only ever reported zeros the series starts
+    /// at the first sample carrying any reading at all. Every sample from that point
+    /// onward is kept, including samples with no reading, so `ndlPlotValue(for:)` can
+    /// decide each one individually. Underlying data is unchanged.
+    private var ndlSeriesSamples: [DiveProfilePoint] {
+        let allSamples = dive.profileSamples
+        let firstNonZeroIdx = allSamples.firstIndex { sample in
+            guard let ndl = reportedNDL(sample) else { return false }
+            return ndl != 0
+        }
+        let firstReportedIdx = allSamples.firstIndex { reportedNDL($0) != nil }
+        guard let startIdx = firstNonZeroIdx ?? firstReportedIdx else { return [] }
+        return Array(allSamples[startIdx...])
+    }
+
+    /// NDL value to plot for one sample, or `nil` when the sample must be left out of the
+    /// series entirely.
+    ///
+    /// An absent NDL is not missing data while the dive computer reports a decompression
+    /// obligation: libdc gates the per-sample NDL on the deco type (`DC_DECO_NDL` vs
+    /// `DC_DECO_DECOSTOP`), so the NDL goes absent exactly while a mandatory stop is owed.
+    /// Those samples plot as 0 — the bottom of the NDL band — the same nil-to-0 mapping
+    /// `decoMarks` applies to `ceilingDepth`. Dropping them instead let `.catmullRom`
+    /// bridge straight from the last pre-deco point to the first post-deco point, drawing
+    /// the NDL as if it were gradually recovering across the whole obligation.
+    ///
+    /// An absent NDL with no deco obligation only means the source did not record a value
+    /// on that sample (Garmin FIT, MacDive, UDDF and BlueDive XML imports all do this), so
+    /// the sample is skipped rather than plotted as 0 — substituting 0 there would display
+    /// an estimated value the dive computer never reported.
+    private func ndlPlotValue(for sample: DiveProfilePoint) -> Double? {
+        if let ndl = reportedNDL(sample) { return ndl }
+        // A sentinel reading means unlimited NDL, never zero, so it is excluded rather
+        // than dropped to the bottom of the band.
+        guard sample.ndl == nil else { return nil }
+        let isUnderDecoObligation = sample.events.contains(.decoStop) || (sample.ceilingDepth ?? 0) > 0
+        return isUnderDecoObligation ? 0 : nil
+    }
+
     @ChartContentBuilder
     private var ndlMarks: some ChartContent {
         if visibility.showNDL {
-            // Skip leading zero NDL samples — dive computers emit 0 until they compute
-            // the first valid NDL value. Find the index of the first non-zero sample
-            // and only plot from that point onward. Underlying data is unchanged.
-            let allWithNDL = dive.profileSamples.filter { $0.ndl != nil && ($0.ndl ?? 0) < ndlSentinel }
-            let firstNonZeroIdx = allWithNDL.firstIndex { ($0.ndl ?? 0) != 0 } ?? allWithNDL.startIndex
-            let samplesWithNDL = Array(allWithNDL[firstNonZeroIdx...])
-            ForEach(samplesWithNDL) { sample in
-                if let ndl = sample.ndl {
+            ForEach(ndlSeriesSamples) { sample in
+                if let ndl = ndlPlotValue(for: sample) {
                     // NDL ≥ 100 min is capped at 99 so the line stays just below y=0
                     // (the top edge). Without this, min(ndl, 100)/100 = 1 → value = 0
                     // (surface line) and the yellow line is invisible. NDL 99 → near top,
@@ -819,12 +914,60 @@ private struct StaticChartLayer: View, Equatable {
                 displayDepth: dive.displayProfileDepth(stopInStoredUnit)
             ))
         }
-        return result
+        // Post-resolution filter only — never a `continue` inside the loop above: the
+        // deepest-first walk advances searchFloorTime to each resolved crossing, so
+        // skipping a stop mid-loop would shift every shallower stop's crossing time.
+        // Mirrored in buildDecoStopCache() and PDFLogbook.mandatoryDecoStopPoints(for:);
+        // all three must carry this filter or the tooltip, legend and PDF contradict
+        // the diamonds drawn here.
+        guard hideClearedDecoStops,
+              let cutoff = decoObligationEndTime(in: allSamples) else { return result }
+        return result.filter { $0.time <= cutoff }
     }
 
+    /// True when at least one sample carries a dive-computer-reported decompression ceiling.
+    /// Gated on > 0, not just non-nil: all three importers (Bluetooth/libdc, Subsurface,
+    /// Garmin FIT) exclude a reported-but-zero ceiling at the source, but dives imported
+    /// before that source-side gate existed may still have a literal-zero ceiling persisted
+    /// in the database — a non-nil 0 must still read as "no real obligation" here or this
+    /// flag would disable the legacy full-height fallback for a dive that ends up with no
+    /// visible ceiling shading at all.
+    private var hasCeilingData: Bool {
+        dive.profileSamples.contains { ($0.ceilingDepth ?? 0) > 0 }
+    }
+
+    /// Contiguous runs of samples carrying a real (> 0) per-sample ceiling, each padded with
+    /// the bracketing zero-ceiling sample immediately before/after (if any) so the entry/exit
+    /// steps of the boundary line still draw. Used only by the ceiling LineMark — the
+    /// AreaMark still iterates every sample directly, since a zero-height fill outside the
+    /// obligation is invisible and needs no such splitting.
+    private var ceilingLineRuns: [[DiveProfilePoint]] {
+        // Importer order is not guaranteed sorted, and the run grouping below depends on
+        // time order — an out-of-order sample would fracture one obligation window into
+        // several runs (unlike the plain per-sample AreaMark above, which tolerates it).
+        let samples = dive.profileSamples.sorted { $0.time < $1.time }
+        var runs: [[DiveProfilePoint]] = []
+        var i = 0
+        while i < samples.count {
+            guard (samples[i].ceilingDepth ?? 0) > 0 else { i += 1; continue }
+            var j = i
+            while j < samples.count, (samples[j].ceilingDepth ?? 0) > 0 { j += 1 }
+            var run = Array(samples[i..<j])
+            if i > 0 { run.insert(samples[i - 1], at: 0) }
+            if j < samples.count { run.append(samples[j]) }
+            runs.append(run)
+            i = j
+        }
+        return runs
+    }
+
+    /// Legacy full-height deco band for dives with no per-sample ceiling data. Declared
+    /// BEFORE depthMarks in the Chart builder (unlike decoMarks below) so this shading
+    /// stays behind the depth curve and its translucent cyan fill, matching its original
+    /// full-dive-height appearance.
     @ChartContentBuilder
-    private var decoMarks: some ChartContent {
-        if visibility.showDeco {
+    private var legacyDecoBand: some ChartContent {
+        if visibility.showDeco && !hasCeilingData {
             let blocks = decoBlocks
             let yMin   = yDomainMin
             // Draw a semi-transparent orange band for each contiguous deco period so the
@@ -837,6 +980,57 @@ private struct StaticChartLayer: View, Equatable {
                     yEnd:   .value("Top",         0.0)
                 )
                 .foregroundStyle(Color.orange.opacity(0.2))
+            }
+        }
+    }
+
+    /// Ceiling band, boundary line and mandatory-stop diamonds. Declared AFTER depthMarks in
+    /// the Chart builder so these render on top of the translucent cyan depth fill instead of
+    /// blending underneath it — the ceiling is always shallower than the diver's actual depth,
+    /// so this content is a full subset of the cyan area and would otherwise always be washed
+    /// toward green rather than reading as orange.
+    @ChartContentBuilder
+    private var decoMarks: some ChartContent {
+        if visibility.showDeco {
+            if hasCeilingData {
+                // Continuous ceiling band from the surface down to the reported ceiling.
+                // Samples with no obligation render at 0 (surface), so the band collapses
+                // to nothing outside the obligation.
+                let samples = dive.profileSamples
+                ForEach(samples) { sample in
+                    AreaMark(
+                        x:      .value("Time",    sample.time),
+                        yStart: .value("Surface", 0.0),
+                        yEnd:   .value("Ceiling", -dive.displayProfileDepth(sample.ceilingDepth ?? 0)),
+                        series: .value("Sequence", "Ceiling")
+                    )
+                    // Step interpolation only: a ceiling holds at the last value the dive
+                    // computer reported until it reports a new one. Linear or curved
+                    // interpolation would draw ceiling values that were never recorded.
+                    .interpolationMethod(.stepEnd)
+                    // Higher than the legacy band's 0.2: this fill sits entirely inside
+                    // depthMarks' cyan area (the ceiling is always shallower than actual
+                    // depth), so a lower alpha desaturates toward khaki instead of reading
+                    // as orange, regardless of draw order.
+                    .foregroundStyle(Color.orange.opacity(0.4))
+                }
+                // Stroked per contiguous obligation run (not per sample, unlike the area
+                // above) so the boundary line never draws across the flat zero-ceiling
+                // baseline between two obligation windows, or before/after the only one —
+                // that baseline sits exactly on the plot's top edge (y=0), where a stroke
+                // would otherwise show as a spurious solid line across the whole chart.
+                ForEach(Array(ceilingLineRuns.enumerated()), id: \.offset) { index, run in
+                    ForEach(run) { sample in
+                        LineMark(
+                            x: .value("Time",    sample.time),
+                            y: .value("Ceiling", -dive.displayProfileDepth(sample.ceilingDepth ?? 0)),
+                            series: .value("Sequence", "Ceiling-\(index)")
+                        )
+                        .interpolationMethod(.stepEnd)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                        .foregroundStyle(Color.orange)
+                    }
+                }
             }
 
             // One labelled point per mandatory deco stop — diamond symbol so it stands
@@ -851,6 +1045,114 @@ private struct StaticChartLayer: View, Equatable {
                 .symbolSize(120)
                 .foregroundStyle(Color.orange)
             }
+        }
+    }
+}
+
+// MARK: - Legend Row Types
+
+/// Small colour-swatch-plus-label rows used by `legendView`. Each used to be a plain
+/// function that inlined its HStack/Circle/Text tree at every call site; `legendView`
+/// calls up to 11 of them statically in one property (plus `ChartTooltipView.body` calls
+/// its own `TooltipRow` up to 13 times), the same class of bug that caused an
+/// `EXC_BAD_ACCESS` crash in `DiveDetailView+MenuTab.swift` (many modifier/view-tree sites
+/// combined in one `some View` property overflowed the stack during Swift's runtime
+/// value-witness copy of the resulting deeply-nested type). Packaging these as nominal
+/// structs — the same fix used there and for `ConditionRow` — stops each call's internal
+/// complexity at its own `body`'s boundary instead of letting it inline into the
+/// combined legend's compound type.
+struct LegendDot: View {
+    let color: Color
+    let text: Text
+
+    init(_ color: Color, _ text: LocalizedStringKey) {
+        self.color = color
+        self.text = Text(text)
+    }
+
+    init(_ color: Color, verbatim text: String) {
+        self.color = color
+        self.text = Text(verbatim: text)
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            text
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Rectangular swatch used for background-band legend entries (e.g. deco phase).
+/// `alpha` must be passed the alpha of the band actually drawn for that case, so the
+/// legend key isn't a different shade than what's on the chart.
+struct LegendBand: View {
+    let color: Color
+    let text: LocalizedStringKey
+    let alpha: Double
+
+    var body: some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color.opacity(alpha))
+                .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(color.opacity(0.6), lineWidth: 0.5))
+                .frame(width: 14, height: 8)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Circle swatch for gas switch legend entries.
+struct LegendGasChange: View {
+    let color: Color
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Diamond swatch used for point-marker legend entries (e.g. mandatory deco stops).
+struct LegendDiamond: View {
+    let color: Color
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Rectangle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+                .rotationEffect(.degrees(45))
+                .frame(width: 10, height: 10)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct MetricLegendRow: View {
+    let color: Color
+    let label: LocalizedStringKey
+    let range: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            (Text(label) + Text(": \(range)"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -890,7 +1192,7 @@ struct UnifiedDiveChartOptimized: View {
                 legendView
             }
         }
-        .task(id: "\(dive.id)\(tanksO2Hash)") {
+        .task(id: "\(dive.id)\(tanksO2Hash)\(prefs.hideClearedDecoStops)") {
             buildPressureCache()
             buildDecoStopCache()
             if visibility.showPPO2 { rebuildPPO2Cache() }
@@ -1001,7 +1303,7 @@ struct UnifiedDiveChartOptimized: View {
             : Double(dive.duration)
         let xMax = max(lastSampleTime, storedDurationMinutes)
 
-        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash)
+        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops)
             .equatable()
             // chartOverlay gives us a ChartProxy so we can read the exact plot-area
             // frame — the rectangle inside both Y-axis label gutters.  Everything
@@ -1171,6 +1473,13 @@ struct UnifiedDiveChartOptimized: View {
             }
         }
 
+        // Same post-resolution-only filter as StaticChartLayer.mandatoryDecoStopPoints and
+        // PDFLogbook.mandatoryDecoStopPoints(for:) — applied after the loop because the
+        // deepest-first searchFloorTime anchoring needs every stop resolved. Keeping this
+        // cache in step with the diamonds is what keeps the tooltip's "Stop X" row honest.
+        if prefs.hideClearedDecoStops, let cutoff = decoObligationEndTime(in: samples) {
+            result = result.filter { $0.entryTime <= cutoff }
+        }
         cachedDecoStopEntries = result.sorted { $0.entryTime < $1.entryTime }
     }
 
@@ -1269,6 +1578,9 @@ struct UnifiedDiveChartOptimized: View {
             tankPressure: tankPressure,
             tankPressures: interpolateMultiPressures(at: cursorTime),
             ndl: ndl,
+            // Step-hold from the earlier real sample rather than interpolating — a ceiling
+            // between two reports is not a value the dive computer ever gave.
+            ceilingDepth: prev.ceilingDepth,
             ppo2: ppo2,
             sensorPPO2: nearest.sensorPPO2,
             events: mergedEvents,
@@ -1286,6 +1598,7 @@ struct UnifiedDiveChartOptimized: View {
             tankPressure: interpolatePressure(at: cursorTime, in: cachedSinglePressureReadings),
             tankPressures: interpolateMultiPressures(at: cursorTime),
             ndl: sample.ndl.flatMap { $0 < ndlSentinel ? $0 : nil },
+            ceilingDepth: sample.ceilingDepth,
             ppo2: cachedPPO2BySampleID[sample.id],
             sensorPPO2: sample.sensorPPO2,
             events: sample.events,
@@ -1313,51 +1626,60 @@ struct UnifiedDiveChartOptimized: View {
             VStack(alignment: .leading, spacing: 6) {
                 if visibility.showDepth {
                     HStack(spacing: 8) {
-                        legendDot(.cyan, "Normal")
-                        legendDot(.orange, ascentRateLegendFast)
-                        legendDot(.red, ascentRateLegendDangerous)
+                        LegendDot(.cyan, "Normal")
+                        LegendDot(.orange, ascentRateLegendFast)
+                        LegendDot(.red, ascentRateLegendDangerous)
                     }
                 }
-                
+
                 if visibility.showTemperature && hasTemperatureData {
-                    metricLegendRow(color: .green, label: "Temperature", range: temperatureRange)
+                    MetricLegendRow(color: .green, label: "Temperature", range: temperatureRange)
                 }
-                
+
                 if visibility.showPressure && hasPressureData {
                     let tankIndices = chartTankIndicesForLegend
                     if tankIndices.count > 1 {
                         ForEach(tankIndices, id: \.self) { idx in
-                            metricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
+                            MetricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
                         }
                     } else {
-                        metricLegendRow(color: .red, label: "Pressure", range: pressureRange)
+                        MetricLegendRow(color: .red, label: "Pressure", range: pressureRange)
                     }
                 }
-                
+
                 if visibility.showNDL && hasNDLData {
-                    metricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
+                    MetricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
                 }
 
                 if visibility.showPPO2 && ppo2Available {
                     let sensorIndices = sensorPPO2Indices(for: dive)
                     if sensorIndices.isEmpty {
-                        legendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
+                        LegendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
                     } else {
                         ForEach(sensorIndices, id: \.self) { idx in
-                            legendDot(ppo2SensorColor(for: idx), verbatim: String(format: NSLocalizedString("S%ld PPO₂ (0–2 bar)", bundle: Bundle.forAppLanguage(), comment: "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)"), idx + 1))
+                            LegendDot(ppo2SensorColor(for: idx), verbatim: String(format: NSLocalizedString("S%ld PPO₂ (0–2 bar)", bundle: Bundle.forAppLanguage(), comment: "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)"), idx + 1))
                         }
                     }
                 }
 
                 if visibility.showDeco && hasDecoData {
                     HStack(spacing: 8) {
-                        legendBand(.orange, "Deco obligation")
-                        legendDiamond(.orange, "Mandatory stop")
+                        if hasCeilingData {
+                            LegendBand(color: .orange, text: "Deco ceiling", alpha: 0.4)
+                        } else {
+                            LegendBand(color: .orange, text: "Deco obligation", alpha: 0.2)
+                        }
+                        // Only consult the async cache when the filter is active, so the
+                        // default (OFF) path stays synchronous and completely unchanged:
+                        // cachedDecoStopEntries is built in .task and is empty on frame one.
+                        if !prefs.hideClearedDecoStops || !cachedDecoStopEntries.isEmpty {
+                            LegendDiamond(color: .orange, text: "Mandatory stop")
+                        }
                     }
                 }
 
                 if hasGasChangeData {
-                    legendGasChange(.brown, "Gas switch")
+                    LegendGasChange(color: .brown, text: "Gas switch")
                 }
             }
         }
@@ -1377,72 +1699,6 @@ struct UnifiedDiveChartOptimized: View {
             return "Dangerous (≥59 ft/min)"
         } else {
             return "Dangerous (≥18 m/min)"
-        }
-    }
-    
-    private func legendDot(_ color: Color, _ text: LocalizedStringKey) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func legendDot(_ color: Color, verbatim text: String) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(verbatim: text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Rectangular swatch used for background-band legend entries (e.g. deco phase).
-    private func legendBand(_ color: Color, _ text: LocalizedStringKey) -> some View {
-        HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color.opacity(0.25))
-                .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(color.opacity(0.6), lineWidth: 0.5))
-                .frame(width: 14, height: 8)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Circle swatch for gas switch legend entries.
-    private func legendGasChange(_ color: Color, _ text: LocalizedStringKey) -> some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Diamond swatch used for point-marker legend entries (e.g. mandatory deco stops).
-    private func legendDiamond(_ color: Color, _ text: LocalizedStringKey) -> some View {
-        HStack(spacing: 4) {
-            Rectangle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-                .rotationEffect(.degrees(45))
-                .frame(width: 10, height: 10)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-    
-    private func metricLegendRow(color: Color, label: LocalizedStringKey, range: String) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            (Text(label) + Text(": \(range)"))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
     }
     
@@ -1487,6 +1743,11 @@ struct UnifiedDiveChartOptimized: View {
 
     private var hasDecoData: Bool {
         dive.profileSamples.contains { $0.events.contains(.decoStop) }
+    }
+
+    // Gated on > 0, not just non-nil — see the matching hasCeilingData in StaticChartLayer.
+    private var hasCeilingData: Bool {
+        dive.profileSamples.contains { ($0.ceilingDepth ?? 0) > 0 }
     }
 
     private var hasGasChangeData: Bool {
@@ -1612,6 +1873,15 @@ struct ChartTooltipView: View {
         NSLocalizedString("Deco Dive", bundle: .forAppLanguage(), comment: "Tooltip label indicating the dive is under decompression")
     }
 
+    /// Current decompression ceiling reported by the dive computer at this cursor position.
+    /// `ceilingDepth` is stored in the dive's import distance unit, like `depth`.
+    private var ceilingLabel: String? {
+        // Gated on > 0, not just non-nil — see the matching hasCeilingData in StaticChartLayer.
+        guard let ceiling = point.ceilingDepth, ceiling > 0 else { return nil }
+        let converted = dive.displayProfileDepth(ceiling).localizedString(decimals: 1)
+        return String(format: NSLocalizedString("Ceiling %1$@ %2$@", bundle: .forAppLanguage(), value: "Ceiling %1$@ %2$@", comment: "Tooltip row showing the current decompression ceiling in the dive chart; %1$@ is the depth value, %2$@ the depth unit symbol"), converted, prefs.depthUnit.symbol)
+    }
+
     /// Depth + duration detail for the mandatory stop at this sample, shown as a sub-row.
     /// Returns nil when the sample does not coincide with a mandatory stop point.
     private var decoStopDetail: String? {
@@ -1620,7 +1890,7 @@ struct ChartTooltipView: View {
         let stopInStoredUnit = dive.importDistanceUnit == "feet" ? stop.depth * 3.28084 : stop.depth
         let depth    = dive.displayProfileDepth(stopInStoredUnit).localizedString(decimals: 0) + prefs.depthUnit.symbol
         let duration = ceil(stop.time / 60).localizedString(decimals: 0) + "min"
-        return "\(depth) · \(duration)"
+        return String(format: NSLocalizedString("Stop %1$@ · %2$@", bundle: .forAppLanguage(), value: "Stop %1$@ · %2$@", comment: "Tooltip sub-row naming the next mandatory decompression stop in the dive chart; %1$@ is the stop depth with unit symbol, %2$@ is the stop duration e.g. '5min'"), depth, duration)
     }
 
     /// Gas name for a gas switch event at this sample.
@@ -1673,32 +1943,32 @@ struct ChartTooltipView: View {
             Divider().background(Color.white.opacity(0.25))
 
             // Depth — always shown
-            tooltipRow(icon: "arrow.down.to.line", color: .cyan, label: depthLabel)
+            TooltipRow(icon: "arrow.down.to.line", color: .cyan, label: depthLabel)
 
             // Ascent speed — always shown below depth
             if let speedLabel = ascentSpeedLabel {
-                tooltipRow(icon: ascentSpeedIcon, color: ascentSpeedColor, label: speedLabel)
+                TooltipRow(icon: ascentSpeedIcon, color: ascentSpeedColor, label: speedLabel)
             }
 
             // Temperature — shown if enabled and data available
             if visibility.showTemperature, let tLabel = temperatureLabel {
-                tooltipRow(icon: "thermometer.medium", color: .green, label: tLabel)
+                TooltipRow(icon: "thermometer.medium", color: .green, label: tLabel)
             }
 
             // Pressure — shown if enabled and data available
             if visibility.showPressure {
                 if let perTank = perTankPressureLabels {
                     ForEach(perTank, id: \.index) { entry in
-                        tooltipRow(icon: "gauge.with.needle.fill", color: .red, label: "T\(entry.index + 1): \(entry.label)")
+                        TooltipRow(icon: "gauge.with.needle.fill", color: .red, label: "T\(entry.index + 1): \(entry.label)")
                     }
                 } else if let pLabel = pressureLabel {
-                    tooltipRow(icon: "gauge.with.needle.fill", color: .red, label: pLabel)
+                    TooltipRow(icon: "gauge.with.needle.fill", color: .red, label: pLabel)
                 }
             }
             
             // NDL — shown if enabled and data available
             if visibility.showNDL, let nLabel = ndlLabel {
-                tooltipRow(icon: "timer", color: .ndlYellow, label: nLabel)
+                TooltipRow(icon: "timer", color: .ndlYellow, label: nLabel)
             }
 
             // PPO2 — shown if enabled; voted row always shown, then per-sensor rows for CCR
@@ -1709,11 +1979,11 @@ struct ChartTooltipView: View {
                             : p < DiveProfileEvent.ppo2WarnThreshold ? .green
                             : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
                             : .red
-                        tooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
+                        TooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
                     }
                     ForEach(sensorData.keys.sorted(), id: \.self) { idx in
                         if let p = sensorData[idx] {
-                            tooltipRow(icon: "lungs.fill", color: ppo2SensorColor(for: idx),
+                            TooltipRow(icon: "lungs.fill", color: ppo2SensorColor(for: idx),
                                        label: String(format: NSLocalizedString("S%ld: ", bundle: Bundle.forAppLanguage(), comment: "Tooltip label prefix for per-O2-sensor PPO2 in the dive chart; %ld = sensor number (1-based)"), idx + 1) + p.localizedString(decimals: 2, minDecimals: 2) + " bar")
                         }
                     }
@@ -1722,22 +1992,27 @@ struct ChartTooltipView: View {
                         : p < DiveProfileEvent.ppo2WarnThreshold ? .green
                         : p < DiveProfileEvent.ppo2DangerThreshold ? .orange
                         : .red
-                    tooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
+                    TooltipRow(icon: "lungs.fill", color: ppo2Color, label: p.localizedString(decimals: 2, minDecimals: 2) + " bar")
                 }
             }
 
             // Deco event — shown if enabled and this sample carries a deco obligation.
             if visibility.showDeco && point.events.contains(.decoStop) {
-                tooltipRow(icon: "exclamationmark.triangle.fill", color: .orange, label: decoDiveLabel)
+                TooltipRow(icon: "exclamationmark.triangle.fill", color: .orange, label: decoDiveLabel)
                 // When on a mandatory stop point, show depth + duration on a sub-row.
                 if let detail = decoStopDetail {
-                    tooltipRow(icon: "smallcircle.filled.circle", color: .orange.opacity(0.7), label: detail)
+                    TooltipRow(icon: "smallcircle.filled.circle", color: .orange.opacity(0.7), label: detail)
                 }
+            }
+
+            // Deco ceiling — shown if enabled and the computer reported one at this point.
+            if visibility.showDeco, let cLabel = ceilingLabel {
+                TooltipRow(icon: "arrow.up.to.line", color: .orange, label: cLabel)
             }
 
             // Gas switch — always shown when present (gas change markers are always on).
             if let gasName = gasChangeName {
-                tooltipRow(icon: "cylinder.fill", color: .brown, label: String(format: NSLocalizedString("→ %@", bundle: .forAppLanguage(), comment: "Gas switch tooltip row: arrow followed by gas mix name"), gasName))
+                TooltipRow(icon: "cylinder.fill", color: .brown, label: String(format: NSLocalizedString("→ %@", bundle: .forAppLanguage(), comment: "Gas switch tooltip row: arrow followed by gas mix name"), gasName))
             }
         }
         .padding(.horizontal, 10)
@@ -1754,7 +2029,21 @@ struct ChartTooltipView: View {
         )
     }
 
-    private func tooltipRow(icon: String, color: Color, label: String) -> some View {
+}
+
+/// A labelled icon row inside `ChartTooltipView`. Used to be a plain function inlining
+/// its HStack/Image/Text tree at every call site; `ChartTooltipView.body` calls it up to
+/// 13 times statically (depth, ascent rate, temperature, per-tank/voted pressure, NDL,
+/// PPO₂ (voted + per-sensor), deco event + detail, deco ceiling, gas switch) — see the
+/// `LegendDot` doc comment above for why that risks the same stack-overflow crash class
+/// this app has already hit once. Packaging it as a nominal struct bounds the complexity
+/// at its own `body`.
+struct TooltipRow: View {
+    let icon: String
+    let color: Color
+    let label: String
+
+    var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 11))

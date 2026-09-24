@@ -64,24 +64,28 @@ struct GasDensityCalculatorView: View {
                 depthSection
                 resultsSection
             }
+            .navigationTitle("Gas Density")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Gas Density")
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    closeToolbarButton { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showInfo = true } label: {
+                        Image(systemName: "info")
+                    }
+                    .accessibilityLabel(Text("Information"))
+                }
+                #else
+                ToolbarItem(placement: .automatic) {
                     Button { showInfo = true } label: {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.cyan)
                     }
+                    .accessibilityLabel(Text("Information"))
                 }
+                #endif
                 #if os(iOS)
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -212,6 +216,8 @@ struct GasDensityCalculatorView: View {
                         Button { text.wrappedValue = "" } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
+                                .clearButtonTapTarget()
+                                .accessibilityLabel(Text("Clear"))
                         }
                         .buttonStyle(.plain)
                     }
@@ -353,6 +359,9 @@ struct GasDensityCalculatorView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // A plain .navigationTitle truncates to one line; longer translations of
+                // this title (fr-CA, de) need to wrap, so this keeps the explicit two-line
+                // .principal title instead.
                 ToolbarItem(placement: .principal) {
                     Text("How Gas Density Works")
                         .font(.headline)
@@ -360,8 +369,8 @@ struct GasDensityCalculatorView: View {
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { showInfo = false }
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { showInfo = false }
                 }
             }
         }

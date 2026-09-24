@@ -8,6 +8,10 @@ Usage:
   Scripts/xcstrings.py set-json entries.json        # batch: {"Key": {"fr-CA": "...", "de": "...", "nl": "..."}, ...}
                                                     # plural keys: {"fr-CA": {"one": "...", "other": "..."}, ...}
   Scripts/xcstrings.py check                        # exit 1 if any translatable key is missing a language
+  Scripts/xcstrings.py remove "Key text" [--force]   # delete a key entirely (e.g. a stale,
+                                                      # superseded entry no source now references).
+                                                      # Refuses on extractionState:"manual" keys
+                                                      # unless --force is passed.
 
   Target the widget catalog by putting --file AFTER the subcommand, e.g.
   Scripts/xcstrings.py check --file BlueDiveWidgetExtension/Localizable.xcstrings
@@ -124,6 +128,7 @@ def main():
     for l in ["en"] + LANGS: st.add_argument(f"--{l}")
     st.add_argument("--create", action="store_true"); st.add_argument("--force", action="store_true")
     sj = sub.add_parser("set-json", parents=[parent]); sj.add_argument("json_file", type=pathlib.Path); sj.add_argument("--create", action="store_true"); sj.add_argument("--force", action="store_true")
+    rm = sub.add_parser("remove", parents=[parent]); rm.add_argument("key"); rm.add_argument("--force", action="store_true")
     a = ap.parse_args()
     d = load(a.file)
 
@@ -152,6 +157,16 @@ def main():
             set_key(d, k, vals, a.create, a.force)
         save(a.file, d)
         print(f"updated {len(batch)} key(s)")
+    elif a.cmd == "remove":
+        if a.key not in d["strings"]:
+            sys.exit(f"ERROR: key not found: {a.key!r}")
+        if d["strings"][a.key].get("extractionState") == "manual" and not a.force:
+            sys.exit(f'ERROR: {a.key!r} is marked extractionState:"manual" — it was added by '
+                     'hand, so Xcode will not re-extract it if this is wrong. '
+                     'Pass --force to override.')
+        del d["strings"][a.key]
+        save(a.file, d)
+        print(f"removed {a.key!r}")
 
 if __name__ == "__main__":
     main()

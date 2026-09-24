@@ -8,6 +8,7 @@ import AppKit
 
 struct DataManagementSettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(DiveStore.self) private var store
     @State private var showingResetAlert = false
     @State private var showingEraseAllDataAlert = false
     @State private var isErasingData = false
@@ -146,7 +147,14 @@ struct DataManagementSettingsView: View {
         .alert("Reset preferences?", isPresented: $showingResetAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
-                withAnimation { UserPreferences.shared.resetToDefaults() }
+                withAnimation {
+                    UserPreferences.shared.resetToDefaults()
+                    // resetToDefaults() already clears the persisted sort order (via
+                    // DiveSortOrder.resetPersisted()), but UserPreferences has no handle
+                    // to the live DiveStore — this line updates the in-memory value (and
+                    // re-persists it) so the toolbar icon and list order change immediately.
+                    store.sortOrder = .dateDesc
+                }
             }
         } message: {
             Text("All preferences will return to their default values.")

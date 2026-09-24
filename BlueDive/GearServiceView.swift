@@ -138,7 +138,7 @@ struct GearServiceView: View {
                             if case .edit(let record) = mode,
                                record.isLegacy,
                                record.date == .distantPast {
-                                Label("Original date unknown — verify before saving.", systemImage: "exclamationmark.triangle.fill")
+                                Label("Original date unknown — verify before saving.", systemImage: "exclamationmark.triangle")
                                     .font(.caption)
                                     .foregroundStyle(.orange)
                             }
@@ -152,6 +152,8 @@ struct GearServiceView: View {
                                         Button { serviceDescription = "" } label: {
                                             Image(systemName: "xmark.circle.fill")
                                                 .foregroundStyle(.secondary)
+                                                .clearButtonTapTarget()
+                                                .accessibilityLabel(Text("Clear"))
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 4)
@@ -167,6 +169,8 @@ struct GearServiceView: View {
                                         Button { serviceCost = "" } label: {
                                             Image(systemName: "xmark.circle.fill")
                                                 .foregroundStyle(.secondary)
+                                                .clearButtonTapTarget()
+                                                .accessibilityLabel(Text("Clear"))
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 4)
@@ -220,7 +224,7 @@ struct GearServiceView: View {
                             }
                         }
                     }
-                    .confirmationDialog("Delete this service record?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                    .alert("Delete this service record?", isPresented: $showDeleteConfirmation) {
                         Button("Delete", role: .destructive) {
                             if case .edit(let record) = mode {
                                 withAnimation { gear.deleteServiceRecord(id: record.id) }
@@ -228,6 +232,7 @@ struct GearServiceView: View {
                             }
                             serviceSheetMode = nil
                         }
+                        Button("Cancel", role: .cancel) { }
                     }
                     .navigationTitle(mode.isEdit ? "Edit Service Record" : "Log Service")
                     #if os(iOS)
@@ -294,13 +299,14 @@ struct GearServiceView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .confirmationDialog("Clear all service records?", isPresented: $showClearAllConfirmation, titleVisibility: .visible) {
+            .alert("Clear all service records?", isPresented: $showClearAllConfirmation) {
                 Button("Clear All Records", role: .destructive) {
                     gear.nextServiceDue = nil
                     gear.lastServiceDate = nil
                     gear.saveServiceRecords([])
                     saveAndReschedule()
                 }
+                Button("Cancel", role: .cancel) { }
             } message: {
                 Text("This will also clear the scheduled maintenance reminder.")
             }
@@ -584,9 +590,9 @@ struct GearServiceView: View {
 
     private var alertIcon: String {
         if isServiceDueOrPast {
-            return "xmark.shield.fill"
+            return "xmark.shield"
         }
-        return "exclamationmark.triangle.fill"
+        return "exclamationmark.triangle"
     }
 
     private var alertTitle: Text {
@@ -633,6 +639,7 @@ struct GearServiceView: View {
                     Image(systemName: alertIcon)
                         .font(.title2)
                         .foregroundStyle(alertColor)
+                        .accessibilityHidden(true)
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
@@ -662,6 +669,7 @@ struct GearServiceView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Mark as Serviced")
@@ -676,6 +684,7 @@ struct GearServiceView: View {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .fontWeight(.bold)
+                        .accessibilityHidden(true)
                 }
                 .foregroundStyle(.black)
                 .padding()
@@ -777,7 +786,8 @@ struct GearServiceView: View {
             Image(systemName: "info.circle.fill")
                 .foregroundStyle(.secondary)
                 .font(.title3)
-            
+                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("No Maintenance Recorded")
                     .font(.subheadline)
@@ -800,10 +810,11 @@ struct GearServiceView: View {
         if let nextDue = gear.nextServiceDue {
             let isPast = nextDue < Date()
             ModernStatRow(
-                icon: isPast ? "exclamationmark.triangle.fill" : "calendar.badge.checkmark",
+                icon: isPast ? "exclamationmark.triangle" : "calendar.badge.checkmark",
                 iconColor: isPast ? .red : .green,
                 title: "Next Maintenance",
-                value: formattedDate(nextDue)
+                value: formattedDate(nextDue),
+                statusLabel: isPast ? "Overdue" : nil
             )
         }
     }
@@ -814,6 +825,7 @@ struct GearServiceView: View {
             HStack(spacing: 8) {
                 Image(systemName: "doc.text.fill")
                     .foregroundStyle(.blue)
+                    .accessibilityHidden(true)
                 Text("Maintenance History")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -824,8 +836,14 @@ struct GearServiceView: View {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.cyan)
                         .font(.title3)
+                        // Only control in this header row: empty Spacer leading, 16 pt of card
+                        // padding trailing and above. Downward growth is capped at the full 8 pt
+                        // gap to the first (tappable) service record row, so the two targets
+                        // touch without overlapping. 48 × 44 pt.
+                        .tapTargetInsets(top: 12, leading: 12, bottom: 8, trailing: 12)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Add Service Record"))
             }
 
             if records.isEmpty {
@@ -876,6 +894,7 @@ struct GearServiceView: View {
                         Image(systemName: "chevron.right")
                             .font(.caption)
                             .foregroundStyle(.clear)
+                            .accessibilityHidden(true)
                     }
                     .padding(.top, 4)
                 }
@@ -899,6 +918,7 @@ struct GearServiceView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "note.text")
                         .foregroundStyle(.yellow)
+                        .accessibilityHidden(true)
                     Text("Notes")
                         .font(.subheadline)
                         .fontWeight(.semibold)
@@ -961,6 +981,7 @@ struct GearServiceView: View {
                             Image(systemName: "figure.water.fitness")
                                 .font(.body)
                                 .foregroundStyle(.cyan)
+                                .accessibilityHidden(true)
                         }
                         
                         // Infos de plongée
@@ -983,6 +1004,7 @@ struct GearServiceView: View {
                                 Image(systemName: "arrow.down")
                                     .font(.caption2)
                                     .foregroundStyle(.blue)
+                                    .accessibilityHidden(true)
                                 Text(verbatim: dive.displayMaxDepth.localizedString(decimals: 1) + prefs.depthUnit.symbol)
                                     .font(.subheadline)
                                     .fontWeight(.bold)
@@ -992,6 +1014,7 @@ struct GearServiceView: View {
                                 Image(systemName: "clock.fill")
                                     .font(.caption2)
                                     .foregroundStyle(.orange)
+                                    .accessibilityHidden(true)
                                 Text("\(dive.duration) min")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -1026,7 +1049,7 @@ struct GearServiceView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Close") {
+            closeToolbarButton {
                 dismiss()
             }
         }
@@ -1053,12 +1076,13 @@ struct GearServiceView: View {
                     Label("Clear All Records", systemImage: "trash")
                 }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis")
                     .foregroundStyle(.cyan)
             }
+            .accessibilityLabel(Text("More"))
         }
     }
-    
+
     // MARK: - Actions
     
     private func saveAndReschedule() {
@@ -1093,6 +1117,7 @@ struct ServiceRecordRow: View {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                         Text("Legacy Note")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -1124,6 +1149,7 @@ struct ServiceRecordRow: View {
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
         }
         .padding(.vertical, 6)
     }
@@ -1139,6 +1165,7 @@ struct ModernInfoPill: View {
             Image(systemName: icon)
                 .font(.caption)
                 .fontWeight(.semibold)
+                .accessibilityHidden(true)
             Text(text)
                 .font(.caption)
                 .fontWeight(.medium)
@@ -1173,8 +1200,9 @@ struct StatCard: View {
                 Image(systemName: icon)
                     .font(.title3)
                     .foregroundStyle(iconColor)
+                    .accessibilityHidden(true)
             }
-            
+
             VStack(spacing: 4) {
                 Text(value)
                     .font(.title3)
@@ -1205,25 +1233,30 @@ struct ModernStatRow: View {
     let iconColor: Color
     let title: LocalizedStringKey
     let value: String
-    
+    /// Spoken-only status (e.g. "Overdue") for rows whose urgency is otherwise conveyed by icon/colour alone.
+    var statusLabel: LocalizedStringKey? = nil
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(iconColor)
                 .frame(width: 32)
-            
+                .accessibilityHidden(true)
+
             Text(title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            
+
             Spacer()
-            
+
             Text(value)
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(statusLabel.map { Text($0) } ?? Text(verbatim: ""))
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
@@ -1309,7 +1342,8 @@ struct ServiceGauge: View {
                     Image(systemName: icon)
                         .font(.title)
                         .foregroundStyle(gaugeColor)
-                    
+                        .accessibilityHidden(true)
+
                     if isCountdown {
                         Text(verbatim: Double(daysRemaining).localizedString(decimals: 0))
                             .font(.system(size: 32, weight: .bold, design: .rounded))

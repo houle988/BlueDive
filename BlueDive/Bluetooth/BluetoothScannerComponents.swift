@@ -29,6 +29,7 @@ struct DiveComputerIconView: View {
                 Image(systemName: Self.fallbackIcon(forName: name))
                     .font(.system(size: 20))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -130,6 +131,7 @@ struct DeviceRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
 
             // Change model button
             Button(action: onChangeModel) {
@@ -138,6 +140,7 @@ struct DeviceRow: View {
                     .foregroundStyle(modelOverride != nil ? Color.orange : Color.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Change Model for %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that changes the detected computer model for a specific paired device, naming the device"), deviceDisplayName(stored: stored))))
 
             // Connection indicator
             if isConnecting {
@@ -146,6 +149,7 @@ struct DeviceRow: View {
             } else if isSelected {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
             }
         }
         .contextMenu {
@@ -197,6 +201,8 @@ struct KnownDeviceRow: View {
     let diverName: String?
     let onTap: () -> Void
 
+    @Environment(\.locale) private var locale
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
@@ -213,11 +219,11 @@ struct KnownDeviceRow: View {
                             .foregroundStyle(.teal)
                     }
 
-                    Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.uppercased()))
+                    Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Text("Last synced \(lastSynced, format: .relative(presentation: .named))")
+                    Text("Last synced \(lastSynced, format: .relative(presentation: .named).locale(locale))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -226,6 +232,7 @@ struct KnownDeviceRow: View {
 
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
             .contentShape(Rectangle())
         }
@@ -358,9 +365,11 @@ struct ModelPickerSheet: View {
                             if currentOverride == nil {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(Color.accentColor)
+                                    .accessibilityHidden(true)
                             }
                         }
                     }
+                    .accessibilityAddTraits(currentOverride == nil ? .isSelected : [])
                 } header: {
                     Text("Detected Model")
                 } footer: {
@@ -384,9 +393,11 @@ struct ModelPickerSheet: View {
                                     if currentOverride?.name == model.name {
                                         Image(systemName: "checkmark")
                                             .foregroundStyle(Color.accentColor)
+                                            .accessibilityHidden(true)
                                     }
                                 }
                             }
+                            .accessibilityAddTraits(currentOverride?.name == model.name ? .isSelected : [])
                         }
                     }
                 }

@@ -104,7 +104,7 @@ extension DiveDetailView {
     var samplesFormatInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "internaldrive.fill")
+                Image(systemName: "internaldrive")
                     .foregroundStyle(.teal)
                 Text("Imported Data Format")
                     .font(.headline)
@@ -130,13 +130,13 @@ extension DiveDetailView {
                     color: .orange
                 )
                 FormatInfoCell(
-                    icon: "gauge.with.needle.fill",
+                    icon: "gauge.with.needle",
                     label: "Pressure",
                     value: dive.importPressureUnit,
                     color: .red
                 )
                 FormatInfoCell(
-                    icon: "cylinder.fill",
+                    icon: "cylinder",
                     label: "Volume",
                     value: {
                         switch dive.importVolumeUnit {
@@ -197,7 +197,7 @@ extension DiveDetailView {
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "tablecells.fill")
+                Image(systemName: "tablecells")
                     .foregroundStyle(.teal)
                 Text("Raw Data (\(dive.profileSamples.count) points)")
                     .font(.headline)
@@ -224,7 +224,10 @@ extension DiveDetailView {
                                 Text(verbatim: "S\(idx + 1)").font(.caption2).foregroundStyle(.secondary).frame(width: 42, alignment: .trailing)
                             }
                         }
+                        Text("CNS").font(.caption2).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
                         Text("NDL").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                        Text("Ceiling").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                        Text("Stop").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
                         Text("Gas").font(.caption2).foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
                         Text("Events").font(.caption2).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
                         Spacer()
@@ -286,9 +289,32 @@ extension DiveDetailView {
                                         }
                                     }
                                 }
+                                if let cns = sample.cns {
+                                    Text(verbatim: cns.localizedString(decimals: 0) + "%")
+                                        .font(.caption).foregroundStyle(cnsColor(for: cns))
+                                        .frame(width: 40, alignment: .trailing)
+                                } else {
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+                                }
                                 if let ndl = sample.ndl {
                                     Text(verbatim: ndl >= ndlSentinel ? "—" : ndl.localizedString(decimals: 0))
                                         .font(.caption).foregroundStyle(.yellow)
+                                        .frame(width: 45, alignment: .trailing)
+                                } else {
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                                }
+                                // Raw stored ceiling, unconverted like the Depth column above,
+                                // so both stay directly comparable in this debug table.
+                                if let ceiling = sample.ceilingDepth {
+                                    Text(verbatim: ceiling.localizedString(decimals: 2))
+                                        .font(.caption).foregroundStyle(.orange)
+                                        .frame(width: 45, alignment: .trailing)
+                                } else {
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                                }
+                                if let ceilingTime = sample.ceilingTime {
+                                    Text(verbatim: ceilingTime.localizedString(decimals: 0))
+                                        .font(.caption).foregroundStyle(.orange.opacity(0.7))
                                         .frame(width: 45, alignment: .trailing)
                                 } else {
                                     Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)

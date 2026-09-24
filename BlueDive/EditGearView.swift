@@ -178,19 +178,12 @@ struct EditGearView: View {
         }
 
         ToolbarItem(placement: .confirmationAction) {
-            Button {
+            Button("Save") {
                 saveChanges()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text("Save")
-                }
-                .fontWeight(.semibold)
             }
             .disabled(!isFormValid)
             #if os(iOS)
             .buttonStyle(.borderedProminent)
-            .tint(.cyan)
             #endif
         }
     }
@@ -270,6 +263,8 @@ struct EditGearView: View {
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
+                                    .clearButtonTapTarget()
+                                    .accessibilityLabel(Text("Clear"))
                             }
                             .buttonStyle(.plain)
                         }
@@ -361,6 +356,8 @@ struct EditGearView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.secondary)
+                                        .clearButtonTapTarget()
+                                        .accessibilityLabel(Text("Clear"))
                                 }
                                 .buttonStyle(.plain)
                             }

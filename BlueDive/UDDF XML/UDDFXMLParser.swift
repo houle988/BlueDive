@@ -723,7 +723,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                         tankPressures: perTank,
                         temperature: tempWaypointTemperature,
                         ppo2: tempWaypointPPO2,
-                        ndt: tempWaypointNDT
+                        ndt: tempWaypointNDT,
+                        cns: tempWaypointCNS
                     ))
                 }
                 // Track max CNS across all waypoints

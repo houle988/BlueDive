@@ -62,6 +62,7 @@ struct ImportPreviewSheet: View {
                 Image(systemName: icon)
                     .font(.system(size: 20))
                     .foregroundStyle(iconColor)
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: NSLocalizedString("Review Import", bundle: .forAppLanguage(), comment: "Header title for the import preview sheet"))
@@ -76,8 +77,12 @@ struct ImportPreviewSheet: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
                     .foregroundStyle(.secondary)
+                    // Only control in the header card: empty Spacer leading, 16 pt of card
+                    // padding on the other three sides. 44 × 44 pt.
+                    .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Close"))
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.primary.opacity(0.05)))
@@ -124,6 +129,7 @@ struct ImportPreviewSheet: View {
                     Image(systemName: "doc.text")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     Text(verbatim: fileName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -146,6 +152,7 @@ struct ImportPreviewSheet: View {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
                 Text(verbatim: value)
                     .font(.title3.bold())
                     .foregroundStyle(.primary)
@@ -183,6 +190,7 @@ struct ImportPreviewSheet: View {
                 Image(systemName: "sparkles")
                     .font(.subheadline)
                     .foregroundStyle(.green)
+                    .accessibilityHidden(true)
                 Text(verbatim: NSLocalizedString("New — will be imported", bundle: .forAppLanguage(), comment: "Section header for the list of new items that will be imported"))
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
@@ -229,6 +237,7 @@ struct ImportPreviewSheet: View {
                 Image(systemName: "list.bullet.rectangle")
                     .font(.subheadline)
                     .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
                 Text(verbatim: NSLocalizedString("Already imported — will be skipped", bundle: .forAppLanguage(), comment: "Section header for the list of duplicate items that are already in the logbook"))
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
@@ -275,6 +284,7 @@ struct ImportPreviewSheet: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(color)
                 .frame(width: 20)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: item.name)
                     .font(.subheadline.weight(.semibold))

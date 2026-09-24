@@ -4,9 +4,6 @@ import Charts
 
 struct StatisticsView: View {
     @Environment(DiveStore.self) private var store
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
     @State private var prefs = UserPreferences.shared
     @Environment(\.dismiss) private var dismiss
     @State private var appeared = false
@@ -71,8 +68,6 @@ struct StatisticsView: View {
     @State private var cachedTotalAirConsumed: Double = 0
 
     @Environment(\.locale) private var locale
-
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
 
     private var filteredDives: [Dive] {
         DiverFilter.applyDiveFilters(
@@ -381,6 +376,11 @@ struct StatisticsView: View {
                         title: "No Dives Recorded",
                         description: "Add your first dive to see your statistics."
                     )
+                } else if filteredDives.isEmpty && !selectedDiver.isEmpty && activeFilterCount == 0 {
+                    NoEntriesForDiverView(
+                        title: DiverFilter.noDivesTitle(for: selectedDiver),
+                        description: DiverFilter.noDivesDescription(for: selectedDiver)
+                    )
                 } else if filteredDives.isEmpty {
                     NoEntriesForDiverView(
                         title: "No Dives Match Filters",
@@ -436,15 +436,14 @@ struct StatisticsView: View {
             .frame(minWidth: 600, idealWidth: 750, maxWidth: 1000, minHeight: 500, idealHeight: 700, maxHeight: 900)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showFilterSheet = true }) {
                         ZStack(alignment: .topTrailing) {
-                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            Image(systemName: "line.3.horizontal.decrease")
                                 .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
                             if activeFilterCount > 0 {
                                 Text("\(activeFilterCount)")
@@ -475,7 +474,7 @@ struct StatisticsView: View {
             .onChange(of: store.cachedSummaries) { _, _ in
                 statsVersion += 1
             }
-            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             .sheet(isPresented: $showFilterSheet) {
                 DiveFilterSheet(
                     availableYears: availableYears,
@@ -519,14 +518,9 @@ struct StatisticsView: View {
                     .presentationDragIndicator(.visible)
                 }
             }
-            .sheet(item: $selectedDive) { dive in
-                NavigationStack {
-                    DiveDetailView(dive: dive, sortedDives: cachedSortedDives,
-                                   diveNumber: dive.diveNumber ?? (cachedSortedDives.firstIndex(where: { $0.id == dive.id }).map { cachedSortedDives.count - $0 } ?? 0))
-                }
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+            .navigationDestination(item: $selectedDive) { dive in
+                DiveDetailView(dive: dive, sortedDives: cachedSortedDives,
+                               diveNumber: dive.diveNumber ?? (cachedSortedDives.firstIndex(where: { $0.id == dive.id }).map { cachedSortedDives.count - $0 } ?? 0))
             }
         }
     }
@@ -543,6 +537,7 @@ struct StatisticsView: View {
                     Image(systemName: "clock.fill")
                         .font(.title3)
                         .foregroundStyle(.green)
+                        .accessibilityHidden(true)
                     Spacer()
                     Text("Bottom Time")
                         .font(.caption)
@@ -583,6 +578,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.green.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -609,6 +605,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.green.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -642,6 +639,7 @@ struct StatisticsView: View {
                     Image(systemName: "hourglass")
                         .font(.title3)
                         .foregroundStyle(.indigo)
+                        .accessibilityHidden(true)
                     Spacer()
                     Text("Surface Interval")
                         .font(.caption)
@@ -682,6 +680,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.indigo.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -708,6 +707,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.indigo.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -745,6 +745,7 @@ struct StatisticsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: "person.crop.circle.fill")
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
                 Text("Overview")
                     .font(.headline)
             }
@@ -811,6 +812,7 @@ struct StatisticsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: "chart.bar.fill")
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
                 Text("Recent Activity")
                     .font(.headline)
             }
@@ -887,6 +889,7 @@ struct StatisticsView: View {
                     Image(systemName: "arrow.down.to.line")
                         .font(.title3)
                         .foregroundStyle(.blue)
+                        .accessibilityHidden(true)
                     Spacer()
                     Text("Depth")
                         .font(.caption)
@@ -927,6 +930,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.blue.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -953,6 +957,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.blue.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -986,6 +991,7 @@ struct StatisticsView: View {
                     Image(systemName: "thermometer.medium")
                         .font(.title3)
                         .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
                     Spacer()
                     Text("Temperature")
                         .font(.caption)
@@ -1026,6 +1032,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.orange.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -1052,6 +1059,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.cyan.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -1092,6 +1100,7 @@ struct StatisticsView: View {
                     Image(systemName: "lungs.fill")
                         .font(.title3)
                         .foregroundStyle(.teal)
+                        .accessibilityHidden(true)
                     Spacer()
                     Text("RMV")
                         .font(.caption)
@@ -1131,6 +1140,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.teal.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -1156,6 +1166,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.teal.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -1189,6 +1200,7 @@ struct StatisticsView: View {
                     Image(systemName: "gauge.with.dots.needle.bottom.50percent")
                         .font(.title3)
                         .foregroundStyle(.mint)
+                        .accessibilityHidden(true)
                     Spacer()
                     Text("SAC")
                         .font(.caption)
@@ -1228,6 +1240,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.mint.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -1253,6 +1266,7 @@ struct StatisticsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.mint.opacity(0.6))
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -1290,6 +1304,7 @@ struct StatisticsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: "mappin.and.ellipse")
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
                 Text("Favourite Sites")
                     .font(.headline)
             }
@@ -1358,6 +1373,7 @@ struct StatisticsView: View {
                                 Image(systemName: "chevron.right")
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
+                                    .accessibilityHidden(true)
                             }
                             .padding(.vertical, 10)
                             .padding(.horizontal, 4)
@@ -1387,6 +1403,7 @@ struct StatisticsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: "square.grid.2x2")
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
                 Text("At a Glance")
                     .font(.headline)
             }
@@ -1431,6 +1448,7 @@ struct StatisticsHeroCard: View {
                         .fill(color.opacity(0.15))
                 )
                 .scaleEffect(cardAppeared ? 1.0 : 0.5)
+                .accessibilityHidden(true)
 
             Text(value)
                 .font(.system(.title2, design: .rounded))
@@ -1487,6 +1505,7 @@ struct StatisticsCard: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(color.opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
@@ -1525,6 +1544,7 @@ struct LifetimeStat: View {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(color)
+                .accessibilityHidden(true)
             Text(verbatim: value)
                 .font(.system(.body, design: .rounded).weight(.black))
                 .foregroundStyle(.primary)
@@ -1589,9 +1609,8 @@ struct SiteDivesSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
             }
         }

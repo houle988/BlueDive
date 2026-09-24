@@ -133,11 +133,135 @@ func calcMinimumGas(_ input: MinimumGasInput) -> MinimumGasResult {
     )
 }
 
+// MARK: - Row Types
+
+/// A labelled numeric input row used across `parametersSection`/`cylinderSection`. Used to
+/// be a plain function that inlined a 4-level VStack/HStack/TextField/ZStack tree at every
+/// call site; those two sections alone call it 9 times statically, combined with
+/// `detailsSection`'s 8 `MGDetailRow`s and `resultsSection`'s `GasRow`s in one `Form` body —
+/// the same class of bug that caused two confirmed `EXC_BAD_ACCESS` crashes elsewhere in
+/// this app (too many inlined view trees combined in one `some View` property overflow the
+/// stack during Swift's runtime value-witness copy). Packaging this as a nominal struct
+/// bounds the complexity at its own `body`.
+struct NumberRow: View {
+    let label: LocalizedStringKey
+    @Binding var text: String
+    var note: LocalizedStringKey?
+    var warning: LocalizedStringKey?
+    var isFocused: FocusState<Bool>.Binding
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                Spacer()
+                HStack(spacing: 0) {
+                    TextField("0", text: $text)
+                        .multilineTextAlignment(.trailing)
+                        .frame(minWidth: 60)
+                        .focused(isFocused)
+                        #if os(iOS)
+                        .keyboardType(.decimalPad)
+                        #endif
+                    // Fixed-width slot keeps layout stable when button appears/disappears
+                    ZStack {
+                        Color.clear.frame(width: 24, height: 24)
+                        if !text.isEmpty {
+                            Button { text = "" } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                                    .clearButtonTapTarget()
+                                    .accessibilityLabel(Text("Clear"))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            if let warning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            if let note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// A label/value row used across `detailsSection`. See `NumberRow` above for why this was
+/// converted from a plain function to a nominal struct.
+struct MGDetailRow: View {
+    let label: LocalizedStringKey
+    let value: String
+
+    var body: some View {
+        LabeledContent(label) {
+            Text(verbatim: value)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+    }
+}
+
+/// The primary/secondary result row used across `resultsSection`. See `NumberRow` above for
+/// why this was converted from a plain function to a nominal struct.
+struct GasRow: View {
+    let label: LocalizedStringKey
+    let primaryValue: Double
+    let primaryUnit: LocalizedStringKey
+    let secondaryValue: Double
+    let secondaryUnit: LocalizedStringKey
+    let color: Color
+    var isValid: Bool = true
+    var badge: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(isValid ? color : .secondary)
+                if let badge {
+                    Text(verbatim: badge)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.purple)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.purple.opacity(0.12), in: Capsule())
+                }
+            }
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: isValid ? String(format: "%.1f", locale: Locale.current, primaryValue) : "—")
+                        .font(.title2.monospacedDigit().bold())
+                        .foregroundStyle(isValid ? color : .secondary)
+                    Text(primaryUnit)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(verbatim: isValid ? String(format: "%.1f", locale: Locale.current, secondaryValue) : "—")
+                        .font(.title2.monospacedDigit().bold())
+                        .foregroundStyle(isValid ? color : .secondary)
+                    Text(secondaryUnit)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 // MARK: - View
 
 struct MinimumGasCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.locale) private var locale
     @AppStorage("lastAcknowledgedCalculatorWarningVersion") private var lastAcknowledgedCalculatorWarningVersion = ""
     @State private var showCalculatorWarning = false
 
@@ -232,24 +356,28 @@ struct MinimumGasCalculatorView: View {
                 detailsSection
                 resultsSection
             }
+            .navigationTitle("Minimum Gas")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Minimum Gas")
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    closeToolbarButton { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showInfo = true } label: {
+                        Image(systemName: "info")
+                    }
+                    .accessibilityLabel(Text("Information"))
+                }
+                #else
+                ToolbarItem(placement: .automatic) {
                     Button { showInfo = true } label: {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.cyan)
                     }
+                    .accessibilityLabel(Text("Information"))
                 }
+                #endif
                 #if os(iOS)
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -328,9 +456,9 @@ struct MinimumGasCalculatorView: View {
                         )
                         Text(verbatim: String(
                             format: unitMode == .metric ? metricFormat : imperialFormat,
-                            String(format: "%g", locale: locale, max(1, toDouble(v1Str))),
-                            String(format: "%g", locale: locale, max(1, toDouble(v2Str))),
-                            String(format: "%g", locale: locale, toDouble(tHandlingStr))
+                            String(format: "%g", locale: Locale.current, max(1, toDouble(v1Str))),
+                            String(format: "%g", locale: Locale.current, max(1, toDouble(v2Str))),
+                            String(format: "%g", locale: Locale.current, toDouble(tHandlingStr))
                         ))
                     }
 
@@ -350,7 +478,7 @@ struct MinimumGasCalculatorView: View {
                             let formatter = NumberFormatter()
                             formatter.numberStyle = .percent
                             formatter.maximumFractionDigits = 0
-                            formatter.locale = locale
+                            formatter.locale = Locale.current
                             let pct = formatter.string(from: 0.5) ?? "50%"
                             return String(
                                 format: NSLocalizedString(
@@ -394,6 +522,9 @@ struct MinimumGasCalculatorView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // A plain .navigationTitle truncates to one line; longer translations of
+                // this title (fr-CA, de) need to wrap, so this keeps the explicit two-line
+                // .principal title instead.
                 ToolbarItem(placement: .principal) {
                     Text("How MG Works")
                         .font(.headline)
@@ -401,8 +532,8 @@ struct MinimumGasCalculatorView: View {
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { showInfo = false }
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { showInfo = false }
                 }
             }
         }
@@ -423,68 +554,70 @@ struct MinimumGasCalculatorView: View {
 
     private var parametersSection: some View {
         Section(header: Text("Dive Parameters")) {
-            numberRow(unitMode == .metric ? "Depth (m)"                       : "Depth (ft)",                      text: $depthStr)
-            numberRow(
-                unitMode == .metric ? "Respiratory Minute Volume (L/min)" : "Respiratory Minute Volume (cuft/min)",
+            NumberRow(label: unitMode == .metric ? "Depth (m)"                       : "Depth (ft)",                      text: $depthStr, isFocused: $isAnyFieldFocused)
+            NumberRow(
+                label: unitMode == .metric ? "Respiratory Minute Volume (L/min)" : "Respiratory Minute Volume (cuft/min)",
                 text: $sacStr,
                 note: "RMV · Measured at the surface",
-                warning: toDouble(sacStr) <= 0 ? "Must be greater than 0" : nil
+                warning: toDouble(sacStr) <= 0 ? "Must be greater than 0" : nil,
+                isFocused: $isAnyFieldFocused
             )
-            numberRow("Handling Time (min)",                                                                        text: $tHandlingStr)
-            numberRow(unitMode == .metric ? "Ascent Speed 1st Half (m/min)"   : "Ascent Speed 1st Half (ft/min)",  text: $v1Str,
-                      warning: toDouble(v1Str) <= 0 ? "Must be greater than 0" : nil)
-            numberRow(unitMode == .metric ? "Ascent Speed 2nd Half (m/min)"   : "Ascent Speed 2nd Half (ft/min)",  text: $v2Str,
-                      warning: toDouble(v2Str) <= 0 ? "Must be greater than 0" : nil)
+            NumberRow(label: "Handling Time (min)",                                                                        text: $tHandlingStr, isFocused: $isAnyFieldFocused)
+            NumberRow(label: unitMode == .metric ? "Ascent Speed 1st Half (m/min)"   : "Ascent Speed 1st Half (ft/min)",  text: $v1Str,
+                      warning: toDouble(v1Str) <= 0 ? "Must be greater than 0" : nil, isFocused: $isAnyFieldFocused)
+            NumberRow(label: unitMode == .metric ? "Ascent Speed 2nd Half (m/min)"   : "Ascent Speed 2nd Half (ft/min)",  text: $v2Str,
+                      warning: toDouble(v2Str) <= 0 ? "Must be greater than 0" : nil, isFocused: $isAnyFieldFocused)
             Toggle("Round Up Ascent Time", isOn: $roundUpAscent)
             Toggle(unitMode == .metric ? "Safety Stop (5m)" : "Safety Stop (15ft)", isOn: $safetyStop)
             Toggle("Safety Margin", isOn: $safetyMarginEnabled)
             if safetyMarginEnabled {
-                numberRow("Multiplier (×)", text: $safetyMarginStr,
+                NumberRow(label: "Multiplier (×)", text: $safetyMarginStr,
                           note: "Accounts for increased RMV under stress",
                           warning: toDouble(safetyMarginStr) < 1.0
                               ? "Must be 1.0 or greater"
                               : toDouble(safetyMarginStr) >= 3.0
                               ? "Stress factor above 3.0 is unusually high"
-                              : nil)
+                              : nil,
+                          isFocused: $isAnyFieldFocused)
             }
         }
     }
 
     private var cylinderSection: some View {
         Section(header: Text("Tank")) {
-            numberRow(unitMode == .metric ? "Volume (L)"           : "Volume (cuft)",         text: $cylVolStr,
-                      warning: toDouble(cylVolStr) <= 0 ? "Must be greater than 0" : nil)
+            NumberRow(label: unitMode == .metric ? "Volume (L)"           : "Volume (cuft)",         text: $cylVolStr,
+                      warning: toDouble(cylVolStr) <= 0 ? "Must be greater than 0" : nil, isFocused: $isAnyFieldFocused)
             Toggle("Twinset", isOn: $isTwinset)
-            numberRow(unitMode == .metric ? "Fill Pressure (bar)"  : "Fill Pressure (psi)",   text: $fillPressureStr,
-                      warning: toDouble(fillPressureStr) <= 0 ? "Must be greater than 0" : nil)
+            NumberRow(label: unitMode == .metric ? "Fill Pressure (bar)"  : "Fill Pressure (psi)",   text: $fillPressureStr,
+                      warning: toDouble(fillPressureStr) <= 0 ? "Must be greater than 0" : nil, isFocused: $isAnyFieldFocused)
             Toggle("Reserve Gas", isOn: $includeReserveGas)
             if includeReserveGas {
-                numberRow(unitMode == .metric ? "Reserve Gas (bar)" : "Reserve Gas (psi)", text: $marginStr)
+                NumberRow(label: unitMode == .metric ? "Reserve Gas (bar)" : "Reserve Gas (psi)", text: $marginStr, isFocused: $isAnyFieldFocused)
             }
         }
     }
 
     private var detailsSection: some View {
         Section(header: Text("Calculation Details")) {
-            detailRow("Handling Pressure", value: hasInvalidInputs ? "—" : String(format: "%.2f ATA", locale: locale, result.pBottom))
-            detailRow("Phase 1 Pressure",  value: hasInvalidInputs ? "—" : String(format: "%.2f ATA", locale: locale, result.pMean1))
-            detailRow("Phase 2 Pressure",  value: hasInvalidInputs ? "—" : String(format: "%.2f ATA", locale: locale, result.pMean2))
-            detailRow("Handling Time",     value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: locale, result.tHandling))
-            detailRow("Ascent Phase 1",    value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: locale, result.t1))
-            detailRow("Ascent Phase 2",    value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: locale, result.t2))
-            detailRow("Safety Stop",       value: hasInvalidInputs ? "—" : (result.safetyStopTime > 0 ? String(format: "%.0f min", locale: locale, result.safetyStopTime) : "—"))
-            detailRow("Total Time",        value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: locale, result.tGrand))
+            MGDetailRow(label: "Handling Pressure", value: hasInvalidInputs ? "—" : String(format: "%.2f ATA", locale: Locale.current, result.pBottom))
+            MGDetailRow(label: "Phase 1 Pressure",  value: hasInvalidInputs ? "—" : String(format: "%.2f ATA", locale: Locale.current, result.pMean1))
+            MGDetailRow(label: "Phase 2 Pressure",  value: hasInvalidInputs ? "—" : String(format: "%.2f ATA", locale: Locale.current, result.pMean2))
+            MGDetailRow(label: "Handling Time",     value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: Locale.current, result.tHandling))
+            MGDetailRow(label: "Ascent Phase 1",    value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: Locale.current, result.t1))
+            MGDetailRow(label: "Ascent Phase 2",    value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: Locale.current, result.t2))
+            MGDetailRow(label: "Safety Stop",       value: hasInvalidInputs ? "—" : (result.safetyStopTime > 0 ? String(format: "%.0f min", locale: Locale.current, result.safetyStopTime) : "—"))
+            MGDetailRow(label: "Total Time",        value: hasInvalidInputs ? "—" : String(format: "%.1f min", locale: Locale.current, result.tGrand))
         }
     }
 
     private var resultsSection: some View {
         Section(header: Text("Results")) {
-            gasRow("Minimum Gas (MG)",
+            GasRow(label: "Minimum Gas (MG)",
                    primaryValue: displayVol(adjustedMg_L),  primaryUnit: volUnitLabel,
                    secondaryValue: displayPres(adjustedMg_bar), secondaryUnit: presUnitLabel,
                    color: .blue, isValid: !hasInvalidInputs,
                    badge: safetyMarginEnabled && !hasInvalidInputs
-                       ? "× \(String(format: "%g", locale: locale, max(1.0, toDouble(safetyMarginStr))))"
+                       ? "× \(String(format: "%g", locale: Locale.current, max(1.0, toDouble(safetyMarginStr))))"
                        : nil)
             // The floor (40 bar / 600 psi) is already baked into result.mg_L by calcMinimumGas.
             // When Safety Margin is on the displayed MG is floor × multiplier, which is no longer
@@ -501,16 +634,16 @@ struct MinimumGasCalculatorView: View {
                 }
             }
             if includeReserveGas {
-                gasRow("Reserve Gas (RG)",
+                GasRow(label: "Reserve Gas (RG)",
                        primaryValue: displayVol(result.rg_L),  primaryUnit: volUnitLabel,
                        secondaryValue: displayPres(result.rg_bar), secondaryUnit: presUnitLabel,
                        color: .orange, isValid: !hasInvalidInputs)
             }
-            gasRow("Total Gas (TG)",
+            GasRow(label: "Total Gas (TG)",
                    primaryValue: displayVol(result.ug_L),  primaryUnit: volUnitLabel,
                    secondaryValue: displayPres(result.ug_bar), secondaryUnit: presUnitLabel,
                    color: .cyan, isValid: !hasInvalidInputs)
-            gasRow("Usable Gas (UG)",
+            GasRow(label: "Usable Gas (UG)",
                    primaryValue: displayVol(adjustedGp_L),  primaryUnit: volUnitLabel,
                    secondaryValue: displayPres(adjustedGp_bar), secondaryUnit: presUnitLabel,
                    color: adjustedGp_L >= 0 ? .green : .red, isValid: !hasInvalidInputs)
@@ -526,100 +659,4 @@ struct MinimumGasCalculatorView: View {
         }
     }
 
-    // MARK: - Row helpers
-
-    @ViewBuilder
-    private func numberRow(_ label: LocalizedStringKey, text: Binding<String>, note: LocalizedStringKey? = nil, warning: LocalizedStringKey? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(label)
-                Spacer()
-                HStack(spacing: 0) {
-                    TextField("0", text: text)
-                        .multilineTextAlignment(.trailing)
-                        .frame(minWidth: 60)
-                        .focused($isAnyFieldFocused)
-                        #if os(iOS)
-                        .keyboardType(.decimalPad)
-                        #endif
-                    // Fixed-width slot keeps layout stable when button appears/disappears
-                    ZStack {
-                        Color.clear.frame(width: 24, height: 24)
-                        if !text.wrappedValue.isEmpty {
-                            Button { text.wrappedValue = "" } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-            if let warning {
-                Text(warning)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-            if let note {
-                Text(note)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func detailRow(_ label: LocalizedStringKey, value: String) -> some View {
-        LabeledContent(label) {
-            Text(verbatim: value)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-    }
-
-    @ViewBuilder
-    private func gasRow(
-        _ label: LocalizedStringKey,
-        primaryValue: Double,   primaryUnit: LocalizedStringKey,
-        secondaryValue: Double, secondaryUnit: LocalizedStringKey,
-        color: Color,
-        isValid: Bool = true,
-        badge: String? = nil
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(isValid ? color : .secondary)
-                if let badge {
-                    Text(verbatim: badge)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.purple)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(.purple.opacity(0.12), in: Capsule())
-                }
-            }
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: isValid ? String(format: "%.1f", locale: locale, primaryValue) : "—")
-                        .font(.title2.monospacedDigit().bold())
-                        .foregroundStyle(isValid ? color : .secondary)
-                    Text(primaryUnit)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(verbatim: isValid ? String(format: "%.1f", locale: locale, secondaryValue) : "—")
-                        .font(.title2.monospacedDigit().bold())
-                        .foregroundStyle(isValid ? color : .secondary)
-                    Text(secondaryUnit)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
 }

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>app.bluedive.universal.cloudkit-sync</string>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -65,29 +69,21 @@
 			</array>
 		</dict>
 	</array>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>app.bluedive.universal</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>bluedive</string>
-            </array>
-        </dict>
-    </array>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>BlueDive uses Bluetooth to connect to your dive computer.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>BlueDive uses your location to show your position on the dive map.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>app.bluedive.universal</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bluedive</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
 		<string>processing</string>
-	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>app.bluedive.universal.cloudkit-sync</string>
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>

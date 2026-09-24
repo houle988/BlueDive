@@ -94,6 +94,55 @@ BlueDive supports running as an iPad app on Apple Silicon Macs via "Designed for
 - **Date pickers**: Use `.adaptiveDatePickerStyle()` (defined in `CrossPlatformImage.swift`) instead of `.datePickerStyle(.compact)`. This shows a full graphical calendar on Mac and compact style on iPhone/iPad.
 - **Platform detection**: Use `ProcessInfo.processInfo.isiOSAppOnMac` to detect "Designed for iPad" mode at runtime. Note that `#if os(iOS)` is `true` in this mode.
 
+## Liquid Glass & HIG Toolbar Compliance
+
+Under iOS/macOS 26+ "Liquid Glass," toolbar buttons render inside a translucent glass capsule. Follow these rules for any toolbar, sheet, or button work.
+
+### Root-Cause Rule: No Local Tint on Bare Toolbar Buttons
+
+A local `.tint(...)` placed directly on a bare toolbar `Button` (one **not** using `.buttonStyle(.borderedProminent)` or another explicit button style) fills the Liquid Glass capsule **background**, not just the label — this is what caused toolbar buttons to render white/wrong instead of the app's cyan brand color, especially on macOS "Designed for iPad." This is the single most important rule in this section; when in doubt, grep the whole tree for `.tint(` and check each hit against the categories below.
+
+- The app's brand color (cyan) is supplied ambiently by two mechanisms kept deliberately together: the `AccentColor` asset catalog (`Assets.xcassets/AccentColor.colorset` and `BlueDiveWidgetExtension/Assets.xcassets/AccentColor.colorset`, both populated with explicit light/dark sRGB cyan values) and a root `.tint(.cyan)` on `BlueDiveApp`'s `WindowGroup` content. `.tint()` is always respected in-process; `AccentColor` is what reaches out-of-process system UI (share sheets, pickers) that `.tint()` can't. Do not remove either as "redundant" — they cover different surfaces.
+- On a bare toolbar button, color only the `Image` inside the label via `.foregroundStyle(...)` (glyph color) — never the button itself via `.tint()`.
+- `.buttonStyle(.borderedProminent)` buttons may legitimately carry a local `.tint()` to explicitly set their fill color — a different, correct mechanism from the bare-button case. Example: `DiveDetailView+EditSheets.swift` gives each edit tab's Save/Add buttons a `.tint()` matching that tab's brand color (`.blue` for Site Details, `.green` for Gas, etc. — see the tab color mapping in `DiveDetailView.swift`). Never strip these as "redundant cyan cleanup" — verify against the tab color mapping before touching any tint in that file.
+- Documented exception: `MapUserLocationButton` (a native MapKit control, used in `DiveMapView.swift`) requires an explicit `.tint()` to pick up the brand color — this is not the anti-pattern.
+
+### Toolbar Button Placement
+
+- Close/Cancel (dismiss without saving) → `.cancellationAction` (leading edge). Use the `closeToolbarButton(action:)` helper (`CrossPlatformImage.swift`) for standard dismiss buttons — it uses `Button(role: .close, action:)` on iOS 26+/macOS 26+ (the system's "doesn't lose progress" affordance, distinct from `.cancel`), falling back to a plain "Close" button pre-26.
+- Done/Save (confirm) → `.confirmationAction` (trailing edge).
+- Exception: when a sheet's *sole* toolbar action is a non-destructive "Done" with no separate save step (e.g. a simple list-picker sheet), `.confirmationAction` (trailing) is still HIG-correct — matches Apple's own simple-list-picker convention even though it's the only button.
+- Destructive actions (delete) → `.destructiveAction`. This placement is platform-divergent by Apple's own design: iOS/tvOS/watchOS render it on the **trailing** edge; macOS/Mac Catalyst render it on the **leading** edge (next to Cancel/Close) with a cautionary appearance. Do not "fix" this by moving it elsewhere on macOS — it's documented, intentional behavior.
+- Only one prominent/primary action per sheet.
+- Any `@available` gate added around `role: .close` or another 26+ API must list every platform the code actually ships on (`iOS 26.0, macOS 26.0, *`) — omitting one is a compile error waiting for the first build on that platform.
+
+### Icon Simplification (iOS / shared code only)
+
+- The Liquid Glass capsule already provides a visual container — do not additionally wrap toolbar icons in `.circle`/`.circle.fill` SF Symbol variants (use `plus`, `ellipsis`, `info`, not `plus.circle.fill`, `ellipsis.circle.fill`, `info.circle`) inside `#if os(iOS)` or unguarded/shared code.
+- Never apply this simplification inside a `#if os(macOS)` branch — see "macOS Branch Preservation" below.
+- Icon+text (`HStack { Image; Text }`) toolbar labels collapse to icon-only on regular-width idiom (iPad/Mac) by Apple's documented default; no modifier prevents this. If the text must always stay visible, drop the icon entirely rather than fighting the collapse.
+
+### Toolbar Layout & Accessibility
+
+- Never group multiple interactive controls inside one `HStack` that itself sits inside a single `ToolbarItem`. Under SDK 26/27 toolbar-overflow layout this silently clips every control but the first when space is constrained (e.g. Mac "Designed for iPad" at narrower widths). Give each control its own `ToolbarItem`/`ToolbarItemGroup` entry.
+- `.topBarLeading`/`.topBarTrailing` are iOS-only placements — never use them unguarded on code that also compiles for macOS; gate with `#if os(iOS) ... #else .automatic ... #endif` or use a cross-platform placement (`.cancellationAction`, `.confirmationAction`, `.destructiveAction`, `.primaryAction`, `.automatic`).
+- Every icon-only toolbar control (a `Button`/`Menu` whose label is only an `Image`, no text) must carry `.accessibilityLabel(Text("..."))`, translated per the Localization workflow. When the label depends on state (e.g. a show/hide toggle), write two literal `Text("Key A")`/`Text("Key B")` branches — never a ternary or variable passed as the key (`Text(condition ? LocalizedStringKey("A") : LocalizedStringKey("B"))` bypasses Xcode's literal-string extraction).
+
+### macOS Branch Preservation
+
+BlueDive plans a native macOS release. Every `#if os(macOS)` / `#else` branch is intentional and must be preserved exactly, even when it looks like unfinished HIG cleanup (older icon style, different button placement, different string casing) — do not simplify, re-tint, reword, or restructure code inside a macOS branch as a side effect of an iOS-focused fix, and do not delete a macOS branch's content when applying a fix meant only for iOS/shared code. Verify the true boundaries with `grep -n "#if os\|#else\|#endif"` before editing near one — do not assume a diff hunk stayed within its intended platform.
+
+There is currently no real macOS build target: "My Mac (Designed for iPad)" still compiles as `#if os(iOS)`, and a native "My Mac" destination is reported incompatible with the current scheme. Consequently, Xcode's string catalog extractor can never pick up a *brand-new* string that exists only inside a `#if os(macOS)` block through the normal build-and-extract workflow (see Localization above). Such a key requires `Scripts/xcstrings.py set --create` as a deliberate, narrow exception to the "don't use `--create`" rule — accept the one-time move-diff risk this defers until a real macOS target is eventually built.
+
+### What NOT To Do
+
+- Never add a local `.tint()` to a bare (non-`.buttonStyle`) toolbar `Button` — color the `Image` inside the label with `.foregroundStyle()` instead, or rely on the ambient `AccentColor`.
+- Never remove a `.tint()` from a `.buttonStyle(.borderedProminent)` button without checking whether it encodes intentional per-section/per-tab color-coding.
+- Never place multiple controls in one `HStack` inside a single `ToolbarItem`.
+- Never use `.topBarLeading`/`.topBarTrailing` without a macOS-compatible fallback.
+- Never simplify a circle-bordered icon, reword a string, or otherwise edit content inside a `#if os(macOS)` branch as an incidental side effect of an iOS fix.
+- Never add a new `@available` gate for a 26+ API without including every platform the code target actually ships on.
+
 ## App Group & Widget Data Sharing
 
 BlueDive shares data with the widget extension via an App Group. When a change affects data that the widget reads, update the App Group store as well — do not only update the main app's local storage. Only touch App Group storage when the change is directly relevant to widget-displayed data; do not write to the App Group for data the widget does not consume.
@@ -153,15 +202,15 @@ SwiftData `@Query` has no delta mechanism — every observer receives a full re-
 
 ### @Query Ownership
 
-- **`ContentView` is the only `@Query Dive` owner.** It owns `@Query dives: [Dive]`, `@Query allInsurances: [DivingInsurance]`, and `@Query allMarineSights: [MarineSight]`.
-- When those query results change, `ContentView` passes them to `store.scheduleRebuild(dives:allInsurances:allMarineSights:selectedDiver:force:)`.
+- **`ContentView` is the only `@Query Dive` owner.** It owns `@Query dives: [Dive]`, `@Query allInsurances: [DivingInsurance]`, `@Query allGear: [Gear]`, `@Query allCertifications: [Certification]`, and `@Query allMarineSights: [MarineSight]`.
+- When `dives`/`allMarineSights` change, `ContentView` passes them to `store.scheduleRebuild(dives:allMarineSights:selectedDiver:)`. When `allGear`/`allCertifications`/`allInsurances` change, it calls `store.updateDiverSources(gear:certifications:insurances:)` instead — a narrow path that only refreshes the diver-name list, not the full dive pipeline.
 - No other view may add a `@Query Dive`. Adding one reintroduces the full-re-delivery cascade freeze this architecture exists to prevent.
 
 ### The Three Commit Scopes
 
 On any save, call `store.commit(_ dive: Dive, affects: DiveChangeScope)` with the narrowest scope that covers the change:
 
-- **`.list`** — full rebuild via `scheduleRebuild(force: true)`. Use when a change reorders or renumbers the list: timestamp, depth, duration, dive number, or diver name (EditMenuStatsView).
+- **`.list`** — full rebuild via `rebuildDerivedDiveState(...)` (called directly, bypassing the debounce). Use when a change reorders or renumbers the list: timestamp, depth, duration, dive number, or diver name (EditMenuStatsView).
 - **`.rowFields`** — incremental single-dive summary patch. Rebuilds one `DiveSummary` and patches `cachedSummaries[idx]` in place; **`store.dives` is NOT reassigned.** If an active filter (search text, country, gas type, depth range, etc.) is set and the edited field could affect filter membership, `.rowFields` falls back to a full `rebuildFilteredDives` for that dive. Use for edits that change displayed row fields but not list order: site name, country, conditions, gas type (EditSiteDetailsView, EditConditionsView, EditGazView).
 - **`.rowBadges`** — badge-only patch via `refreshBadgeSets`. Faults `seenFish`/`photosData` for the one changed dive and patches `hasFish`/`hasPhotos`/`seenFishNames` on its summary. Use for fish and photo add/remove (AddFishView, EditFishView, DiveDetailView+MenuTab).
 - **`.nothing`** — no-op. Use for changes that affect neither list order, row fields, nor badges.
@@ -171,6 +220,7 @@ On any save, call `store.commit(_ dive: Dive, affects: DiveChangeScope)` with th
 
 - `store.cachedSummaries` changes on **all three** commit scopes (`.list`, `.rowFields`, `.rowBadges`). A view that must refresh on any dive-field change observes `onChange(of: store.cachedSummaries)` and bumps a local version counter.
 - `store.dives` is reassigned **only** on `.list` commits. Do **not** use `onChange(of: store.dives)` as the change signal in a view that must respond to `.rowFields` edits — it will miss them.
+- `store.searchText` updates synchronously as the user types, but `store.cachedFilteredSummaries` lags it by up to 150ms via `scheduleSearchRebuild`'s debounce. A view deciding what empty-state to show (e.g. "no results for this search" vs. "no results for this diver") based on whether search is active must check `store.appliedSearchText` — the debounce-synced value, updated inside `rebuildFilteredDives` — not the live `store.searchText`, or it can briefly render a state describing search results that haven't been computed yet.
 - `DiveMapView` already uses `onChange(of: store.cachedSummaries, initial: true)`. Do not change it.
 - `MarineLifeView` uses a fish-specific hash in its `.task(id:)` fingerprint and needs no summary observer.
 
@@ -195,3 +245,9 @@ On any save, call `store.commit(_ dive: Dive, affects: DiveChangeScope)` with th
 2. Add `@Environment(DiveStore.self) private var store` to the edit view.
 3. On save, call `store.commit(dive, affects: <scope>)`, replacing any `NotificationCenter.default.post(...)` call.
 4. If the view must recompute its stats when any dive field changes, add `@State private var contentVersion: Int = 0`, add `.onChange(of: store.cachedSummaries) { _, _ in contentVersion += 1 }`, and include `contentVersion` in the view's `.task(id:)` fingerprint.
+
+## MapKit Annotation Z-Order Has No SwiftUI-Level Control
+
+SwiftUI's `Annotation` conforms to `MapContent`, not `View` — `.zIndex()` does not compile on it, and the complete public `MapContent` modifier surface (`tint`, `tag`, `foregroundStyle`, `stroke`, `strokeStyle`, `annotationTitles`, `annotationSubtitles`, `mapOverlayLevel`, `mapItemDetailSelectionAccessory` — confirmed by dumping the SDK's `_MapKit_SwiftUI.swiftinterface`) exposes no equivalent of `MKAnnotationView.zPriority`/`displayPriority`. **The order two `Annotation`s are declared in a `Map`'s content builder has no effect on which one renders in front when they visually overlap** — MapKit decides that itself, using its own geography-based heuristic (observed: the annotation with the lower latitude renders on top, regardless of declaration order — verified by swapping declaration order and confirming zero visual change, then reverting one annotation's content back to the old code as a control and re-measuring the same pin to confirm the shift was real).
+
+If a specific annotation must always render in front of another when they overlap (e.g. a dive's entry pin must win over its exit pin), the only way to get real control is to **merge the two into a single `Annotation`** and stack them yourself with a plain SwiftUI `ZStack` inside its `content:` closure — ordinary `ZStack` layering *is* respected (later view = on top), because at that point it's no longer two independent MapKit-managed annotations, it's one annotation containing ordinary SwiftUI content. The "back" pin needs to be manually offset to its true screen position relative to the "front" pin's anchor, using `MKMapPoint` to project both coordinates and taking the difference (scaled by points-per-map-point derived from the visible `MKMapRect`) as a SwiftUI `.offset()`. Fall back to two independent annotations once they're far enough apart to read as separate pins, so each keeps its own accurate anchor and label. See `SiteEntryExitMap` in `DiveDetailView+SiteDetails.swift` for the full implementation (overlap-distance threshold, live-vs-initial `MKMapRect` handling, and the identical/overlapping/separate three-way branch).

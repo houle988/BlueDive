@@ -194,7 +194,7 @@ struct GearListView: View {
                 ZStack {
                     Color.black.opacity(0.6).ignoresSafeArea()
                     VStack(spacing: 16) {
-                        ProgressView().tint(.cyan).scaleEffect(1.5)
+                        ProgressView().scaleEffect(1.5)
                         Text("Importing...")
                             .font(.headline)
                             .foregroundStyle(.primary)
@@ -393,7 +393,7 @@ struct GearListView: View {
     private var emptyStateView: some View {
         ContentUnavailableView(
             "No Equipment",
-            systemImage: "wrench.and.screwdriver.fill",
+            systemImage: "wrench.and.screwdriver",
             description: Text("Add your tanks, suits, and regulators to track their usage and maintenance.")
         )
     }
@@ -403,10 +403,9 @@ struct GearListView: View {
     }
 
     private var noGearForDiverView: some View {
-        ContentUnavailableView(
-            "No Equipment for Diver",
-            systemImage: "person.slash",
-            description: Text("No equipment was found for the selected diver.")
+        NoEntriesForDiverView(
+            title: Text(verbatim: String(format: NSLocalizedString("No Equipment for %@", bundle: Bundle.forAppLanguage(), value: "No Equipment for %@", comment: "Empty-state title when the selected diver has no gear; %@ is the diver's name"), selectedDiver)),
+            description: Text(verbatim: String(format: NSLocalizedString("No equipment was found for %@.", bundle: Bundle.forAppLanguage(), value: "No equipment was found for %@.", comment: "Empty-state description when the selected diver has no gear; %@ is the diver's name"), selectedDiver))
         )
     }
     
@@ -417,9 +416,10 @@ struct GearListView: View {
 
     private var serviceAlertBanner: some View {
         HStack {
-            Image(systemName: gearOverdue.isEmpty ? "exclamationmark.triangle.fill" : "xmark.shield.fill")
+            Image(systemName: gearOverdue.isEmpty ? "exclamationmark.triangle" : "xmark.shield")
                 .foregroundStyle(bannerColor)
-            
+                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: 2) {
                 Group {
                     if gearOverdue.isEmpty {
@@ -488,6 +488,7 @@ struct GearListView: View {
                     HStack {
                         if let gearCategory = GearCategory.allCases.first(where: { $0.rawValue == category }) {
                             Image(systemName: gearCategory.icon)
+                                .accessibilityHidden(true)
                             Text(gearCategory.localizedName)
                         } else {
                             Text(category)
@@ -562,31 +563,32 @@ struct GearListView: View {
                         showInactive.toggle()
                     }
                 } label: {
-                    Image(systemName: showInactive ? "eye.fill" : "eye.slash.fill")
+                    Image(systemName: showInactive ? "eye" : "eye.slash")
                         .font(.title3)
                         .foregroundStyle(showInactive ? .cyan : .secondary)
                 }
                 .help(showInactive
                       ? NSLocalizedString("Hide Inactive Equipment", bundle: Bundle.forAppLanguage(), comment: "")
                       : NSLocalizedString("Show Inactive Equipment", bundle: Bundle.forAppLanguage(), comment: ""))
+                .accessibilityLabel(showInactive ? Text("Hide Inactive Equipment") : Text("Show Inactive Equipment"))
             }
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
                 showAddGear = true
             } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+                Image(systemName: "plus")
                     .foregroundStyle(.cyan)
             }
+            .accessibilityLabel(Text("Add Equipment"))
         }
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 Button(action: { showTankTemplates = true }) {
-                    Label("Tank Templates", systemImage: "cylinder.fill")
+                    Label("Tank Templates", systemImage: "cylinder")
                 }
                 Button(action: { showGearGroups = true }) {
-                    Label("Gear Groups", systemImage: "tray.2.fill")
+                    Label("Gear Groups", systemImage: "tray.2")
                 }
                 Divider()
                 Button {
@@ -601,13 +603,13 @@ struct GearListView: View {
                     Label("Import", systemImage: "square.and.arrow.down")
                 }
             } label: {
-                Image(systemName: "ellipsis.circle.fill")
-                    .font(.title3)
+                Image(systemName: "ellipsis")
                     .foregroundStyle(.cyan)
             }
+            .accessibilityLabel(Text("More"))
         }
     }
-    
+
     // MARK: - Actions
     
     private func deleteGear(items: [Gear], at offsets: IndexSet) {
@@ -1054,7 +1056,8 @@ struct GearRow: View {
                     Circle()
                         .fill(gear.isInactive ? .red : .green)
                         .frame(width: 8, height: 8)
-                    
+                        .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
+
                     Text(gear.name)
                         .font(.headline)
                         .foregroundStyle(gear.isInactive ? .secondary : .primary)
@@ -1074,9 +1077,10 @@ struct GearRow: View {
 
             // Indicateur d'entretien — orange within 30 days, red when due/past
             if let indicatorColor = serviceIndicatorColor {
-                Image(systemName: "exclamationmark.circle.fill")
+                Image(systemName: "exclamationmark.circle")
                     .foregroundStyle(indicatorColor)
                     .font(.title3)
+                    .accessibilityLabel(indicatorColor == .red ? Text("Service Overdue") : Text("Service Due Soon"))
             }
         }
         .padding(.vertical, 8)
@@ -1137,7 +1141,8 @@ struct CategoryFilterChip: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption)
-                
+                    .accessibilityHidden(true)
+
                 Text(LocalizedStringKey(title))
                     .font(.subheadline)
                     .fontWeight(isSelected ? .semibold : .regular)
@@ -1168,5 +1173,6 @@ struct CategoryFilterChip: View {
             .animation(.easeInOut(duration: 0.2), value: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

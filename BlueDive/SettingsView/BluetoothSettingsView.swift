@@ -23,7 +23,6 @@ struct BluetoothSettingsView: View {
                         Toggle(isOn: $filterUnusedTanks) {
                             Label("Filter unused tanks", systemImage: "cylinder.split.1x2")
                         }
-                        .tint(.cyan)
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))

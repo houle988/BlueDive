@@ -41,9 +41,9 @@ enum DiveTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .menu:        return "chart.xyaxis.line"
-        case .siteDetails: return "mappin.and.ellipse.circle.fill"
-        case .conditions:  return "cloud.sun.fill"
-        case .gaz:         return "bubbles.and.sparkles.fill"
+        case .siteDetails: return "mappin.and.ellipse.circle"
+        case .conditions:  return "cloud.sun"
+        case .gaz:         return "bubbles.and.sparkles"
         case .samples:     return "waveform.path.ecg"
         case .xmlExport:   return "doc.text.magnifyingglass"
         case .uddfExport:  return "doc.badge.gearshape.fill"
@@ -381,7 +381,6 @@ struct DiveDetailView: View {
                 }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 12) {
                     // Export menu
                     Menu {
                         Button {
@@ -404,12 +403,14 @@ struct DiveDetailView: View {
                         Label("Export", systemImage: "square.and.arrow.up.circle.fill")
                             .foregroundStyle(.cyan)
                         #else
-                        Image(systemName: "square.and.arrow.up.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "square.and.arrow.up")
                             .foregroundStyle(.cyan)
                         #endif
                     }
+                    .accessibilityLabel(Text("Export Dive"))
+                }
 
+                ToolbarItem(placement: .primaryAction) {
                     // Edit button
                     Button {
                         showEditSheet = true
@@ -418,12 +419,11 @@ struct DiveDetailView: View {
                         Label("Edit", systemImage: "pencil.circle.fill")
                             .foregroundStyle(.cyan)
                         #else
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "pencil")
                             .foregroundStyle(.cyan)
                         #endif
                     }
-                }
+                    .accessibilityLabel(Text("Edit Dive"))
                 }
             }
         }
@@ -552,7 +552,7 @@ struct DiveDetailView: View {
             Button {
                 if let prev = previousDiveInList { navigateTo(prev, forward: false) }
             } label: {
-                Image(systemName: "chevron.left.circle.fill")
+                Image(systemName: "chevron.left.circle")
                     .font(.title3)
                     .foregroundStyle(previousDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
                     .padding(8)
@@ -560,11 +560,12 @@ struct DiveDetailView: View {
             }
             .disabled(previousDiveInList == nil)
             .help("Previous dive")
+            .accessibilityLabel(Text("Previous dive"))
 
             Button {
                 if let next = nextDiveInList { navigateTo(next, forward: true) }
             } label: {
-                Image(systemName: "chevron.right.circle.fill")
+                Image(systemName: "chevron.right.circle")
                     .font(.title3)
                     .foregroundStyle(nextDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
                     .padding(8)
@@ -572,6 +573,7 @@ struct DiveDetailView: View {
             }
             .disabled(nextDiveInList == nil)
             .help("Next dive")
+            .accessibilityLabel(Text("Next dive"))
         }
     }
 
@@ -688,7 +690,7 @@ struct DiveDetailView: View {
         #else
         NavigationStack {
             VStack(spacing: 20) {
-                Image(systemName: "lock.circle.fill")
+                Image(systemName: "lock.circle")
                     .font(.system(size: 50))
                     .foregroundStyle(.secondary)
                 Text("Editing Not Available")
@@ -704,8 +706,8 @@ struct DiveDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { showEditSheet = false }.foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { showEditSheet = false }
                 }
             }
         }

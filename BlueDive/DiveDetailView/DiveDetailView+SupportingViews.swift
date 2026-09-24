@@ -232,6 +232,8 @@ struct AddFishView: View {
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
                                                 .foregroundStyle(.secondary)
+                                                .clearButtonTapTarget()
+                                                .accessibilityLabel(Text("Clear"))
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 8)
@@ -485,6 +487,8 @@ struct EditFishView: View {
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
                                                 .foregroundStyle(.secondary)
+                                                .clearButtonTapTarget()
+                                                .accessibilityLabel(Text("Clear"))
                                         }
                                         .buttonStyle(.plain)
                                         .padding(.trailing, 8)
@@ -683,10 +687,12 @@ struct GearChipView: View {
                 Circle()
                     .fill(gear.isInactive ? .red : .green)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
 
                 Image(systemName: categoryIcon)
                     .font(.caption)
                     .foregroundStyle(categoryColor)
+                    .accessibilityHidden(true)
 
                 Text(gear.gearCategory?.localizedName ?? LocalizedStringKey(gear.category))
                     .font(.caption2)
@@ -986,6 +992,8 @@ struct MenuTextField: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
+                        .clearButtonTapTarget()
+                        .accessibilityLabel(Text("Clear"))
                 }
                 .buttonStyle(.plain)
             }
@@ -1038,6 +1046,8 @@ struct AutocompleteMenuTextField: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
                     }
                     .buttonStyle(.plain)
                 }
@@ -1129,6 +1139,8 @@ struct SiteSearchField: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
                     }
                     .buttonStyle(.plain)
                 }
@@ -1376,7 +1388,7 @@ struct PhotoPreviewSheet: View {
                 } else {
                     TabView(selection: $currentIndex) {
                         ForEach(photos.indices, id: \.self) { index in
-                            PhotoPageView(data: photos[index])
+                            PhotoPageView(data: photos[index], index: index, total: photos.count)
                                 .tag(index)
                         }
                     }
@@ -1414,7 +1426,10 @@ struct PhotoPreviewSheet: View {
             }
             .toolbar {
                 #if os(iOS)
-                ToolbarItemGroup(placement: .cancellationAction) {
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     if let shareItem = cachedShareItem {
                         let name = cachedExportName
                         if let thumbnail = shareThumbnail {
@@ -1437,6 +1452,8 @@ struct PhotoPreviewSheet: View {
                         // standard dimmed-disabled visual treatment.
                         Button(action: {}) { shareButtonLabel }.disabled(true)
                     }
+                }
+                ToolbarItem(placement: .destructiveAction) {
                     Button(role: .destructive) {
                         showDeleteAlert = true
                     } label: {
@@ -1444,6 +1461,7 @@ struct PhotoPreviewSheet: View {
                             .foregroundStyle(.red)
                     }
                     .disabled(photos.isEmpty)
+                    .accessibilityLabel(Text("Remove Photo"))
                 }
                 #else
                 ToolbarItem(placement: .cancellationAction) {
@@ -1463,11 +1481,11 @@ struct PhotoPreviewSheet: View {
                         .disabled(photos.isEmpty)
                     }
                 }
-                #endif
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Close") { dismiss() }
                         .foregroundStyle(.primary)
                 }
+                #endif
             }
             .alert("Remove Photo", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) {
@@ -1630,6 +1648,8 @@ struct PhotoPreviewSheet: View {
 
 private struct PhotoPageView: View {
     let data: Data
+    let index: Int
+    let total: Int
     @State private var image: PlatformImage?
 
     var body: some View {
@@ -1641,6 +1661,7 @@ private struct PhotoPageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %lld of %lld", bundle: .forAppLanguage(), comment: "Announces the current photo's position while paging through a dive's photos"), index + 1, total)))
             } else {
                 ZStack {
                     Color.platformBackground.ignoresSafeArea()

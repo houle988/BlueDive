@@ -19,7 +19,6 @@ struct NotificationsSettingsView: View {
                         Toggle(isOn: $notificationsEnabled) {
                             Label("Notifications", systemImage: "bell.fill")
                         }
-                        .tint(.cyan)
                         .onChange(of: notificationsEnabled) {
                             if notificationsEnabled {
                                 Task { await requestNotificationPermission() }
@@ -57,7 +56,6 @@ struct NotificationsSettingsView: View {
                             Toggle(isOn: $gearReminders) {
                                 Label("Equipment maintenance", systemImage: "wrench.fill")
                             }
-                            .tint(.cyan)
                             .onChange(of: gearReminders) {
                                 Task { await rescheduleGearNotifications() }
                             }
@@ -69,7 +67,6 @@ struct NotificationsSettingsView: View {
                             Toggle(isOn: $certReminders) {
                                 Label("Certification expiration", systemImage: "rosette")
                             }
-                            .tint(.cyan)
                             .onChange(of: certReminders) {
                                 Task { await rescheduleCertNotifications() }
                             }
@@ -81,7 +78,6 @@ struct NotificationsSettingsView: View {
                             Toggle(isOn: $insuranceReminders) {
                                 Label("Insurance expiration", systemImage: "shield.fill")
                             }
-                            .tint(.cyan)
                             .onChange(of: insuranceReminders) {
                                 Task { await rescheduleInsuranceNotifications() }
                             }
@@ -93,7 +89,6 @@ struct NotificationsSettingsView: View {
                             Toggle(isOn: $milestoneNotifs) {
                                 Label("Milestones reached", systemImage: "star.fill")
                             }
-                            .tint(.cyan)
                         }
                         .padding()
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))

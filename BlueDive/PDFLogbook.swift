@@ -631,6 +631,20 @@ struct PDFDiveLogbook {
         drawText(depthSymbol, attrs: unitAttrs, in: ctx, at: CGPoint(x: x + 8, y: chartTop + 4))
         drawText(NSLocalizedString("min", bundle: loc, comment: ""), attrs: unitAttrs, in: ctx, at: CGPoint(x: chartX + chartW + 2, y: chartBottom - 10))
 
+        // Computed once and threaded through the overlay, diamonds and legend below —
+        // each is an O(n) scan over the dive's samples, no need to repeat it three times
+        // for a single PDF export.
+        let decoBlocksForChart = decoBlocks(for: dive)
+        let decoStopsForChart = mandatoryDecoStopPoints(for: dive)
+
+        // Decompression band — drawn before the depth curve so the profile line, the
+        // max-depth pill and the gas markers all stay crisp on top of the translucent band.
+        // The mandatory-stop diamonds are drawn separately, after the depth curve (below).
+        drawDecoOverlay(ctx: ctx, dive: dive, blocks: decoBlocksForChart, chartX: chartX, chartW: chartW,
+                        chartTop: chartTop, profileBottom: profileBottom,
+                        maxDepth: maxDepth, maxTime: maxTime)
+        drawDecoLegend(ctx: ctx, dive: dive, blocks: decoBlocksForChart, stops: decoStopsForChart, x: x, y: y, width: width)
+
         // Profile line (maps depth using profileBottom so deepest point stays above label zone)
         ctx.setStrokeColor(accentCyan)
         ctx.setLineWidth(1.4)
@@ -701,7 +715,362 @@ struct PDFDiveLogbook {
             drawText(gasLabel, attrs: gasAttrs, in: ctx, at: CGPoint(x: gx - labelW / 2, y: gy + dotR + 2))
         }
 
+        // Mandatory-stop diamonds go on top of the depth curve, drawn last.
+        drawDecoStopDiamonds(ctx: ctx, stops: decoStopsForChart, chartX: chartX, chartW: chartW,
+                             chartTop: chartTop, profileBottom: profileBottom,
+                             maxDepth: maxDepth, maxTime: maxTime)
+
         return y - cardH
+    }
+
+    // MARK: - Deco Overlay (profile chart)
+
+    /// Contiguous time ranges during which the dive computer reported a deco obligation.
+    /// Two consecutive deco samples are merged into the same block when their time gap
+    /// is ≤ 3 minutes (well above any normal sample interval).
+    private static func decoBlocks(for dive: Dive) -> [(start: Double, end: Double)] {
+        let times = dive.profileSamples
+            .filter { $0.events.contains(.decoStop) }
+            .map { $0.time }
+            .sorted()
+        guard !times.isEmpty else { return [] }
+
+        var blocks: [(start: Double, end: Double)] = []
+        var blockStart = times[0]
+        var blockEnd   = times[0]
+
+        for i in 1..<times.count {
+            if times[i] - blockEnd <= 3.0 {
+                blockEnd = times[i]
+            } else {
+                blocks.append((start: blockStart, end: blockEnd))
+                blockStart = times[i]
+                blockEnd   = times[i]
+            }
+        }
+        blocks.append((start: blockStart, end: blockEnd))
+        return blocks
+    }
+
+    /// For each mandatory deco stop (type == 2) in `dive.decoStops`, interpolates the
+    /// exact time at which the depth profile crosses `stop.depth` during the deco phase,
+    /// so the marker sits exactly on the profile line at the planned stop depth.
+    /// Falls back to the deco sample whose depth is closest to `stop.depth` when the
+    /// profile does not cross it between consecutive samples.
+    ///
+    /// Algorithm is intentionally identical to the in-app chart's `mandatoryDecoStopPoints`
+    /// (deepest-first, 2-minute lookback, advancing `searchFloorTime`) so the PDF markers
+    /// land at the same times as the on-screen diamonds.
+    ///
+    /// Returns the depth in the dive's RAW STORED UNIT, not the display unit: this chart's
+    /// y-axis is built from unconverted `sample.depth` values, so running the result through
+    /// `displayProfileDepth(_:)` would scale it by the display factor and misplace the marker
+    /// on every dive whose stored unit differs from the user's display unit.
+    private static func mandatoryDecoStopPoints(for dive: Dive) -> [(time: Double, depth: Double)] {
+        // Process deepest-first so each stop anchors below the previous one.
+        let stops = dive.decoStops
+            .filter { $0.type == 2 }
+            .sorted { $0.depth > $1.depth }
+        guard !stops.isEmpty else { return [] }
+
+        let allSamples = dive.profileSamples
+        let decoSamples = allSamples
+            .filter { $0.events.contains(.decoStop) }
+            .sorted { $0.time < $1.time }
+        guard !decoSamples.isEmpty else { return [] }
+
+        // Search from a 2-minute lookback before the first deco sample (some computers emit
+        // .decoStop only after passing the stop depth) through to the end of the dive, so
+        // stops that are only physically reached after the obligation clears still resolve
+        // onto the real ascent line. The loop takes the FIRST ascending crossing at or after
+        // searchFloorTime, so dives that cross inside the obligation window are unaffected.
+        let decoWindowStart = (decoSamples.first?.time ?? 0) - 2.0
+        let decoWindowEnd   = allSamples.map(\.time).max() ?? (decoSamples.last?.time ?? 0)
+        let windowSamples = allSamples
+            .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
+            .sorted { $0.time < $1.time }
+
+        // DecoStop.depth is always metres; sample.depth is in the stored unit. This is a
+        // geometry conversion needed to compare the two, not a display conversion.
+        let isFeet = dive.importDistanceUnit == "feet"
+        var result: [(time: Double, depth: Double)] = []
+        var searchFloorTime = -Double.greatestFiniteMagnitude
+
+        for stop in stops {
+            let stopInStoredUnit = isFeet ? stop.depth * 3.28084 : stop.depth
+            var crossTime: Double? = nil
+            if windowSamples.count >= 2 {
+                for i in 0..<(windowSamples.count - 1) {
+                    let a = windowSamples[i], b = windowSamples[i + 1]
+                    guard a.time >= searchFloorTime else { continue }
+                    guard a.depth > stopInStoredUnit && b.depth <= stopInStoredUnit else { continue }
+                    let denom = b.depth - a.depth
+                    guard denom != 0 else { continue }
+                    crossTime = a.time + ((stopInStoredUnit - a.depth) / denom) * (b.time - a.time)
+                    break
+                }
+            }
+            // Fall back: deco-event sample whose depth is closest to the stop depth
+            if crossTime == nil {
+                crossTime = decoSamples
+                    .filter { $0.time >= searchFloorTime }
+                    .min(by: { abs($0.depth - stopInStoredUnit) < abs($1.depth - stopInStoredUnit) })?.time
+            }
+            guard let time = crossTime else { continue }
+            searchFloorTime = time
+            result.append((time: time, depth: stopInStoredUnit))
+        }
+        // Post-resolution filter only, for the same reason as the two in-app copies
+        // (StaticChartLayer.mandatoryDecoStopPoints and buildDecoStopCache in
+        // UnifiedDiveChartFixed.swift): the deepest-first loop advances searchFloorTime to
+        // each resolved crossing, so a `continue` inside it would move every shallower
+        // stop. All three copies must carry this filter or the PDF and the screen disagree.
+        // Filtering here covers both the diamonds and drawDecoLegend's "Mandatory stop"
+        // entry, since both read this one result array.
+        guard UserPreferences.shared.hideClearedDecoStops,
+              let cutoff = decoObligationEndTime(in: allSamples) else { return result }
+        return result.filter { $0.time <= cutoff }
+    }
+
+    /// Draws the decompression visualization behind the depth curve: either a stepped
+    /// ceiling band (computers that report a per-sample ceiling) or full-height obligation
+    /// columns (older computers that only report discrete deco-stop events), plus a diamond
+    /// at each mandatory stop.
+    ///
+    /// `maxDepth` and all depths fed to `yFor` are RAW STORED values — this chart's axis is
+    /// built from unconverted `sample.depth`, and `ProfileSample.ceilingDepth` is stored in
+    /// the same unit, so no display conversion may be applied here.
+    private static func drawDecoOverlay(ctx: CGContext, dive: Dive, blocks: [(start: Double, end: Double)],
+                                        chartX: CGFloat, chartW: CGFloat,
+                                        chartTop: CGFloat, profileBottom: CGFloat,
+                                        maxDepth: Double, maxTime: Double) {
+        // Importer order is not guaranteed sorted, and the step polygon below needs
+        // monotonically increasing x to build valid horizontal/vertical segments.
+        let samples = dive.profileSamples.sorted { $0.time < $1.time }
+        guard samples.count >= 2 else { return }
+
+        func xFor(_ t: Double) -> CGFloat {
+            chartX + chartW * CGFloat(min(max(t, 0), maxTime) / maxTime)
+        }
+        func yFor(_ rawDepth: Double) -> CGFloat {
+            chartTop - (chartTop - profileBottom) * CGFloat(min(max(rawDepth, 0), maxDepth) / maxDepth)
+        }
+
+        let plotRect = CGRect(x: chartX, y: profileBottom, width: chartW, height: chartTop - profileBottom)
+        // Gated on > 0, not just non-nil: the Bluetooth/libdc path passes its per-sample
+        // ceiling through ungated (unlike Subsurface/Garmin, which already exclude a
+        // reported-but-zero ceiling), so a non-nil 0 must still read as "no obligation".
+        let hasCeilingData = samples.contains { ($0.ceilingDepth ?? 0) > 0 }
+
+        if hasCeilingData {
+            // Build the step polygon by hand: a ceiling holds at the last reported value
+            // until the computer reports a new one, so each sample contributes a horizontal
+            // "hold" to the next sample's time followed by a vertical step. Raw CGContext
+            // has no equivalent of Swift Charts' .interpolationMethod(.stepEnd).
+            var stepPoints: [CGPoint] = []
+            for (i, sample) in samples.enumerated() {
+                let sy = yFor(sample.ceilingDepth ?? 0)
+                stepPoints.append(CGPoint(x: xFor(sample.time), y: sy))
+                if i + 1 < samples.count {
+                    stepPoints.append(CGPoint(x: xFor(samples[i + 1].time), y: sy))
+                }
+            }
+
+            if stepPoints.count >= 2 {
+                ctx.saveGState()
+                ctx.clip(to: plotRect)
+
+                // Band fill from the surface gridline down to the ceiling. Samples with no
+                // obligation sit at depth 0 (== chartTop), so the band self-collapses there.
+                let fillPath = CGMutablePath()
+                fillPath.move(to: CGPoint(x: stepPoints[0].x, y: chartTop))
+                for point in stepPoints { fillPath.addLine(to: point) }
+                fillPath.addLine(to: CGPoint(x: stepPoints[stepPoints.count - 1].x, y: chartTop))
+                fillPath.closeSubpath()
+                ctx.addPath(fillPath)
+                ctx.setFillColor(CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: 0.30))
+                ctx.fillPath()
+
+                // Solid boundary line, skipping any segment that lies entirely on the
+                // zero-ceiling baseline: unlike the in-app chart, the depth-0 gridline is
+                // inside the visible card here, so stroking it would paint a spurious solid
+                // orange rule across the full chart width outside the obligation window.
+                let baselineEpsilon: CGFloat = 0.01
+                let linePath = CGMutablePath()
+                var penDown = false
+                for i in 0..<(stepPoints.count - 1) {
+                    let a = stepPoints[i], b = stepPoints[i + 1]
+                    if abs(a.y - chartTop) < baselineEpsilon && abs(b.y - chartTop) < baselineEpsilon {
+                        penDown = false
+                        continue
+                    }
+                    if !penDown {
+                        linePath.move(to: a)
+                        penDown = true
+                    }
+                    linePath.addLine(to: b)
+                }
+                if !linePath.isEmpty {
+                    ctx.addPath(linePath)
+                    ctx.setStrokeColor(accentOrange)
+                    ctx.setLineWidth(1.0)
+                    ctx.strokePath()
+                }
+                ctx.restoreGState()
+            }
+        } else {
+            // Legacy dives report only discrete deco-stop events, with no ceiling depth to
+            // plot — shade the whole chart height across each obligation window instead.
+            if !blocks.isEmpty {
+                ctx.saveGState()
+                ctx.clip(to: plotRect)
+                ctx.setFillColor(CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: 0.18))
+                for block in blocks {
+                    let bx = xFor(block.start)
+                    // Minimum width so a single-sample block stays visible instead of
+                    // collapsing to a zero-width rect.
+                    let bw = max(xFor(block.end) - bx, 1.5)
+                    ctx.fill(CGRect(x: bx, y: profileBottom, width: bw, height: chartTop - profileBottom))
+                }
+                ctx.restoreGState()
+            }
+        }
+    }
+
+    /// Mandatory-stop diamonds, styled like the gas-change markers. Drawn separately from
+    /// `drawDecoOverlay` and called AFTER the depth-curve stroke (unlike the band, which stays
+    /// behind it): the diamonds mark a specific point on the profile line and must sit on top
+    /// of it, not be paved over by it — matching the in-app chart, where the equivalent marks
+    /// are likewise drawn after the depth trace. No text label: space is tight and the exact
+    /// depth/time is already listed in the DECO INFO card.
+    private static func drawDecoStopDiamonds(ctx: CGContext, stops: [(time: Double, depth: Double)],
+                                             chartX: CGFloat, chartW: CGFloat,
+                                             chartTop: CGFloat, profileBottom: CGFloat,
+                                             maxDepth: Double, maxTime: Double) {
+        func xFor(_ t: Double) -> CGFloat {
+            chartX + chartW * CGFloat(min(max(t, 0), maxTime) / maxTime)
+        }
+        func yFor(_ rawDepth: Double) -> CGFloat {
+            chartTop - (chartTop - profileBottom) * CGFloat(min(max(rawDepth, 0), maxDepth) / maxDepth)
+        }
+        // xFor/yFor clamp the diamond's CENTRE into the plot rect, but the 5pt halo can
+        // still bleed a point or two past the edge for a stop resolved near the start/end
+        // of the dive or at the very top/bottom of the depth range — clip like the band.
+        let plotRect = CGRect(x: chartX, y: profileBottom, width: chartW, height: chartTop - profileBottom)
+        ctx.saveGState()
+        ctx.clip(to: plotRect)
+        for point in stops {
+            let center = CGPoint(x: xFor(point.time), y: yFor(point.depth))
+            fillDiamond(ctx: ctx, center: center, radius: 5.0,
+                        color: CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: 0.18))
+            fillDiamond(ctx: ctx, center: center, radius: 3.0, color: accentOrange)
+        }
+        ctx.restoreGState()
+    }
+
+    /// Small right-aligned deco legend drawn inline on the "DIVE PROFILE" title row.
+    /// Kept on the existing row rather than given its own so `cardH` does not grow, which
+    /// would eat into the notes section — the only variable-height element on the page.
+    private static func drawDecoLegend(ctx: CGContext, dive: Dive, blocks: [(start: Double, end: Double)],
+                                       stops: [(time: Double, depth: Double)], x: CGFloat, y: CGFloat, width: CGFloat) {
+        // Gated on > 0 to match drawDecoOverlay's hasCeilingData — otherwise the legend
+        // could advertise "Deco ceiling" for a dive whose ceiling never rendered.
+        let hasCeilingData = dive.profileSamples.contains { ($0.ceilingDepth ?? 0) > 0 }
+        let hasBand  = hasCeilingData || !blocks.isEmpty
+        let hasStops = !stops.isEmpty
+        let hasGas   = dive.profileSamples.contains { $0.events.contains(.gasChange) }
+        guard hasBand || hasStops || hasGas else { return }
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font(size: 5.5),
+            .foregroundColor: platformColor(textMuted)
+        ]
+        let bandLabel = hasCeilingData
+            ? NSLocalizedString("Deco ceiling", bundle: loc, comment: "")
+            : NSLocalizedString("Deco obligation", bundle: loc, comment: "")
+        let stopLabel = NSLocalizedString("Mandatory stop", bundle: loc, comment: "")
+        // Reuses the in-app chart's exact legend wording/key (UnifiedDiveChartFixed.swift's
+        // legendGasChange) so both surfaces read identically and no new translation is needed.
+        let gasLabel = NSLocalizedString("Gas switch", bundle: loc, comment: "")
+
+        let swatchW: CGFloat = 8
+        let swatchH: CGFloat = 4.5
+        let diamondR: CGFloat = 2.6
+        let dotR: CGFloat = 2.6
+        let gap: CGFloat = 3
+        let itemGap: CGFloat = 8
+
+        var totalW: CGFloat = 0
+        if hasBand {
+            totalW += swatchW + gap + (bandLabel as NSString).size(withAttributes: attrs).width
+        }
+        if hasBand && (hasStops || hasGas) { totalW += itemGap }
+        if hasStops {
+            totalW += diamondR * 2 + gap + (stopLabel as NSString).size(withAttributes: attrs).width
+        }
+        if hasStops && hasGas { totalW += itemGap }
+        if hasGas {
+            totalW += dotR * 2 + gap + (gasLabel as NSString).size(withAttributes: attrs).width
+        }
+
+        // Bail out rather than overlap the section title when the translated labels are too
+        // long for the remaining width (fr-CA is the longest of the supported languages).
+        let titleW = (NSLocalizedString("DIVE PROFILE", bundle: loc, comment: "") as NSString)
+            .size(withAttributes: [.font: boldFont(size: 7.5)]).width
+        var cx = x + width - 10 - totalW
+        guard cx >= x + 16 + titleW + 10 else { return }
+
+        let baseline = y - 12
+
+        if hasBand {
+            let swatchRect = CGRect(x: cx, y: baseline, width: swatchW, height: swatchH)
+            // Matches the actual band alpha for each case (0.30 ceiling / 0.18 legacy) so
+            // the legend key isn't a different shade than what's drawn on the chart.
+            ctx.setFillColor(CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: hasCeilingData ? 0.30 : 0.18))
+            ctx.fill(swatchRect)
+            ctx.saveGState()
+            ctx.setStrokeColor(accentOrange)
+            ctx.setLineWidth(0.4)
+            ctx.stroke(swatchRect)
+            ctx.restoreGState()
+            cx += swatchW + gap
+            drawText(bandLabel, attrs: attrs, in: ctx, at: CGPoint(x: cx, y: baseline))
+            cx += (bandLabel as NSString).size(withAttributes: attrs).width
+            if hasStops || hasGas { cx += itemGap }
+        }
+
+        if hasStops {
+            fillDiamond(ctx: ctx, center: CGPoint(x: cx + diamondR, y: baseline + swatchH / 2),
+                        radius: diamondR, color: accentOrange)
+            cx += diamondR * 2 + gap
+            drawText(stopLabel, attrs: attrs, in: ctx, at: CGPoint(x: cx, y: baseline))
+            cx += (stopLabel as NSString).size(withAttributes: attrs).width
+            if hasGas { cx += itemGap }
+        }
+
+        if hasGas {
+            // Matches the profile chart's own gas-switch marker colour (accentPurple) rather
+            // than the in-app chart's brown — the two charts already use different colours
+            // for this marker, so the legend follows its own chart's swatch, not the other's.
+            let dotCenter = CGPoint(x: cx + dotR, y: baseline + swatchH / 2)
+            ctx.setFillColor(accentPurple)
+            ctx.fillEllipse(in: CGRect(x: dotCenter.x - dotR, y: dotCenter.y - dotR, width: dotR * 2, height: dotR * 2))
+            cx += dotR * 2 + gap
+            drawText(gasLabel, attrs: attrs, in: ctx, at: CGPoint(x: cx, y: baseline))
+        }
+    }
+
+    /// Fills an axis-aligned diamond (rotated square) centred on `center`.
+    private static func fillDiamond(ctx: CGContext, center: CGPoint, radius: CGFloat, color: CGColor) {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: center.x, y: center.y + radius))
+        path.addLine(to: CGPoint(x: center.x + radius, y: center.y))
+        path.addLine(to: CGPoint(x: center.x, y: center.y - radius))
+        path.addLine(to: CGPoint(x: center.x - radius, y: center.y))
+        path.closeSubpath()
+        ctx.addPath(path)
+        ctx.setFillColor(color)
+        ctx.fillPath()
     }
 
     // MARK: - Dive Statistics

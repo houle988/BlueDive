@@ -328,7 +328,7 @@
       }
     },
     "%@ dives" : {
-      "comment" : "Plural dive count goal label\nPlural dive count in a cluster map annotation",
+      "comment" : "Plural dive count goal label",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -352,6 +352,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ duiken"
+          }
+        }
+      }
+    },
+    "%@ dives already in logbook" : {
+      "comment" : "A footnote showing how many dives were skipped because they were already in the logbook. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Tauchgänge bereits im Logbuch"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées déjà dans le carnet"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ duiken al aanwezig in logboek"
+          }
+        }
+      }
+    },
+    "%@ dives already present" : {
+      "comment" : "Subtitle showing the number of dives already present in the logbook. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Tauchgänge bereits vorhanden"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées déjà présentes"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ duiken al aanwezig"
           }
         }
       }
@@ -381,6 +427,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ duiken op deze locatie"
+          }
+        }
+      }
+    },
+    "%@ dives imported" : {
+      "comment" : "A label in the Bluetooth sync results showing how many dives were imported. %@ is the locale-formatted dive count.\nSubtitle showing how many dives were imported when a cutoff also discarded older dives during the same sync. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Tauchgänge importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées importées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ duiken geïmporteerd"
+          }
+        }
+      }
+    },
+    "%@ dives updated" : {
+      "comment" : "A label indicating dives have been updated. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Tauchgänge aktualisiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées mises à jour"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ duiken bijgewerkt"
           }
         }
       }
@@ -439,6 +531,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ van %@ duiken geïmporteerd"
+          }
+        }
+      }
+    },
+    "%@ older dives not imported" : {
+      "comment" : "A footnote in the Bluetooth sync results showing how many downloaded dives were discarded because they were recorded before the user's import cutoff date. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ältere Tauchgänge nicht importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées plus anciennes non importées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ oudere duiken niet geïmporteerd"
+          }
+        }
+      }
+    },
+    "%@ older dives skipped" : {
+      "comment" : "Subtitle footnote showing how many downloaded dives were discarded because they were recorded before the user's import cutoff date. %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ältere Tauchgänge übersprungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées plus anciennes ignorées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ oudere duiken overgeslagen"
           }
         }
       }
@@ -543,6 +681,75 @@
       },
       "shouldTranslate" : false
     },
+    "%@: Auto-detected" : {
+      "comment" : "Accessibility label naming the field whose value was auto-detected from the import file",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: automatisch erkannt"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ : détecté automatiquement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: automatisch gedetecteerd"
+          }
+        }
+      }
+    },
+    "%@: Auto-Detection Unavailable" : {
+      "comment" : "Accessibility label naming the field for which auto-detection was unavailable",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: automatische Erkennung nicht verfügbar"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ : détection automatique indisponible"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: automatische detectie niet beschikbaar"
+          }
+        }
+      }
+    },
+    "%1$@ more dives were downloaded but will not be imported — they were recorded before %2$@." : {
+      "comment" : "Note appended to the Bluetooth import confirmation alert when several downloaded dives fall before the user's import cutoff date. %1$@ is the locale-formatted dive count, %2$@ is the cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ weitere Tauchgänge wurden heruntergeladen, werden aber nicht importiert — sie wurden vor dem %2$@ aufgezeichnet."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ plongées supplémentaires ont été téléchargées, mais ne seront pas importées — elles ont été enregistrées avant le %2$@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ extra duiken zijn gedownload, maar worden niet geïmporteerd — ze zijn vastgelegd vóór %2$@."
+          }
+        }
+      }
+    },
     "%1$@, %2$@, and %3$@ imported successfully." : {
       "comment" : "Sentence frame for the XML gear import success message. Arguments: gear noun phrase, group noun phrase, tank template noun phrase.",
       "localizations" : {
@@ -576,27 +783,75 @@
       "comment" : "Accessibility label for the filter button showing the number of active filters",
       "localizations" : {
         "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d aktive Filter"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d aktiver Filter"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d aktive Filter"
+                }
+              }
+            }
           }
         },
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d active filters"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d active filter"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d active filters"
+                }
+              }
+            }
           }
         },
         "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d filtres actifs"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d filtre actif"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d filtres actifs"
+                }
+              }
+            }
           }
         },
         "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d actieve filters"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d actief filter"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d actieve filters"
+                }
+              }
+            }
           }
         }
       }
@@ -678,6 +933,83 @@
         }
       }
     },
+    "%lld dive" : {
+      "comment" : "Number of dives logged on a calendar day, read by VoiceOver",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Tauchgang"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Tauchgänge"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld dive"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld dives"
+                }
+              }
+            }
+          }
+        },
+        "fr-CA" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld plongée"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld plongées"
+                }
+              }
+            }
+          }
+        },
+        "nl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld duik"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld duiken"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld dives" : {
       "comment" : "Multiple dives count\nMultiple dives count in calendar heatmap month header",
       "localizations" : {
@@ -743,64 +1075,6 @@
         }
       }
     },
-    "%lld dives already in logbook" : {
-      "comment" : "A footnote showing how many dives were skipped because they were already in the logbook.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Tauchgänge bereits im Logbuch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld dives already in logbook"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plongées déjà dans le carnet"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld duiken al in het logboek"
-          }
-        }
-      }
-    },
-    "%lld dives already present" : {
-      "comment" : "Subtitle showing the number of dives already present in the logbook.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Tauchgänge bereits vorhanden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld dives already present"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plongées déjà présentes"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld duiklogs reeds aanwezig"
-          }
-        }
-      }
-    },
     "%lld dives downloaded" : {
       "comment" : "A text label displaying the number of dives that have been successfully downloaded.",
       "localizations" : {
@@ -826,64 +1100,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld duiklogs gedownload"
-          }
-        }
-      }
-    },
-    "%lld dives imported" : {
-      "comment" : "A label displaying the number of dives imported.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Tauchgänge importiert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld dives imported"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plongées importées"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld duiklogs geïmporteerd"
-          }
-        }
-      }
-    },
-    "%lld dives updated" : {
-      "comment" : "A label indicating dives have been updated.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Tauchgänge aktualisiert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld dives updated"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plongées mises à jour"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld duiklogs bijgewerkt"
           }
         }
       }
@@ -1217,6 +1433,83 @@
         }
       }
     },
+    "%lld star" : {
+      "comment" : "Star rating button label; tapping it sets the dive rating to this many stars",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Stern"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Sterne"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld star"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld stars"
+                }
+              }
+            }
+          }
+        },
+        "fr-CA" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld étoile"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld étoiles"
+                }
+              }
+            }
+          }
+        },
+        "nl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ster"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sterren"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld tank templates" : {
       "comment" : "Noun phrase for multiple tank templates in the XML import success message.",
       "localizations" : {
@@ -1380,11 +1673,6 @@
           }
         }
       }
-    },
-    "|" : {
-      "comment" : "A separator between pressure and temperature labels.",
-      "isCommentAutoGenerated" : true,
-      "shouldTranslate" : false
     },
     "≥ 5.2 g/L: Elevated — approach with caution." : {
       "localizations" : {
@@ -2246,6 +2534,75 @@
         }
       }
     },
+    "1 more dive was downloaded but will not be imported — it was recorded before %@." : {
+      "comment" : "Note appended to the Bluetooth import confirmation alert when exactly one downloaded dive falls before the user's import cutoff date. %@ is the cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 weiterer Tauchgang wurde heruntergeladen, wird aber nicht importiert — er wurde vor dem %@ aufgezeichnet."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 plongée supplémentaire a été téléchargée, mais ne sera pas importée — elle a été enregistrée avant le %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog 1 duik is gedownload, maar wordt niet geïmporteerd — deze is vastgelegd vóór %@."
+          }
+        }
+      }
+    },
+    "1 older dive not imported" : {
+      "comment" : "A footnote in the Bluetooth sync results when exactly one downloaded dive was discarded because it was recorded before the user's import cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 älterer Tauchgang nicht importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 plongée plus ancienne non importée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 oudere duik niet geïmporteerd"
+          }
+        }
+      }
+    },
+    "1 older dive skipped" : {
+      "comment" : "Subtitle footnote when exactly one downloaded dive was discarded because it was recorded before the user's import cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 älterer Tauchgang übersprungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 plongée plus ancienne ignorée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 oudere duik overgeslagen"
+          }
+        }
+      }
+    },
     "1 tank template" : {
       "comment" : "Noun phrase for one tank template in the XML import success message.",
       "localizations" : {
@@ -2866,6 +3223,50 @@
         }
       }
     },
+    "Add Dive" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgang hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg duik toe"
+          }
+        }
+      }
+    },
+    "Add Document" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokument hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un document"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg document toe"
+          }
+        }
+      }
+    },
     "Add Equipment" : {
       "comment" : "The title of the view that appears when adding equipment to a dive.",
       "isCommentAutoGenerated" : true,
@@ -2926,6 +3327,30 @@
         }
       }
     },
+    "Add Gear Group" : {
+      "comment" : "A label for a button that adds a new gear group.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausrüstungsgruppe hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un groupe d'équipement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg uitrustingsgroep toe"
+          }
+        }
+      }
+    },
     "Add Insurance" : {
       "comment" : "A button label that says \"Add Insurance\".",
       "isCommentAutoGenerated" : true,
@@ -2952,6 +3377,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voeg verzekering toe"
+          }
+        }
+      }
+    },
+    "Add Marine Life" : {
+      "comment" : "A button that adds a marine life to a dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterwasserlebewesen hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter la vie marine"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg onderwaterleven toe"
           }
         }
       }
@@ -3040,6 +3489,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voeg nieuwe duikuitrusting toe"
+          }
+        }
+      }
+    },
+    "Add Photo" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une photo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg foto toe"
+          }
+        }
+      }
+    },
+    "Add Service Record" : {
+      "comment" : "A button title that opens a sheet for adding a service record.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartungseintrag hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une fiche d'entretien"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg onderhoudsrecord toe"
+          }
+        }
+      }
+    },
+    "Add Tank" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flasche hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un cylindre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg tank toe"
+          }
+        }
+      }
+    },
+    "Add Tank Template" : {
+      "comment" : "A label for a button that adds a new tank template.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flaschenvorlage hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un modèle de bouteille"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg tanksjabloon toe"
           }
         }
       }
@@ -4272,6 +4813,53 @@
         }
       }
     },
+    "Apply Auto-Detected %@ Value" : {
+      "comment" : "Accessibility label for a button that applies the auto-detected value for a specific unit field, naming the field",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch erkannten Wert für %@ übernehmen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appliquer la valeur détectée automatiquement pour %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch gedetecteerde waarde voor %@ toepassen"
+          }
+        }
+      }
+    },
+    "Apply Gear Group" : {
+      "comment" : "A button that allows the user to apply a gear group to the dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausrüstungsgruppe anwenden"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appliquer le groupe d'équipement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitrustingsgroep toepassen"
+          }
+        }
+      }
+    },
     "Are you sure you want to delete \"%@\"? This action cannot be undone." : {
       "comment" : "Delete confirmation alert message.",
       "localizations" : {
@@ -4297,6 +4885,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Weet je zeker dat je \"%@\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+          }
+        }
+      }
+    },
+    "Ascending" : {
+      "comment" : "Accessibility value: the dive list's sort direction is ascending (low to high) — not a diver ascending in the water column.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufsteigend"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Croissant"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oplopend"
           }
         }
       }
@@ -4702,6 +5313,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beschikbare apparaten"
+          }
+        }
+      }
+    },
+    "Available when searching for new devices, and alongside Download All Dives for a known computer — the common cases where a dive computer sends its whole history. A never-synced computer has no sync bookmark, so it sends everything by default; that can mean hundreds of dives you already logged by hand or imported from another app. If a computer you've already synced turns out not to need a full re-download, the limit simply has nothing to do." : {
+      "comment" : "A description of the limit on the number of dives to download.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verfügbar bei der Suche nach neuen Geräten und zusammen mit Alle Tauchgänge herunterladen für einen bekannten Computer — die üblichen Fälle, in denen ein Tauchcomputer seinen gesamten Verlauf sendet. Ein noch nie synchronisierter Computer hat kein Sync-Lesezeichen und sendet daher standardmäßig alles; das können Hunderte von Tauchgängen sein, die du bereits manuell erfasst oder aus einer anderen App importiert hast. Wenn ein bereits synchronisierter Computer letztlich keinen vollständigen erneuten Download benötigt, hat die Begrenzung einfach nichts zu tun."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disponible lors de la recherche de nouveaux appareils et avec « Télécharger toutes les plongées » pour un ordinateur connu — les cas courants où un ordinateur de plongée envoie tout son historique. Un ordinateur jamais synchronisé n'a pas de repère de synchronisation; il envoie donc tout par défaut, ce qui peut représenter des centaines de plongées déjà consignées manuellement ou importées d'une autre application. Si un ordinateur déjà synchronisé n'a finalement pas besoin d'un téléchargement complet, la limite n'a tout simplement rien à faire."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beschikbaar bij het zoeken naar nieuwe apparaten en samen met 'Alle duiken downloaden' voor een bekende computer — de gebruikelijke gevallen waarin een duikcomputer zijn volledige geschiedenis verstuurt. Een nooit-gesynchroniseerde computer heeft geen synchronisatiebladwijzer en verstuurt daarom standaard alles; dat kunnen honderden duiken zijn die je al handmatig hebt vastgelegd of vanuit een andere app hebt geïmporteerd. Als een computer die je al hebt gesynchroniseerd uiteindelijk geen volledige herdownload nodig heeft, valt er voor de limiet simpelweg niets te doen."
           }
         }
       }
@@ -5879,6 +6514,30 @@
         }
       }
     },
+    "Calculators" : {
+      "comment" : "A popover that displays a list of calculators.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechner"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculatrices"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rekenmachines"
+          }
+        }
+      }
+    },
     "Calendar" : {
       "comment" : "A button that displays a view for displaying a calendar heatmap.",
       "isCommentAutoGenerated" : true,
@@ -6112,6 +6771,53 @@
         }
       }
     },
+    "Ceiling" : {
+      "comment" : "The ceiling depth is inverted to make it",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decke"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plafond"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plafond"
+          }
+        }
+      }
+    },
+    "Ceiling %1$@ %2$@" : {
+      "comment" : "Tooltip row showing the current decompression ceiling in the dive chart; %1$@ is the depth value, %2$@ the depth unit symbol",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decke %1$@ %2$@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plafond %1$@ %2$@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plafond %1$@ %2$@"
+          }
+        }
+      }
+    },
     "Celsius (°C)" : {
       "comment" : "Label for a temperature option in the Import Format Picker.",
       "isCommentAutoGenerated" : true,
@@ -6317,6 +7023,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wijzig model"
+          }
+        }
+      }
+    },
+    "Change Model for %@" : {
+      "comment" : "Accessibility label for a button that changes the detected computer model for a specific paired device, naming the device",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modell für %@ ändern"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changer le modèle pour %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzig model voor %@"
+          }
+        }
+      }
+    },
+    "Checked" : {
+      "comment" : "The accessibility label for the button that allows the user to agree to the disclaimer.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiviert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cochée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aangevinkt"
           }
         }
       }
@@ -6556,6 +7309,30 @@
         }
       }
     },
+    "Clear" : {
+      "comment" : "A button to clear the text field.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wissen"
+          }
+        }
+      }
+    },
     "Clear all BLE log files from Documents" : {
       "comment" : "A description of the action of clearing all BLE diagnostic logs.",
       "isCommentAutoGenerated" : true,
@@ -6706,6 +7483,28 @@
         }
       }
     },
+    "Clear filters and diver" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter und Taucher zurücksetzen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer les filtres et le plongeur"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filters en duiker wissen"
+          }
+        }
+      }
+    },
     "Clock sync is only performed on dive computers that support it. If your computer does not support clock setting, this option has no effect and the sync proceeds normally." : {
       "localizations" : {
         "de" : {
@@ -6788,6 +7587,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bewolkt"
+          }
+        }
+      }
+    },
+    "CNS" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CNS"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CNS"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CNS"
           }
         }
       }
@@ -6932,6 +7753,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Koudste"
+          }
+        }
+      }
+    },
+    "Collapsed" : {
+      "comment" : "A description of the collapsed state of a list item.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reduziert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réduit"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Samengevouwen"
           }
         }
       }
@@ -8231,6 +9076,29 @@
         }
       }
     },
+    "Custom sort applied" : {
+      "comment" : "Accessibility label for the filter button when no filters are active but the sort order differs from the default",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benutzerdefinierte Sortierung angewendet"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tri personnalisé appliqué"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aangepaste sortering toegepast"
+          }
+        }
+      }
+    },
     "Dangerous (≥18 m/min)" : {
       "comment" : "A label for the maximum safe rate of ascent.",
       "isCommentAutoGenerated" : true,
@@ -8469,64 +9337,6 @@
         }
       }
     },
-    "Date ↑" : {
-      "comment" : "Sort order option: dives sorted by date, oldest first.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Datum ↑"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Date ↑"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Date ↑"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Datum ↑"
-          }
-        }
-      }
-    },
-    "Date ↓" : {
-      "comment" : "Sort order option: dives sorted by date, newest first.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Datum ↓"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Date ↓"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Date ↓"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Datum ↓"
-          }
-        }
-      }
-    },
     "Dates" : {
       "comment" : "A section header for the dates related to a certification.",
       "isCommentAutoGenerated" : true,
@@ -8700,6 +9510,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deco"
+          }
+        }
+      }
+    },
+    "Deco ceiling" : {
+      "comment" : "A label for a line on a dive chart that represents the maximum depth at which a diver can descend safely.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dekodecke"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plafond de déco"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decompressieplafond"
           }
         }
       }
@@ -9053,6 +9887,28 @@
         }
       }
     },
+    "Delete Certification" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zertifizierung löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la certification"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder certificering"
+          }
+        }
+      }
+    },
     "Delete certification?" : {
       "comment" : "An alert title that asks if the user wants to delete a certification.",
       "isCommentAutoGenerated" : true,
@@ -9195,6 +10051,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Duikuitrustinggroep verwijderen?"
+          }
+        }
+      }
+    },
+    "Delete Insurance" : {
+      "comment" : "A button title that de",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versicherung löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer l'assurance"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder verzekering"
           }
         }
       }
@@ -9459,35 +10339,6 @@
         }
       }
     },
-    "Depth ↓" : {
-      "comment" : "Sort order option: dives sorted by depth, deepest first.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tiefe ↓"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Depth ↓"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profondeur ↓"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diepte ↓"
-          }
-        }
-      }
-    },
     "Depth is always displayed on the chart" : {
       "localizations" : {
         "de" : {
@@ -9569,6 +10420,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Diepte, duur, temperaturen, gasmengsels, tankdrukken, decompressiegegevens, duikprofiel, naam van de duikcomputer, ruwe gegevens, watertype en GPS-coördinaten."
+          }
+        }
+      }
+    },
+    "Descending" : {
+      "comment" : "Accessibility value: the dive list's sort direction is descending (high to low) — not a diver descending in the water column.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Absteigend"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Décroissant"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aflopend"
           }
         }
       }
@@ -9929,64 +10803,6 @@
         }
       }
     },
-    "Dive # ↑" : {
-      "comment" : "Sort order option: dives sorted by dive number, lowest first.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tauchgang # ↑"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dive # ↑"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Plongée # ↑"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Duik # ↑"
-          }
-        }
-      }
-    },
-    "Dive # ↓" : {
-      "comment" : "Sort order option: dives sorted by dive number, highest first.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tauchgang # ↓"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dive # ↓"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Plongée # ↓"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Duik # ↓"
-          }
-        }
-      }
-    },
     "DIVE #%lld" : {
       "comment" : "The text that appears inside a dive number badge.",
       "isCommentAutoGenerated" : true,
@@ -10297,6 +11113,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Duikparameters"
+          }
+        }
+      }
+    },
+    "Dive Profile" : {
+      "comment" : "Title of the Dive Profile settings screen.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchprofil"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil de plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duikprofiel"
           }
         }
       }
@@ -10921,6 +11761,76 @@
         }
       }
     },
+    "Dives recorded before the date you choose are discarded after they arrive, instead of being added to your logbook. Every dive is still transferred from the computer, so the sync takes exactly as long — only your logbook stays clean. When re-downloading a known computer, older dives are also not refreshed with the computer's data." : {
+      "comment" : "A description of the Dive Computer Sync Options.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge, die vor dem gewählten Datum aufgezeichnet wurden, werden nach dem Empfang verworfen, anstatt zu deinem Logbuch hinzugefügt zu werden. Jeder Tauchgang wird trotzdem vom Computer übertragen, die Synchronisierung dauert also genauso lange — nur dein Logbuch bleibt sauber. Beim erneuten Herunterladen eines bekannten Computers werden ältere Tauchgänge außerdem nicht mit den Daten des Computers aktualisiert."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plongées enregistrées avant la date choisie sont rejetées à leur arrivée, au lieu d'être ajoutées à votre carnet. Chaque plongée est tout de même transférée depuis l'ordinateur, donc la synchronisation prend exactement le même temps — seul votre carnet reste propre. Lors d'un nouveau téléchargement d'un ordinateur connu, les plongées plus anciennes ne sont pas non plus mises à jour avec les données de l'ordinateur."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken die zijn vastgelegd vóór de gekozen datum worden na ontvangst verwijderd in plaats van aan je logboek te worden toegevoegd. Elke duik wordt nog steeds van de computer overgebracht, dus de synchronisatie duurt precies even lang — alleen je logboek blijft schoon. Bij het opnieuw downloaden van een bekende computer worden oudere duiken ook niet bijgewerkt met de gegevens van de computer."
+          }
+        }
+      }
+    },
+    "Dives recorded before this date are still transferred from the dive computer, then discarded — they are neither re-imported nor updated. This does not make the sync faster, and applies to this sync only." : {
+      "comment" : "A description of the import cutoff date.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge, die vor diesem Datum aufgezeichnet wurden, werden weiterhin vom Tauchcomputer übertragen und anschließend verworfen — sie werden weder erneut importiert noch aktualisiert. Dadurch wird die Synchronisierung nicht schneller, und dies gilt nur für diese Synchronisierung."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plongées enregistrées avant cette date sont tout de même transférées depuis l'ordinateur de plongée, puis rejetées — elles ne sont ni réimportées ni mises à jour. Cela ne rend pas la synchronisation plus rapide et s'applique uniquement à cette synchronisation."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken die vóór deze datum zijn vastgelegd, worden nog steeds van de duikcomputer overgebracht en vervolgens verwijderd — ze worden niet opnieuw geïmporteerd of bijgewerkt. Dit maakt de synchronisatie niet sneller en geldt alleen voor deze synchronisatie."
+          }
+        }
+      }
+    },
+    "Dives recorded before this date are still transferred from the dive computer, then discarded instead of being added to your logbook — this does not make the sync faster. The date defaults to the most recent dive in your logbook, or one year ago if your logbook is empty, and applies to this sync only. Has no effect on a device you've already synced." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge, die vor diesem Datum aufgezeichnet wurden, werden weiterhin vom Tauchcomputer übertragen und dann verworfen, anstatt zu deinem Logbuch hinzugefügt zu werden — dadurch wird die Synchronisierung nicht schneller. Das Datum wird standardmäßig auf den zuletzt erfassten Tauchgang in deinem Logbuch gesetzt, oder auf ein Jahr zuvor, wenn dein Logbuch leer ist, und gilt nur für diese Synchronisierung. Hat keine Auswirkung auf ein bereits synchronisiertes Gerät."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plongées enregistrées avant cette date sont tout de même transférées depuis l'ordinateur de plongée, puis rejetées au lieu d'être ajoutées à votre carnet — cela ne rend pas la synchronisation plus rapide. La date correspond par défaut à la plongée la plus récente de votre carnet, ou à un an en arrière si votre carnet est vide, et s'applique uniquement à cette synchronisation. N'a aucun effet sur un appareil déjà synchronisé."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken die vóór deze datum zijn vastgelegd, worden nog steeds van de duikcomputer overgebracht en vervolgens verwijderd in plaats van aan je logboek te worden toegevoegd — dit maakt de synchronisatie niet sneller. De datum wordt standaard ingesteld op de meest recente duik in je logboek, of op één jaar geleden als je logboek leeg is, en geldt alleen voor deze synchronisatie. Heeft geen effect op een apparaat dat al is gesynchroniseerd."
+          }
+        }
+      }
+    },
     "Dives without a diver name are not affected." : {
       "localizations" : {
         "de" : {
@@ -11265,6 +12175,28 @@
         }
       }
     },
+    "Download All Dives is on for this sync, carried over from the known-devices screen — it re-downloads the full history and merges matched dives. Turn it off from the main screen." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Tauchgänge herunterladen ist für diese Synchronisierung aktiviert, übernommen vom Bildschirm der bekannten Tauchcomputer — dadurch wird der gesamte Verlauf erneut heruntergeladen und übereinstimmende Tauchgänge werden zusammengeführt. Schalte die Option auf dem Hauptbildschirm aus."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Télécharger toutes les plongées est activé pour cette synchronisation, reporté depuis l'écran des ordinateurs connus — cela retélécharge l'historique complet et fusionne les plongées correspondantes. Désactivez cette option depuis l'écran principal."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "'Alle duiken downloaden' staat aan voor deze synchronisatie, overgenomen van het scherm met bekende duikcomputers — hierdoor wordt de volledige geschiedenis opnieuw gedownload en worden overeenkomende duiken samengevoegd. Schakel deze uit via het hoofdscherm."
+          }
+        }
+      }
+    },
     "Download All Dives is only available for known dive computers. Sync this device once first, then use it from the main screen." : {
       "localizations" : {
         "de" : {
@@ -11377,6 +12309,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bezig met downloaden…"
+          }
+        }
+      }
+    },
+    "Drag the map to position the pin, then tap Save." : {
+      "comment" : "A description of how to use the coordinate picker.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ziehe die Karte, um den Pin zu positionieren, und tippe dann auf „Speichern“."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faites glisser la carte pour positionner l'épingle, puis touchez Enregistrer."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep de kaart om de pin te plaatsen en tik vervolgens op Opslaan."
           }
         }
       }
@@ -11551,35 +12507,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tijdsduur (min)"
-          }
-        }
-      }
-    },
-    "Duration ↓" : {
-      "comment" : "Sort order option: dives sorted by duration, longest first.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dauer ↓"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Duration ↓"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Durée ↓"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tijdsduur ↓"
           }
         }
       }
@@ -12221,6 +13148,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wijzig onderwaterleven"
+          }
+        }
+      }
+    },
+    "Edit Photos" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos bearbeiten"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier les photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzig foto's"
           }
         }
       }
@@ -13546,6 +14495,30 @@
         }
       }
     },
+    "Expanded" : {
+      "comment" : "A description of the state of the view when it is expanded.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erweitert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Développé"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitgevouwen"
+          }
+        }
+      }
+    },
     "Expert" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13983,6 +14956,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exporteer wanneer je wilt"
+          }
+        }
+      }
+    },
+    "Export Dive" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgang exportieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter la plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporteer duik"
           }
         }
       }
@@ -16938,6 +17933,78 @@
         }
       }
     },
+    "Has fish sightings" : {
+      "comment" : "A description of a dive that has fish sightings.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enthält Fischsichtungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contient des observations de poissons"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heeft visobservaties"
+          }
+        }
+      }
+    },
+    "Has GPS coordinates" : {
+      "comment" : "A description of a location that has GPS coordinates.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPS-Koordinaten verfügbar"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coordonnées GPS disponibles"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPS-coördinaten beschikbaar"
+          }
+        }
+      }
+    },
+    "Has photos" : {
+      "comment" : "A tooltip for a button that displays a photo.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enthält Fotos"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contient des photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heeft foto's"
+          }
+        }
+      }
+    },
     "Heavy swell" : {
       "localizations" : {
         "de" : {
@@ -17052,6 +18119,30 @@
         }
       }
     },
+    "Hide early-cleared decompression stops" : {
+      "comment" : "A toggle that hides mandatory decompression stops that the dive computer cleared before the user reached them.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frühzeitig erledigte Pflichtstopps ausblenden"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les paliers de décompression résolus plus tôt que prévu"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vroegtijdig voltooide verplichte stops verbergen"
+          }
+        }
+      }
+    },
     "Hide Inactive Equipment" : {
       "localizations" : {
         "de" : {
@@ -17106,6 +18197,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hoog"
+          }
+        }
+      }
+    },
+    "High confidence match" : {
+      "comment" : "Accessibility label describing the confidence level of a detected duplicate dive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übereinstimmung mit hoher Zuversicht"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correspondance de confiance élevée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overeenkomst met hoge zekerheid"
           }
         }
       }
@@ -17278,32 +18392,26 @@
         }
       }
     },
-    "Hybrid View" : {
-      "comment" : "The title of a map style option that shows both roads and satellite imagery.",
+    "Hybrid" : {
+      "comment" : "A map style that shows both roads and hybrid imagery.",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hybridansicht"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hybrid View"
+            "value" : "Hybrid"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vue hybride"
+            "value" : "Hybride"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hybride weergave"
+            "value" : "Hybride"
           }
         }
       }
@@ -17547,6 +18655,30 @@
         }
       }
     },
+    "iCloud sync is turned off" : {
+      "comment" : "The accessibility label for the sync button when iCloud sync is disabled.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud-Synchronisierung ist deaktiviert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La synchronisation iCloud est désactivée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud-synchronisatie is uitgeschakeld"
+          }
+        }
+      }
+    },
     "iCloud Sync Status" : {
       "comment" : "Title of the iCloud sync status popover and toolbar button tooltip.",
       "localizations" : {
@@ -17602,6 +18734,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Identificatie"
+          }
+        }
+      }
+    },
+    "Idle" : {
+      "comment" : "A description of a state where the app is not syncing with iCloud.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inaktiv"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inactif"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inactief"
           }
         }
       }
@@ -17838,6 +18994,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importeer duiken"
+          }
+        }
+      }
+    },
+    "Import Dives On or After" : {
+      "comment" : "A label that appears above a date picker.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge importieren ab"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer les plongées à partir du"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken importeren vanaf"
           }
         }
       }
@@ -18311,6 +19491,30 @@
         }
       }
     },
+    "Inactive" : {
+      "comment" : "The accessibility label for the inactive dot.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inaktiv"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inactif"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inactief"
+          }
+        }
+      }
+    },
     "Inactive Equipment" : {
       "localizations" : {
         "de" : {
@@ -18423,6 +19627,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voeg GPS-coördinaten toe (instap- en uitstapplaats)"
+          }
+        }
+      }
+    },
+    "Information" : {
+      "comment" : "A button that opens a view with information.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informationen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informations"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informatie"
           }
         }
       }
@@ -19418,6 +20646,30 @@
         }
       }
     },
+    "Limit Import by Date" : {
+      "comment" : "A toggle that limits the import of dives to a specific date.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import nach Datum begrenzen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limiter l'importation par date"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import beperken op datum"
+          }
+        }
+      }
+    },
     "Liters" : {
       "comment" : "Unit name: litres",
       "localizations" : {
@@ -19740,6 +20992,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zoeken naar duikcomputer…"
+          }
+        }
+      }
+    },
+    "Low confidence match" : {
+      "comment" : "Accessibility label describing the confidence level of a detected duplicate dive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übereinstimmung mit geringer Zuversicht"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correspondance de confiance faible"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overeenkomst met lage zekerheid"
           }
         }
       }
@@ -20890,6 +22165,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Maximum temperatuur"
+          }
+        }
+      }
+    },
+    "Medium confidence match" : {
+      "comment" : "Accessibility label describing the confidence level of a detected duplicate dive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übereinstimmung mit mittlerer Zuversicht"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correspondance de confiance moyenne"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overeenkomst met gemiddelde zekerheid"
           }
         }
       }
@@ -22467,6 +23765,30 @@
         }
       }
     },
+    "Next Year" : {
+      "comment" : "A label for the button that scrolls to the next year.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nächstes Jahr"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Année suivante"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volgend jaar"
+          }
+        }
+      }
+    },
     "Nitrogen (N₂)" : {
       "comment" : "A label for the nitrogen percentage in a dive.",
       "isCommentAutoGenerated" : true,
@@ -22814,31 +24136,25 @@
         }
       }
     },
-    "No certifications or insurance were found for the selected diver." : {
-      "comment" : "Description shown in the Documents view when a diver filter is active but no certifications or insurance exist for that diver.",
+    "No certifications or insurance were found for %@." : {
+      "comment" : "Empty-state description when the selected diver has no certifications or insurance; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Zertifizierungen oder Versicherungen für den ausgewählten Taucher gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No certifications or insurance were found for the selected diver."
+            "value" : "Für %@ wurden keine Zertifizierungen oder Versicherungen gefunden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune certification ni assurance trouvée pour le plongeur sélectionné."
+            "value" : "Aucune certification ou assurance n'a été trouvée pour %@."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen certificeringen of verzekering(en) gevonden voor de geselecteerde duiker."
+            "value" : "Geen certificeringen of verzekeringen gevonden voor %@."
           }
         }
       }
@@ -22960,30 +24276,25 @@
         }
       }
     },
-    "No Dives for Diver" : {
+    "No Dives for %@" : {
+      "comment" : "Empty-state title when the selected diver has no dives; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Tauchgänge für diesen Taucher"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Dives for Diver"
+            "value" : "Keine Tauchgänge für %@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune plongée pour ce plongeur"
+            "value" : "Aucune plongée pour %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duiken voor duiker"
+            "value" : "Geen duiken voor %@"
           }
         }
       }
@@ -23076,30 +24387,25 @@
         }
       }
     },
-    "No dives were found for the selected diver." : {
+    "No dives were found for %@." : {
+      "comment" : "Empty-state description when the selected diver has no dives; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Für den ausgewählten Taucher wurden keine Tauchgänge gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No dives were found for the selected diver."
+            "value" : "Für %@ wurden keine Tauchgänge gefunden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune plongée trouvée pour le plongeur sélectionné."
+            "value" : "Aucune plongée n'a été trouvée pour %@."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duiken gevonden voor de geselecteerde duiker."
+            "value" : "Geen duiken gevonden voor %@."
           }
         }
       }
@@ -23191,31 +24497,25 @@
         }
       }
     },
-    "No Documents for Diver" : {
-      "comment" : "Empty state title shown in the Documents view when a diver filter is active but no records match.",
+    "No Documents for %@" : {
+      "comment" : "Empty-state title when the selected diver has no certifications or insurance; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Dokumente für diesen Taucher"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Documents for Diver"
+            "value" : "Keine Dokumente für %@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun document pour ce plongeur"
+            "value" : "Aucun document pour %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen documenten voor duiker"
+            "value" : "Geen documenten voor %@"
           }
         }
       }
@@ -23309,30 +24609,25 @@
         }
       }
     },
-    "No Equipment for Diver" : {
+    "No Equipment for %@" : {
+      "comment" : "Empty-state title when the selected diver has no gear; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Ausrüstung für diesen Taucher"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Equipment for Diver"
+            "value" : "Keine Ausrüstung für %@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun équipement pour ce plongeur"
+            "value" : "Aucun équipement pour %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duikuitrusting voor duiker"
+            "value" : "Geen duikuitrusting voor %@"
           }
         }
       }
@@ -23397,30 +24692,25 @@
         }
       }
     },
-    "No equipment was found for the selected diver." : {
+    "No equipment was found for %@." : {
+      "comment" : "Empty-state description when the selected diver has no gear; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Für den ausgewählten Taucher wurde keine Ausrüstung gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No equipment was found for the selected diver."
+            "value" : "Für %@ wurde keine Ausrüstung gefunden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun équipement trouvé pour le plongeur sélectionné."
+            "value" : "Aucun équipement n'a été trouvé pour %@."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen duikuitrusting gevonden voor de geselecteerde duiker."
+            "value" : "Geen duikuitrusting gevonden voor %@."
           }
         }
       }
@@ -24246,58 +25536,48 @@
         }
       }
     },
-    "No Trips for Diver" : {
+    "No Trips for %@" : {
+      "comment" : "Empty-state title when the selected diver has no trips; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Reisen für diesen Taucher"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Trips for Diver"
+            "value" : "Keine Reisen für %@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun voyage pour ce plongeur"
+            "value" : "Aucun voyage pour %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen trips voor duiker"
+            "value" : "Geen trips voor %@"
           }
         }
       }
     },
-    "No trips were found for the selected diver." : {
+    "No trips were found for %@." : {
+      "comment" : "Empty-state description when the selected diver has no trips; %@ is the diver's name",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Für den ausgewählten Taucher wurden keine Reisen gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No trips were found for the selected diver."
+            "value" : "Für %@ wurden keine Reisen gefunden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun voyage trouvé pour le plongeur sélectionné."
+            "value" : "Aucun voyage n'a été trouvé pour %@."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen trips gevonden voor de geselecteerde duiker."
+            "value" : "Geen trips gevonden voor %@."
           }
         }
       }
@@ -24475,6 +25755,30 @@
         }
       }
     },
+    "Not Checked" : {
+      "comment" : "The accessibility label for the button that allows the user to agree to the disclaimer.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht aktiviert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non cochée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet aangevinkt"
+          }
+        }
+      }
+    },
     "Not yet synced" : {
       "comment" : "CloudKit sync state label when no sync has occurred since app launch",
       "localizations" : {
@@ -24500,6 +25804,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nog niet gesynchroniseerd"
+          }
+        }
+      }
+    },
+    "Note: the merged dive's duration, average depth, and SAC include the surface interval between the two dives." : {
+      "comment" : "Disclosure in the merge confirmation that combined stats span the surface interval",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinweis: Dauer, durchschnittliche Tiefe und SAC des zusammengeführten Tauchgangs schließen das Oberflächenintervall zwischen den beiden Tauchgängen ein."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note : la durée, la profondeur moyenne et la consommation (SAC) de la plongée fusionnée incluent l’intervalle de surface entre les deux plongées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Let op: de duur, gemiddelde diepte en SAC van de samengevoegde duik zijn inclusief het oppervlakte-interval tussen de twee duiken."
           }
         }
       }
@@ -24627,7 +25954,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notizen, Tauchpartner, Tauchleiter, Bewertung, Tauchgangstyp, Bedingungen, Tauchplatzname und -details, Tauchgangsnummer und Oberflächenpause. Flaschvolumen, Arbeitsdruck, Material und Typ werden ebenfalls beibehalten, sofern der Tauchcomputer diese nicht explizit meldet."
+            "value" : "Notizen, Tauchpartner, Tauchleiter, Bewertung, Tauchgangstyp, Bedingungen, Tauchplatzname und -details, Tauchgangsnummer und Oberflächenintervall. Flaschvolumen, Arbeitsdruck, Material und Typ werden ebenfalls beibehalten, sofern der Tauchcomputer diese nicht explizit meldet."
           }
         },
         "en" : {
@@ -24793,6 +26120,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
+          }
+        }
+      }
+    },
+    "Older Dives Skipped" : {
+      "comment" : "Title shown after a Bluetooth sync in which every downloaded dive was discarded because it predated the user's import cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ältere Tauchgänge übersprungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plongées plus anciennes ignorées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oudere duiken overgeslagen"
           }
         }
       }
@@ -25229,6 +26579,30 @@
         }
       }
     },
+    "Overdue" : {
+      "comment" : "Label indicating that the maintenance is overdue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überfällig"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En retard"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Achterstallig"
+          }
+        }
+      }
+    },
     "Override (hex)" : {
       "comment" : "A label for the text field that lets the user override the fingerprint.",
       "isCommentAutoGenerated" : true,
@@ -25343,6 +26717,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zuurstof (O₂)"
+          }
+        }
+      }
+    },
+    "Page %lld of %lld" : {
+      "comment" : "Announces the current page's position in the welcome wizard's page indicator",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seite %1$lld von %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld of %2$lld"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page %1$lld sur %2$lld"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pagina %1$lld van %2$lld"
           }
         }
       }
@@ -25548,6 +26951,35 @@
         }
       }
     },
+    "Photo %lld of %lld" : {
+      "comment" : "Announces the current photo's position while paging through a dive's photos",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %lld von %lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo %1$lld of %2$lld"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo %lld sur %lld"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %lld van %lld"
+          }
+        }
+      }
+    },
     "Photo Import Failed" : {
       "localizations" : {
         "de" : {
@@ -25602,6 +27034,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Foto’s"
+          }
+        }
+      }
+    },
+    "Pick on Map" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf der Karte auswählen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir sur la carte"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kiezen op de kaart"
           }
         }
       }
@@ -26159,6 +27613,30 @@
         }
       }
     },
+    "Previous Year" : {
+      "comment" : "A label for a button that scrolls to the previous year.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorheriges Jahr"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Année précédente"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorig jaar"
+          }
+        }
+      }
+    },
     "Price" : {
       "comment" : "A label describing the price of an item.",
       "isCommentAutoGenerated" : true,
@@ -26709,7 +28187,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oppervlaktepauze herberekenen"
+            "value" : "Oppervlakte-intervallen herberekenen"
           }
         }
       }
@@ -26737,7 +28215,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oppervlaktepauze herberekenen?"
+            "value" : "Oppervlakte-intervallen herberekenen?"
           }
         }
       }
@@ -26826,6 +28304,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recente duiken"
+          }
+        }
+      }
+    },
+    "Recently synced" : {
+      "comment" : "A description of the state of the user's iCloud sync.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kürzlich synchronisiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récemment synchronisé"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent gesynchroniseerd"
           }
         }
       }
@@ -27061,6 +28563,29 @@
         }
       }
     },
+    "Remove %@" : {
+      "comment" : "Accessibility label for a button that removes a filter chip, naming the specific value it removes",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ verwijderen"
+          }
+        }
+      }
+    },
     "Remove %@ (%@) from known devices? The next sync will re-download all dives from this computer." : {
       "localizations" : {
         "de" : {
@@ -27205,6 +28730,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verwijder foto"
+          }
+        }
+      }
+    },
+    "Remove Photo %lld" : {
+      "comment" : "Accessibility label for a button that removes one photo, naming its position in the photo strip",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto %lld entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la photo %lld"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder foto %lld"
+          }
+        }
+      }
+    },
+    "Remove Tank" : {
+      "comment" : "A button that removes the currently selected tank.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flasche entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer le cylindre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tank verwijderen"
           }
         }
       }
@@ -27418,6 +28990,100 @@
         }
       }
     },
+    "Replace" : {
+      "comment" : "The text of a button that replaces the existing coordinates with the pinned location.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersetzen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vervangen"
+          }
+        }
+      }
+    },
+    "Replace Coordinates" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koordinaten ersetzen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer les coordonnées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coördinaten vervangen"
+          }
+        }
+      }
+    },
+    "Replace Exit Coordinates" : {
+      "comment" : "A title for a confirmation alert that replaces the exit coordinates with the entry coordinates.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausstiegskoordinaten ersetzen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer les coordonnées de sortie"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitstapcoördinaten vervangen"
+          }
+        }
+      }
+    },
+    "Rescan" : {
+      "comment" : "A button that triggers a new scan.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneut scannen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle analyse"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opnieuw scannen"
+          }
+        }
+      }
+    },
     "Reserve Gas" : {
       "localizations" : {
         "de" : {
@@ -27617,35 +29283,6 @@
         }
       }
     },
-    "Reset %lld filters & sort" : {
-      "comment" : "Reset button label when both multiple filters and sort order are active.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Filter und Sortierung zurücksetzen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reset %lld filters & sort"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Réinitialiser %lld filtres et le tri"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld filters & sortering resetten"
-          }
-        }
-      }
-    },
     "Reset 1 filter" : {
       "comment" : "Reset button label when exactly one filter is active.",
       "localizations" : {
@@ -27671,35 +29308,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 filter resetten"
-          }
-        }
-      }
-    },
-    "Reset 1 filter & sort" : {
-      "comment" : "Reset button label when exactly one filter and sort order are both active.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 Filter und Sortierung zurücksetzen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reset 1 filter & sort"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Réinitialiser 1 filtre et le tri"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 filter & sortering resetten"
           }
         }
       }
@@ -27790,35 +29398,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voorkeuren opnieuw instellen?"
-          }
-        }
-      }
-    },
-    "Reset sort" : {
-      "comment" : "Reset button label when only the sort order is changed",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sortierung zurücksetzen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reset sort"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Réinitialiser le tri"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reset sortering"
           }
         }
       }
@@ -27991,6 +29570,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zet alle voorkeuren terug naar hun standaardwaarden."
+          }
+        }
+      }
+    },
+    "Reverses the sort direction" : {
+      "comment" : "A hint for the user that explains what happens when they tap the \"Reverses the sort direction\" button.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kehrt die Sortierrichtung um"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inverse le sens du tri"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keert de sorteerrichting om"
           }
         }
       }
@@ -28574,6 +30177,28 @@
         }
       }
     },
+    "Same as Entry" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wie beim Einstieg"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identique à l'entrée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zelfde als instapplaats"
+          }
+        }
+      }
+    },
     "Same date, depth and duration" : {
       "comment" : "Duplicate match reason: heuristic match on date, depth and duration",
       "localizations" : {
@@ -28778,32 +30403,26 @@
         }
       }
     },
-    "Satellite View" : {
-      "comment" : "The title for a map style option that shows satellite images.",
+    "Satellite" : {
+      "comment" : "A map view showing the world from above.",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Satellitenansicht"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Satellite View"
+            "value" : "Satellit"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vue satellite"
+            "value" : "Satellite"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Satellietweergave"
+            "value" : "Satelliet"
           }
         }
       }
@@ -30365,6 +31984,30 @@
         }
       }
     },
+    "Service Due Soon" : {
+      "comment" : "A label describing a service that is due in the near future.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartung bald fällig"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entretien bientôt requis"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderhoud binnenkort nodig"
+          }
+        }
+      }
+    },
     "SERVICE DUE SOON" : {
       "localizations" : {
         "de" : {
@@ -30389,6 +32032,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ONDERHOUD NODIG OP KORTE TERMIJN"
+          }
+        }
+      }
+    },
+    "Service Overdue" : {
+      "comment" : "A label describing a service that is overdue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartung überfällig"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entretien en retard"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderhoud achterstallig"
           }
         }
       }
@@ -30596,6 +32263,54 @@
         }
       }
     },
+    "Set Entry Coordinates" : {
+      "comment" : "Title of the coordinate picker for setting the entry coordinates.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstiegskoordinaten festlegen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Définir les coordonnées d'entrée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instapcoördinaten instellen"
+          }
+        }
+      }
+    },
+    "Set Exit Coordinates" : {
+      "comment" : "Title of the screen to set the exit coordinates.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausstiegskoordinaten festlegen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Définir les coordonnées de sortie"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitstapcoördinaten instellen"
+          }
+        }
+      }
+    },
     "Settings" : {
       "comment" : "The title of the settings screen.",
       "isCommentAutoGenerated" : true,
@@ -30680,6 +32395,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kortste"
+          }
+        }
+      }
+    },
+    "Show All Divers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Taucher anzeigen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher tous les plongeurs"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toon alle duikers"
           }
         }
       }
@@ -31579,6 +33316,30 @@
         }
       }
     },
+    "Sorts dives by this field" : {
+      "comment" : "A hint for the user that describes the purpose of this button.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sortiert die Tauchgänge nach diesem Feld"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trie les plongées selon ce champ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sorteert duiken op dit veld"
+          }
+        }
+      }
+    },
     "Species" : {
       "localizations" : {
         "de" : {
@@ -31637,32 +33398,26 @@
         }
       }
     },
-    "Standard Map" : {
-      "comment" : "A map style option that displays a standard map view.",
+    "Standard" : {
+      "comment" : "The label for the standard map style.",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Standardkarte"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Standard Map"
+            "value" : "Standard"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Carte standard"
+            "value" : "Standard"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Standaardkaart"
+            "value" : "Standaard"
           }
         }
       }
@@ -31900,6 +33655,51 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Staal"
+          }
+        }
+      }
+    },
+    "Stop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopp"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palier"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop"
+          }
+        }
+      }
+    },
+    "Stop %1$@ · %2$@" : {
+      "comment" : "Tooltip sub-row naming the next mandatory decompression stop in the dive chart; %1$@ is the stop depth with unit symbol, %2$@ is the stop duration e.g. '5min'",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopp %1$@ · %2$@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palier %1$@ · %2$@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop %1$@ · %2$@"
           }
         }
       }
@@ -32456,6 +34256,30 @@
         }
       }
     },
+    "Sync error" : {
+      "comment" : "A description of a sync error.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisierungsfehler"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erreur de synchronisation"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisatiefout"
+          }
+        }
+      }
+    },
     "Sync Error" : {
       "comment" : "A label displayed in the iCloud sync status sheet when a CloudKit sync error has occurred.",
       "localizations" : {
@@ -32626,6 +34450,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Laatste synchronisatie: %@"
+          }
+        }
+      }
+    },
+    "Syncing" : {
+      "comment" : "A description of the sync process.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird synchronisiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation en cours"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchroniseren"
           }
         }
       }
@@ -33528,6 +35376,30 @@
         }
       }
     },
+    "The date defaults to the most recent dive in your logbook, or one year ago if your logbook is empty. The limit applies to a single sync and is never remembered: once a computer is known, the sync bookmark fetches only new dives on its own, so a saved date limit could silently hide dives later." : {
+      "comment" : "A description of the date limit for Dive Computer Sync.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Datum wird standardmäßig auf den zuletzt erfassten Tauchgang in deinem Logbuch gesetzt, oder auf ein Jahr zuvor, wenn dein Logbuch leer ist. Die Begrenzung gilt nur für eine einzelne Synchronisierung und wird nie gespeichert: Sobald ein Computer bekannt ist, ruft das Sync-Lesezeichen von selbst nur neue Tauchgänge ab, sodass eine gespeicherte Datumsbegrenzung später unbemerkt Tauchgänge verbergen könnte."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La date correspond par défaut à la plongée la plus récente de votre carnet, ou à un an en arrière si votre carnet est vide. La limite s'applique à une seule synchronisation et n'est jamais mémorisée : une fois l'ordinateur reconnu, le repère de synchronisation ne récupère que les nouvelles plongées de lui-même, donc une limite de date enregistrée pourrait masquer silencieusement des plongées plus tard."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De datum wordt standaard ingesteld op de meest recente duik in je logboek, of op één jaar geleden als je logboek leeg is. De limiet geldt voor één synchronisatie en wordt nooit onthouden: zodra een computer bekend is, haalt de synchronisatiebladwijzer vanzelf alleen nieuwe duiken op, waardoor een opgeslagen datumlimiet later stilletjes duiken zou kunnen verbergen."
+          }
+        }
+      }
+    },
     "The file could not be read correctly." : {
       "localizations" : {
         "de" : {
@@ -33638,6 +35510,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "De werkdruk wordt gebruikt om de gascapaciteit (ft³) om te rekenen naar het werkelijke watervolume (L) voor AMV- en SAC-berekeningen. Typische waarde: 3000 PSI."
+          }
+        }
+      }
+    },
+    "The sync bookmark is saved even when every downloaded dive falls before your date, so the next sync still fetches only genuinely new dives." : {
+      "comment" : "The text above the sync bookmark.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Sync-Lesezeichen wird auch dann gespeichert, wenn alle heruntergeladenen Tauchgänge vor deinem Datum liegen, sodass die nächste Synchronisierung weiterhin nur wirklich neue Tauchgänge abruft."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le repère de synchronisation est enregistré même si toutes les plongées téléchargées sont antérieures à votre date, afin que la prochaine synchronisation ne récupère que les plongées réellement nouvelles."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De synchronisatiebladwijzer wordt opgeslagen, zelfs als alle gedownloade duiken vóór je datum vallen, zodat de volgende synchronisatie alleen echt nieuwe duiken ophaalt."
           }
         }
       }
@@ -33786,6 +35682,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deze drempelwaarden dienen als richtlijn voor dieptelimieten en gaskeuze bij technisch duiken (Anthony & Mitchell, 2016)."
+          }
+        }
+      }
+    },
+    "They were downloaded from your dive computer, then discarded because they were recorded before %@." : {
+      "comment" : "Explanation in the Bluetooth sync results for dives discarded by the import cutoff date. %@ is the cutoff date.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie wurden von deinem Tauchcomputer heruntergeladen und dann verworfen, weil sie vor dem %@ aufgezeichnet wurden."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elles ont été téléchargées depuis votre ordinateur de plongée, puis rejetées car elles ont été enregistrées avant le %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ze zijn gedownload van je duikcomputer en vervolgens verwijderd omdat ze zijn vastgelegd vóór %@."
           }
         }
       }
@@ -34055,6 +35974,52 @@
         }
       }
     },
+    "This will replace the existing coordinates with the pinned location." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dadurch werden die vorhandenen Koordinaten durch den markierten Standort ersetzt."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cela remplacera les coordonnées existantes par l'emplacement épinglé."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiermee worden de bestaande coördinaten vervangen door de vastgezette locatie."
+          }
+        }
+      }
+    },
+    "This will replace the existing exit coordinates with the entry coordinates." : {
+      "comment" : "The body of an alert that appears when the user tries to set the exit coordinates to match the entry coordinates.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dadurch werden die vorhandenen Ausstiegskoordinaten durch die Einstiegskoordinaten ersetzt."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cela remplacera les coordonnées de sortie existantes par les coordonnées d'entrée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiermee worden de bestaande uitstapcoördinaten vervangen door de instapcoördinaten."
+          }
+        }
+      }
+    },
     "This will update the surface interval for all dives based on each diver's previous dive. Dives without a diver name will not be affected." : {
       "localizations" : {
         "de" : {
@@ -34078,7 +36043,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hierdoor wordt de oppervlaktepauze voor alle duiken bijgewerkt op basis van de vorige duik van elke duiker. Duiklogs zonder naam van een duiker blijven hierdoor ongewijzigd."
+            "value" : "Hierdoor wordt het oppervlakte-interval voor alle duiken bijgewerkt op basis van de vorige duik van elke duiker. Duiklogs zonder naam van een duiker blijven hierdoor ongewijzigd."
           }
         }
       }
@@ -37328,6 +39293,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanneer deze optie is ingeschakeld worden duiknummers en oppervlakte-intervallen automatisch herberekend wanneer je een duik toevoegt, verwijdert, verplaatst of de datum ervan wijzigt. Schakel dit uit om ze alleen met de knoppen hierboven bij te werken."
+          }
+        }
+      }
+    },
+    "When on, the orange diamond markers are hidden for mandatory decompression stops that your dive computer cleared earlier than expected, before you reached that depth. This applies to the dive profile chart and to the PDF logbook." : {
+      "comment" : "The description of the dive profile settings.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn aktiviert, werden die orangefarbenen Rautenmarkierungen für Pflichtstopps ausgeblendet, die Ihr Tauchcomputer bereits früher als erwartet erledigt hat, bevor Sie diese Tiefe erreicht haben. Dies gilt für das Tauchprofildiagramm und das PDF-Logbuch."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsque cette option est activée, les losanges orange ne sont pas affichés pour les paliers de décompression obligatoires que votre ordinateur de plongée a résolus plus tôt que prévu, avant que vous n'atteigniez cette profondeur. Ceci s'applique au graphique du profil de plongée et au carnet de plongée PDF."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indien ingeschakeld, worden de oranje ruitmarkeringen verborgen voor verplichte stops die uw duikcomputer eerder dan verwacht heeft voltooid, voordat u die diepte bereikte. Dit is van toepassing op de duikprofielgrafiek en op het PDF-logboek."
           }
         }
       }

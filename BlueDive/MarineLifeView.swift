@@ -3,9 +3,6 @@ import SwiftData
 
 struct MarineLifeView: View {
     @Environment(DiveStore.self) private var store
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
@@ -32,7 +29,6 @@ struct MarineLifeView: View {
         let quantityCounts: [SightingQuantity: Int]  // times each range was recorded
     }
 
-    private var uniqueDivers: [String] { DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances) }
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
     private var numberMap: [PersistentIdentifier: Int] {
         let total = store.dives.count
@@ -139,8 +135,8 @@ struct MarineLifeView: View {
             Group {
                 if !store.dives.isEmpty && !selectedDiver.isEmpty && filteredDives.isEmpty {
                     NoEntriesForDiverView(
-                        title: "No Dives for Diver",
-                        description: "No dives were found for the selected diver."
+                        title: DiverFilter.noDivesTitle(for: selectedDiver),
+                        description: DiverFilter.noDivesDescription(for: selectedDiver)
                     )
                 } else if !statsReady {
                     ProgressView()
@@ -165,11 +161,10 @@ struct MarineLifeView: View {
             .frame(minWidth: 600, idealWidth: 750, maxWidth: 1000, minHeight: 500, idealHeight: 700, maxHeight: 900)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             }
             .background(Color.platformBackground.ignoresSafeArea())
             .task(id: "\(store.dives.count):\(totalSightingsCount):\(sightingCountsHash):\(selectedDiver)") {
@@ -181,7 +176,7 @@ struct MarineLifeView: View {
                     appeared = true
                 }
             }
-            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             .sheet(item: $selectedSpecies) { species in
                 SpeciesDivesSheet(
                     speciesName: species.name,
@@ -228,6 +223,7 @@ struct MarineLifeView: View {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: "list.bullet")
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
                 Text("All Species")
                     .font(.headline)
                 Spacer()
@@ -244,6 +240,7 @@ struct MarineLifeView: View {
                     Image(systemName: "fish")
                         .font(.largeTitle)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     Text("No marine life recorded")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -255,6 +252,7 @@ struct MarineLifeView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
                         .frame(width: 20)
+                        .accessibilityHidden(true)
                     TextField(
                         NSLocalizedString(
                             "Search marine life…",
@@ -270,6 +268,8 @@ struct MarineLifeView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
+                                .clearButtonTapTarget()
+                                .accessibilityLabel(Text("Clear"))
                         }
                         .buttonStyle(.plain)
                     }
@@ -335,6 +335,7 @@ struct MarineLifeView: View {
                 Image(systemName: "fish.fill")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(index == 0 ? .primary : .secondary)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -378,10 +379,12 @@ struct MarineLifeView: View {
             Image(systemName: "chevron.right")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -426,6 +429,7 @@ struct SpeciesDivesSheet: View {
                                 Image(systemName: "chevron.right")
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
+                                    .accessibilityHidden(true)
                             }
                             .padding(12)
                             .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformSecondaryBackground.opacity(0.6)))
@@ -444,9 +448,8 @@ struct SpeciesDivesSheet: View {
             #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.cyan)
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
                 }
             }
         }

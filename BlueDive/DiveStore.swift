@@ -2,27 +2,112 @@ import SwiftUI
 import SwiftData
 import WidgetKit
 
-// MARK: - DiveSortOrder
+// MARK: - Dive Sorting
 
-enum DiveSortOrder: String, CaseIterable, Identifiable {
-    case dateDesc       = "dateDesc"
-    case dateAsc        = "dateAsc"
-    case depthDesc      = "depthDesc"
-    case durationDesc   = "durationDesc"
-    case diveNumberDesc = "diveNumberDesc"
-    case diveNumberAsc  = "diveNumberAsc"
+/// The field the dive list is sorted by. Direction is a separate axis
+/// (`DiveSortDirection`) so every field supports both orders — see issue #77.
+///
+/// Warning: these raw values are persisted `UserDefaults` identifiers (see
+/// `DiveSortOrder.persisted`), not display strings — never rename one, or every
+/// existing user's saved sort order silently resets to the default on next launch.
+enum DiveSortField: String, CaseIterable, Identifiable {
+    case date       = "date"
+    case depth      = "depth"
+    case duration   = "duration"
+    case diveNumber = "diveNumber"
 
     var id: String { rawValue }
 
     var localizedTitle: LocalizedStringKey {
         switch self {
-        case .dateDesc:       return "Date ↓"
-        case .dateAsc:        return "Date ↑"
-        case .depthDesc:      return "Depth ↓"
-        case .durationDesc:   return "Duration ↓"
-        case .diveNumberDesc: return "Dive # ↓"
-        case .diveNumberAsc:  return "Dive # ↑"
+        case .date:       return "Date"
+        case .depth:      return "Depth"
+        case .duration:   return "Duration"
+        case .diveNumber: return "Dive #"
         }
+    }
+
+    /// The direction a field starts in when it is newly selected. Descending for every
+    /// field, which reproduces the pre-toggle defaults exactly: newest, deepest,
+    /// longest and highest-numbered first.
+    var defaultDirection: DiveSortDirection { .descending }
+}
+
+/// Warning: these raw values are persisted `UserDefaults` identifiers (see
+/// `DiveSortOrder.persisted`), not display strings — never rename one, or every
+/// existing user's saved sort order silently resets to the default on next launch.
+enum DiveSortDirection: String, CaseIterable {
+    case ascending  = "Asc"
+    case descending = "Desc"
+
+    mutating func toggle() {
+        self = (self == .ascending) ? .descending : .ascending
+    }
+}
+
+/// A sort field paired with a direction.
+///
+/// Deliberately a struct rather than one enum case per field/direction combination:
+/// adding a field does not double the case count, the filter sheet can render one
+/// toggleable row per field, and reversing is `direction.toggle()` rather than an
+/// 8-entry mapping table. It must stay a *struct* — as a class, an in-place
+/// `direction` mutation would not reassign `DiveStore.sortOrder` and `@Observable`
+/// would never notify `ContentView`'s `onChange(of: store.sortOrder)`. Never
+/// hand-write `==` — the synthesized memberwise version comparing both `field` and
+/// `direction` is what keeps the date-descending fast path (below) from firing for
+/// any other order.
+struct DiveSortOrder: Equatable, Hashable {
+    var field: DiveSortField
+    var direction: DiveSortDirection
+
+    // Named to match the previous enum's cases. In practice only `.dateDesc` has
+    // an existing call site (`= .dateDesc`, `== .dateDesc`, `.constant(.dateDesc)`)
+    // — the rest are kept as convenience constants for the other seven
+    // field/direction combinations, e.g. for future direct construction or tests.
+    static let dateDesc       = DiveSortOrder(field: .date,       direction: .descending)
+    static let dateAsc        = DiveSortOrder(field: .date,       direction: .ascending)
+    static let depthDesc      = DiveSortOrder(field: .depth,      direction: .descending)
+    static let depthAsc       = DiveSortOrder(field: .depth,      direction: .ascending)
+    static let durationDesc   = DiveSortOrder(field: .duration,   direction: .descending)
+    static let durationAsc    = DiveSortOrder(field: .duration,   direction: .ascending)
+    static let diveNumberDesc = DiveSortOrder(field: .diveNumber, direction: .descending)
+    static let diveNumberAsc  = DiveSortOrder(field: .diveNumber, direction: .ascending)
+}
+
+// MARK: - Dive Sort Persistence
+
+extension DiveSortOrder {
+    // The `UserDefaults` keys the dive list's sort field and direction are persisted under.
+    private static let fieldDefaultsKey     = "diveListSortField"
+    private static let directionDefaultsKey = "diveListSortDirection"
+
+    /// Loads the persisted sort order, falling back to the date-descending default when
+    /// no value has ever been saved (fresh install) or a saved value fails to decode.
+    static var persisted: DiveSortOrder {
+        let defaults = UserDefaults.standard
+        // The direction is only meaningful paired with the field it was saved alongside.
+        // If the field is missing or fails to decode, ignore any leftover direction and
+        // fall back to the date-descending default as a unit.
+        guard let field = DiveSortField(rawValue: defaults.string(forKey: fieldDefaultsKey) ?? "") else {
+            return .dateDesc
+        }
+        let direction = DiveSortDirection(rawValue: defaults.string(forKey: directionDefaultsKey) ?? "") ?? field.defaultDirection
+        return DiveSortOrder(field: field, direction: direction)
+    }
+
+    func persist() {
+        let defaults = UserDefaults.standard
+        defaults.set(field.rawValue, forKey: Self.fieldDefaultsKey)
+        defaults.set(direction.rawValue, forKey: Self.directionDefaultsKey)
+    }
+
+    /// Clears the persisted sort order so the next `persisted` read falls back to
+    /// `.dateDesc`. Used by `UserPreferences.resetToDefaults()`, which has no handle
+    /// to the live `DiveStore` and so cannot assign `sortOrder` directly.
+    static func resetPersisted() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: fieldDefaultsKey)
+        defaults.removeObject(forKey: directionDefaultsKey)
     }
 }
 
@@ -49,7 +134,9 @@ final class DiveStore {
     var filterTag: String? = nil
     var filterMarineLife: [String] = []
     var filterMarineLifeMode: FilterMarineLifeMode = .any
-    var sortOrder: DiveSortOrder = .dateDesc
+    var sortOrder: DiveSortOrder = .persisted {
+        didSet { sortOrder.persist() }
+    }
 
     // MARK: - Derived / Cached State
     private(set) var dives: [Dive] = []
@@ -58,7 +145,6 @@ final class DiveStore {
     private(set) var cachedShowGrouped: Bool = false
     private(set) var cachedGroupedDives: [(key: String, value: [Dive])] = []
     private(set) var cachedUniqueDivers: [String] = []
-    private(set) var cachedHasUnnamedDives: Bool = false
     private(set) var cachedWidgetFingerprint: Int = 0
     private(set) var hasCacheBuilt: Bool = false
     private(set) var cachedDivesWithFish: Set<UUID> = []
@@ -71,8 +157,18 @@ final class DiveStore {
     private(set) var cachedAvailableTags: [String] = []
     private(set) var cachedAvailableMarineLife: [String] = []
     private var cachedInsurances: [DivingInsurance] = []
+    private var cachedGear: [Gear] = []
+    private var cachedCertifications: [Certification] = []
     private var cachedMarineSights: [MarineSight] = []
     private var cachedSelectedDiver: String = ""
+    /// The trimmed searchText value actually applied to cachedFilteredSummaries as of the
+    /// last rebuildFilteredDives call — lags live searchText by up to scheduleSearchRebuild's
+    /// 150ms debounce. Sibling of cachedSelectedDiver above: both are "last value actually
+    /// applied," synced together in rebuildFilteredDives. Views deciding what empty-state to
+    /// show must check this, not searchText directly, or they can render a state describing
+    /// search results that haven't been computed yet (e.g. a diver-specific empty state while
+    /// a stale search is still applied).
+    private(set) var appliedSearchText: String = ""
 
     // MARK: - Summary Cache
     private(set) var cachedSummaries: [DiveSummary] = []
@@ -103,6 +199,8 @@ final class DiveStore {
 
     // MARK: - Filter Reset
 
+    // Resets only the filter criteria — sort order is a durable, persisted preference
+    // and is deliberately left untouched here.
     func resetFilters() {
         filterYear           = nil
         filterYearNegate     = false
@@ -118,7 +216,6 @@ final class DiveStore {
         filterTag            = nil
         filterMarineLife     = []
         filterMarineLifeMode = .any
-        sortOrder            = .dateDesc
     }
 
     // MARK: - Commit
@@ -134,13 +231,14 @@ final class DiveStore {
         switch scope {
         case .list:
             // Bypass the debounce so a timestamp/depth/dive-number edit reorders the list
-            // immediately. scheduleRebuild(force:true) is cancelled within its 50ms window
-            // by the @Query re-delivery that fires force:false — which then short-circuits
-            // on matching IDs and never runs, leaving the list in the wrong order.
+            // immediately. A debounced rebuild would be cancelled within its 50ms window by
+            // the @Query re-delivery this edit triggers, and that re-delivery's own scheduled
+            // rebuild then short-circuits on matching IDs and never runs, leaving the list in
+            // the wrong order.
             rebuildTask?.cancel()
             rebuildTask = nil
             let sortedDives = dives.sorted { $0.timestamp > $1.timestamp }
-            rebuildDerivedDiveState(dives: sortedDives, allInsurances: cachedInsurances,
+            rebuildDerivedDiveState(dives: sortedDives,
                                     allMarineSights: cachedMarineSights,
                                     selectedDiver: cachedSelectedDiver)
         case .rowBadges:
@@ -179,11 +277,11 @@ final class DiveStore {
 
     func commitListRebuild() {
         // Same synchronous bypass as commit(.list) — avoids the debounce-cancellation race
-        // where a @Query re-delivery kills the force:true task before it runs.
+        // where a @Query re-delivery kills the pending debounced rebuild before it runs.
         rebuildTask?.cancel()
         rebuildTask = nil
         let sortedDives = dives.sorted { $0.timestamp > $1.timestamp }
-        rebuildDerivedDiveState(dives: sortedDives, allInsurances: cachedInsurances,
+        rebuildDerivedDiveState(dives: sortedDives,
                                 allMarineSights: cachedMarineSights,
                                 selectedDiver: cachedSelectedDiver)
     }
@@ -262,26 +360,23 @@ final class DiveStore {
     // MARK: - Pipeline
 
     // Coalesces rapid-fire triggers into a single rebuild after a 50ms quiet period.
-    // When force=false, skips the rebuild if dive membership is unchanged — this suppresses
-    // spurious @Query re-deliveries that fire when edit sheets open/close without modifying data.
-    // force=true is required when dive IDs are stable but data changed (field-level saves, insurance changes).
+    // Skips the rebuild if dive membership is unchanged — this suppresses spurious @Query
+    // re-deliveries that fire when edit sheets open/close without modifying data. Field-level
+    // dive edits (site, conditions, gas, etc.) go through commit(_:affects: .rowFields) instead
+    // and never reach this debounce at all, so an unconditional membership check is always correct here.
     func scheduleRebuild(
         dives: [Dive],
-        allInsurances: [DivingInsurance],
         allMarineSights: [MarineSight],
-        selectedDiver: String,
-        force: Bool = false
+        selectedDiver: String
     ) {
         rebuildTask?.cancel()
         rebuildTask = Task { @MainActor [weak self] in
             guard let self else { return }
             try? await Task.sleep(for: .milliseconds(50))
             guard !Task.isCancelled else { return }
-            if !force {
-                let currentIDs = Set(dives.map { $0.id })
-                guard currentIDs != self.lastPhotoSweepDiveIDs else { return }
-            }
-            self.rebuildDerivedDiveState(dives: dives, allInsurances: allInsurances, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
+            let currentIDs = Set(dives.map { $0.id })
+            guard currentIDs != self.lastPhotoSweepDiveIDs else { return }
+            self.rebuildDerivedDiveState(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
         }
     }
 
@@ -298,18 +393,15 @@ final class DiveStore {
 
     func rebuildDerivedDiveState(
         dives: [Dive],
-        allInsurances: [DivingInsurance],
         allMarineSights: [MarineSight],
         selectedDiver: String
     ) {
         self.dives = dives
-        self.cachedInsurances = allInsurances
         self.cachedSelectedDiver = selectedDiver
         self.cachedMarineSights = allMarineSights
         // Phase 1 — Fast synchronous work on MainActor. Must complete before returning
         // so callers see a consistent index and filtered list immediately.
-        cachedUniqueDivers = DiverFilter.uniqueDivers(in: dives, insurances: allInsurances)
-        cachedHasUnnamedDives = dives.contains { $0.diverName.trimmingCharacters(in: .whitespaces).isEmpty }
+        recomputeUniqueDivers()
 
         // diveIndexLookup maps dive.id → position in the timestamp-sorted @Query array. A timestamp
         // edit reorders the array without changing IDs, so this must be rebuilt on every pass (not
@@ -395,6 +487,37 @@ final class DiveStore {
         }
     }
 
+    // Diver-name sources — see updateDiverSources below.
+    /// Refreshes ONLY the cached diver-name list from the non-Dive sources.
+    ///
+    /// Deliberately bypasses scheduleRebuild()/rebuildDerivedDiveState(): a gear,
+    /// certification or insurance edit cannot change dive order, row fields or row
+    /// badges, so routing it through the full pipeline would rebuild every
+    /// DiveSummary (10 000+ dives) to refresh a name list. This replaces the per-screen
+    /// copies of the same narrow refresh (formerly DiveMapView.rebuildUniqueDivers(),
+    /// among others) for every screen whose gear/cert/insurance queries existed only to
+    /// feed the picker. DocumentsView, GearListView and DiverProfileView still compute
+    /// uniqueDivers locally — they already own those queries for their primary content.
+    func updateDiverSources(gear: [Gear], certifications: [Certification], insurances: [DivingInsurance]) {
+        cachedGear = gear
+        cachedCertifications = certifications
+        cachedInsurances = insurances
+        recomputeUniqueDivers()
+    }
+
+    private func recomputeUniqueDivers() {
+        let names = DiverFilter.uniqueDivers(
+            in: dives, gear: cachedGear,
+            certifications: cachedCertifications, insurances: cachedInsurances
+        )
+        // @Observable fires on every assignment regardless of equality. The @Query re-delivery
+        // that triggered this call already invalidated ContentView's body; this guard instead
+        // stops that no-op from propagating further downstream, to diverFilterReset's
+        // task(id: uniqueDivers) and the onChange(of: store.cachedUniqueDivers) handler that
+        // intersects collapsedDiverSections.
+        if names != cachedUniqueDivers { cachedUniqueDivers = names }
+    }
+
     // Recomputes only the filter-sheet option lists. Called both from
     // rebuildDerivedDiveState() and lazily when the filter sheet is about to open,
     // so that in-place edits (marine life, country, tags) are reflected immediately.
@@ -468,11 +591,12 @@ final class DiveStore {
         // Keep cachedSelectedDiver in sync on every call path — not just when routed through
         // rebuildDerivedDiveState. Direct calls from onChange(of: selectedDiver) / sort /
         // filter handlers would otherwise leave it stale, causing commit(.list) to rebuild
-        // with the wrong diver scope.
+        // with the wrong diver scope. appliedSearchText is synced here for the same reason.
         cachedSelectedDiver = selectedDiver
+        appliedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         // Does NOT rebuild diveIndexLookup (positional dive numbers). That is intentional:
         // only timestamp edits reorder the @Query array, and those always commit(_:affects: .list)
-        // → scheduleRebuild(force:) → rebuildDerivedDiveState(), which rebuilds the lookup.
+        // → rebuildDerivedDiveState(), which rebuilds the lookup.
         // Fields committed with .rowFields (site, conditions, gas) cannot change @Query order.
         //
         // Fast path: when nothing is filtered and using the default date-desc sort, the @Query
@@ -696,16 +820,63 @@ final class DiveStore {
             return true
         }
 
-        switch sortOrder {
-        case .dateDesc:     break // @Query already delivers dives sorted by timestamp descending
-        case .dateAsc:      result.sort { $0.timestamp < $1.timestamp }
-        case .depthDesc:    result.sort { $0.displayMaxDepth > $1.displayMaxDepth }
-        case .durationDesc: result.sort { $0.duration > $1.duration }
-        case .diveNumberDesc: result.sort { ($0.diveNumber ?? 0) > ($1.diveNumber ?? 0) }
-        case .diveNumberAsc:
-            result.sort {
-                switch ($0.diveNumber, $1.diveNumber) {
-                case let (a?, b?): return a < b
+        // Sorting. Switching on the (field, direction) tuple keeps every combination
+        // compiler-checked for exhaustiveness. `.diveNumber` collapses both
+        // directions into one arm because it shares a single nil-last comparator
+        // with a flipped `<`/`>` check. `.depth` collapses both directions for a
+        // different reason: so both share the one decorate step below.
+        switch (sortOrder.field, sortOrder.direction) {
+        case (.date, .descending):
+            break // @Query already delivers dives sorted by timestamp descending
+        case (.date, .ascending):
+            result.sort { $0.timestamp < $1.timestamp }
+
+        // Depth is compared in *display* units so the ordering matches the numbers
+        // shown in the rows, and so a library mixing metric and imperial imports
+        // orders correctly. The depth-range filter above compares displayMaxDepth
+        // for the same reason. Decorate-sort-undecorate: displayMaxDepth is a
+        // computed property (unit conversion plus a UserPreferences read), so it's
+        // evaluated once per dive here rather than repeatedly inside the comparator.
+        case (.depth, let direction):
+            var decorated = result.map { ($0, $0.displayMaxDepth) }
+            switch direction {
+            case .descending:
+                decorated.sort { $0.1 > $1.1 }
+            case .ascending:
+                // maxDepth is a non-optional Double defaulting to 0 for dives with
+                // no recorded depth — treat 0 as "unrecorded" and sort those last,
+                // matching the diveNumber policy below, so they don't bury real
+                // shallow dives.
+                decorated.sort { lhs, rhs in
+                    switch (lhs.1 == 0, rhs.1 == 0) {
+                    case (false, false): return lhs.1 < rhs.1
+                    case (true, false):  return false
+                    case (false, true):  return true
+                    case (true, true):   return false
+                    }
+                }
+            }
+            result = decorated.map { $0.0 }
+
+        case (.duration, .descending):
+            result.sort { $0.duration > $1.duration }
+        case (.duration, .ascending):
+            // Same "0 means unrecorded, sort last" policy as depth ascending above.
+            result.sort { lhs, rhs in
+                switch (lhs.duration == 0, rhs.duration == 0) {
+                case (false, false): return lhs.duration < rhs.duration
+                case (true, false):  return false
+                case (false, true):  return true
+                case (true, true):   return false
+                }
+            }
+
+        // Dives without a dive number sort last in *both* directions, so the
+        // unnumbered tail never splits the numbered run.
+        case (.diveNumber, let direction):
+            result.sort { lhs, rhs in
+                switch (lhs.diveNumber, rhs.diveNumber) {
+                case let (a?, b?): return direction == .ascending ? a < b : a > b
                 case (_?, nil):    return true
                 case (nil, _?):    return false
                 case (nil, nil):   return false
@@ -764,7 +935,7 @@ final class DiveStore {
             hasher.combine(dive.timestamp.timeIntervalSince1970.bitPattern)
 
             if dive.hasFish { withFish.insert(dive.id) }
-            for name in dive.seenFishNames { marineLifeSet.insert(name) }
+            for name in dive.seenFishNames where !name.isEmpty { marineLifeSet.insert(name) }
 
             yearSet.insert(dive.year)
             if !dive.gasType.isEmpty { gasTypeSet.insert(dive.gasType) }

@@ -48,12 +48,15 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
     let tankPressure: Double? // Tank pressure in bar (single / primary tank)
     let tankPressures: [Int: Double]? // Per-tank pressure readings {tankIndex: bar}
     let ndl: Double? // No Decompression Limit in minutes
+    let ceilingDepth: Double? // Reported decompression ceiling in importDistanceUnit (feet or meters, as imported); nil when no mandatory obligation
+    let ceilingTime: Double? // Reported time remaining required at the current ceiling, in minutes; nil when no mandatory obligation
+    let cns: Double? // CNS oxygen-toxicity load reported by the dive computer at this sample, as a percentage 0-100; nil when the source does not report it per sample
     let ppo2: Double? // Oxygen partial pressure in bar (voted/representative)
     let sensorPPO2: [Int: Double]? // Per-O2-sensor PPO2 {sensorIndex: bar}; nil for non-CCR/legacy
     let events: [DiveProfileEvent] // Events at this profile point
     let currentGas: Int? // Active tank index at this point (index into Dive.tanks)
 
-    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
+    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
         self.id = id
         self.time = time
         self.depth = depth
@@ -61,6 +64,9 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         self.tankPressure = tankPressure
         self.tankPressures = tankPressures
         self.ndl = ndl
+        self.ceilingDepth = ceilingDepth
+        self.ceilingTime = ceilingTime
+        self.cns = cns
         self.ppo2 = ppo2
         self.sensorPPO2 = sensorPPO2
         self.events = events
@@ -81,6 +87,9 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         // Derive tankPressure from per-tank dict (tank 0 / lowest index) when available
         tankPressure = perTank.flatMap { $0[0] ?? $0.min(by: { $0.key < $1.key })?.value } ?? storedPressure
         ndl = try container.decodeIfPresent(Double.self, forKey: .ndl)
+        ceilingDepth = try container.decodeIfPresent(Double.self, forKey: .ceilingDepth)
+        ceilingTime = try container.decodeIfPresent(Double.self, forKey: .ceilingTime)
+        cns = try container.decodeIfPresent(Double.self, forKey: .cns)
         ppo2 = try container.decodeIfPresent(Double.self, forKey: .ppo2)
         sensorPPO2 = try container.decodeIfPresent([Int: Double].self, forKey: .sensorPPO2)
         events = (try? container.decode([DiveProfileEvent].self, forKey: .events)) ?? []

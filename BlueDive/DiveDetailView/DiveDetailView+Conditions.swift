@@ -1,5 +1,55 @@
 import SwiftUI
 
+// MARK: - Condition Row
+
+/// A labelled icon/value row used across the Conditions, Gas, and Site Details tabs.
+///
+/// This used to be a plain function (`conditionRow(icon:color:label:value:)`) that inlined
+/// its HStack/ZStack/VStack tree at every call site. `gazTabContent` alone calls it 15+
+/// times across four sibling card properties combined in one VStack — the same class of
+/// bug that caused an `EXC_BAD_ACCESS` crash in `DiveDetailView+MenuTab.swift` (10 chained
+/// `.tapTargetInsets(...)` modifier sites overflowed the stack during Swift's runtime
+/// value-witness copy of the resulting deeply-nested anonymous type). Packaging this as a
+/// nominal struct — the same fix used there — stops each call's internal complexity at its
+/// own `body`'s boundary instead of letting it inline into the combined tab's compound type.
+struct ConditionRow: View {
+    let icon: String
+    let color: Color
+    let label: LocalizedStringKey
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.2))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundStyle(color)
+                    // Purely decorative: the label/value pair below carries the meaning.
+                    // Without this, VoiceOver announces the SF Symbol's own built-in
+                    // system description first (e.g. "arrow.up.arrow.down.circle" reads
+                    // as "Sort"), which is nonsensical ahead of the real content.
+                    .accessibilityHidden(true)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(verbatim: value)
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+            }
+            Spacer()
+        }
+        // Read the row as one unit — "<label>, <value>" — instead of two separate
+        // elements. Combining keeps the label localized via its LocalizedStringKey.
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - Conditions Tab
 
 extension DiveDetailView {
@@ -13,7 +63,7 @@ extension DiveDetailView {
     var conditionsInfoCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
-                Image(systemName: "cloud.sun.fill")
+                Image(systemName: "cloud.sun")
                     .font(.title3)
                     .foregroundStyle(.yellow)
                 Text("Weather & Water Conditions")
@@ -23,7 +73,7 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            conditionRow(
+            ConditionRow(
                 icon: "thermometer.medium",
                 color: .orange,
                 label: "Surface Temp.",
@@ -31,13 +81,13 @@ extension DiveDetailView {
                     UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
                 } ?? "—"
             )
-            conditionRow(
+            ConditionRow(
                 icon: "thermometer.low",
                 color: .blue,
                 label: "Minimum Temperature",
                 value: dive.minTemperature.map { UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit) } ?? "—"
             )
-            conditionRow(
+            ConditionRow(
                 icon: "thermometer.high",
                 color: .red,
                 label: "Maximum Temp.",
@@ -47,15 +97,15 @@ extension DiveDetailView {
             )
 
             // Always display Weather field
-            conditionRow(icon: "cloud.sun.fill", color: .yellow, label: "Weather",
+            ConditionRow(icon: "cloud.sun", color: .yellow, label: "Weather",
                         value: dive.weather.map { localizedWeather($0) } ?? "—")
 
             // Always display Surface conditions field
-            conditionRow(icon: "water.waves", color: .cyan, label: "Surface",
+            ConditionRow(icon: "water.waves", color: .cyan, label: "Surface",
                         value: dive.surfaceConditions.map { localizedSurface($0) } ?? "—")
 
             // Always display Current field
-            conditionRow(icon: "wind", color: .teal, label: "Current",
+            ConditionRow(icon: "wind", color: .teal, label: "Current",
                         value: dive.current.map { localizedCurrent($0) } ?? "—")
 
             // Always display Visibility field
@@ -65,15 +115,15 @@ extension DiveDetailView {
                     let trimmed = visibility.trimmingCharacters(in: .whitespaces)
                     return Double(trimmed) != nil ? "\(trimmed) \(depthUnit)" : trimmed
                 }()
-                conditionRow(
-                    icon: "eye.fill",
+                ConditionRow(
+                    icon: "eye",
                     color: .green,
                     label: "Visibility",
                     value: visibilityDisplay
                 )
             } else {
-                conditionRow(
-                    icon: "eye.fill",
+                ConditionRow(
+                    icon: "eye",
                     color: .green,
                     label: "Visibility",
                     value: "—"
@@ -118,26 +168,4 @@ extension DiveDetailView {
         }
     }
 
-    func conditionRow(icon: String, color: Color, label: LocalizedStringKey, value: String) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.2))
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .font(.system(size: 15))
-                    .foregroundStyle(color)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(verbatim: value)
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.primary)
-            }
-            Spacer()
-        }
-    }
 }
