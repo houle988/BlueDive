@@ -114,6 +114,25 @@ struct ContentView: View {
         .tint(.blue)
     }
 
+    #if os(macOS)
+    /// Trailing swipe-to-delete for a dive row. On iOS the List synthesizes this swipe from
+    /// `.onDelete`; macOS does not, so it is added explicitly. Uses the same confirmation as
+    /// the row's context-menu "Delete dive".
+    private func deleteSwipeButton(for summaryID: UUID) -> some View {
+        Button(role: .destructive) {
+            if let dive = store.diveByID[summaryID] {
+                diveToDeleteDirectly = dive
+                showDeleteSingleConfirmation = true
+            }
+        } label: {
+            Label("Delete dive", systemImage: "trash")
+        }
+        // Swipe actions are coloured by their tint; without this macOS uses the app's cyan
+        // accent instead of the destructive red iOS applies automatically.
+        .tint(.red)
+    }
+    #endif
+
     // MARK: - Body
     
     var body: some View {
@@ -722,6 +741,11 @@ struct ContentView: View {
                                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                         moveButton(for: summary.id)
                                     }
+                                    #if os(macOS)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        deleteSwipeButton(for: summary.id)
+                                    }
+                                    #endif
                                     .contextMenu {
                                         Button(role: .destructive) {
                                             if let dive = store.diveByID[summary.id] {
@@ -770,6 +794,11 @@ struct ContentView: View {
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 moveButton(for: summary.id)
                             }
+                            #if os(macOS)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                deleteSwipeButton(for: summary.id)
+                            }
+                            #endif
                             .contextMenu {
                                 Button(role: .destructive) {
                                     if let dive = store.diveByID[summary.id] {
@@ -864,21 +893,39 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        #if os(macOS)
+        // macOS joins toolbar controls into one Liquid Glass capsule per side only when they
+        // share a ToolbarItemGroup; a Menu in its own ToolbarItem gets a separate capsule with
+        // a ⌄ pull-down indicator. Grouping each side and hiding the indicators matches the
+        // iOS navigation bar. Each control is still a separate view, so toolbar overflow can
+        // manage them individually.
+        ToolbarItemGroup(placement: .navigation) {
+            DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver).picker
+                .toolbarMenuIndicatorHiddenOnMac()
+            settingsButton
+            cloudSyncToolbarItem
+            if showCalculatorsMenu {
+                calculatorsMenu
+                    .toolbarMenuIndicatorHiddenOnMac()
+            }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            addDiveMenu
+                .toolbarMenuIndicatorHiddenOnMac()
+            filterButton
+            moreMenu
+                .toolbarMenuIndicatorHiddenOnMac()
+        }
+        #else
         DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
 
         // ── Left: Settings + Bluetooth + Tools Menu ──────────────────────
         // On iOS use `.topBarLeading` (not `.navigation`) so these items stay
         // pinned to the leading edge; `.navigation` is re-flowed to the trailing
         // side by SwiftUI when popping back from a pushed detail view, which
-        // crams every leading button into the top-right. On macOS `.topBarLeading`
-        // maps to `.navigation` (see PlatformCompat.swift). Matches DiverFilterToolbar.
+        // crams every leading button into the top-right. Matches DiverFilterToolbar.
         ToolbarItem(placement: .topBarLeading) {
-            Button(action: { showSettings = true }) {
-                Image(systemName: "gear")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Settings")
-            .accessibilityLabel(Text("Settings"))
+            settingsButton
         }
         ToolbarItem(placement: .topBarLeading) {
             cloudSyncToolbarItem
@@ -893,81 +940,103 @@ struct ContentView: View {
         // + menu (Add/Import/Bluetooth) + Filter + overflow menu.
         // Each control is its own ToolbarItem (not a shared HStack) so the system's
         // toolbar-overflow layout can manage/overflow them independently instead of
-        // clipping the whole group when the window is narrow (e.g. a small Mac window).
+        // clipping the whole group when space is constrained.
         ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Button(action: addManualDive) {
-                    Label("Add a dive (Manual)", systemImage: "plus.circle")
-                }
-                Button(action: { showScannerSheet = true }) {
-                    Label("Add a dive (Bluetooth)", systemImage: "antenna.radiowaves.left.and.right")
-                }
-                Button(action: { showFileImporter = true }) {
-                    Label("Import", systemImage: "doc.badge.plus")
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .foregroundStyle(.cyan)
-            }
-            .accessibilityLabel(Text("Add Dive"))
+            addDiveMenu
         }
-
         ToolbarItem(placement: .primaryAction) {
-            Button(action: { store.showFilterSheet = true }) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .foregroundStyle(filterToolbarIsActive ? .orange : .cyan)
-                    if store.activeFilterCount > 0 {
-                        Text("\(store.activeFilterCount)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.black)
-                            .padding(3)
-                            .background(Color.orange, in: Circle())
-                            .offset(x: 6, y: -6)
-                    }
+            filterButton
+        }
+        ToolbarItem(placement: .primaryAction) {
+            moreMenu
+        }
+        #endif
+    }
+
+    // Main-window toolbar controls, shared by the iOS and macOS toolbar layouts above.
+
+    private var settingsButton: some View {
+        Button(action: { showSettings = true }) {
+            Image(systemName: "gear")
+                .foregroundStyle(.cyan)
+        }
+        .help("Settings")
+        .accessibilityLabel(Text("Settings"))
+    }
+
+    private var addDiveMenu: some View {
+        Menu {
+            Button(action: addManualDive) {
+                Label("Add a dive (Manual)", systemImage: "plus.circle")
+            }
+            Button(action: { showScannerSheet = true }) {
+                Label("Add a dive (Bluetooth)", systemImage: "antenna.radiowaves.left.and.right")
+            }
+            Button(action: { showFileImporter = true }) {
+                Label("Import", systemImage: "doc.badge.plus")
+            }
+        } label: {
+            Image(systemName: "plus")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Add Dive"))
+    }
+
+    private var filterButton: some View {
+        Button(action: { store.showFilterSheet = true }) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .foregroundStyle(filterToolbarIsActive ? .orange : .cyan)
+                if store.activeFilterCount > 0 {
+                    Text("\(store.activeFilterCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.black)
+                        .padding(3)
+                        .background(Color.orange, in: Circle())
+                        .offset(x: 6, y: -6)
                 }
             }
-            .accessibilityLabel(filterToolbarAccessibilityLabel)
         }
+        .accessibilityLabel(filterToolbarAccessibilityLabel)
+    }
 
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Button(action: { showProfile = true }) {
-                    Label("Profile", systemImage: "person.circle.fill")
-                }
+    private var moreMenu: some View {
+        Menu {
+            Button(action: { showProfile = true }) {
+                Label("Profile", systemImage: "person.circle.fill")
+            }
+            Divider()
+            Button(action: { showDashboard = true }) {
+                Label("Stats", systemImage: "chart.bar.fill")
+            }
+            Button(action: { showDiveTrips = true }) {
+                Label("My Trips", systemImage: "map.fill")
+            }
+            Button(action: { showCalendarHeatmap = true }) {
+                Label("Calendar", systemImage: "calendar")
+            }
+            Button(action: { showMarineLife = true }) {
+                Label("Marine Life", systemImage: "fish.fill")
+            }
+            if !dives.isEmpty {
                 Divider()
-                Button(action: { showDashboard = true }) {
-                    Label("Stats", systemImage: "chart.bar.fill")
+                Button(action: exportAllDivesToXML) {
+                    Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
                 }
-                Button(action: { showDiveTrips = true }) {
-                    Label("My Trips", systemImage: "map.fill")
+                Button(action: exportAllDivesToUDDF) {
+                    Label("Export All Dives to UDDF", systemImage: "water.waves")
                 }
-                Button(action: { showCalendarHeatmap = true }) {
-                    Label("Calendar", systemImage: "calendar")
-                }
-                Button(action: { showMarineLife = true }) {
-                    Label("Marine Life", systemImage: "fish.fill")
-                }
-                if !dives.isEmpty {
-                    Divider()
-                    Button(action: exportAllDivesToXML) {
-                        Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
-                    }
-                    Button(action: exportAllDivesToUDDF) {
-                        Label("Export All Dives to UDDF", systemImage: "water.waves")
-                    }
-                }
-                if dives.count >= 2 {
-                    Button(action: { showMergeDivesSheet = true }) {
-                        Label("Merge Dives", systemImage: "arrow.triangle.merge")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(.cyan)
             }
-            .accessibilityLabel(Text("More"))
+            if dives.count >= 2 {
+                Button(action: { showMergeDivesSheet = true }) {
+                    Label("Merge Dives", systemImage: "arrow.triangle.merge")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .foregroundStyle(.cyan)
         }
+        .accessibilityLabel(Text("More"))
     }
 
     // Tools menu extracted to a property to avoid

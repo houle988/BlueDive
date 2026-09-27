@@ -831,7 +831,7 @@ struct AddGearToDiveView: View {
     }
 
     private var gearList: some View {
-        List {
+        groupedList {
             ForEach(groupedAvailableGear, id: \.key) { category, items in
                 Section {
                     ForEach(items) { gear in

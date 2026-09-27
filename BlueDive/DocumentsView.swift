@@ -371,59 +371,23 @@ struct DocumentsView: View {
                     }
                 }
                 DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                #if os(macOS)
+                // One ToolbarItemGroup so macOS shares a single glass capsule, as the iOS
+                // navigation bar does; separate items (especially menus) get separate capsules.
+                ToolbarItemGroup(placement: .primaryAction) {
+                    addDocumentMenu
+                        .toolbarMenuIndicatorHiddenOnMac()
+                    documentsMoreMenu
+                        .toolbarMenuIndicatorHiddenOnMac()
+                }
+                #else
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button { showAddCertification = true } label: {
-                            Label("Add Certification", systemImage: "graduationcap")
-                        }
-                        Button { showAddInsurance = true } label: {
-                            Label("Add Insurance", systemImage: "shield")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .foregroundStyle(.cyan)
-                    }
-                    .accessibilityLabel(Text("Add Document"))
+                    addDocumentMenu
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Section("Certifications") {
-                            Button {
-                                exportCertificationsToXML()
-                            } label: {
-                                Label("Export", systemImage: "square.and.arrow.up")
-                            }
-                            .disabled(certifications.isEmpty)
-
-                            Button {
-                                importTarget = .certifications
-                                showImportPicker = true
-                            } label: {
-                                Label("Import", systemImage: "square.and.arrow.down")
-                            }
-                        }
-
-                        Section("Insurance") {
-                            Button {
-                                exportInsurancesToXML()
-                            } label: {
-                                Label("Export", systemImage: "square.and.arrow.up")
-                            }
-                            .disabled(insurances.isEmpty)
-
-                            Button {
-                                importTarget = .insurance
-                                showImportPicker = true
-                            } label: {
-                                Label("Import", systemImage: "square.and.arrow.down")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .foregroundStyle(.cyan)
-                    }
-                    .accessibilityLabel(Text("More"))
+                    documentsMoreMenu
                 }
+                #endif
             }
             // --- Certification Sheets ---
             .sheet(isPresented: $showAddCertification) {
@@ -587,6 +551,64 @@ struct DocumentsView: View {
             importTarget = .insurance
             handleInsuranceImport(data: pending.data, fileName: pending.fileName)
         }
+    }
+
+    // MARK: - Toolbar Controls
+    // Shared by the iOS and macOS toolbar layouts in `body`.
+
+    private var addDocumentMenu: some View {
+        Menu {
+            Button { showAddCertification = true } label: {
+                Label("Add Certification", systemImage: "graduationcap")
+            }
+            Button { showAddInsurance = true } label: {
+                Label("Add Insurance", systemImage: "shield")
+            }
+        } label: {
+            Image(systemName: "plus")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Add Document"))
+    }
+
+    private var documentsMoreMenu: some View {
+        Menu {
+            Section("Certifications") {
+                Button {
+                    exportCertificationsToXML()
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .disabled(certifications.isEmpty)
+
+                Button {
+                    importTarget = .certifications
+                    showImportPicker = true
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+            }
+
+            Section("Insurance") {
+                Button {
+                    exportInsurancesToXML()
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .disabled(insurances.isEmpty)
+
+                Button {
+                    importTarget = .insurance
+                    showImportPicker = true
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("More"))
     }
 
     // MARK: - Row Helpers

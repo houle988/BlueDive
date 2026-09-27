@@ -6,6 +6,7 @@ struct MoveDiverSheet: View {
     @Environment(DiveStore.self) private var store
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     @Query private var allGear: [Gear]
     @Query private var allCertifications: [Certification]
@@ -33,80 +34,16 @@ struct MoveDiverSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    Button {
-                        targetName = ""
-                    } label: {
-                        HStack {
-                            Label {
-                                Text("No diver")
-                                    .foregroundStyle(.primary)
-                            } icon: {
-                                Image(systemName: "person.slash")
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if resolvedName.isEmpty {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.cyan)
-                                    .accessibilityHidden(true)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(resolvedName.isEmpty ? .isSelected : [])
+            ZStack {
+                Color.platformBackground.ignoresSafeArea()
 
-                    ForEach(diverNames, id: \.self) { name in
-                        Button {
-                            targetName = name
-                        } label: {
-                            HStack {
-                                Label {
-                                    Text(verbatim: name)
-                                        .foregroundStyle(.primary)
-                                } icon: {
-                                    Image(systemName: "person")
-                                        .foregroundStyle(.cyan)
-                                }
-                                Spacer()
-                                if resolvedName == name {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.cyan)
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(resolvedName == name ? .isSelected : [])
-                    }
-                } header: {
-                    Text("Select diver")
+                Form {
+                    diveSummarySection
+                    selectDiverSection
+                    newDiverSection
                 }
-
-                Section {
-                    TextField("Diver name", text: $targetName)
-                        .autocorrectionDisabled()
-                        #if os(iOS)
-                        .textInputAutocapitalization(.words)
-                        #endif
-                        .padding(.trailing, targetName.isEmpty ? 0 : 24)
-                        .overlay(alignment: .trailing) {
-                            if !targetName.isEmpty {
-                                Button {
-                                    targetName = ""
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
-                                        .clearButtonTapTarget()
-                                        .accessibilityLabel(Text("Clear"))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                } header: {
-                    Text("Add new diver")
-                }
+                .groupedFormStyleOnMac()
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Move dive")
             #if os(iOS)
@@ -126,10 +63,116 @@ struct MoveDiverSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Move") { save() }
+                        .bold()
                         .disabled(isUnchanged)
                 }
             }
         }
+    }
+
+    // MARK: - Sections
+
+    /// Identifies the dive being moved and the diver it currently belongs to.
+    private var diveSummarySection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "location")
+                    .foregroundStyle(.cyan)
+                    .frame(width: 24)
+                if dive.siteName.isEmpty {
+                    Text("Unknown site")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(verbatim: dive.siteName)
+                        .foregroundStyle(.primary)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .foregroundStyle(.indigo)
+                    .frame(width: 24)
+                Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
+                    .foregroundStyle(.primary)
+            }
+
+            HStack(spacing: 12) {
+                Image(systemName: "person")
+                    .foregroundStyle(.blue)
+                    .frame(width: 24)
+                Text("Current diver")
+                    .foregroundStyle(.primary)
+                Spacer()
+                if originalTrimmedName.isEmpty {
+                    Text("No diver")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(verbatim: originalTrimmedName)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            MenuSectionHeader(title: "Dive to move", icon: "water.waves", color: .blue)
+        }
+    }
+
+    private var selectDiverSection: some View {
+        Section {
+            diverRow(icon: "person.slash", iconColor: .secondary, isSelected: resolvedName.isEmpty) {
+                targetName = ""
+            } title: {
+                Text("No diver")
+            }
+
+            ForEach(diverNames, id: \.self) { name in
+                diverRow(icon: "person", iconColor: .cyan, isSelected: resolvedName == name) {
+                    targetName = name
+                } title: {
+                    Text(verbatim: name)
+                }
+            }
+        } header: {
+            MenuSectionHeader(title: "Select diver", icon: "person.2", color: .cyan)
+        }
+    }
+
+    private var newDiverSection: some View {
+        Section {
+            MenuTextField(label: "Diver name", text: $targetName, icon: "person.badge.plus", color: .green)
+                .autocorrectionDisabled()
+                .platformTextInputAutocapitalization(.capitalizeWords)
+        } header: {
+            MenuSectionHeader(title: "Add new diver", icon: "person.badge.plus", color: .green)
+        }
+    }
+
+    /// Selectable diver row laid out like the edit sheets' icon rows: a fixed-width
+    /// coloured icon, the name, and a checkmark on the selected diver.
+    private func diverRow<Title: View>(
+        icon: String,
+        iconColor: Color,
+        isSelected: Bool,
+        action: @escaping () -> Void,
+        @ViewBuilder title: () -> Title
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
+                    .frame(width: 24)
+                title()
+                    .foregroundStyle(.primary)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.cyan)
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func save() {

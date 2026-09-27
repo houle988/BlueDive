@@ -70,6 +70,20 @@ struct TankTemplateListView: View {
                     TankTemplateRow(template: template)
                 }
                 .buttonStyle(.plain)
+                #if os(macOS)
+                // macOS does not synthesize swipe-to-delete from .onDelete (iOS does): add it
+                // explicitly, routed through the same handler (and confirmation) as .onDelete.
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        if let index = templates.firstIndex(of: template) {
+                            deleteTemplates(at: IndexSet(integer: index))
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .tint(.red)
+                }
+                #endif
             }
             .onDelete(perform: deleteTemplates)
         }

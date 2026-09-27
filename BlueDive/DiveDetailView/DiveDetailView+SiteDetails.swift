@@ -571,6 +571,7 @@ struct SiteMapFullScreenView: View {
                             .foregroundStyle(.cyan)
                     }
                     .accessibilityLabel(Text("Map Style"))
+                    .toolbarMenuIndicatorHiddenOnMac()
                 }
             }
         }

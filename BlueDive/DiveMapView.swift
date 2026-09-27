@@ -915,73 +915,93 @@ struct DiveMapView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 160)
                 }
+                #if os(macOS)
+                // One ToolbarItemGroup so macOS shares a single glass capsule, as the iOS
+                // navigation bar does; separate items (especially menus) get separate capsules.
+                ToolbarItemGroup(placement: .primaryAction) {
+                    mapFilterButton
+                    mapMoreMenu
+                        .toolbarMenuIndicatorHiddenOnMac()
+                }
+                #else
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showFilterSheet = true }) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "line.3.horizontal.decrease")
-                                .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
-
-                            if activeFilterCount > 0 {
-                                Text("\(activeFilterCount)")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.black)
-                                    .padding(3)
-                                    .background(Color.orange, in: Circle())
-                                    .offset(x: 6, y: -6)
-                            }
-                        }
-                    }
-                    .accessibilityLabel(activeFilterCount == 0
-                        ? Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
-                        : Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), activeFilterCount))
-                    )
+                    mapFilterButton
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            cameraPosition = .automatic
-                        } label: {
-                            Label("Global View", systemImage: "globe")
-                        }
+                    mapMoreMenu
+                }
+                #endif
+            }
+        }
+    }
 
-                        Button {
-                            cameraPosition = .region(MKCoordinateRegion(
-                                center: CLLocationCoordinate2D(latitude: 20, longitude: 0),
-                                span: MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
-                            ))
-                        } label: {
-                            Label("Reset", systemImage: "arrow.counterclockwise")
-                        }
+    // Toolbar controls, shared by the iOS and macOS toolbar layouts above.
 
-                        Divider()
+    private var mapFilterButton: some View {
+        Button(action: { showFilterSheet = true }) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
 
-                        Section("Map Style") {
-                            Button {
-                                mapStyle = .standard(elevation: .realistic)
-                            } label: {
-                                Label("Standard", systemImage: "map")
-                            }
-
-                            Button {
-                                mapStyle = .hybrid(elevation: .realistic)
-                            } label: {
-                                Label("Hybrid", systemImage: "map.fill")
-                            }
-
-                            Button {
-                                mapStyle = .imagery(elevation: .realistic)
-                            } label: {
-                                Label("Satellite", systemImage: "globe.americas.fill")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .foregroundStyle(.cyan)
-                    }
-                    .accessibilityLabel(Text("More"))
+                if activeFilterCount > 0 {
+                    Text("\(activeFilterCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.black)
+                        .padding(3)
+                        .background(Color.orange, in: Circle())
+                        .offset(x: 6, y: -6)
                 }
             }
         }
+        .accessibilityLabel(activeFilterCount == 0
+            ? Text(verbatim: NSLocalizedString("Filter dives", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active"))
+            : Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), activeFilterCount))
+        )
+    }
+
+    private var mapMoreMenu: some View {
+        Menu {
+            Button {
+                cameraPosition = .automatic
+            } label: {
+                Label("Global View", systemImage: "globe")
+            }
+
+            Button {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: CLLocationCoordinate2D(latitude: 20, longitude: 0),
+                    span: MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
+                ))
+            } label: {
+                Label("Reset", systemImage: "arrow.counterclockwise")
+            }
+
+            Divider()
+
+            Section("Map Style") {
+                Button {
+                    mapStyle = .standard(elevation: .realistic)
+                } label: {
+                    Label("Standard", systemImage: "map")
+                }
+
+                Button {
+                    mapStyle = .hybrid(elevation: .realistic)
+                } label: {
+                    Label("Hybrid", systemImage: "map.fill")
+                }
+
+                Button {
+                    mapStyle = .imagery(elevation: .realistic)
+                } label: {
+                    Label("Satellite", systemImage: "globe.americas.fill")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("More"))
     }
 }
 

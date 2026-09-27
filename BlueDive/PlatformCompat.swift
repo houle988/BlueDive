@@ -43,6 +43,21 @@ private struct FullWidthSwitchToggleStyle: ToggleStyle {
 }
 #endif
 
+// MARK: - Toolbar menus
+
+extension View {
+    /// Hides the ⌄ pull-down indicator macOS draws on a toolbar `Menu`, so icon menus look
+    /// like their iOS counterparts. On iOS the view is returned unchanged (iOS toolbar menus
+    /// have no indicator).
+    func toolbarMenuIndicatorHiddenOnMac() -> some View {
+        #if os(macOS)
+        self.menuIndicator(.hidden)
+        #else
+        self
+        #endif
+    }
+}
+
 // MARK: - Grouped form style
 
 extension View {
@@ -82,6 +97,23 @@ func fullWidthPicker<SelectionValue: Hashable, Content: View>(
     }
     #else
     Picker(title, selection: selection, content: content)
+    #endif
+}
+
+// MARK: - Grouped list
+
+/// Sectioned list for sheets that looks like the iOS inset-grouped `List` on both
+/// platforms. macOS has no inset-grouped list style — a `List` there renders as a
+/// sidebar-like list without row cards — so on macOS the same content is shown in a
+/// grouped `Form`, matching the other sheets. On iOS this returns the plain `List`
+/// itself (a function, not a wrapper view, so the iOS view tree is unchanged).
+@ViewBuilder
+func groupedList<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    #if os(macOS)
+    Form(content: content)
+        .formStyle(.grouped)
+    #else
+    List(content: content)
     #endif
 }
 

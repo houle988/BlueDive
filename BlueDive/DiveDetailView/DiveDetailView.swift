@@ -359,13 +359,25 @@ struct DiveDetailView: View {
                 }
                 #endif
                 #if os(macOS)
+                // One ToolbarItemGroup per cluster so macOS shares a glass capsule, as the iOS
+                // navigation bar does; separate items (especially menus) get separate capsules.
                 if !sortedDives.isEmpty {
-                    ToolbarItem(placement: .principalOutsideTabBar) {
+                    ToolbarItemGroup(placement: .principalOutsideTabBar) {
                         previousDiveButton
-                    }
-                    ToolbarItem(placement: .principalOutsideTabBar) {
                         nextDiveButton
                     }
+                    // Both groups sit in the trailing area (.principalOutsideTabBar is
+                    // .primaryAction on macOS), where macOS would merge them into one capsule;
+                    // a fixed spacer keeps previous/next and Export/Edit as distinct groups.
+                    // (Pre-26 toolbars have no Liquid Glass merging, so no spacer is needed there.)
+                    if #available(iOS 26.0, macOS 26.0, *) {
+                        ToolbarSpacer(.fixed, placement: .primaryAction)
+                    }
+                }
+                ToolbarItemGroup(placement: .primaryAction) {
+                    exportDiveMenu
+                        .toolbarMenuIndicatorHiddenOnMac()
+                    editDiveButton
                 }
                 #else
                 ToolbarItem(placement: .principal) {
@@ -382,42 +394,14 @@ struct DiveDetailView: View {
                         }
                     }
                 }
-                #endif
                 ToolbarItem(placement: .primaryAction) {
-                    // Export menu
-                    Menu {
-                        Button {
-                            exportToXML()
-                        } label: {
-                            Label("Export Dive to XML", systemImage: "doc.text")
-                        }
-                        Button {
-                            exportToUDDF()
-                        } label: {
-                            Label("Export Dive to UDDF", systemImage: "doc.badge.gearshape")
-                        }
-                        Button {
-                            exportToPDF()
-                        } label: {
-                            Label("Export Dive to PDF", systemImage: "doc.richtext")
-                        }
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundStyle(.cyan)
-                    }
-                    .accessibilityLabel(Text("Export Dive"))
+                    exportDiveMenu
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    // Edit button
-                    Button {
-                        showEditSheet = true
-                    } label: {
-                        Image(systemName: "pencil")
-                            .foregroundStyle(.cyan)
-                    }
-                    .accessibilityLabel(Text("Edit Dive"))
+                    editDiveButton
                 }
+                #endif
             }
         }
         .sheet(isPresented: $showEditSheet) {
@@ -567,6 +551,44 @@ struct DiveDetailView: View {
         .accessibilityLabel(Text("Next dive"))
     }
     #endif
+
+    // Export / Edit toolbar controls, shared by the iOS and macOS toolbar layouts.
+
+    private var exportDiveMenu: some View {
+        // Export menu
+        Menu {
+            Button {
+                exportToXML()
+            } label: {
+                Label("Export Dive to XML", systemImage: "doc.text")
+            }
+            Button {
+                exportToUDDF()
+            } label: {
+                Label("Export Dive to UDDF", systemImage: "doc.badge.gearshape")
+            }
+            Button {
+                exportToPDF()
+            } label: {
+                Label("Export Dive to PDF", systemImage: "doc.richtext")
+            }
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Export Dive"))
+    }
+
+    private var editDiveButton: some View {
+        // Edit button
+        Button {
+            showEditSheet = true
+        } label: {
+            Image(systemName: "pencil")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Edit Dive"))
+    }
 
     // MARK: - Tab Bar
 

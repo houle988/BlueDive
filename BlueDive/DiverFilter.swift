@@ -187,12 +187,15 @@ struct DiverFilterToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             picker
+                .toolbarMenuIndicatorHiddenOnMac()
         }
     }
 
     private var isActive: Bool { !selectedDiver.isEmpty }
 
-    private var picker: some View {
+    // Internal (not private) so the macOS main-window toolbar can place the menu inside its
+    // own ToolbarItemGroup alongside Settings and iCloud.
+    var picker: some View {
         Menu {
             Button {
                 selectedDiver = ""

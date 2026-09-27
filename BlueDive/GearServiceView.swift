@@ -1083,6 +1083,7 @@ struct GearServiceView: View {
                     .foregroundStyle(.cyan)
             }
             .accessibilityLabel(Text("More"))
+            .toolbarMenuIndicatorHiddenOnMac()
         }
     }
 

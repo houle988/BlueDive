@@ -443,7 +443,7 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            groupedList {
                 Section {
                     NavigationLink {
                         AppearanceSettingsView(onNeedsRootDismiss: { dismiss() })

@@ -480,6 +480,20 @@ struct GearListView: View {
                             GearRow(gear: item)
                         }
                         .buttonStyle(.plain)
+                        #if os(macOS)
+                        // macOS does not synthesize swipe-to-delete from .onDelete (iOS does): add it
+                        // explicitly, routed through the same handler as .onDelete.
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                if let index = items.firstIndex(of: item) {
+                                    deleteGear(items: items, at: IndexSet(integer: index))
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            .tint(.red)
+                        }
+                        #endif
                     }
                     .onDelete { indexSet in
                         deleteGear(items: items, at: indexSet)
@@ -556,58 +570,85 @@ struct GearListView: View {
     private var toolbarContent: some ToolbarContent {
         DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
 
+        #if os(macOS)
+        // One ToolbarItemGroup so macOS shares a single glass capsule, as the iOS
+        // navigation bar does; separate items (especially menus) get separate capsules.
+        ToolbarItemGroup(placement: .primaryAction) {
+            if inactiveCount > 0 {
+                inactiveToggleButton
+            }
+            addGearButton
+            gearMoreMenu
+                .toolbarMenuIndicatorHiddenOnMac()
+        }
+        #else
         if inactiveCount > 0 {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    withAnimation {
-                        showInactive.toggle()
-                    }
-                } label: {
-                    Image(systemName: showInactive ? "eye" : "eye.slash")
-                        .font(.title3)
-                        .foregroundStyle(showInactive ? .cyan : .secondary)
-                }
-                .help(showInactive
-                      ? NSLocalizedString("Hide Inactive Equipment", bundle: Bundle.forAppLanguage(), comment: "")
-                      : NSLocalizedString("Show Inactive Equipment", bundle: Bundle.forAppLanguage(), comment: ""))
-                .accessibilityLabel(showInactive ? Text("Hide Inactive Equipment") : Text("Show Inactive Equipment"))
+                inactiveToggleButton
             }
         }
         ToolbarItem(placement: .primaryAction) {
+            addGearButton
+        }
+        ToolbarItem(placement: .primaryAction) {
+            gearMoreMenu
+        }
+        #endif
+    }
+
+    // Toolbar controls, shared by the iOS and macOS toolbar layouts above.
+
+    private var inactiveToggleButton: some View {
+        Button {
+            withAnimation {
+                showInactive.toggle()
+            }
+        } label: {
+            Image(systemName: showInactive ? "eye" : "eye.slash")
+                .font(.title3)
+                .foregroundStyle(showInactive ? .cyan : .secondary)
+        }
+        .help(showInactive
+              ? NSLocalizedString("Hide Inactive Equipment", bundle: Bundle.forAppLanguage(), comment: "")
+              : NSLocalizedString("Show Inactive Equipment", bundle: Bundle.forAppLanguage(), comment: ""))
+        .accessibilityLabel(showInactive ? Text("Hide Inactive Equipment") : Text("Show Inactive Equipment"))
+    }
+
+    private var addGearButton: some View {
+        Button {
+            showAddGear = true
+        } label: {
+            Image(systemName: "plus")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Add Equipment"))
+    }
+
+    private var gearMoreMenu: some View {
+        Menu {
+            Button(action: { showTankTemplates = true }) {
+                Label("Tank Templates", systemImage: "cylinder")
+            }
+            Button(action: { showGearGroups = true }) {
+                Label("Gear Groups", systemImage: "tray.2")
+            }
+            Divider()
             Button {
-                showAddGear = true
+                exportGearToXML()
             } label: {
-                Image(systemName: "plus")
-                    .foregroundStyle(.cyan)
+                Label("Export", systemImage: "square.and.arrow.up")
             }
-            .accessibilityLabel(Text("Add Equipment"))
-        }
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Button(action: { showTankTemplates = true }) {
-                    Label("Tank Templates", systemImage: "cylinder")
-                }
-                Button(action: { showGearGroups = true }) {
-                    Label("Gear Groups", systemImage: "tray.2")
-                }
-                Divider()
-                Button {
-                    exportGearToXML()
-                } label: {
-                    Label("Export", systemImage: "square.and.arrow.up")
-                }
-                .disabled(allGear.isEmpty)
-                Button {
-                    showImportPicker = true
-                } label: {
-                    Label("Import", systemImage: "square.and.arrow.down")
-                }
+            .disabled(allGear.isEmpty)
+            Button {
+                showImportPicker = true
             } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(.cyan)
+                Label("Import", systemImage: "square.and.arrow.down")
             }
-            .accessibilityLabel(Text("More"))
+        } label: {
+            Image(systemName: "ellipsis")
+                .foregroundStyle(.cyan)
         }
+        .accessibilityLabel(Text("More"))
     }
 
     // MARK: - Actions

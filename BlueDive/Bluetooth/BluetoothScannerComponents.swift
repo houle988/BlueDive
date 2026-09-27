@@ -349,7 +349,7 @@ struct ModelPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            groupedList {
                 Section {
                     Button {
                         onSelect(nil)
