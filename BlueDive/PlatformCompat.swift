@@ -100,6 +100,31 @@ func fullWidthPicker<SelectionValue: Hashable, Content: View>(
     #endif
 }
 
+// MARK: - List row separator
+
+extension View {
+    /// Sets the row background and, on macOS, draws an iOS-style separator line along the
+    /// bottom of the row. The macOS `.sidebar` and `.plain` list styles draw no row separators
+    /// (and the list style has the final say, so `.listRowSeparator(.visible)` can't force
+    /// them); the line is drawn in the row background so it sits on the row's real bottom
+    /// edge. Pass `macSeparator: false` for the last row of a section, as iOS does.
+    /// On iOS this is exactly `.listRowBackground(background)`.
+    func listRowBackground<Background: View>(_ background: Background, macSeparator separator: Bool) -> some View {
+        #if os(macOS)
+        self.listRowBackground(
+            background.overlay(alignment: .bottom) {
+                if separator {
+                    Divider()
+                        .padding(.horizontal, 16)
+                }
+            }
+        )
+        #else
+        self.listRowBackground(background)
+        #endif
+    }
+}
+
 // MARK: - Grouped list
 
 /// Sectioned list for sheets that looks like the iOS inset-grouped `List` on both

@@ -718,7 +718,8 @@ struct ContentView: View {
                                     NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: true)) {
                                         DiveRowView(summary: summary, diveNumber: rowNumber)
                                     }
-                                    .listRowBackground(Color.primary.opacity(0.07))
+                                    .listRowBackground(Color.primary.opacity(0.07),
+                                                       macSeparator: summary.id != sectionSummaries.last?.id)
                                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                         moveButton(for: summary.id)
                                     }
@@ -771,7 +772,8 @@ struct ContentView: View {
                             NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: false)) {
                                 DiveRowView(summary: summary, diveNumber: rowNumber)
                             }
-                            .listRowBackground(Color.primary.opacity(0.07))
+                            .listRowBackground(Color.primary.opacity(0.07),
+                                               macSeparator: summary.id != displayedSummaries.last?.id)
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 moveButton(for: summary.id)
                             }
@@ -837,9 +839,12 @@ struct ContentView: View {
             Image(systemName: "icloud.slash")
                 .foregroundStyle(.secondary)
         } else if syncMonitor.isSyncing {
-            ProgressView()
-                .scaleEffect(0.75)
-                .frame(width: 20, height: 20)
+            // An animated symbol, not a ProgressView: macOS only shares a toolbar glass capsule
+            // between items whose labels are plain images/text, so a ProgressView label would
+            // split this button from the Settings/diver-filter group while syncing.
+            Image(systemName: "arrow.clockwise.icloud")
+                .foregroundStyle(.cyan)
+                .symbolEffect(.pulse)
         } else if syncMonitor.hasError {
             Image(systemName: "exclamationmark.icloud")
                 .foregroundStyle(.orange)
