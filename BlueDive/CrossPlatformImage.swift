@@ -6,10 +6,14 @@ import SwiftUI
 import UIKit
 /// Platform-agnostic image type. Maps to `UIImage` on iOS/iPadOS.
 typealias PlatformImage = UIImage
+/// Platform-agnostic colour type. Maps to `UIColor` on iOS/iPadOS.
+typealias PlatformColor = UIColor
 #elseif os(macOS)
 import AppKit
 /// Platform-agnostic image type. Maps to `NSImage` on macOS.
 typealias PlatformImage = NSImage
+/// Platform-agnostic colour type. Maps to `NSColor` on macOS.
+typealias PlatformColor = NSColor
 #endif
 
 // MARK: - SwiftUI Image helpers
@@ -78,16 +82,29 @@ extension Color {
     }
 }
 
-// MARK: - Conditional view modifier helper
+// MARK: - App screen background
 
-extension View {
-    /// Applies a view-builder transform only when `condition` is true.
-    @ViewBuilder
-    func applyIf<T: View>(_ condition: Bool, transform: (Self) -> T) -> some View {
-        if condition {
-            transform(self)
+/// Shared screen background for the dive list and dive detail: a subtle blue tint
+/// fading in from the top. The dive list draws the translucent gradient over the
+/// window background; dive detail uses the opaque variant (gradient over the platform
+/// background) so stacked pages in the swipe-between-dives transition never show
+/// through each other.
+struct AppBackground: View {
+    var opaque = true
+
+    private var gradient: LinearGradient {
+        LinearGradient(
+            colors: [Color.blue.opacity(0.1), Color.platformBackground.opacity(0.8)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    var body: some View {
+        if opaque {
+            Color.platformBackground.overlay(gradient)
         } else {
-            self
+            gradient
         }
     }
 }
@@ -95,15 +112,11 @@ extension View {
 // MARK: - Adaptive DatePicker style
 
 extension DatePicker {
-    /// Uses `.graphical` (full-size calendar) when running as an iPad app on Mac,
-    /// and `.compact` (small inline button) on actual iOS devices.
-    @ViewBuilder
+    /// Uses `.compact` on every platform: a small date field that opens a calendar
+    /// popover when tapped/clicked. On macOS this matches the iOS experience — the
+    /// `.graphical` style renders a fixed, small calendar inline in the form row.
     func adaptiveDatePickerStyle() -> some View {
-        if ProcessInfo.processInfo.isiOSAppOnMac {
-            self.datePickerStyle(.graphical)
-        } else {
-            self.datePickerStyle(.compact)
-        }
+        self.datePickerStyle(.compact)
     }
 }
 

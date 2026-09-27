@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 // MARK: - Insurance Icon View
 
@@ -24,7 +23,7 @@ struct InsuranceIconView: View {
         self.fallbackColor = fallbackColor
         self.fillOpacity = fillOpacity
         self.fallbackSymbol = fallbackSymbol
-        if let name = Self.assetName(for: insurerName), UIImage(named: name) != nil {
+        if let name = Self.assetName(for: insurerName), PlatformImage(named: name) != nil {
             self.resolvedAsset = name
         } else {
             self.resolvedAsset = nil

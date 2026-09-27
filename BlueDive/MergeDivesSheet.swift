@@ -84,10 +84,8 @@ struct MergeDivesSheet: View {
             }
             #if os(macOS)
             .frame(minWidth: 550, idealWidth: 620, maxWidth: 750, minHeight: 500, idealHeight: 650, maxHeight: 850)
-            .background(Color(nsColor: .textBackgroundColor))
-            #else
-            .background(Color(.systemGroupedBackground))
             #endif
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Merge Dives")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
@@ -124,11 +122,7 @@ struct MergeDivesSheet: View {
             Button("Merge") {
                 showConfirmation = true
             }
-            #if os(iOS)
             .buttonStyle(.borderedProminent)
-            #else
-            .foregroundStyle(.cyan)
-            #endif
             .disabled(selectedDiveA == nil || selectedDiveB == nil)
         }
     }

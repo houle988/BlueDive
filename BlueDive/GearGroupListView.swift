@@ -88,7 +88,7 @@ struct GearGroupListView: View {
         ToolbarItem(placement: .cancellationAction) {
             closeToolbarButton { dismiss() }
         }
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(placement: .sheetPrimaryAction) {
             Button {
                 showAddGearGroup = true
             } label: {

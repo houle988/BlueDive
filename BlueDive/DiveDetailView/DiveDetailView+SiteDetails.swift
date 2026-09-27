@@ -547,7 +547,7 @@ struct SiteMapFullScreenView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItem(placement: .sheetPrimaryAction) {
                     Menu {
                         Section("Map Style") {
                             Button {

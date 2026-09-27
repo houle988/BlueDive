@@ -149,6 +149,7 @@ struct WelcomeWizardView: View {
                                     .padding(.vertical, 12)
                             }
                             .transition(.opacity)
+                            .borderlessButton()
                         }
 
                         Spacer()

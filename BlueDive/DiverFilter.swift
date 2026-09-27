@@ -185,15 +185,9 @@ struct DiverFilterToolbar: ToolbarContent {
     @Binding var selectedDiver: String
 
     var body: some ToolbarContent {
-        #if os(iOS)
         ToolbarItem(placement: .topBarLeading) {
             picker
         }
-        #else
-        ToolbarItem(placement: .navigation) {
-            picker
-        }
-        #endif
     }
 
     private var isActive: Bool { !selectedDiver.isEmpty }

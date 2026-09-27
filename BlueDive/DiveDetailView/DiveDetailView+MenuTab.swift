@@ -131,18 +131,12 @@ extension DiveDetailView {
                                 .clipShape(RoundedRectangle(cornerRadius: 4))
                         }
                     }
-                    #if os(iOS)
                     locationText
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(formattedTimestamp)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    #else
-                    (Text(verbatim: formattedTimestamp) + Text(" — ") + locationText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    #endif
                 }
                 Spacer()
                 RatingStarsView(rating: dive.rating)
@@ -801,6 +795,7 @@ extension DiveDetailView {
                     }
                 }
                 .accessibilityLabel(Text("Add Equipment"))
+                .borderlessButton()
             }
 
             if (dive.usedGear ?? []).isEmpty {
@@ -923,6 +918,7 @@ extension DiveDetailView {
                     }
                 }
                 .accessibilityLabel(Text("Add Marine Life"))
+                .borderlessButton()
             }
 
             if (dive.seenFish ?? []).isEmpty {
@@ -962,7 +958,6 @@ extension DiveDetailView {
                     ZStack(alignment: .topTrailing) {
                         FishChipView(fish: fish)
                             .contentShape(Rectangle())
-                            #if os(iOS)
                             .onTapGesture {
                                 if !isEditingMarineLife {
                                     fishToEdit = fish
@@ -973,13 +968,6 @@ extension DiveDetailView {
                                     isEditingMarineLife.toggle()
                                 }
                             }
-                            #else
-                            .onTapGesture {
-                                if !isEditingMarineLife {
-                                    fishToEdit = fish
-                                }
-                            }
-                            #endif
                         if isEditingMarineLife {
                             Button {
                                 fishToDelete = fish

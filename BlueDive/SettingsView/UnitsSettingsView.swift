@@ -16,7 +16,7 @@ struct UnitsSettingsView: View {
                                 Text(unit.symbol.uppercased()).tag(unit)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .fullWidthSegmentedPicker()
                         .labelsHidden()
                     }
                     .padding()
@@ -31,7 +31,7 @@ struct UnitsSettingsView: View {
                                 Text(unit.symbol).tag(unit)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .fullWidthSegmentedPicker()
                         .labelsHidden()
                     }
                     .padding()
@@ -46,7 +46,7 @@ struct UnitsSettingsView: View {
                                 Text(unit.symbol).tag(unit)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .fullWidthSegmentedPicker()
                         .labelsHidden()
                     }
                     .padding()
@@ -61,7 +61,7 @@ struct UnitsSettingsView: View {
                                 Text(unit.symbol).tag(unit)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .fullWidthSegmentedPicker()
                         .labelsHidden()
                     }
                     .padding()
@@ -76,7 +76,7 @@ struct UnitsSettingsView: View {
                                 Text(unit.symbol).tag(unit)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .fullWidthSegmentedPicker()
                         .labelsHidden()
                     }
                     .padding()

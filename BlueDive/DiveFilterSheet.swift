@@ -92,10 +92,8 @@ struct DiveFilterSheet: View {
             }
             #if os(macOS)
             .frame(minWidth: 550, idealWidth: 600, maxWidth: 700, minHeight: 500, idealHeight: 650, maxHeight: 850)
-            .background(Color(nsColor: .textBackgroundColor))
-            #else
-            .background(Color(.systemGroupedBackground))
             #endif
+            .background(Color(.systemGroupedBackground))
             .navigationTitle(showSort ? NSLocalizedString("Filters & Sort", bundle: Bundle.forAppLanguage(), comment: "Title of the filter and sort sheet") : NSLocalizedString("Filters", bundle: Bundle.forAppLanguage(), comment: "Title of the filter sheet without sort"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)

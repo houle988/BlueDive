@@ -43,7 +43,6 @@ struct ContentView: View {
     @State private var diveToDelete: IndexSet?
     @State private var diveToDeleteDirectly: Dive?
     @State private var showDeleteSingleConfirmation = false
-    @State private var showDeleteSheet = false
     @State private var diveToMove: Dive?
     @State var isImporting = false
     @State var importProgressFileName: String = ""
@@ -52,7 +51,6 @@ struct ContentView: View {
     @State var isExporting = false
     @State var exportProgressCurrent: Int = 0
     @State var exportProgressTotal: Int = 0
-    @State private var showExportMenu = false
     @State var exportDocument: ExportableFileDocument?
     @State var exportFileName: String = ""
     @State var showFileExporter = false
@@ -92,7 +90,6 @@ struct ContentView: View {
     @State private var showMinimumGasPlanning = false
     @State private var showGasDensityCalculator = false
     @State private var showBestMixCalculator = false
-    @State private var showCalculatorsPopover = false
     @State private var isSyncing = false
     @State private var showManualDiveDatePicker = false
     @State private var manualDiveDate = Date.now
@@ -107,14 +104,6 @@ struct ContentView: View {
     @State private var showSyncStatusPopover = false
     @State private var collapsedDiverSections: Set<String> = []
 
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color.blue.opacity(0.1), Color.platformBackground.opacity(0.8)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-    
     @ViewBuilder
     private func moveButton(for summaryID: UUID) -> some View {
         Button {
@@ -131,7 +120,7 @@ struct ContentView: View {
         @Bindable var store = store
         NavigationStack {
             ZStack {
-                backgroundGradient.ignoresSafeArea()
+                AppBackground(opaque: false).ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     contentSection
@@ -145,7 +134,10 @@ struct ContentView: View {
             #endif
             .animation(.easeInOut(duration: 0.3), value: store.searchText)
             .toolbar { toolbarContent }
+            #if os(iOS)
+            // The macOS window toolbar is always visible; there is no navigation bar.
             .toolbarBackground(.visible, for: .navigationBar)
+            #endif
             .sheet(isPresented: $store.showFilterSheet) {
                 DiveFilterSheet(
                     availableYears: store.cachedAvailableYears,
@@ -250,17 +242,8 @@ struct ContentView: View {
                 showScannerSheet = true
             }
             #if os(macOS)
-            .sheet(isPresented: $showDeleteSheet) {
-                MacOSDeleteDiveSheet(
-                    dives: store.cachedFilteredDives,
-                    onDelete: { dive in
-                        diveToDeleteDirectly = dive
-                        showDeleteSingleConfirmation = true
-                    }
-                )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+            .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+                showSettings = true
             }
             #endif
             .sheet(isPresented: $showMergeDivesSheet) {
@@ -361,14 +344,20 @@ struct ContentView: View {
                 Text("This action is irreversible. All associated data (fish sightings, equipment) will also be deleted.")
             }
             .sheet(isPresented: $showManualDiveDatePicker) {
-                #if os(iOS)
                 NavigationStack {
                     Form {
                         DatePicker("Date & Time", selection: $manualDiveDate)
+                            #if os(macOS)
+                            // macOS renders .graphical as a small fixed-size calendar plus an
+                            // analogue clock; the compact field opens a calendar popover instead.
+                            .datePickerStyle(.compact)
+                            #else
                             .datePickerStyle(.graphical)
+                            #endif
                         AutocompleteMenuTextField(label: "Diver (optional)", text: $manualDiveDiverName, icon: "person.fill", color: .cyan, suggestions: store.cachedUniqueDivers)
                             .autocorrectionDisabled()
                     }
+                    .groupedFormStyleOnMac()
                     .navigationTitle("New Dive Date")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -387,56 +376,6 @@ struct ContentView: View {
                 .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                #else
-                VStack(spacing: 0) {
-                    HStack {
-                        Button("Cancel") { showManualDiveDatePicker = false }
-                            .keyboardShortcut(.cancelAction)
-                        Spacer()
-                        Text("New Dive Date")
-                            .font(.headline)
-                        Spacer()
-                        Button("Add") {
-                            showManualDiveDatePicker = false
-                            createManualDive(date: manualDiveDate, diverName: manualDiveDiverName)
-                        }
-                        .keyboardShortcut(.defaultAction)
-                        .fontWeight(.semibold)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-
-                    Divider()
-
-                    DatePicker("Date", selection: $manualDiveDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .labelsHidden()
-                        .scaleEffect(1.5)
-                        .frame(width: 380, height: 310)
-                        .clipped()
-
-                    Divider()
-
-                    HStack {
-                        Text("Time")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        DatePicker("", selection: $manualDiveDate, displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.stepperField)
-                            .labelsHidden()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-
-                    Divider()
-
-                    AutocompleteMenuTextField(label: "Diver (optional)", text: $manualDiveDiverName, icon: "person.fill", color: .cyan, suggestions: store.cachedUniqueDivers)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                }
-                .frame(width: 390, height: 440)
-                #endif
             }
             .alert("Delete dive?", isPresented: $showDeleteSingleConfirmation, presenting: diveToDeleteDirectly) { dive in
                 Button("Cancel", role: .cancel) { diveToDeleteDirectly = nil }
@@ -704,6 +643,7 @@ struct ContentView: View {
             } label: {
                 Label("Show All Divers", systemImage: "person.2")
             }
+            .borderlessButton()
         }
     }
 
@@ -738,6 +678,7 @@ struct ContentView: View {
                     .foregroundStyle(.cyan)
                 }
                 .transition(.scale.combined(with: .opacity))
+                .borderlessButton()
             }
             Spacer()
         }
@@ -817,9 +758,7 @@ struct ContentView: View {
                     .refreshable {
                         await forceiCloudSync()
                     }
-                    #if os(iOS)
                     .contentMargins(.top, 0, for: .scrollContent)
-                    #endif
                 } else {
                     List {
                         ForEach(displayedSummaries) { summary in
@@ -848,10 +787,8 @@ struct ContentView: View {
                     .refreshable {
                         await forceiCloudSync()
                     }
-                    #if os(iOS)
                     .listStyle(.plain)
                     .contentMargins(.top, 0, for: .scrollContent)
-                    #endif
                 }
             }
         }
@@ -933,9 +870,8 @@ struct ContentView: View {
         // On iOS use `.topBarLeading` (not `.navigation`) so these items stay
         // pinned to the leading edge; `.navigation` is re-flowed to the trailing
         // side by SwiftUI when popping back from a pushed detail view, which
-        // crams every leading button into the top-right. macOS keeps `.navigation`
-        // (there is no `.topBarLeading` there). Matches DiverFilterToolbar.
-        #if os(iOS)
+        // crams every leading button into the top-right. On macOS `.topBarLeading`
+        // maps to `.navigation` (see PlatformCompat.swift). Matches DiverFilterToolbar.
         ToolbarItem(placement: .topBarLeading) {
             Button(action: { showSettings = true }) {
                 Image(systemName: "gear")
@@ -952,101 +888,12 @@ struct ContentView: View {
                 calculatorsMenu
             }
         }
-        #else
-        ToolbarItem(placement: .navigation) {
-            Button(action: { showSettings = true }) {
-                Image(systemName: "gear")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Settings")
-            .accessibilityLabel(Text("Settings"))
-        }
-        ToolbarItem(placement: .navigation) {
-            cloudSyncToolbarItem
-        }
-        if showCalculatorsMenu {
-            ToolbarItem(placement: .navigation) {
-                calculatorsMenu
-            }
-        }
-        #endif
         // ── Right ───────────────────────────────────────────────────────────
 
-        #if os(macOS)
-        ToolbarItemGroup(placement: .primaryAction) {
-            Button(action: { showProfile = true }) {
-                Image(systemName: "person.circle.fill")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Diver Profile")
-            .accessibilityLabel(Text("Diver Profile"))
-
-            Button(action: { showFileImporter = true }) {
-                Image(systemName: "doc.badge.plus")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Import Dives")
-            .accessibilityLabel(Text("Import Dives"))
-
-            Button(action: addManualDive) {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Add Dive Manually")
-            .accessibilityLabel(Text("Add Dive Manually"))
-
-            Button(action: { showScannerSheet = true }) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Sync Bluetooth Dive Computer")
-            .accessibilityLabel(Text("Sync Bluetooth Dive Computer"))
-
-            if !dives.isEmpty {
-                exportMenuButton
-                    .help("Export")
-                    .accessibilityLabel(Text("Export"))
-            }
-
-            Button(action: { showMergeDivesSheet = true }) {
-                Image(systemName: "arrow.triangle.merge")
-                    .foregroundStyle(.cyan)
-            }
-            .help("Merge two dives")
-            .accessibilityLabel(Text("Merge two dives"))
-            .disabled(dives.count < 2)
-
-            Button(action: { store.showFilterSheet = true }) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .foregroundStyle(filterToolbarIsActive ? .orange : .cyan)
-                    if store.activeFilterCount > 0 {
-                        Text("\(store.activeFilterCount)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.black)
-                            .padding(3)
-                            .background(Color.orange, in: Circle())
-                            .offset(x: 6, y: -6)
-                    }
-                }
-            }
-            .help("Filter Dives")
-            .accessibilityLabel(filterToolbarAccessibilityLabel)
-
-            if !dives.isEmpty {
-                Button(action: { showDeleteSheet = true }) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red)
-                }
-                .help("Delete a dive")
-                .accessibilityLabel(Text("Delete a dive"))
-            }
-        }
-        #else
-        // iOS: + menu (Add/Import/Bluetooth) + Filter + overflow menu.
+        // + menu (Add/Import/Bluetooth) + Filter + overflow menu.
         // Each control is its own ToolbarItem (not a shared HStack) so the system's
         // toolbar-overflow layout can manage/overflow them independently instead of
-        // clipping the whole group when the window is narrow (e.g. Mac Designed for iPad).
+        // clipping the whole group when the window is narrow (e.g. a small Mac window).
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 Button(action: addManualDive) {
@@ -1121,40 +968,11 @@ struct ContentView: View {
             }
             .accessibilityLabel(Text("More"))
         }
-        #endif
     }
 
     // Tools menu extracted to a property to avoid
     // @State capture issues in toolbar closures on macOS.
     private var calculatorsMenu: some View {
-        #if os(macOS)
-        Button(action: { showCalculatorsPopover = true }) {
-            Image(systemName: "wrench.and.screwdriver.fill")
-                .foregroundStyle(.cyan)
-        }
-        .help("Calculators")
-        .accessibilityLabel(Text("Calculators"))
-        .popover(isPresented: $showCalculatorsPopover, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 0) {
-                toolsPopoverButton("Minimum Gas", icon: "wrench.and.screwdriver.fill") {
-                    showCalculatorsPopover = false
-                    showMinimumGasPlanning = true
-                }
-                Divider()
-                toolsPopoverButton("Gas Density", icon: "atom") {
-                    showCalculatorsPopover = false
-                    showGasDensityCalculator = true
-                }
-                Divider()
-                toolsPopoverButton("Best Mix", icon: "bubbles.and.sparkles") {
-                    showCalculatorsPopover = false
-                    showBestMixCalculator = true
-                }
-            }
-            .frame(width: 220)
-            .padding(.vertical, 4)
-        }
-        #else
         Menu {
             Button(action: { showMinimumGasPlanning = true }) {
                 Label("Minimum Gas", systemImage: "wrench.and.screwdriver.fill")
@@ -1170,72 +988,8 @@ struct ContentView: View {
                 .foregroundStyle(.cyan)
         }
         .accessibilityLabel(Text("Calculators"))
-        #endif
     }
 
-    private var exportMenuButton: some View {
-        #if os(macOS)
-        Button(action: { showExportMenu = true }) {
-            Image(systemName: "square.and.arrow.up")
-                .foregroundStyle(.cyan)
-        }
-        .popover(isPresented: $showExportMenu, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 0) {
-                Button(action: {
-                    showExportMenu = false
-                    exportAllDivesToXML()
-                }) {
-                    Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                Divider()
-                Button(action: {
-                    showExportMenu = false
-                    exportAllDivesToUDDF()
-                }) {
-                    Label("Export All Dives to UDDF", systemImage: "water.waves")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(width: 240)
-            .padding(.vertical, 4)
-        }
-        #else
-        Menu {
-            Button(action: exportAllDivesToXML) {
-                Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")
-            }
-            Button(action: exportAllDivesToUDDF) {
-                Label("Export All Dives to UDDF", systemImage: "water.waves")
-            }
-        } label: {
-            Image(systemName: "square.and.arrow.up")
-                .foregroundStyle(.cyan)
-        }
-        #endif
-    }
-
-    #if os(macOS)
-    private func toolsPopoverButton(_ title: LocalizedStringKey, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: icon)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-    #endif
-    
     // MARK: - Actions
 
     private func forceiCloudSync() async {

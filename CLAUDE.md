@@ -29,7 +29,7 @@ The `needs_review` state left on `de`/`nl` is intentional, not a bug: a native r
 Workflow for every new or changed user-facing string:
 
 1. Write the Swift code with the literal key. For `NSLocalizedString`, always pass `value:` with the English text so the string displays before the catalog syncs, e.g. `NSLocalizedString("Service record saved.", bundle: Bundle.forAppLanguage(), value: "Service record saved.", comment: "")`.
-2. Build the project (⌘B) so Xcode inserts the key into the catalog. Do not add keys to the catalog yourself.
+2. Build the project (⌘B) so Xcode inserts the key into the catalog. Do not add keys to the catalog yourself. A key that exists only inside `#if os(macOS)` (or only inside `#if os(iOS)`) is extracted only by a build for that platform — build the **My Mac** destination as well as an iOS destination when the change touches platform-specific code.
 3. Run `python3 Scripts/xcstrings.py missing` — it lists every key still lacking `fr-CA`, `de` or `nl`. These are the only keys you translate.
 4. Write the translations to a temp JSON file and apply them in one call:
    ```
@@ -86,13 +86,31 @@ Every dive in the database stores its raw values in the unit they were imported 
 
 Never call `DepthUnit.formatted(_ meters:)` or `DepthUnit.convert(_ meters:)` with a raw stored value — these methods assume metres input. Always go through the `Dive` display helpers first.
 
-## Mac (Designed for iPad) Support
+## macOS Support (Native Universal App)
 
-BlueDive supports running as an iPad app on Apple Silicon Macs via "Designed for iPad" mode. The following patterns ensure a good experience on Mac:
+BlueDive is a universal app: the same SwiftUI code builds for iOS/iPadOS and as a **native macOS** app (the "My Mac" destination). "Designed for iPad" is disabled (`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO`), so the iOS build never runs on a Mac and `ProcessInfo.processInfo.isiOSAppOnMac` is always `false` — do not use it.
 
-- **Sheet sizing**: All `.sheet()` presentations must include `.presentationSizing(.page)`, `.presentationDetents([.large])`, and `.presentationDragIndicator(.visible)` so sheets appear at page size instead of the small default form sheet on iPad/Mac.
-- **Date pickers**: Use `.adaptiveDatePickerStyle()` (defined in `CrossPlatformImage.swift`) instead of `.datePickerStyle(.compact)`. This shows a full graphical calendar on Mac and compact style on iPhone/iPad.
-- **Platform detection**: Use `ProcessInfo.processInfo.isiOSAppOnMac` to detect "Designed for iPad" mode at runtime. Note that `#if os(iOS)` is `true` in this mode.
+### One Shared UI
+
+The Mac app must offer the same user experience as iOS/iPadOS, built from the same code. Do not write a separate macOS layout (`macOSBody`, `macOSLayout`, a macOS-only toolbar or sheet) for a screen that already exists on iOS.
+
+- **Prefer shims over `#if`.** When a SwiftUI API is iOS-only, add a macOS equivalent to `PlatformCompat.swift` so call sites stay identical (existing shims: `navigationBarTitleDisplayMode(_:)`, `.bottomBar`, `.topBarLeading` → `.navigation`, `.topBarTrailing` → `.automatic`, `NSColor.systemGroupedBackground`). Use `.fullWidthSegmentedPicker()` instead of `.pickerStyle(.segmented)` for any segmented picker that should span its container, as it does on iOS — on macOS a segmented control otherwise sizes to its segments and shows its label. Keep plain `.pickerStyle(.segmented)` only for deliberately compact pickers (inline toggles with a fixed `.frame(maxWidth:)`, toolbar items). Every `Button` needs an explicit look on macOS, because an unstyled macOS Button is a bordered push button (grey capsule sized to its label) everywhere, while on iOS it is borderless: use `.listRowButton()` for a Button that acts as a whole `List`/`Form` row (navigation-style rows, picker choices, text action rows — accent-coloured by default, red for `role: .destructive`, whole row clickable), `.borderlessButton()` for a Button in an ordinary layout (cards, headers, bottom bars, icon buttons, inline links), or an explicit `.buttonStyle(...)`. Buttons inside toolbars, menus, alerts, confirmation dialogs, context menus, swipe actions and menu-bar commands are styled by the system and need none of these.
+- **Toolbars in sheets**: in a sheet, macOS renders `.primaryAction` and `.confirmationAction` items as the sheet's accent-filled default button at the bottom (triggered by Return). In any view presented as a sheet, place utility items (filter, add, refresh, "…" menus) with `.sheetPrimaryAction` (iOS `.primaryAction`, macOS `.automatic`) — a cyan icon in a `.primaryAction` item is invisible on the cyan fill. Reserve `.confirmationAction` for the real confirm button (Save/Done/Add), and colour its label with `.confirmationActionForeground(_:)` (applied on iOS only) instead of `.foregroundStyle(_:)`. Root tab views and views pushed in the main window keep `.primaryAction` — they use the window toolbar.
+- **Principal items in the main window**: on macOS the tab bar (Dives / Map / Equipment / Documents) occupies the centre of the window toolbar, so a `.principal` item in a tab root or a view pushed from it sits beside the tabs and shifts them. Use `.principalOutsideTabBar` there (iOS `.principal`, macOS `.primaryAction`). Plain `.principal` is fine in sheets, which have no tab bar. Cross-platform helpers that wrap both implementations (`PlatformImage`, `PlatformColor`, `Color.platformBackground`, `platformKeyboardType(_:)`, `platformTextInputAutocapitalization(_:)`, `adaptiveDatePickerStyle()`, `closeToolbarButton(action:)`) live in `CrossPlatformImage.swift`.
+- **Use `#if os(macOS)` only for genuine platform differences**: AppKit/UIKit-only APIs (`NSSavePanel` vs `.fileExporter`, `NSPasteboard` vs `UIPasteboard`, `NSWorkspace`, fonts/images in PDF generation), APIs unavailable on macOS (`fullScreenCover` → `.sheet`, paging `TabView` → one page at a time, `BGTaskScheduler`), Mac-only features (menu bar commands, "Show database in Finder"), input-method adaptations (previous/next dive buttons instead of swipe), and window/sheet sizing (`.frame(minWidth:…)`). Keep such a branch as small as possible — wrap the single differing modifier or call, not the whole view.
+- Before removing or editing a platform branch, verify its boundaries with `grep -n "#if os\|#else\|#endif"` — do not assume a diff hunk stayed within its intended platform.
+- Every change must build for **both** an iOS destination and **My Mac** before it is considered done.
+- **Keep iOS untouched**: a macOS-only fix must not change what the iOS compiler sees. Put the macOS behaviour inside a helper whose iOS branch returns the view (or the original call) unchanged — prefer a function returning the original control over a wrapper `View` struct, so the iOS view tree stays identical, or inside `#if os(macOS)`; do not add "harmless on iOS" modifiers unguarded.
+
+### Presentation & Controls
+
+- **Sheet sizing**: All `.sheet()` presentations must include `.presentationSizing(.page)`, `.presentationDetents([.large])`, and `.presentationDragIndicator(.visible)`.
+- **Date pickers**: Use `.adaptiveDatePickerStyle()` (defined in `CrossPlatformImage.swift`) instead of `.datePickerStyle(.compact)`. It applies the compact style on every platform (a date field that opens a calendar popover); do not use `.graphical` in form rows on macOS, where it renders a fixed, small inline calendar. macOS has no seconds component (`.hourMinuteAndSecond` is unavailable) — use `.hourAndMinute` and preserve the stored seconds on save.
+- **Forms**: every `Form` must carry `.groupedFormStyleOnMac()` (or an explicit `.formStyle(.grouped)`) directly. macOS otherwise uses its two-column style (labels in a separate leading column); a form style set higher up, e.g. at the app root, does not reach Forms inside sheets. The helper returns the view unchanged on iOS, where grouped is already the default.
+- **Toggles**: every `Toggle` uses `.fullWidthSwitch()` (`PlatformCompat.swift`). On macOS a Toggle outside a Form is otherwise a checkbox, and a `.switch` toggle sizes to its label, shrinking the card it sits in; the helper gives the iOS layout (label leading, switch trailing, full width). On iOS it returns the view unchanged; if the Toggle needs an explicit style on iOS, use `.fullWidthSwitch(iOS: .switch)` instead of a separate `.toggleStyle(...)`. When adding it to an existing chain, place it before any modifier that takes a trailing closure (e.g. `.onChange(of:) { }`).
+- **Menu pickers in cards**: a menu-style `Picker` in a custom card layout (not inside a `Form`) uses `fullWidthPicker(title, selection:) { … }` (`PlatformCompat.swift`) — on macOS it lays out label leading / pop-up trailing at full width instead of a label+pop-up pair centred at natural size; on iOS it returns exactly the plain `Picker`. Pickers inside a `Form` need nothing (the grouped style already lays them out as rows).
+- **Text fields in Forms**: use `formTextField("Title", text:)` (`PlatformCompat.swift`) instead of `TextField` for any text field inside a `Form` (directly or via a row component such as `MenuTextField`). In a macOS grouped Form a plain `TextField`'s title becomes a separate leading label and the value is pushed to the trailing edge (duplicating icon rows' own labels); `formTextField` hides that label on macOS and shows the title as the grey placeholder, as on iOS. On iOS it returns exactly `TextField(title, text:)`; use `formTextField(verbatim:text:)` for a computed `String` title and the `axis:` overload for multi-line fields.
+- **Settings**: Settings is the same sheet on both platforms (presented by `ContentView`); on macOS the app menu's **Settings…** command (⌘,) posts `.openSettings` to present it. Do not add a separate SwiftUI `Settings` scene.
 
 ## Liquid Glass & HIG Toolbar Compliance
 
@@ -100,7 +118,7 @@ Under iOS/macOS 26+ "Liquid Glass," toolbar buttons render inside a translucent 
 
 ### Root-Cause Rule: No Local Tint on Bare Toolbar Buttons
 
-A local `.tint(...)` placed directly on a bare toolbar `Button` (one **not** using `.buttonStyle(.borderedProminent)` or another explicit button style) fills the Liquid Glass capsule **background**, not just the label — this is what caused toolbar buttons to render white/wrong instead of the app's cyan brand color, especially on macOS "Designed for iPad." This is the single most important rule in this section; when in doubt, grep the whole tree for `.tint(` and check each hit against the categories below.
+A local `.tint(...)` placed directly on a bare toolbar `Button` (one **not** using `.buttonStyle(.borderedProminent)` or another explicit button style) fills the Liquid Glass capsule **background**, not just the label — this is what caused toolbar buttons to render white/wrong instead of the app's cyan brand color, especially on Mac. This is the single most important rule in this section; when in doubt, grep the whole tree for `.tint(` and check each hit against the categories below.
 
 - The app's brand color (cyan) is supplied ambiently by two mechanisms kept deliberately together: the `AccentColor` asset catalog (`Assets.xcassets/AccentColor.colorset` and `BlueDiveWidgetExtension/Assets.xcassets/AccentColor.colorset`, both populated with explicit light/dark sRGB cyan values) and a root `.tint(.cyan)` on `BlueDiveApp`'s `WindowGroup` content. `.tint()` is always respected in-process; `AccentColor` is what reaches out-of-process system UI (share sheets, pickers) that `.tint()` can't. Do not remove either as "redundant" — they cover different surfaces.
 - On a bare toolbar button, color only the `Image` inside the label via `.foregroundStyle(...)` (glyph color) — never the button itself via `.tint()`.
@@ -116,31 +134,23 @@ A local `.tint(...)` placed directly on a bare toolbar `Button` (one **not** usi
 - Only one prominent/primary action per sheet.
 - Any `@available` gate added around `role: .close` or another 26+ API must list every platform the code actually ships on (`iOS 26.0, macOS 26.0, *`) — omitting one is a compile error waiting for the first build on that platform.
 
-### Icon Simplification (iOS / shared code only)
+### Icon Simplification
 
-- The Liquid Glass capsule already provides a visual container — do not additionally wrap toolbar icons in `.circle`/`.circle.fill` SF Symbol variants (use `plus`, `ellipsis`, `info`, not `plus.circle.fill`, `ellipsis.circle.fill`, `info.circle`) inside `#if os(iOS)` or unguarded/shared code.
-- Never apply this simplification inside a `#if os(macOS)` branch — see "macOS Branch Preservation" below.
+- The Liquid Glass capsule already provides a visual container — do not additionally wrap toolbar icons in `.circle`/`.circle.fill` SF Symbol variants (use `plus`, `ellipsis`, `info`, not `plus.circle.fill`, `ellipsis.circle.fill`, `info.circle`). This applies to both platforms; toolbar icons are shared code.
 - Icon+text (`HStack { Image; Text }`) toolbar labels collapse to icon-only on regular-width idiom (iPad/Mac) by Apple's documented default; no modifier prevents this. If the text must always stay visible, drop the icon entirely rather than fighting the collapse.
 
 ### Toolbar Layout & Accessibility
 
-- Never group multiple interactive controls inside one `HStack` that itself sits inside a single `ToolbarItem`. Under SDK 26/27 toolbar-overflow layout this silently clips every control but the first when space is constrained (e.g. Mac "Designed for iPad" at narrower widths). Give each control its own `ToolbarItem`/`ToolbarItemGroup` entry.
-- `.topBarLeading`/`.topBarTrailing` are iOS-only placements — never use them unguarded on code that also compiles for macOS; gate with `#if os(iOS) ... #else .automatic ... #endif` or use a cross-platform placement (`.cancellationAction`, `.confirmationAction`, `.destructiveAction`, `.primaryAction`, `.automatic`).
+- Never group multiple interactive controls inside one `HStack` that itself sits inside a single `ToolbarItem`. Under SDK 26/27 toolbar-overflow layout this silently clips every control but the first when space is constrained (e.g. a narrow Mac window). Give each control its own `ToolbarItem`/`ToolbarItemGroup` entry.
+- `.topBarLeading`/`.topBarTrailing` may be used unguarded: `PlatformCompat.swift` maps them to `.navigation` / `.automatic` on macOS. Cross-platform placements (`.cancellationAction`, `.confirmationAction`, `.destructiveAction`, `.primaryAction`, `.automatic`) remain preferred where they express the intent.
 - Every icon-only toolbar control (a `Button`/`Menu` whose label is only an `Image`, no text) must carry `.accessibilityLabel(Text("..."))`, translated per the Localization workflow. When the label depends on state (e.g. a show/hide toggle), write two literal `Text("Key A")`/`Text("Key B")` branches — never a ternary or variable passed as the key (`Text(condition ? LocalizedStringKey("A") : LocalizedStringKey("B"))` bypasses Xcode's literal-string extraction).
-
-### macOS Branch Preservation
-
-BlueDive plans a native macOS release. Every `#if os(macOS)` / `#else` branch is intentional and must be preserved exactly, even when it looks like unfinished HIG cleanup (older icon style, different button placement, different string casing) — do not simplify, re-tint, reword, or restructure code inside a macOS branch as a side effect of an iOS-focused fix, and do not delete a macOS branch's content when applying a fix meant only for iOS/shared code. Verify the true boundaries with `grep -n "#if os\|#else\|#endif"` before editing near one — do not assume a diff hunk stayed within its intended platform.
-
-There is currently no real macOS build target: "My Mac (Designed for iPad)" still compiles as `#if os(iOS)`, and a native "My Mac" destination is reported incompatible with the current scheme. Consequently, Xcode's string catalog extractor can never pick up a *brand-new* string that exists only inside a `#if os(macOS)` block through the normal build-and-extract workflow (see Localization above). Such a key requires `Scripts/xcstrings.py set --create` as a deliberate, narrow exception to the "don't use `--create`" rule — accept the one-time move-diff risk this defers until a real macOS target is eventually built.
 
 ### What NOT To Do
 
 - Never add a local `.tint()` to a bare (non-`.buttonStyle`) toolbar `Button` — color the `Image` inside the label with `.foregroundStyle()` instead, or rely on the ambient `AccentColor`.
 - Never remove a `.tint()` from a `.buttonStyle(.borderedProminent)` button without checking whether it encodes intentional per-section/per-tab color-coding.
 - Never place multiple controls in one `HStack` inside a single `ToolbarItem`.
-- Never use `.topBarLeading`/`.topBarTrailing` without a macOS-compatible fallback.
-- Never simplify a circle-bordered icon, reword a string, or otherwise edit content inside a `#if os(macOS)` branch as an incidental side effect of an iOS fix.
+- Never add a macOS-only layout, toolbar, or sheet for a screen that already exists on iOS — share the iOS code and add a shim to `PlatformCompat.swift` if an API is missing on macOS.
 - Never add a new `@available` gate for a 26+ API without including every platform the code target actually ships on.
 
 ## App Group & Widget Data Sharing
@@ -175,8 +185,8 @@ When asked for a GitHub release note, PR description, or commit message, use the
 
 Each section is a bullet list (`- `). Write from the user/reviewer's perspective; name the concrete UI location (e.g. "Settings → Bluetooth Import"), file/type where useful, and any default state.
 
-**Commit trailer** — when the output is an actual git commit message (not just a GitHub release body), end with the standard co-author trailer:
-`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+**Commit trailer** — when the output is an actual git commit message (not just a GitHub release body), end with the standard co-author trailer naming the Claude model that is actually doing the work in the current session (do not copy a model name from an older commit), e.g.:
+`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
 Omit the trailer when the text is only a GitHub release/PR body.
 
 When a plain, non-technical version is also requested, provide a separate "user-facing" note in simple language (no type prefix, no file/type references), describing what the user can now do and how.

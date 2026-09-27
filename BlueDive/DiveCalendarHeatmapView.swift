@@ -209,6 +209,7 @@ struct DiveCalendarHeatmapView: View {
                     .tapTargetInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
             }
             .accessibilityLabel(Text("Previous Year"))
+            .borderlessButton()
 
             Text(String(selectedYear))
                 .font(.system(size: 28, weight: .black, design: .rounded))
@@ -231,6 +232,7 @@ struct DiveCalendarHeatmapView: View {
                     .tapTargetInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
             }
             .accessibilityLabel(Text("Next Year"))
+            .borderlessButton()
 
             Spacer()
 

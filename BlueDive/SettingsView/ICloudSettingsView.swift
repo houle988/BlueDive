@@ -5,12 +5,10 @@ import UniformTypeIdentifiers
 struct ICloudSettingsView: View {
     @Environment(CloudKitSyncMonitor.self) private var syncMonitor
     @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
-    #if os(iOS)
     @State private var showSyncLogExporter = false
     @State private var syncLogDocument: ExportableFileDocument?
     @State private var syncLogFileName: String = ""
     @State private var isPreparingSyncLog = false
-    #endif
 
     var body: some View {
         ScrollView {
@@ -42,6 +40,7 @@ struct ICloudSettingsView: View {
                         Toggle(isOn: $iCloudSyncEnabled) {
                             Label("iCloud sync", systemImage: "arrow.triangle.2.circlepath.icloud")
                         }
+                        .fullWidthSwitch()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -65,7 +64,6 @@ struct ICloudSettingsView: View {
                 if iCloudSyncEnabled {
                     VStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 8) {
-                            #if os(iOS)
                             Button {
                                 guard !isPreparingSyncLog else { return }
                                 isPreparingSyncLog = true
@@ -88,13 +86,7 @@ struct ICloudSettingsView: View {
                                     }
                                 }
                             }
-                            #else
-                            HStack {
-                                Label("Export Sync Log", systemImage: "square.and.arrow.up")
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            #endif
+                            .borderlessButton()
                         }
                         .padding()
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -145,7 +137,6 @@ struct ICloudSettingsView: View {
         }
         .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("iCloud", bundle: .forAppLanguage(), value: "iCloud", comment: "")))
-        #if os(iOS)
         .fileExporter(
             isPresented: $showSyncLogExporter,
             document: syncLogDocument,
@@ -154,6 +145,5 @@ struct ICloudSettingsView: View {
         ) { _ in
             syncLogDocument = nil
         }
-        #endif
     }
 }

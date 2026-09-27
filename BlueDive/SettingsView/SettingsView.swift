@@ -504,16 +504,19 @@ struct SettingsView: View {
                         SettingsListRow(title: "About BlueDive", icon: "water.waves", color: .cyan)
                     }
                     .foregroundStyle(.primary)
+                    .listRowButton()
 
                     Button { showDisclaimer = true } label: {
                         SettingsListRow(title: "Disclaimer", icon: "exclamationmark.triangle", color: .orange)
                     }
                     .foregroundStyle(.primary)
+                    .listRowButton()
 
                     Button { showWelcomeWizard = true } label: {
                         SettingsListRow(title: "Welcome Tour", icon: "hand.wave", color: .orange)
                     }
                     .foregroundStyle(.primary)
+                    .listRowButton()
 
                     Button {
                         dismiss()
@@ -525,6 +528,7 @@ struct SettingsView: View {
                         SettingsListRow(title: "Intro Animation", icon: "play.circle", color: .teal)
                     }
                     .foregroundStyle(.primary)
+                    .listRowButton()
                 }
             }
             .navigationTitle("Settings")
@@ -667,6 +671,7 @@ struct ModernToggleRow: View {
 
             Toggle(title, isOn: $isOn)
                 .labelsHidden()
+                .fullWidthSwitch()
         }
         .padding()
         .background(

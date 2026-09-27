@@ -46,4 +46,9 @@ extension Notification.Name {
     static let importCertificationXML = Notification.Name("FileImport.importCertificationXML")
     /// Posted when a BlueDive Insurance XML file is opened via file association; switches to Documents tab.
     static let importInsuranceXML     = Notification.Name("FileImport.importInsuranceXML")
+    #if os(macOS)
+    /// Posted by the macOS "Settings…" menu command (⌘,); switches to the Logbook tab,
+    /// where `ContentView` presents the same Settings sheet as its gear button.
+    static let openSettings           = Notification.Name("AppCommand.openSettings")
+    #endif
 }

@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 // MARK: - Certification Icon View
 
@@ -18,7 +17,7 @@ struct CertificationIconView: View {
         let org = CertificationOrganization(rawValue: organization)
         self.orgColor = org?.swiftUIColor ?? .gray
         self.orgText = org?.localizedName ?? organization
-        if let name = Self.assetName(for: organization), UIImage(named: name) != nil {
+        if let name = Self.assetName(for: organization), PlatformImage(named: name) != nil {
             self.resolvedAsset = name
         } else {
             self.resolvedAsset = nil

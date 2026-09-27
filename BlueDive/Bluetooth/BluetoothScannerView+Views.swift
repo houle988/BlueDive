@@ -173,6 +173,7 @@ extension BluetoothScannerView {
 
             Section {
                 Toggle("Download All Dives", isOn: $downloadAllDives)
+                    .fullWidthSwitch()
             } footer: {
                 Text("Re-downloads all dives and merges matched ones. Tap ⓘ at the top right for details.")
             }
@@ -183,6 +184,7 @@ extension BluetoothScannerView {
             if downloadAllDives {
                 Section {
                     Toggle("Limit Import by Date", isOn: $importCutoffEnabled.animation(.easeInOut(duration: 0.2)))
+                        .fullWidthSwitch()
 
                     if importCutoffEnabled {
                         DatePicker(
@@ -200,6 +202,7 @@ extension BluetoothScannerView {
 
             Section {
                 Toggle("Sync device clock", isOn: $syncDeviceClock)
+                    .fullWidthSwitch()
             } footer: {
                 Text("Automatically set the dive computer's clock to your device's current time and time zone after each sync.")
             }
@@ -224,6 +227,7 @@ extension BluetoothScannerView {
                         systemImage: "antenna.radiowaves.left.and.right"
                     )
                 }
+                .listRowButton()
             } footer: {
                 if knownDevices.isEmpty {
                     Text("No previously synced dive computers found. Tap to search for nearby Bluetooth devices.")
@@ -268,6 +272,11 @@ extension BluetoothScannerView {
                     } description: {
                         Text("Make sure your dive computer is turned on and in Bluetooth transfer mode.")
                     }
+                    #if os(macOS)
+                    // A macOS Form row sizes the view to its content and leading-aligns it;
+                    // fill the row so it is centred as on iOS (where it already fills).
+                    .frame(maxWidth: .infinity)
+                    #endif
                 } else {
                     ForEach(bleManager.discoveredPeripherals, id: \.identifier) { peripheral in
                         DeviceRow(
@@ -302,6 +311,7 @@ extension BluetoothScannerView {
             Section {
                 Toggle("Download All Dives", isOn: $downloadAllDives)
                     .disabled(true)
+                    .fullWidthSwitch()
             } footer: {
                 // The toggle is always disabled here, but the value it displays is NOT always
                 // false: connectToKnownDevice's scan fallback (and returning here after cancelling
@@ -326,6 +336,7 @@ extension BluetoothScannerView {
             Section {
                 Toggle("Limit Import by Date", isOn: $importCutoffEnabled.animation(.easeInOut(duration: 0.2)))
                     .disabled(syncState.isActive && syncState != .scanning)
+                    .fullWidthSwitch()
 
                 if importCutoffEnabled {
                     DatePicker(
@@ -370,6 +381,7 @@ extension BluetoothScannerView {
             Section {
                 Toggle("Sync device clock", isOn: $syncDeviceClock)
                     .disabled(syncState.isActive && syncState != .scanning)
+                    .fullWidthSwitch()
             } footer: {
                 Text("Automatically set the dive computer's clock to your device's current time and time zone after each sync.")
             }
@@ -598,7 +610,6 @@ extension BluetoothScannerView {
         }
 
         if !(syncState.isActive && syncState != .scanning) {
-            #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showInfo = true
@@ -607,21 +618,10 @@ extension BluetoothScannerView {
                 }
                 .accessibilityLabel(Text("Information"))
             }
-            #else
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    showInfo = true
-                } label: {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.cyan)
-                }
-                .accessibilityLabel(Text("Information"))
-            }
-            #endif
         }
 
         if syncState == .scanning {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .sheetPrimaryAction) {
                 Button {
                     abandonScanSession()
                 } label: {
@@ -629,7 +629,7 @@ extension BluetoothScannerView {
                 }
             }
 
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .sheetPrimaryAction) {
                 Button {
                     stopScanning()
                     // Drop peripherals discovered by the previous scan so a rescan starts from a

@@ -440,7 +440,7 @@ struct StatisticsView: View {
                     closeToolbarButton { dismiss() }
                 }
                 DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItem(placement: .sheetPrimaryAction) {
                     Button(action: { showFilterSheet = true }) {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "line.3.horizontal.decrease")

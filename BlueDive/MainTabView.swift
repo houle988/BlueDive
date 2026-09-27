@@ -45,13 +45,6 @@ struct MainTabView: View {
     @State private var certToRenew: Certification? = nil
     @State private var insuranceToRenew: DivingInsurance? = nil
 
-    init() {
-        // Force black background for all tabs on macOS
-        #if os(macOS)
-        // This ensures the TabView background is black
-        #endif
-    }
-    
     var body: some View {
         ZStack {
             Color.platformBackground.ignoresSafeArea()
@@ -95,6 +88,11 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .addDiveBluetooth)) { _ in
             selectedTab = 0
         }
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+            selectedTab = 0
+        }
+        #endif
         .onReceive(NotificationCenter.default.publisher(for: .openEquipmentForService)) { note in
             let gearId = note.object as? String
             Task { @MainActor in
@@ -188,31 +186,14 @@ struct MainTabView: View {
                 Task { await scheduleNotificationsAtLaunch() }
         }
         #if os(iOS)
-        .applyIf(!ProcessInfo.processInfo.isiOSAppOnMac) { view in
-            view
-                .fullScreenCover(isPresented: disclaimerBinding) {
-                    DisclaimerView()
-                }
-                .fullScreenCover(isPresented: welcomeBinding) {
-                    WelcomeWizardView()
-                }
+        .fullScreenCover(isPresented: disclaimerBinding) {
+            DisclaimerView()
         }
-        .applyIf(ProcessInfo.processInfo.isiOSAppOnMac) { view in
-            view
-                .sheet(isPresented: disclaimerBinding) {
-                    DisclaimerView()
-                        .presentationSizing(.page)
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.visible)
-                }
-                .sheet(isPresented: welcomeBinding) {
-                    WelcomeWizardView()
-                        .presentationSizing(.page)
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.visible)
-                }
+        .fullScreenCover(isPresented: welcomeBinding) {
+            WelcomeWizardView()
         }
         #else
+        // fullScreenCover is unavailable on macOS; present as sheets instead.
         .sheet(isPresented: disclaimerBinding) {
             DisclaimerView()
                 .presentationSizing(.page)

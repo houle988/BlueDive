@@ -59,7 +59,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disable macOS window tabbing so "View > Show Tab Bar" doesn't
         // offer to open multiple window-tabs alongside the app's own TabView.
-        NSWindow.allowsAutomaticWindowTabbing = true
+        NSWindow.allowsAutomaticWindowTabbing = false
     }
 }
 #endif
@@ -92,9 +92,7 @@ struct BlueDiveApp: App {
 
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
         #if os(iOS)
-        if !ProcessInfo.processInfo.isiOSAppOnMac {
-            BackgroundSyncTask.register()
-        }
+        BackgroundSyncTask.register()
         #endif
         #if DEBUG
         // listPendingNotifications()
@@ -123,13 +121,18 @@ struct BlueDiveApp: App {
             }
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .tint(.cyan)
+            #if os(macOS)
+            // Keep the app background visible behind the window toolbar; otherwise macOS
+            // reveals its own lighter toolbar background when the pointer hovers over it.
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            #endif
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
             .environment(diveStore)
             .environment(syncMonitor)
             .environment(importCoordinator)
             .onChange(of: scenePhase) { _, newPhase in
                 #if os(iOS)
-                if newPhase == .background, !ProcessInfo.processInfo.isiOSAppOnMac {
+                if newPhase == .background {
                     BackgroundSyncTask.schedule()
                     if UserDefaults.standard.bool(forKey: BlueDiveApp.iCloudSyncEnabledKey) {
                         Self.beginSyncBackgroundTask()
@@ -171,6 +174,20 @@ struct BlueDiveApp: App {
                 Button("About BlueDive") {
                     showingAbout = true
                 }
+            }
+            // Settings is the same sheet as on iOS (presented by ContentView),
+            // not a separate Settings scene; ⌘, opens it from the app menu.
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    // Settings is itself a sheet: ignore ⌘, while another sheet is already
+                    // shown (the key window is then that sheet, or has one attached), so the
+                    // request is not left pending until that sheet closes.
+                    if let window = NSApp.keyWindow, window.sheetParent != nil || window.attachedSheet != nil {
+                        return
+                    }
+                    NotificationCenter.default.post(name: .openSettings, object: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
             }
         }
         #endif

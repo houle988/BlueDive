@@ -37,6 +37,7 @@ struct DataManagementSettingsView: View {
                                 Spacer()
                             }
                         }
+                        .borderlessButton()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -68,6 +69,7 @@ struct DataManagementSettingsView: View {
                             }
                         }
                         .foregroundStyle(.red)
+                        .borderlessButton()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -103,6 +105,7 @@ struct DataManagementSettingsView: View {
                         }
                         .foregroundStyle(.red)
                         .disabled(isErasingData || erasePhase != nil)
+                        .borderlessButton()
 
                         if let erasePhase {
                             Group {

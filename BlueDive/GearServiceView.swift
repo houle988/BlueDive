@@ -145,7 +145,7 @@ struct GearServiceView: View {
                         }
 
                         Section("Description") {
-                            TextField("Description", text: $serviceDescription, axis: .vertical)
+                            formTextField("Description", text: $serviceDescription, axis: .vertical)
                                 .lineLimit(4...)
                                 .overlay(alignment: .trailing) {
                                     if !serviceDescription.isEmpty {
@@ -162,7 +162,7 @@ struct GearServiceView: View {
                         }
 
                         Section("Cost (optional)") {
-                            TextField(0.0.editableString(decimals: 2, minDecimals: 2), text: $serviceCost)
+                            formTextField(verbatim: 0.0.editableString(decimals: 2, minDecimals: 2), text: $serviceCost)
                                 .platformKeyboardType(.decimalPad)
                                 .overlay(alignment: .trailing) {
                                     if !serviceCost.isEmpty {
@@ -191,12 +191,14 @@ struct GearServiceView: View {
                                     Label("Delete Record", systemImage: "trash")
                                         .frame(maxWidth: .infinity, alignment: .center)
                                 }
+                                .listRowButton()
                             }
                         }
 
                         if !mode.isEdit {
                             Section {
                                 Toggle("Schedule Next Service", isOn: $scheduleNextService)
+                                    .fullWidthSwitch()
                                     .onChange(of: scheduleNextService) { _, isOn in
                                         if isOn {
                                             nextServiceDate = Calendar.current.date(
@@ -224,6 +226,7 @@ struct GearServiceView: View {
                             }
                         }
                     }
+                    .groupedFormStyleOnMac()
                     .alert("Delete this service record?", isPresented: $showDeleteConfirmation) {
                         Button("Delete", role: .destructive) {
                             if case .edit(let record) = mode {
@@ -1054,7 +1057,7 @@ struct GearServiceView: View {
             }
         }
         
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(placement: .sheetPrimaryAction) {
             Menu {
                 Button {
                     showEditGear = true

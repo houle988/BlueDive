@@ -55,10 +55,8 @@ struct AddGearGroupView: View {
             #if os(macOS)
             .frame(minWidth: 500, idealWidth: 600, maxWidth: 750,
                    minHeight: 500, idealHeight: 700, maxHeight: 900)
-            .background(Color(nsColor: .textBackgroundColor))
-            #else
-            .background(Color(.systemGroupedBackground))
             #endif
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("New Group")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)

@@ -62,10 +62,8 @@ struct AddTankTemplateView: View {
             #if os(macOS)
             .frame(minWidth: 500, idealWidth: 600, maxWidth: 750,
                    minHeight: 400, idealHeight: 550, maxHeight: 700)
-            .background(Color(nsColor: .textBackgroundColor))
-            #else
-            .background(Color(.systemGroupedBackground))
             #endif
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("New Template")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)

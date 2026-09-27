@@ -421,6 +421,7 @@ struct ImportFormatPickerView: View {
             Toggle("Import Gear", isOn: $options.importGear)
                 .labelsHidden()
                 .tint(.green)
+                .fullWidthSwitch()
         }
         .padding()
         .background(

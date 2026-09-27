@@ -88,7 +88,7 @@ struct TankTemplateListView: View {
         ToolbarItem(placement: .cancellationAction) {
             closeToolbarButton { dismiss() }
         }
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(placement: .sheetPrimaryAction) {
             Button {
                 showAddTemplate = true
             } label: {

@@ -907,7 +907,7 @@ struct DiveMapView: View {
             .background(filterObservers)
             .toolbar {
                 DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
-                ToolbarItem(placement: .principal) {
+                ToolbarItem(placement: .principalOutsideTabBar) {
                     Picker("Coordinate Mode", selection: $coordinateMode) {
                         Text("Entry").tag(MapCoordinateMode.entry)
                         Text("Exit").tag(MapCoordinateMode.exit)
@@ -1156,6 +1156,7 @@ struct DiveClusterListCard: View {
                         .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
                 }
                 .accessibilityLabel(Text("Close"))
+                .borderlessButton()
             }
 
             ScrollView {
@@ -1287,6 +1288,7 @@ struct DiveMapCard: View {
                         .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
                 }
                 .accessibilityLabel(Text("Close"))
+                .borderlessButton()
             }
 
             HStack(spacing: 16) {

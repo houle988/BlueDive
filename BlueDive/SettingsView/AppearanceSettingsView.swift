@@ -20,22 +20,22 @@ struct AppearanceSettingsView: View {
                                 Text(mode.label).tag(mode)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .fullWidthSegmentedPicker()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                    } else {
-                        Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                    }
+                    #if os(macOS)
+                    Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #else
+                    Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #endif
                 }
                 .padding()
                 .background(
@@ -65,17 +65,17 @@ struct AppearanceSettingsView: View {
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                    } else {
-                        Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                    }
+                    #if os(macOS)
+                    Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #else
+                    Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #endif
                 }
                 .padding()
                 .background(

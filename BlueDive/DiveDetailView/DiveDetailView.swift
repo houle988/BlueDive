@@ -260,7 +260,7 @@ struct DiveDetailView: View {
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
-                .background(Color.platformBackground)
+                .background(AppBackground())
                 .offset(x: dragOffset)
             }
             .clipped()
@@ -331,7 +331,7 @@ struct DiveDetailView: View {
                 }
         )
         .modifier(NavTitleIfNotPreview(title: dive.siteName, isSlidePreview: isSlidePreview))
-        .background(Color.platformBackground.ignoresSafeArea())
+        .background(AppBackground().ignoresSafeArea())
         #if os(iOS)
         // Disable the system interactive back-swipe so our own edge swipe can
         // navigate to the previous dive instead of popping to the list.
@@ -360,8 +360,11 @@ struct DiveDetailView: View {
                 #endif
                 #if os(macOS)
                 if !sortedDives.isEmpty {
-                    ToolbarItem(placement: .principal) {
-                        diveNavigationButtons
+                    ToolbarItem(placement: .principalOutsideTabBar) {
+                        previousDiveButton
+                    }
+                    ToolbarItem(placement: .principalOutsideTabBar) {
+                        nextDiveButton
                     }
                 }
                 #else
@@ -399,13 +402,8 @@ struct DiveDetailView: View {
                             Label("Export Dive to PDF", systemImage: "doc.richtext")
                         }
                     } label: {
-                        #if os(macOS)
-                        Label("Export", systemImage: "square.and.arrow.up.circle.fill")
-                            .foregroundStyle(.cyan)
-                        #else
                         Image(systemName: "square.and.arrow.up")
                             .foregroundStyle(.cyan)
-                        #endif
                     }
                     .accessibilityLabel(Text("Export Dive"))
                 }
@@ -415,13 +413,8 @@ struct DiveDetailView: View {
                     Button {
                         showEditSheet = true
                     } label: {
-                        #if os(macOS)
-                        Label("Edit", systemImage: "pencil.circle.fill")
-                            .foregroundStyle(.cyan)
-                        #else
                         Image(systemName: "pencil")
                             .foregroundStyle(.cyan)
-                        #endif
                     }
                     .accessibilityLabel(Text("Edit Dive"))
                 }
@@ -547,52 +540,37 @@ struct DiveDetailView: View {
         }
     }
 
-    private var diveNavigationButtons: some View {
-        HStack(spacing: 4) {
-            Button {
-                if let prev = previousDiveInList { navigateTo(prev, forward: false) }
-            } label: {
-                Image(systemName: "chevron.left.circle")
-                    .font(.title3)
-                    .foregroundStyle(previousDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
-                    .padding(8)
-                    .contentShape(Rectangle())
-            }
-            .disabled(previousDiveInList == nil)
-            .help("Previous dive")
-            .accessibilityLabel(Text("Previous dive"))
-
-            Button {
-                if let next = nextDiveInList { navigateTo(next, forward: true) }
-            } label: {
-                Image(systemName: "chevron.right.circle")
-                    .font(.title3)
-                    .foregroundStyle(nextDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
-                    .padding(8)
-                    .contentShape(Rectangle())
-            }
-            .disabled(nextDiveInList == nil)
-            .help("Next dive")
-            .accessibilityLabel(Text("Next dive"))
+    #if os(macOS)
+    // Previous / next dive buttons (macOS replaces the iOS swipe-between-dives gesture).
+    // Each is its own ToolbarItem so toolbar overflow can manage them independently.
+    private var previousDiveButton: some View {
+        Button {
+            if let prev = previousDiveInList { navigateTo(prev, forward: false) }
+        } label: {
+            Image(systemName: "chevron.left")
+                .foregroundStyle(previousDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
         }
+        .disabled(previousDiveInList == nil)
+        .help("Previous dive")
+        .accessibilityLabel(Text("Previous dive"))
     }
+
+    private var nextDiveButton: some View {
+        Button {
+            if let next = nextDiveInList { navigateTo(next, forward: true) }
+        } label: {
+            Image(systemName: "chevron.right")
+                .foregroundStyle(nextDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
+        }
+        .disabled(nextDiveInList == nil)
+        .help("Next dive")
+        .accessibilityLabel(Text("Next dive"))
+    }
+    #endif
 
     // MARK: - Tab Bar
 
     private var diveTabBar: some View {
-        #if os(macOS)
-        // macOS : segmented control natif
-        Picker("", selection: $selectedTab) {
-            ForEach(DiveTab.visibleCases) { tab in
-                Label(tab.localizedName, systemImage: tab.icon).tag(tab)
-            }
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(Color.primary.opacity(0.05))
-        .animation(.easeInOut(duration: 0.2), value: selectedTab)
-        #else
         // iOS : tab bar scrollable avec indicateur coloré
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
@@ -633,7 +611,6 @@ struct DiveDetailView: View {
             }
         }
         .background(Color.primary.opacity(0.05))
-        #endif
     }
 
     // MARK: - Edit Sheet Router
@@ -666,28 +643,6 @@ struct DiveDetailView: View {
 
     @ViewBuilder
     private func noEditAvailableView(title: LocalizedStringKey, message: LocalizedStringKey) -> some View {
-        #if os(macOS)
-        VStack(spacing: 20) {
-            HStack {
-                Spacer()
-                Button("Close") { showEditSheet = false }
-                    .keyboardShortcut(.escape, modifiers: [])
-            }
-            .padding()
-            Spacer()
-            Image(systemName: "lock.circle.fill")
-                .font(.system(size: 50))
-                .foregroundStyle(.secondary)
-            Text("Editing Not Available")
-                .font(.headline).foregroundStyle(.primary)
-            Text(message)
-                .font(.subheadline).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).padding(.horizontal, 30)
-            Spacer()
-        }
-        .frame(width: 400, height: 280)
-        .background(Color(NSColor.windowBackgroundColor))
-        #else
         NavigationStack {
             VStack(spacing: 20) {
                 Image(systemName: "lock.circle")
@@ -711,7 +666,6 @@ struct DiveDetailView: View {
                 }
             }
         }
-        #endif
     }
 }
 
@@ -727,14 +681,9 @@ private struct NavTitleIfNotPreview: ViewModifier {
         if isSlidePreview {
             content
         } else {
-            #if os(iOS)
             content
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
-            #else
-            content
-                .navigationTitle(title)
-            #endif
         }
     }
 }

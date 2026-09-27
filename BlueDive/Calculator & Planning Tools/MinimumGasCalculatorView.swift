@@ -356,28 +356,19 @@ struct MinimumGasCalculatorView: View {
                 detailsSection
                 resultsSection
             }
+            .groupedFormStyleOnMac()
             .navigationTitle("Minimum Gas")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                #if os(iOS)
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showInfo = true } label: {
                         Image(systemName: "info")
                     }
                     .accessibilityLabel(Text("Information"))
                 }
-                #else
-                ToolbarItem(placement: .automatic) {
-                    Button { showInfo = true } label: {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.cyan)
-                    }
-                    .accessibilityLabel(Text("Information"))
-                }
-                #endif
                 #if os(iOS)
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -547,7 +538,7 @@ struct MinimumGasCalculatorView: View {
                 Text("Metric").tag(UnitMode.metric)
                 Text("Imperial").tag(UnitMode.imperial)
             } label: { EmptyView() }
-            .pickerStyle(.segmented)
+            .fullWidthSegmentedPicker()
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         }
     }
@@ -568,8 +559,11 @@ struct MinimumGasCalculatorView: View {
             NumberRow(label: unitMode == .metric ? "Ascent Speed 2nd Half (m/min)"   : "Ascent Speed 2nd Half (ft/min)",  text: $v2Str,
                       warning: toDouble(v2Str) <= 0 ? "Must be greater than 0" : nil, isFocused: $isAnyFieldFocused)
             Toggle("Round Up Ascent Time", isOn: $roundUpAscent)
+                .fullWidthSwitch()
             Toggle(unitMode == .metric ? "Safety Stop (5m)" : "Safety Stop (15ft)", isOn: $safetyStop)
+                .fullWidthSwitch()
             Toggle("Safety Margin", isOn: $safetyMarginEnabled)
+                .fullWidthSwitch()
             if safetyMarginEnabled {
                 NumberRow(label: "Multiplier (×)", text: $safetyMarginStr,
                           note: "Accounts for increased RMV under stress",
@@ -588,9 +582,11 @@ struct MinimumGasCalculatorView: View {
             NumberRow(label: unitMode == .metric ? "Volume (L)"           : "Volume (cuft)",         text: $cylVolStr,
                       warning: toDouble(cylVolStr) <= 0 ? "Must be greater than 0" : nil, isFocused: $isAnyFieldFocused)
             Toggle("Twinset", isOn: $isTwinset)
+                .fullWidthSwitch()
             NumberRow(label: unitMode == .metric ? "Fill Pressure (bar)"  : "Fill Pressure (psi)",   text: $fillPressureStr,
                       warning: toDouble(fillPressureStr) <= 0 ? "Must be greater than 0" : nil, isFocused: $isAnyFieldFocused)
             Toggle("Reserve Gas", isOn: $includeReserveGas)
+                .fullWidthSwitch()
             if includeReserveGas {
                 NumberRow(label: unitMode == .metric ? "Reserve Gas (bar)" : "Reserve Gas (psi)", text: $marginStr, isFocused: $isAnyFieldFocused)
             }

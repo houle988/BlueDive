@@ -340,6 +340,7 @@ struct AddFishView: View {
                 HStack {
                     Button("Cancel") { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
+                        .borderlessButton()
 
                     Spacer()
 
@@ -595,6 +596,7 @@ struct EditFishView: View {
                 HStack {
                     Button("Cancel") { dismiss() }
                         .keyboardShortcut(.escape, modifiers: [])
+                        .borderlessButton()
 
                     Spacer()
 
@@ -810,7 +812,7 @@ struct AddGearToDiveView: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundStyle(.orange)
+                    .confirmationActionForeground(.orange)
                 }
             }
         }
@@ -897,6 +899,7 @@ struct AddGearToDiveView: View {
                             }
                         }
                         .listRowBackground(Color.primary.opacity(0.05))
+                        .listRowButton()
                     }
                 } header: {
                     Text(GearCategory(rawValue: category)?.localizedName ?? LocalizedStringKey(category))
@@ -984,7 +987,7 @@ struct MenuTextField: View {
             Image(systemName: icon)
                 .foregroundStyle(color)
                 .frame(width: 24)
-            TextField(label, text: $text)
+            formTextField(label, text: $text)
                 .foregroundStyle(.primary)
             if !text.isEmpty {
                 Button {
@@ -1024,7 +1027,7 @@ struct AutocompleteMenuTextField: View {
                 Image(systemName: icon)
                     .foregroundStyle(color)
                     .frame(width: 24)
-                TextField(label, text: $text)
+                formTextField(label, text: $text)
                     .foregroundStyle(.primary)
                     .focused($isFocused)
                     .onChange(of: text) {
@@ -1111,7 +1114,7 @@ struct SiteSearchField: View {
                 Image(systemName: selectedSite == nil ? "magnifyingglass" : "checkmark.circle.fill")
                     .foregroundStyle(.orange)
                     .frame(width: 24)
-                TextField("Search sites…", text: $searchText)
+                formTextField("Search sites…", text: $searchText)
                     .foregroundStyle(.primary)
                     .autocorrectionDisabled()
                     .focused($isFocused)
@@ -1204,56 +1207,6 @@ struct SiteSearchField: View {
 }
 
 
-// MARK: - FlowLayout for macOS
-
-#if os(macOS)
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        var totalHeight: CGFloat = 0
-        var totalWidth: CGFloat = 0
-
-        var lineWidth: CGFloat = 0
-        var lineHeight: CGFloat = 0
-
-        for size in sizes {
-            if lineWidth + size.width > proposal.width ?? 0 {
-                totalHeight += lineHeight + spacing
-                lineWidth = size.width
-                lineHeight = size.height
-            } else {
-                lineWidth += size.width + spacing
-                lineHeight = max(lineHeight, size.height)
-            }
-            totalWidth = max(totalWidth, lineWidth)
-        }
-        totalHeight += lineHeight
-
-        return CGSize(width: totalWidth, height: totalHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var point = bounds.origin
-        var lineHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-
-            if point.x + size.width > bounds.maxX {
-                point.x = bounds.origin.x
-                point.y += lineHeight + spacing
-                lineHeight = 0
-            }
-
-            subview.place(at: point, proposal: .unspecified)
-            point.x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-        }
-    }
-}
-#endif
 
 // MARK: - Array Extension
 
@@ -1386,6 +1339,7 @@ struct PhotoPreviewSheet: View {
                 if photos.isEmpty {
                     Color.platformBackground.ignoresSafeArea()
                 } else {
+                    #if os(iOS)
                     TabView(selection: $currentIndex) {
                         ForEach(photos.indices, id: \.self) { index in
                             PhotoPageView(data: photos[index], index: index, total: photos.count)
@@ -1395,6 +1349,14 @@ struct PhotoPreviewSheet: View {
                     .tabViewStyle(.page(indexDisplayMode: .never))
                     .opacity(isPageSeeded ? 1 : 0)
                     .animation(.easeIn(duration: 0.15), value: isPageSeeded)
+                    #else
+                    // The paging TabView style is unavailable on macOS: show the current
+                    // photo only and navigate with the Previous / Next toolbar buttons.
+                    if let photo = currentPhoto {
+                        PhotoPageView(data: photo, index: currentIndex, total: photos.count)
+                            .id(currentIndex)
+                    }
+                    #endif
                 }
             }
             .background(Color.platformBackground.ignoresSafeArea())
@@ -1425,11 +1387,19 @@ struct PhotoPreviewSheet: View {
                 }
             }
             .toolbar {
-                #if os(iOS)
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    #if os(macOS)
+                    // macOS saves the photo straight to disk through a save panel.
+                    Button {
+                        savePhotoToDisk()
+                    } label: {
+                        Label("Save As", systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(photos.isEmpty)
+                    #else
                     if let shareItem = cachedShareItem {
                         let name = cachedExportName
                         if let thumbnail = shareThumbnail {
@@ -1452,6 +1422,7 @@ struct PhotoPreviewSheet: View {
                         // standard dimmed-disabled visual treatment.
                         Button(action: {}) { shareButtonLabel }.disabled(true)
                     }
+                    #endif
                 }
                 ToolbarItem(placement: .destructiveAction) {
                     Button(role: .destructive) {
@@ -1463,29 +1434,6 @@ struct PhotoPreviewSheet: View {
                     .disabled(photos.isEmpty)
                     .accessibilityLabel(Text("Remove Photo"))
                 }
-                #else
-                ToolbarItem(placement: .cancellationAction) {
-                    HStack(spacing: 8) {
-                        Button {
-                            savePhotoToDisk()
-                        } label: {
-                            Label("Save As", systemImage: "square.and.arrow.down")
-                        }
-                        .disabled(photos.isEmpty)
-                        Button {
-                            showDeleteAlert = true
-                        } label: {
-                            Text("Delete")
-                                .foregroundStyle(.red)
-                        }
-                        .disabled(photos.isEmpty)
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.primary)
-                }
-                #endif
             }
             .alert("Remove Photo", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) {

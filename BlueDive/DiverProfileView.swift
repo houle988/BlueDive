@@ -13,18 +13,18 @@ extension Color {
         let percent = max(0.0, min(1.0, percentage))
         
         // Extract RGBA components for both colors
-        let startComponents = UIColor(self).cgColor.components ?? [0, 0, 0, 1]
-        let endComponents = UIColor(Color.green).cgColor.components ?? [0, 0, 0, 1]
-        
-        // Handle fallback if components are missing
+        let startComponents = Self.rgbaComponents(of: self)
+        let endComponents = Self.rgbaComponents(of: .green)
+
+        // Guard every index — a greyscale CGColor has only 2 components [white, alpha].
         let r1 = startComponents[0]
-        let g1 = startComponents[1]
-        let b1 = startComponents[2]
+        let g1 = startComponents.count > 1 ? startComponents[1] : 0.0
+        let b1 = startComponents.count > 2 ? startComponents[2] : 0.0
         let a1 = startComponents.count > 3 ? startComponents[3] : 1.0
-        
+
         let r2 = endComponents[0]
-        let g2 = endComponents[1]
-        let b2 = endComponents[2]
+        let g2 = endComponents.count > 1 ? endComponents[1] : 0.0
+        let b2 = endComponents.count > 2 ? endComponents[2] : 0.0
         let a2 = endComponents.count > 3 ? endComponents[3] : 1.0
         
         // Perform linear interpolation
@@ -34,6 +34,18 @@ extension Color {
         let a = a1 + (a2 - a1) * percent
         
         return Color(red: r, green: g, blue: b, opacity: a)
+    }
+
+    /// Returns the CGColor components of `color`, falling back to opaque black.
+    /// On macOS an `NSColor` created from a SwiftUI `Color` may be a catalog or
+    /// greyscale colour, so it is converted to sRGB first to obtain RGBA components.
+    private static func rgbaComponents(of color: Color) -> [CGFloat] {
+        #if os(macOS)
+        let platformColor = PlatformColor(color).usingColorSpace(.sRGB) ?? PlatformColor(color)
+        #else
+        let platformColor = PlatformColor(color)
+        #endif
+        return platformColor.cgColor.components ?? [0, 0, 0, 1]
     }
 }
 
@@ -538,6 +550,7 @@ struct DiverProfileView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(.cyan)
                     }
+                    .borderlessButton()
 
                     Spacer()
 
@@ -555,6 +568,7 @@ struct DiverProfileView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.cyan.opacity(0.7))
                             }
+                            .borderlessButton()
                         }
                     }
                 }
@@ -696,6 +710,7 @@ struct DiverProfileView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(.blue)
                     }
+                    .borderlessButton()
 
                     Spacer()
 
@@ -713,6 +728,7 @@ struct DiverProfileView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.blue.opacity(0.7))
                             }
+                            .borderlessButton()
                         }
                     }
                 }

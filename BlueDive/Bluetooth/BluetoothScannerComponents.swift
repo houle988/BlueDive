@@ -283,6 +283,7 @@ struct DeviceReassociationPickerSheet: View {
                             }
                         }
                         .foregroundStyle(.primary)
+                        .listRowButton()
                     }
                 } header: {
                     Text("Known Dive Computers")
@@ -297,6 +298,7 @@ struct DeviceReassociationPickerSheet: View {
                     } label: {
                         Text("Connect as New Device")
                     }
+                    .listRowButton()
                 }
             }
             .formStyle(.grouped)
@@ -370,6 +372,7 @@ struct ModelPickerSheet: View {
                         }
                     }
                     .accessibilityAddTraits(currentOverride == nil ? .isSelected : [])
+                    .listRowButton()
                 } header: {
                     Text("Detected Model")
                 } footer: {
@@ -398,6 +401,7 @@ struct ModelPickerSheet: View {
                                 }
                             }
                             .accessibilityAddTraits(currentOverride?.name == model.name ? .isSelected : [])
+                            .listRowButton()
                         }
                     }
                 }

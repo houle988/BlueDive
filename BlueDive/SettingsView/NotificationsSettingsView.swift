@@ -19,6 +19,7 @@ struct NotificationsSettingsView: View {
                         Toggle(isOn: $notificationsEnabled) {
                             Label("Notifications", systemImage: "bell.fill")
                         }
+                        .fullWidthSwitch()
                         .onChange(of: notificationsEnabled) {
                             if notificationsEnabled {
                                 Task { await requestNotificationPermission() }
@@ -56,6 +57,7 @@ struct NotificationsSettingsView: View {
                             Toggle(isOn: $gearReminders) {
                                 Label("Equipment maintenance", systemImage: "wrench.fill")
                             }
+                            .fullWidthSwitch()
                             .onChange(of: gearReminders) {
                                 Task { await rescheduleGearNotifications() }
                             }
@@ -67,6 +69,7 @@ struct NotificationsSettingsView: View {
                             Toggle(isOn: $certReminders) {
                                 Label("Certification expiration", systemImage: "rosette")
                             }
+                            .fullWidthSwitch()
                             .onChange(of: certReminders) {
                                 Task { await rescheduleCertNotifications() }
                             }
@@ -78,6 +81,7 @@ struct NotificationsSettingsView: View {
                             Toggle(isOn: $insuranceReminders) {
                                 Label("Insurance expiration", systemImage: "shield.fill")
                             }
+                            .fullWidthSwitch()
                             .onChange(of: insuranceReminders) {
                                 Task { await rescheduleInsuranceNotifications() }
                             }
@@ -89,6 +93,7 @@ struct NotificationsSettingsView: View {
                             Toggle(isOn: $milestoneNotifs) {
                                 Label("Milestones reached", systemImage: "star.fill")
                             }
+                            .fullWidthSwitch()
                         }
                         .padding()
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -125,7 +130,7 @@ struct NotificationsSettingsView: View {
                             #elseif os(macOS)
                             HStack {
                                 Label {
-                                    Text("Notifications are disabled. Enable them in System Preferences → Notifications → BlueDive.")
+                                    Text("Notifications are disabled. Enable them in System Settings → Notifications → BlueDive.")
                                         .foregroundStyle(.orange)
                                 } icon: {
                                     Image(systemName: "exclamationmark.triangle.fill")

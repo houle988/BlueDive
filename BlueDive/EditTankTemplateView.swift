@@ -60,78 +60,12 @@ struct EditTankTemplateView: View {
     // MARK: - Body
 
     var body: some View {
-        #if os(macOS)
-        macOSLayout
-        #else
         iOSLayout
-        #endif
     }
 
     // MARK: - Platform Layouts
 
-    #if os(macOS)
-    private var macOSLayout: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 20) {
-                        headerSection
-                        nameSection
-                        tankPropertiesSection
-                        identificationSection
 
-                        if !isFormValid && (!name.isEmpty || !workingPressureText.isEmpty) {
-                            validationSection
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 16)
-                }
-
-                Divider().overlay(Color.primary.opacity(0.08))
-
-                // Bottom bar
-                HStack {
-                    Button("Cancel") { dismiss() }
-                        .keyboardShortcut(.escape)
-                    Spacer()
-                    Button {
-                        saveChanges()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Save")
-                        }
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(isFormValid ? .cyan : .cyan.opacity(0.3))
-                        )
-                        .foregroundStyle(isFormValid ? .black : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!isFormValid)
-                    .keyboardShortcut(.return)
-                }
-                .padding()
-            }
-            .frame(minWidth: 500, idealWidth: 600, maxWidth: 750,
-                   minHeight: 400, idealHeight: 550, maxHeight: 700)
-            .background(Color.platformBackground.ignoresSafeArea())
-            .navigationTitle("Edit Tank Template")
-
-            .alert("Error", isPresented: $showValidationError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(LocalizedStringKey(validationMessage))
-            }
-        }
-    }
-    #endif
-
-    #if os(iOS)
     private var iOSLayout: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -154,6 +88,7 @@ struct EditTankTemplateView: View {
                 HStack {
                     Button("Cancel") { dismiss() }
                         .foregroundStyle(.primary)
+                        .borderlessButton()
                     Spacer()
                     Button {
                         saveChanges()
@@ -188,7 +123,6 @@ struct EditTankTemplateView: View {
             }
         }
     }
-    #endif
 
     // MARK: - View Components
 

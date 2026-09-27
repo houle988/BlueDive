@@ -342,7 +342,7 @@ struct DocumentsView: View {
                             Text(LocalizedStringKey(section.rawValue)).tag(section)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .fullWidthSegmentedPicker()
                     .padding(.horizontal)
                     .padding(.top, 8)
                     .padding(.bottom, 2)
@@ -1562,34 +1562,7 @@ struct AddCertificationView: View {
                                     suggestions: diverNameSuggestions
                                 )
 
-                                #if os(macOS)
-                                certificationMenuRow("Organization", selection: CertificationOrganization(rawValue: organization)?.localizedName ?? organization) {
-                                    ForEach(CertificationOrganization.allCases) { org in
-                                        Button(org.localizedName) {
-                                            Task { @MainActor in
-                                                organization = org.rawValue
-                                                if !org.levels.contains(level) {
-                                                    level = ""
-                                                }
-                                                updateAutoName()
-                                            }
-                                        }
-                                    }
-                                }
-                                certificationMenuRow("Level", selection: level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : level) {
-                                    ForEach(availableLevels, id: \.self) { lvl in
-                                        Button {
-                                            Task { @MainActor in
-                                                level = lvl
-                                                updateAutoName()
-                                            }
-                                        } label: {
-                                            Text(verbatim: lvl == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : lvl)
-                                        }
-                                    }
-                                }
-                                #else
-                                Picker("Organization", selection: $organization) {
+                                fullWidthPicker("Organization", selection: $organization) {
                                     ForEach(CertificationOrganization.allCases) { org in
                                         Text(verbatim: org.localizedName).tag(org.rawValue)
                                     }
@@ -1600,7 +1573,7 @@ struct AddCertificationView: View {
                                     }
                                     updateAutoName()
                                 }
-                                Picker("Level", selection: $level) {
+                                fullWidthPicker("Level", selection: $level) {
                                     Text("Select a level").tag("")
                                     ForEach(availableLevels, id: \.self) { lvl in
                                         Text(verbatim: lvl == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : lvl)
@@ -1610,7 +1583,6 @@ struct AddCertificationView: View {
                                 .onChange(of: level) {
                                     updateAutoName()
                                 }
-                                #endif
 
                                 certificationTextField("Certification Name", text: $name)
                                     .onChange(of: name) {
@@ -1635,6 +1607,7 @@ struct AddCertificationView: View {
 
                                 Toggle("Has an expiration date", isOn: $hasExpiration.animation(.easeInOut(duration: 0.2)))
                                     .foregroundStyle(.primary)
+                                    .fullWidthSwitch()
 
                                 if hasExpiration {
                                     DatePicker("Expiration Date", selection: $expirationDate, displayedComponents: .date)
@@ -1791,41 +1764,6 @@ struct AddCertificationView: View {
         }
     }
 
-    #if os(macOS)
-    private func certificationMenuRow<Content: View>(_ label: LocalizedStringKey, selection: String, @ViewBuilder menuItems: () -> Content) -> some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-            Spacer()
-            Menu {
-                menuItems()
-            } label: {
-                HStack(spacing: 6) {
-                    Group {
-                        if selection.isEmpty {
-                            Text("Choose…")
-                        } else {
-                            Text(selection)
-                        }
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.cyan)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.cyan.opacity(0.1)))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
-    }
-    #endif
 
     private func updateAutoName() {
         if !nameManuallyEdited {

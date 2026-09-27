@@ -21,6 +21,7 @@ struct DiveProfileSettingsView: View {
                                     .foregroundStyle(.orange)
                             }
                         }
+                        .fullWidthSwitch()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))

@@ -59,28 +59,19 @@ struct BestMixCalculatorView: View {
                 inputSection
                 resultsSection
             }
+            .groupedFormStyleOnMac()
             .navigationTitle("Best Mix")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                #if os(iOS)
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showInfo = true } label: {
                         Image(systemName: "info")
                     }
                     .accessibilityLabel(Text("Information"))
                 }
-                #else
-                ToolbarItem(placement: .automatic) {
-                    Button { showInfo = true } label: {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.cyan)
-                    }
-                    .accessibilityLabel(Text("Information"))
-                }
-                #endif
                 #if os(iOS)
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -121,7 +112,7 @@ struct BestMixCalculatorView: View {
                 Text("Metric").tag(UnitMode.metric)
                 Text("Imperial").tag(UnitMode.imperial)
             } label: { EmptyView() }
-            .pickerStyle(.segmented)
+            .fullWidthSegmentedPicker()
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         }
     }
@@ -136,6 +127,7 @@ struct BestMixCalculatorView: View {
             }
             numberRow(unitMode == .metric ? "Depth (m)" : "Depth (ft)", text: $depthStr)
             Toggle("Seawater", isOn: $isSeawater)
+                .fullWidthSwitch()
             LabeledContent("Pressure") {
                 Text(verbatim: result.ata.localizedString(decimals: 2, minDecimals: 2) + " ATA")
                     .foregroundStyle(.secondary)

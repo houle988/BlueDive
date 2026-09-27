@@ -130,10 +130,8 @@ struct EditGearView: View {
             }
             #if os(macOS)
             .frame(minWidth: 600, idealWidth: 650, maxWidth: 750, minHeight: 500, idealHeight: 650, maxHeight: 900)
-            .background(Color(nsColor: .textBackgroundColor))
-            #else
-            .background(Color(.systemGroupedBackground))
             #endif
+            .background(Color(.systemGroupedBackground))
             .toolbar { toolbarContent }
             .alert("Error", isPresented: $showValidationError) {
                 Button("OK", role: .cancel) { }
@@ -424,7 +422,7 @@ struct EditGearView: View {
                             .fontWeight(.medium)
                     }
                 }
-                .toggleStyle(.switch)
+                .fullWidthSwitch(iOS: .switch)
                 .padding()
                 .background(Color.platformSecondaryBackground)
                 .cornerRadius(10)
@@ -438,7 +436,7 @@ struct EditGearView: View {
                             .fontWeight(.medium)
                     }
                 }
-                .toggleStyle(.switch)
+                .fullWidthSwitch(iOS: .switch)
                 .padding()
                 .background(Color.platformSecondaryBackground)
                 .cornerRadius(10)

@@ -26,6 +26,7 @@ struct DiveSequenceSettingsView: View {
                                 Spacer()
                             }
                         }
+                        .borderlessButton()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -39,6 +40,7 @@ struct DiveSequenceSettingsView: View {
                                 Spacer()
                             }
                         }
+                        .borderlessButton()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -64,6 +66,7 @@ struct DiveSequenceSettingsView: View {
                         Toggle(isOn: $autoSequenceEnabled) {
                             Label("Auto-update dive numbers", systemImage: "arrow.triangle.2.circlepath")
                         }
+                        .fullWidthSwitch()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -95,6 +98,7 @@ struct DiveSequenceSettingsView: View {
                                 Spacer()
                             }
                         }
+                        .borderlessButton()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))

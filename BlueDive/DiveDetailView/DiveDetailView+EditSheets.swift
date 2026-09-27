@@ -197,662 +197,9 @@ struct EditMenuStatsView: View {
     }
 
     var body: some View {
-        #if os(macOS)
-        macOSBody
-        #else
         iOSBody
-        #endif
     }
 
-    #if os(macOS)
-    private var macOSBody: some View {
-        VStack(spacing: 0) {
-            // En-tête élégant
-            HStack(spacing: 12) {
-                Image(systemName: "chart.xyaxis.line")
-                    .font(.title2)
-                    .foregroundStyle(.cyan)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Edit Dive")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.primary)
-                    Text("Overview")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Button("Cancel") {
-                    dismiss()
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-
-                Button("Save Changes") {
-                    save()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.cyan)
-                .controlSize(.large)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 20)
-            .background(
-                LinearGradient(
-                    colors: [Color.cyan.opacity(0.1), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    macOSModernGroupBox("Diver", icon: "person.fill", color: .blue) {
-                        macOSModernAutocompleteField("Diver", text: $workingDiverName, icon: "person.fill", suggestions: uniqueDiverNames)
-                        HStack(spacing: 12) {
-                            Image(systemName: "number")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text("Dive #")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 120, alignment: .leading)
-                            TextField("", text: $workingDiveNumber)
-                                .textFieldStyle(.roundedBorder)
-                                .overlay(alignment: .trailing) {
-                                    if !workingDiveNumber.isEmpty {
-                                        Button {
-                                            workingDiveNumber = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 6)
-                                        .accessibilityLabel(Text("Clear"))
-                                    }
-                                }
-                        }
-                        .padding(.vertical, 4)
-                    }
-
-                    macOSModernGroupBox("Date & Time", icon: "calendar", color: .indigo) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "calendar")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            DatePicker("", selection: $workingTimestamp, displayedComponents: [.date, .hourMinuteAndSecond])
-                                .labelsHidden()
-                        }
-                        .padding(.vertical, 4)
-                    }
-
-                    macOSModernGroupBox("Operator", icon: "building.2.fill", color: .teal) {
-                        macOSModernAutocompleteField("Dive Center", text: $workingDiveCenter, icon: "building.2.fill", suggestions: uniqueOptionalValues(for: \.diveOperator))
-                        macOSModernAutocompleteField("Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark.fill", suggestions: uniqueOptionalValues(for: \.diveMaster))
-                        macOSModernAutocompleteField("Captain", text: $workingSkipper, icon: "person.fill.turn.right", suggestions: uniqueOptionalValues(for: \.skipper))
-                        macOSModernAutocompleteField("Boat", text: $workingBoat, icon: "ferry.fill", suggestions: uniqueOptionalValues(for: \.boat))
-                        macOSModernAutocompleteField("Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle.fill", suggestions: uniqueOptionalValues(for: \.entryType))
-                    }
-
-                    macOSModernGroupBox("Buddies", icon: "person.2.fill", color: .green) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Current buddies
-                            if !buddiesArray.isEmpty {
-                                FlowLayout(spacing: 8) {
-                                    ForEach(buddiesArray, id: \.self) { buddy in
-                                        HStack(spacing: 6) {
-                                            Text(buddy)
-                                                .font(.subheadline)
-                                            Button {
-                                                withAnimation {
-                                                    removeBuddy(buddy)
-                                                }
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), buddy)))
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.green.opacity(0.15))
-                                        .foregroundStyle(.green)
-                                        .cornerRadius(16)
-                                    }
-                                }
-                                .padding(.bottom, 8)
-                            }
-
-                            // Add new buddy
-                            VStack(alignment: .leading, spacing: 0) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .foregroundStyle(.green)
-                                    TextField("Add a buddy", text: $newBuddy)
-                                        .textFieldStyle(.roundedBorder)
-                                        .overlay(alignment: .trailing) {
-                                            if !newBuddy.isEmpty {
-                                                Button {
-                                                    newBuddy = ""
-                                                } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .padding(.trailing, 6)
-                                                .accessibilityLabel(Text("Clear"))
-                                            }
-                                        }
-                                        .onSubmit {
-                                            addBuddy(newBuddy)
-                                            newBuddy = ""
-                                        }
-                                    Button("Add") {
-                                        withAnimation {
-                                            addBuddy(newBuddy)
-                                            newBuddy = ""
-                                        }
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.green)
-                                }
-                                let filteredBuddySuggestions = newBuddy.isEmpty ? [] : uniqueBuddyNames.filter {
-                                    $0.localizedCaseInsensitiveContains(newBuddy) && $0.lowercased() != newBuddy.lowercased() && !buddiesArray.contains($0)
-                                }
-                                if !filteredBuddySuggestions.isEmpty {
-                                    VStack(alignment: .leading, spacing: 0) {
-                                        ForEach(filteredBuddySuggestions.prefix(5), id: \.self) { suggestion in
-                                            Button {
-                                                addBuddy(suggestion)
-                                                newBuddy = ""
-                                            } label: {
-                                                Text(suggestion)
-                                                    .foregroundStyle(.primary)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                                    .padding(.vertical, 4)
-                                                    .padding(.horizontal, 8)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .background(Color.primary.opacity(0.05))
-                                            .cornerRadius(4)
-                                        }
-                                    }
-                                    .padding(.leading, 28)
-                                }
-                            }
-                        }
-                    }
-
-                    macOSModernGroupBox("Weight", icon: "scalemass.fill", color: .gray) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "scalemass.fill")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text("Weight (\(dive.storedWeightUnit.symbol))")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 120, alignment: .leading)
-                            TextField("Weight (\(dive.storedWeightUnit.symbol))", text: $workingWeightsText)
-                                .textFieldStyle(.roundedBorder)
-                                .onChange(of: workingWeightsText) {
-                                    workingWeights = parseFlexibleDouble(workingWeightsText)
-                                }
-                                .overlay(alignment: .trailing) {
-                                    if workingWeights != nil {
-                                        Button {
-                                            workingWeights = nil
-                                            workingWeightsText = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 6)
-                                        .accessibilityLabel(Text("Clear"))
-                                    }
-                                }
-                        }
-                        .padding(.vertical, 4)
-                        Text("Unit (\(dive.storedWeightUnit.symbol)) matches the original import format and cannot be changed.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if dive.sourceImport == "Manual" {
-                        macOSModernGroupBox("Dive Stats", icon: "chart.bar.fill", color: .cyan) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "arrow.down.to.line")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 20)
-                                Text("Max Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 120, alignment: .leading)
-                                TextField("Max Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingMaxDepthText)
-                                    .textFieldStyle(.roundedBorder)
-                                    .onChange(of: workingMaxDepthText) {
-                                        workingMaxDepth = parseFlexibleDouble(workingMaxDepthText) ?? 0
-                                    }
-                                    .overlay(alignment: .trailing) {
-                                        if !workingMaxDepthText.isEmpty {
-                                            Button {
-                                                workingMaxDepthText = ""
-                                                workingMaxDepth = 0
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .padding(.trailing, 6)
-                                            .accessibilityLabel(Text("Clear"))
-                                        }
-                                    }
-                            }
-                            .padding(.vertical, 4)
-                            HStack(spacing: 12) {
-                                Image(systemName: "arrow.left.and.right")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 20)
-                                Text("Avg Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 120, alignment: .leading)
-                                TextField("Avg Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingAvgDepthText)
-                                    .textFieldStyle(.roundedBorder)
-                                    .onChange(of: workingAvgDepthText) {
-                                        workingAvgDepth = parseFlexibleDouble(workingAvgDepthText) ?? 0
-                                    }
-                                    .overlay(alignment: .trailing) {
-                                        if !workingAvgDepthText.isEmpty {
-                                            Button {
-                                                workingAvgDepthText = ""
-                                                workingAvgDepth = 0
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .padding(.trailing, 6)
-                                            .accessibilityLabel(Text("Clear"))
-                                        }
-                                    }
-                            }
-                            .padding(.vertical, 4)
-                            HStack(spacing: 12) {
-                                Image(systemName: "clock")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 20)
-                                Text("Duration (min)")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 120, alignment: .leading)
-                                TextField("Duration (min)", text: $workingDurationText)
-                                    .textFieldStyle(.roundedBorder)
-                                    .onChange(of: workingDurationText) {
-                                        workingDuration = parseFlexibleDouble(workingDurationText).map(Int.init) ?? 0
-                                    }
-                                    .overlay(alignment: .trailing) {
-                                        if !workingDurationText.isEmpty {
-                                            Button {
-                                                workingDurationText = ""
-                                                workingDuration = 0
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .padding(.trailing, 6)
-                                            .accessibilityLabel(Text("Clear"))
-                                        }
-                                    }
-                            }
-                            .padding(.vertical, 4)
-                            Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        macOSModernGroupBox("Dive Computer", icon: "desktopcomputer", color: .purple) {
-                            macOSModernAutocompleteField("Computer Name", text: $workingComputerName, icon: "desktopcomputer", suggestions: uniqueValues(for: \.computerName))
-                            macOSModernAutocompleteField("Serial Number", text: $workingSerialNumber, icon: "number", suggestions: uniqueOptionalValues(for: \.computerSerialNumber))
-                        }
-                    }
-
-                    macOSModernGroupBox("Type & Rating", icon: "star.fill", color: .yellow) {
-                        VStack(spacing: 12) {
-                            // Dive Types Section
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack {
-                                    Image(systemName: "figure.open.water.swim")
-                                        .foregroundStyle(.secondary)
-                                    Text("Dive Types")
-                                        .foregroundStyle(.secondary)
-                                        .font(.subheadline)
-                                }
-
-                                // Current dive types
-                                if !diveTypesArray.isEmpty {
-                                    FlowLayout(spacing: 8) {
-                                        ForEach(diveTypesArray, id: \.self) { type in
-                                            HStack(spacing: 6) {
-                                                Text(type)
-                                                    .font(.subheadline)
-                                                Button {
-                                                    withAnimation {
-                                                        removeDiveType(type)
-                                                    }
-                                                } label: {
-                                                    Image(systemName: "xmark.circle.fill")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), type)))
-                                            }
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color.purple.opacity(0.15))
-                                            .foregroundStyle(.purple)
-                                            .cornerRadius(16)
-                                        }
-                                    }
-                                    .padding(.bottom, 8)
-                                }
-
-                                // Add new dive type
-                                VStack(alignment: .leading, spacing: 0) {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "plus.circle.fill")
-                                            .foregroundStyle(.purple)
-                                        TextField("Add a dive type", text: $newType)
-                                            .textFieldStyle(.roundedBorder)
-                                            .overlay(alignment: .trailing) {
-                                                if !newType.isEmpty {
-                                                    Button {
-                                                        newType = ""
-                                                    } label: {
-                                                        Image(systemName: "xmark.circle.fill")
-                                                            .foregroundStyle(.secondary)
-                                                    }
-                                                    .buttonStyle(.plain)
-                                                    .padding(.trailing, 6)
-                                                    .accessibilityLabel(Text("Clear"))
-                                                }
-                                            }
-                                            .onSubmit {
-                                                addDiveType(newType)
-                                                newType = ""
-                                            }
-                                        Button("Add") {
-                                            withAnimation {
-                                                addDiveType(newType)
-                                                newType = ""
-                                            }
-                                        }
-                                        .buttonStyle(.borderedProminent)
-                                        .tint(.purple)
-                                    }
-                                    let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter {
-                                        $0.localizedCaseInsensitiveContains(newType) && $0.lowercased() != newType.lowercased() && !diveTypesArray.contains($0)
-                                    }
-                                    if !filteredDiveTypeSuggestions.isEmpty {
-                                        VStack(alignment: .leading, spacing: 0) {
-                                            ForEach(filteredDiveTypeSuggestions.prefix(5), id: \.self) { suggestion in
-                                                Button {
-                                                    addDiveType(suggestion)
-                                                    newType = ""
-                                                } label: {
-                                                    Text(suggestion)
-                                                        .foregroundStyle(.primary)
-                                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                                        .padding(.vertical, 4)
-                                                        .padding(.horizontal, 8)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .background(Color.primary.opacity(0.05))
-                                            }
-                                        }
-                                        .cornerRadius(4)
-                                        .padding(.top, 4)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(Color.primary.opacity(0.03))
-                            .cornerRadius(10)
-
-                            Divider()
-                                .padding(.vertical, 4)
-
-                            HStack {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(.yellow)
-                                Text("Rating")
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                HStack(spacing: 6) {
-                                    ForEach(1...5, id: \.self) { star in
-                                        Image(systemName: star <= workingRating ? "star.fill" : "star")
-                                            .font(.title3)
-                                            .foregroundStyle(star <= workingRating ? .yellow : .secondary)
-                                            .onTapGesture {
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    workingRating = star == workingRating ? 0 : star
-                                                }
-                                            }
-                                            .accessibilityElement()
-                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("%lld star", bundle: .forAppLanguage(), comment: "Star rating button label; tapping it sets the dive rating to this many stars"), star)))
-                                            .accessibilityAddTraits(star <= workingRating ? [.isButton, .isSelected] : .isButton)
-                                            // onTapGesture isn't reliably fired by VoiceOver's activate
-                                            // gesture; this makes double-tap set the rating.
-                                            .accessibilityAction {
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    workingRating = star == workingRating ? 0 : star
-                                                }
-                                            }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(Color.primary.opacity(0.03))
-                            .cornerRadius(10)
-                        }
-                    }
-
-                    macOSModernGroupBox("Tags", icon: "tag.fill", color: .pink) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Current tags
-                            if !tagsArray.isEmpty {
-                                FlowLayout(spacing: 8) {
-                                    ForEach(tagsArray, id: \.self) { tag in
-                                        HStack(spacing: 6) {
-                                            Text(tag)
-                                                .font(.subheadline)
-                                            Button {
-                                                withAnimation {
-                                                    removeTag(tag)
-                                                }
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), tag)))
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.cyan.opacity(0.15))
-                                        .foregroundStyle(.cyan)
-                                        .cornerRadius(16)
-                                    }
-                                }
-                                .padding(.bottom, 8)
-                            }
-
-                            // Add new tag
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundStyle(.cyan)
-                                TextField("Add a tag", text: $newTag)
-                                    .textFieldStyle(.roundedBorder)
-                                    .overlay(alignment: .trailing) {
-                                        if !newTag.isEmpty {
-                                            Button {
-                                                newTag = ""
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .padding(.trailing, 6)
-                                            .accessibilityLabel(Text("Clear"))
-                                        }
-                                    }
-                                    .onSubmit {
-                                        addTag(newTag)
-                                        newTag = ""
-                                    }
-                                Button("Add") {
-                                    addTag(newTag)
-                                    newTag = ""
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.cyan)
-                                .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
-                            }
-                        }
-                    }
-
-                    macOSModernGroupBox("Notes", icon: "note.text", color: .orange) {
-                        TextEditor(text: $workingNotes)
-                            .frame(minHeight: 100)
-                            .scrollContentBackground(.hidden)
-                            .background(Color.primary.opacity(0.03))
-                            .cornerRadius(8)
-                    }
-                }
-                .padding(24)
-            }
-        }
-        .frame(width: 650, height: 750)
-        .background(Color.platformBackground)
-
-    }
-
-    // MARK: - macOS Modern Helpers
-
-    private func macOSModernGroupBox(_ title: LocalizedStringKey, icon: String, color: Color, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.headline)
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-            }
-            .padding(.bottom, 4)
-
-            VStack(spacing: 0) {
-                content()
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(color.opacity(0.2), lineWidth: 1)
-        )
-    }
-
-    private func macOSModernField(_ label: LocalizedStringKey, text: Binding<String>, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            TextField("", text: text)
-                .textFieldStyle(.roundedBorder)
-                .overlay(alignment: .trailing) {
-                    if !text.wrappedValue.isEmpty {
-                        Button {
-                            text.wrappedValue = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 6)
-                        .accessibilityLabel(Text("Clear"))
-                    }
-                }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func macOSModernAutocompleteField(_ label: LocalizedStringKey, text: Binding<String>, icon: String, suggestions: [String]) -> some View {
-        let filtered = text.wrappedValue.isEmpty ? [] : suggestions.filter {
-            $0.localizedCaseInsensitiveContains(text.wrappedValue) && $0.lowercased() != text.wrappedValue.lowercased()
-        }
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-                Text(label)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 120, alignment: .leading)
-                TextField("", text: text)
-                    .textFieldStyle(.roundedBorder)
-                    .overlay(alignment: .trailing) {
-                        if !text.wrappedValue.isEmpty {
-                            Button {
-                                text.wrappedValue = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.trailing, 6)
-                            .accessibilityLabel(Text("Clear"))
-                        }
-                    }
-            }
-            .padding(.vertical, 4)
-
-            if !filtered.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(filtered.prefix(5), id: \.self) { suggestion in
-                        Button {
-                            text.wrappedValue = suggestion
-                        } label: {
-                            Text(suggestion)
-                                .foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 8)
-                        }
-                        .buttonStyle(.plain)
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(4)
-                    }
-                }
-                .padding(.leading, 152)
-            }
-        }
-    }
-
-    #endif
 
     @ViewBuilder
     private var iOSManualDiveSections: some View {
@@ -952,7 +299,7 @@ struct EditMenuStatsView: View {
                             Text("Dive #")
                                 .foregroundStyle(.primary)
                             Spacer()
-                            TextField("Dive #", text: $workingDiveNumber)
+                            formTextField("Dive #", text: $workingDiveNumber)
                                 .platformKeyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 80)
@@ -1032,7 +379,7 @@ struct EditMenuStatsView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "plus.circle")
                                     .foregroundStyle(.green)
-                                TextField("Add a buddy", text: $newBuddy)
+                                formTextField("Add a buddy", text: $newBuddy)
                                     .autocorrectionDisabled()
                                     .foregroundStyle(.primary)
                                 if !newBuddy.isEmpty {
@@ -1089,7 +436,7 @@ struct EditMenuStatsView: View {
                                 .frame(width: 24)
                             Text("Weight (\(dive.storedWeightUnit.symbol))")
                                 .foregroundStyle(.primary)
-                            TextField("Weight (\(dive.storedWeightUnit.symbol))", text: $workingWeightsText)
+                            formTextField("Weight (\(dive.storedWeightUnit.symbol))", text: $workingWeightsText)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
                                 .onChange(of: workingWeightsText) {
@@ -1159,7 +506,7 @@ struct EditMenuStatsView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "plus.circle")
                                     .foregroundStyle(.purple)
-                                TextField("Add a dive type", text: $newType)
+                                formTextField("Add a dive type", text: $newType)
                                     .autocorrectionDisabled()
                                     .foregroundStyle(.primary)
                                 if !newType.isEmpty {
@@ -1281,7 +628,7 @@ struct EditMenuStatsView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "plus.circle")
                                 .foregroundStyle(.cyan)
-                            TextField("Add a tag", text: $newTag)
+                            formTextField("Add a tag", text: $newTag)
                                 .autocorrectionDisabled()
                                 .foregroundStyle(.primary)
                             if !newTag.isEmpty {
@@ -1314,6 +661,7 @@ struct EditMenuStatsView: View {
                         MenuSectionHeader(title: "Notes", icon: "note.text", color: .orange)
                     }
                 }
+                .groupedFormStyleOnMac()
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Edit Dive")
@@ -1369,16 +717,8 @@ struct EditMenuStatsView: View {
         // The picker never exposes seconds to the user, so discarding them would silently destroy
         // sub-minute precision that the dive computer captured (e.g. surface-interval calculations).
         var timestampDidChange = false
-#if os(macOS)
-        // macOS: .hourMinuteAndSecond — workingTimestamp already carries the user-selected seconds
-        let origFloor = floor(dive.timestamp.timeIntervalSinceReferenceDate)
-        let newFloor = floor(workingTimestamp.timeIntervalSinceReferenceDate)
-        if origFloor != newFloor {
-            dive.timestamp = workingTimestamp
-            timestampDidChange = true
-        }
-#else
-        // iOS: .hourAndMinute only — graft the original seconds back so they are never lost
+        // The picker offers .hourAndMinute only (seconds are unavailable on macOS) —
+        // graft the original seconds back so they are never lost.
         let cal = Calendar.current
         var newComponents = cal.dateComponents([.year, .month, .day, .hour, .minute], from: workingTimestamp)
         newComponents.second = cal.component(.second, from: dive.timestamp)
@@ -1390,7 +730,6 @@ struct EditMenuStatsView: View {
                 timestampDidChange = true
             }
         }
-#endif
         if timestampDidChange || diverNameDidChange {
             // Flush changes to the persistent store so the background context sees
             // the updated values when it fetches all dives for recalculation.
@@ -1580,11 +919,7 @@ struct EditSiteDetailsView: View {
 
     var body: some View {
         Group {
-            #if os(macOS)
-            macOSBody
-            #else
             iOSBody
-            #endif
         }
         .sheet(isPresented: $showEntryCoordinatePicker) {
             CoordinatePickerView(
@@ -1630,349 +965,6 @@ struct EditSiteDetailsView: View {
         }
     }
 
-    #if os(macOS)
-    private var macOSBody: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                Image(systemName: "mappin.and.ellipse.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.blue)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Edit Dive")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.primary)
-                    Text("Site Details")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Button("Cancel") {
-                    dismiss()
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-
-                Button("Save Changes") {
-                    save()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .controlSize(.large)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 20)
-            .background(
-                LinearGradient(
-                    colors: [Color.blue.opacity(0.1), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if !uniqueSites.isEmpty {
-                        siteDetailsMacOSGroupBox("Copy from Existing Site", icon: "doc.on.doc.fill", color: .orange) {
-                            SiteSearchField(selectedSite: $selectedSite, recents: recentSites, allSites: uniqueSites)
-                                .padding(.vertical, 4)
-
-                            HStack(spacing: 8) {
-                                Toggle(isOn: $copyGPSCoordinates) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "location.circle.fill")
-                                            .foregroundStyle(.green)
-                                        Text("Include GPS Coordinates (Entry & Exit)")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .toggleStyle(.checkbox)
-                                .controlSize(.small)
-
-                                Spacer()
-
-                                Button("Copy Site Information") {
-                                    if let source = selectedSite {
-                                        applySite(from: source)
-                                    }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.orange)
-                                .disabled(selectedSite == nil)
-                            }
-                            .padding(.top, 8)
-                        }
-                    }
-
-                    siteDetailsMacOSGroupBox("Location", icon: "mappin.and.ellipse", color: .blue) {
-                        siteDetailsMacOSAutocompleteField("Site Name", text: $workingSiteName, icon: "location.fill", suggestions: uniqueValues(for: \.siteName))
-                        siteDetailsMacOSAutocompleteField("Country", text: $workingCountry, icon: "flag.fill", suggestions: uniqueOptionalValues(for: \.siteCountry))
-                        siteDetailsMacOSAutocompleteField("Location", text: $workingLocation, icon: "mappin.and.ellipse", suggestions: uniqueValues(for: \.location))
-                        HStack(spacing: 12) {
-                            Image(systemName: "star.fill")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text("Difficulty")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 120, alignment: .leading)
-                            Menu {
-                                Button("—") { workingDifficulty = "" }
-                                ForEach(Self.difficultyScale, id: \.level) { item in
-                                    Button { workingDifficulty = String(item.level) } label: {
-                                        Text("\(item.level) — \(Text(LocalizedStringKey(item.label)))")
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Text(workingDifficulty.isEmpty ? "—" : {
-                                        if let n = Int(workingDifficulty),
-                                           let match = Self.difficultyScale.first(where: { $0.level == n }) {
-                                            return "\(match.level) — \(match.label)"
-                                        }
-                                        return workingDifficulty
-                                    }())
-                                    Spacer()
-                                    Image(systemName: "chevron.up.chevron.down")
-                                        .font(.caption)
-                                }
-                                .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
-                    }
-
-                    siteDetailsMacOSGroupBox("Water", icon: "drop.fill", color: .teal) {
-                        let canonicalWaterTypes = ["", "freshwater", "fresh", "saltwater", "salt", "en13319", "brackish"]
-                        let isCustomWT = !canonicalWaterTypes.contains(workingWaterType.lowercased())
-                        HStack(spacing: 12) {
-                            Image(systemName: "drop.fill")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text("Water Type")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 120, alignment: .leading)
-                            Menu {
-                                Button("—") { workingWaterType = "" }
-                                Button { workingWaterType = "Freshwater" } label: { Text("Freshwater") }
-                                Button { workingWaterType = "Saltwater"  } label: { Text("Saltwater") }
-                                Button { workingWaterType = "EN13319"    } label: { Text("Brackish water (EN13319)") }
-                                if isCustomWT {
-                                    Divider()
-                                    Text(workingWaterType).foregroundStyle(.secondary)
-                                }
-                            } label: {
-                                HStack {
-                                    Text(localizedWaterType(workingWaterType))
-                                        .foregroundStyle(workingWaterType.isEmpty ? .secondary : .primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.up.chevron.down")
-                                        .font(.caption)
-                                }
-                                .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
-                        siteDetailsMacOSAutocompleteField("Body of Water", text: $workingBodyOfWater, icon: "water.waves", suggestions: uniqueOptionalValues(for: \.siteBodyOfWater))
-                    }
-
-                    siteDetailsMacOSGroupBox("GPS Coordinates (Entry)", icon: "location.circle.fill", color: .green,
-                        resetAction: dive.rawDiveComputerData != nil ? { resetEntryGPS() } : nil,
-                        resetEnabled: canResetEntryGPS) {
-                        siteDetailsMacOSActionRow("Pick on Map", icon: "mappin.and.ellipse") { showEntryCoordinatePicker = true }
-                        siteDetailsMacOSField("Latitude", text: $workingLatitude, icon: "arrow.up.arrow.down")
-                        siteDetailsMacOSField("Longitude", text: $workingLongitude, icon: "arrow.left.arrow.right")
-                        siteDetailsMacOSField(LocalizedStringKey("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))"), text: $workingAltitude, icon: "mountain.2.fill")
-                        Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    siteDetailsMacOSGroupBox("GPS Coordinates (Exit)", icon: "location.circle", color: .green,
-                        resetAction: dive.rawDiveComputerData != nil ? { resetExitGPS() } : nil,
-                        resetEnabled: canResetExitGPS) {
-                        siteDetailsMacOSActionRow("Pick on Map", icon: "mappin.and.ellipse") { showExitCoordinatePicker = true }
-                        siteDetailsMacOSActionRow("Same as Entry", icon: "arrow.turn.right.up", enabled: entryCoordinate != nil) {
-                            if exitCoordinate != nil {
-                                showSameAsEntryConfirm = true
-                            } else {
-                                copyEntryToExit()
-                            }
-                        }
-                        siteDetailsMacOSField("Latitude", text: $workingExitLatitude, icon: "arrow.up.arrow.down")
-                        siteDetailsMacOSField("Longitude", text: $workingExitLongitude, icon: "arrow.left.arrow.right")
-                    }
-                }
-                .padding(24)
-            }
-        }
-        .frame(width: 650, height: 680)
-        .background(Color.platformBackground)
-
-    }
-
-    private func siteDetailsMacOSGroupBox(_ title: LocalizedStringKey, icon: String, color: Color, resetAction: (() -> Void)? = nil, resetEnabled: Bool = true, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.headline)
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                if let resetAction {
-                    Spacer()
-                    gpsHeaderActionButton("Reset", enabled: resetEnabled, action: resetAction)
-                }
-            }
-            .padding(.bottom, 4)
-
-            VStack(spacing: 0) {
-                content()
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(color.opacity(0.2), lineWidth: 1)
-        )
-    }
-
-    private func siteDetailsMacOSField(_ label: LocalizedStringKey, text: Binding<String>, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            TextField(label, text: text)
-                .textFieldStyle(.roundedBorder)
-                .overlay(alignment: .trailing) {
-                    if !text.wrappedValue.isEmpty {
-                        Button {
-                            text.wrappedValue = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 6)
-                        .accessibilityLabel(Text("Clear"))
-                    }
-                }
-        }
-        .padding(.vertical, 4)
-    }
-
-    /// A full-width tappable row for GPS actions (Pick on Map, Same as Entry) — a larger,
-    /// more discoverable target than a small header text link.
-    private func siteDetailsMacOSActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .foregroundStyle(enabled ? .blue : .secondary)
-                    .frame(width: 20)
-                Text(title)
-                    .foregroundStyle(enabled ? .blue : .secondary)
-                Spacer()
-            }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-    }
-
-    private func siteDetailsMacOSPicker(_ label: LocalizedStringKey, selection: Binding<String>, options: [String], icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            Menu {
-                Button("—") { selection.wrappedValue = "" }
-                ForEach(options, id: \.self) { opt in
-                    Button { selection.wrappedValue = opt } label: { Text(LocalizedStringKey(opt)) }
-                }
-            } label: {
-                HStack {
-                    Text(LocalizedStringKey(selection.wrappedValue.isEmpty ? "—" : selection.wrappedValue))
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func siteDetailsMacOSAutocompleteField(_ label: LocalizedStringKey, text: Binding<String>, icon: String, suggestions: [String]) -> some View {
-        let filtered = text.wrappedValue.isEmpty ? [] : suggestions.filter {
-            $0.localizedCaseInsensitiveContains(text.wrappedValue) && $0.lowercased() != text.wrappedValue.lowercased()
-        }
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-                Text(label)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 120, alignment: .leading)
-                TextField("", text: text)
-                    .textFieldStyle(.roundedBorder)
-                    .overlay(alignment: .trailing) {
-                        if !text.wrappedValue.isEmpty {
-                            Button {
-                                text.wrappedValue = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.trailing, 6)
-                            .accessibilityLabel(Text("Clear"))
-                        }
-                    }
-            }
-            .padding(.vertical, 4)
-
-            if !filtered.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(filtered.prefix(5), id: \.self) { suggestion in
-                        Button {
-                            text.wrappedValue = suggestion
-                        } label: {
-                            Text(suggestion)
-                                .foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 8)
-                        }
-                        .buttonStyle(.plain)
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(4)
-                    }
-                }
-                .padding(.leading, 152)
-            }
-        }
-    }
-    #endif
 
     @ViewBuilder
     private var copyFromSiteSection: some View {
@@ -1989,6 +981,7 @@ struct EditSiteDetailsView: View {
                     }
                 }
                 .tint(.green)
+                .fullWidthSwitch()
 
                 Button {
                     if let source = selectedSite {
@@ -2002,6 +995,7 @@ struct EditSiteDetailsView: View {
                 }
                 .disabled(selectedSite == nil)
                 .foregroundStyle(.orange)
+                .listRowButton()
             } header: {
                 MenuSectionHeader(title: "Copy from Existing Site", icon: "doc.on.doc", color: .orange)
             }
@@ -2071,7 +1065,7 @@ struct EditSiteDetailsView: View {
                                 .frame(width: 24)
                             Text("Latitude")
                                 .foregroundStyle(.primary)
-                            TextField("Latitude", text: $workingLatitude)
+                            formTextField("Latitude", text: $workingLatitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
                             gpsSignToggleButton(for: $workingLatitude)
@@ -2090,7 +1084,7 @@ struct EditSiteDetailsView: View {
                                 .frame(width: 24)
                             Text("Longitude")
                                 .foregroundStyle(.primary)
-                            TextField("Longitude", text: $workingLongitude)
+                            formTextField("Longitude", text: $workingLongitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
                             gpsSignToggleButton(for: $workingLongitude)
@@ -2109,7 +1103,7 @@ struct EditSiteDetailsView: View {
                                 .frame(width: 24)
                             Text("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))")
                                 .foregroundStyle(.primary)
-                            TextField("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingAltitude)
+                            formTextField("Altitude (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingAltitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
                             if !workingAltitude.isEmpty {
@@ -2133,6 +1127,7 @@ struct EditSiteDetailsView: View {
                                         .foregroundStyle(canResetEntryGPS ? .blue : .secondary)
                                 }
                                 .disabled(!canResetEntryGPS)
+                                .borderlessButton()
                             }
                         }
                     } footer: {
@@ -2155,7 +1150,7 @@ struct EditSiteDetailsView: View {
                                 .frame(width: 24)
                             Text("Latitude")
                                 .foregroundStyle(.primary)
-                            TextField("Latitude", text: $workingExitLatitude)
+                            formTextField("Latitude", text: $workingExitLatitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
                             gpsSignToggleButton(for: $workingExitLatitude)
@@ -2174,7 +1169,7 @@ struct EditSiteDetailsView: View {
                                 .frame(width: 24)
                             Text("Longitude")
                                 .foregroundStyle(.primary)
-                            TextField("Longitude", text: $workingExitLongitude)
+                            formTextField("Longitude", text: $workingExitLongitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
                             gpsSignToggleButton(for: $workingExitLongitude)
@@ -2199,10 +1194,12 @@ struct EditSiteDetailsView: View {
                                         .foregroundStyle(canResetExitGPS ? .blue : .secondary)
                                 }
                                 .disabled(!canResetExitGPS)
+                                .borderlessButton()
                             }
                         }
                     }
                 }
+                .groupedFormStyleOnMac()
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Edit Site Details")
@@ -2216,7 +1213,7 @@ struct EditSiteDetailsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .foregroundStyle(.blue)
+                        .confirmationActionForeground(.blue)
                 }
             }
         }
@@ -2346,73 +1343,6 @@ struct EditConditionsView: View {
     }
 
     var body: some View {
-        #if os(macOS)
-        VStack(spacing: 0) {
-            // En-tête élégant
-            HStack(spacing: 12) {
-                Image(systemName: "cloud.sun.fill")
-                    .font(.title2)
-                    .foregroundStyle(.yellow)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Edit Dive")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.primary)
-                    Text("Conditions")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.escape, modifiers: [])
-                Button("Save Changes") { save() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.yellow)
-                    .controlSize(.large)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 20)
-            .background(
-                LinearGradient(
-                    colors: [Color.yellow.opacity(0.1), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    conditionsMacOSGroup("Temperatures (\(dive.storedTemperatureUnit.symbol))", icon: "thermometer.medium", color: .orange) {
-                        conditionsMacOSField("Surface Temp. (\(dive.storedTemperatureUnit.symbol))", text: $workingAirTemp, icon: "thermometer.medium")
-                        conditionsMacOSField("Min Temp. (\(dive.storedTemperatureUnit.symbol))", text: $workingMinTemp, icon: "thermometer.low")
-                        conditionsMacOSField("Max Temp. (\(dive.storedTemperatureUnit.symbol))", text: $workingMaxTemp, icon: "thermometer.high")
-                        Text("Unit (\(dive.storedTemperatureUnit.symbol)) matches the original import format and cannot be changed.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    conditionsMacOSGroup("Weather & Sea", icon: "cloud.sun.fill", color: .blue) {
-                        conditionsMacOSPicker("Weather", selection: $workingWeather, options: weatherOptions, icon: "cloud.sun.fill")
-                        conditionsMacOSPicker("Surface", selection: $workingSurface, options: surfaceOptions, icon: "water.waves")
-                        conditionsMacOSPicker("Current", selection: $workingCurrent, options: currentOptions, icon: "wind")
-                    }
-
-                    conditionsMacOSGroup("Visibility", icon: "eye.fill", color: .green) {
-                        conditionsMacOSAutocompleteField("Visibility", text: $workingVisibility, icon: "eye.fill", suggestions: visibilitySuggestions)
-                    }
-                }
-                .padding(24)
-            }
-        }
-        .frame(width: 550, height: 500)
-        .background(Color.platformBackground)
-
-        #else
         NavigationStack {
             ZStack {
                 Color.platformBackground.ignoresSafeArea()
@@ -2443,6 +1373,7 @@ struct EditConditionsView: View {
                         ConditionsSectionHeader(title: "Visibility", icon: "eye", color: .green)
                     }
                 }
+                .groupedFormStyleOnMac()
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Edit Conditions")
@@ -2459,7 +1390,6 @@ struct EditConditionsView: View {
                 }
             }
         }
-        #endif
     }
 
     // iOS Helpers - Renamed to avoid conflicts
@@ -2545,140 +1475,6 @@ struct EditConditionsView: View {
         }
     }
 
-    #if os(macOS)
-    private func conditionsMacOSGroup(_ title: LocalizedStringKey, icon: String, color: Color, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.headline)
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-            }
-            .padding(.bottom, 4)
-
-            VStack(spacing: 12) {
-                content()
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(color.opacity(0.2), lineWidth: 1)
-        )
-    }
-
-    private func conditionsMacOSField(_ label: LocalizedStringKey, text: Binding<String>, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            TextField("", text: text)
-                .textFieldStyle(.roundedBorder)
-                .overlay(alignment: .trailing) {
-                    if !text.wrappedValue.isEmpty {
-                        Button {
-                            text.wrappedValue = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 6)
-                        .accessibilityLabel(Text("Clear"))
-                    }
-                }
-        }
-    }
-
-
-
-    private func conditionsMacOSAutocompleteField(_ label: LocalizedStringKey, text: Binding<String>, icon: String, suggestions: [String]) -> some View {
-        let filtered = text.wrappedValue.isEmpty ? [] : suggestions.filter {
-            $0.localizedCaseInsensitiveContains(text.wrappedValue) && $0.lowercased() != text.wrappedValue.lowercased()
-        }
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-                Text(label)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 120, alignment: .leading)
-                TextField("", text: text)
-                    .textFieldStyle(.roundedBorder)
-                    .overlay(alignment: .trailing) {
-                        if !text.wrappedValue.isEmpty {
-                            Button {
-                                text.wrappedValue = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.trailing, 6)
-                            .accessibilityLabel(Text("Clear"))
-                        }
-                    }
-            }
-
-            if !filtered.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(filtered.prefix(5), id: \.self) { suggestion in
-                        Button {
-                            text.wrappedValue = suggestion
-                        } label: {
-                            Text(suggestion)
-                                .foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 8)
-                        }
-                        .buttonStyle(.plain)
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(4)
-                    }
-                }
-                .padding(.leading, 152)
-            }
-        }
-    }
-
-    private func conditionsMacOSPicker(_ label: LocalizedStringKey, selection: Binding<String>, options: [String], icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
-            Menu {
-                Button("—") { selection.wrappedValue = "" }
-                ForEach(options, id: \.self) { opt in
-                    Button(opt) { selection.wrappedValue = opt }
-                }
-            } label: {
-                HStack {
-                    Text(selection.wrappedValue.isEmpty ? "—" : selection.wrappedValue)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .frame(maxWidth: .infinity)
-        }
-    }
-    #endif
 
     private func save() {
         dive.waterTemperature  = workingWaterTemp
@@ -2891,373 +1687,6 @@ struct EditGazView: View {
     private var heMax: Int { 100 - workingO2 }
 
     var body: some View {
-#if os(macOS)
-        VStack(spacing: 0) {
-            // En-tête élégant
-            HStack(spacing: 12) {
-                Image(systemName: "bubbles.and.sparkles.fill")
-                    .font(.title2)
-                    .foregroundStyle(.green)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Edit Dive")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.primary)
-                    Text("Gas & Tank")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.escape, modifiers: [])
-                Button("Save Changes") { save() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.green)
-                    .controlSize(.large)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 20)
-            .background(
-                LinearGradient(
-                    colors: [Color.green.opacity(0.1), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Tank Slot — reorder tanks when multiple tanks exist
-                    if dive.tanks.count > 1 && tankIndex < dive.tanks.count {
-                        gazMacOSGroup("Tank Slot", icon: "number.circle.fill", color: .orange) {
-                            gazMacOSRow("Tank Number") {
-                                Picker("Tank Number", selection: $workingSlot) {
-                                    ForEach(1...dive.tanks.count, id: \.self) { slot in
-                                        Text(verbatim: "\(slot)").tag(slot)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                            }
-                            Divider()
-                            gazMacOSRow("Update Samples") {
-                                Toggle("Update Samples", isOn: $rewriteSamples)
-                                    .labelsHidden()
-                            }
-                            Text("Update Samples remaps tank pressures and the active-gas assignment in the dive profile to match the new slot order.")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    // Copy from Tank Template
-                    if !templates.isEmpty {
-                        gazMacOSGroup("Copy from Tank Template", icon: "doc.on.doc.fill", color: .orange) {
-                            gazMacOSRow("Template") {
-                                Menu {
-                                    Button("Select a template...") { selectedTemplateName = "" }
-                                    ForEach(templates) { template in
-                                        Button(template.name) {
-                                            selectedTemplateName = template.name
-                                        }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(selectedTemplateName.isEmpty ? "Select a template..." : selectedTemplateName)
-                                            .foregroundStyle(selectedTemplateName.isEmpty ? .secondary : .primary)
-                                        Spacer()
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .padding(.vertical, 4)
-
-                            HStack {
-                                Spacer()
-                                Button("Copy Tank Information") {
-                                    if let source = templates.first(where: { $0.name == selectedTemplateName }) {
-                                        applyTemplate(from: source)
-                                    }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.orange)
-                                .disabled(selectedTemplateName.isEmpty)
-                            }
-                            .padding(.top, 4)
-                        }
-                    }
-
-                    gazMacOSGroup("Gas Blend", icon: "bubbles.and.sparkles.fill", color: .green) {
-                        gazMacOSRow("Gas Type") {
-                            Text(verbatim: autoGasLabel)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.green)
-                        }
-                        Divider()
-                        gazMacOSRow("Oxygen (O₂)") {
-                            Stepper(value: $workingO2, in: o2Min...o2Max) {
-                                Text((Double(workingO2) / 100).formatted(.percent.precision(.fractionLength(0))))
-                            }
-                        }
-                        Divider()
-                        gazMacOSRow("Helium (He)") {
-                            Stepper(value: $workingHe, in: 0...heMax) {
-                                Text((Double(workingHe) / 100).formatted(.percent.precision(.fractionLength(0))))
-                            }
-                        }
-                    }
-                    gazMacOSGroup("Tank", icon: "cylinder.fill", color: .blue) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "cylinder.fill")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text("Volume (\(dive.storedVolumeUnit.symbol))")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 140, alignment: .leading)
-                            TextField("Volume (\(dive.storedVolumeUnit.symbol))", text: $cylinderSizeText)
-                                .textFieldStyle(.roundedBorder)
-                                .foregroundStyle(cylinderSizeIsValid ? Color.primary : Color.orange)
-                                .onChange(of: cylinderSizeText) {
-                                    workingCylinderSize = parseFlexibleDouble(cylinderSizeText)
-                                }
-                                .overlay(alignment: .trailing) {
-                                    if workingCylinderSize != nil {
-                                        Button {
-                                            workingCylinderSize = nil
-                                            cylinderSizeText = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 6)
-                                        .accessibilityLabel(Text("Clear"))
-                                    }
-                                }
-                        }
-                        .padding(.vertical, 4)
-                        Divider()
-                        // Working pressure — essential to convert gas-capacity (cu ft) → L
-                        HStack(spacing: 12) {
-                            Image(systemName: "gauge.badge.plus")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text("Service pressure (\(dive.storedPressureUnit.symbol))")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 180, alignment: .leading)
-                            TextField("Service pressure (\(dive.storedPressureUnit.symbol))", text: $workingPressureText)
-                                .textFieldStyle(.roundedBorder)
-                                .foregroundStyle(workingPressureIsValid ? Color.primary : Color.orange)
-                                .onChange(of: workingPressureText) {
-                                    workingWorkingPressure = parseFlexibleDouble(workingPressureText)
-                                }
-                                .overlay(alignment: .trailing) {
-                                    if workingWorkingPressure != nil {
-                                        Button {
-                                            workingWorkingPressure = nil
-                                            workingPressureText = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 6)
-                                        .accessibilityLabel(Text("Clear"))
-                                    }
-                                }
-                        }
-                        .padding(.vertical, 4)
-                        Divider()
-                        gazMacOSRow("Material") {
-                            Menu {
-                                Button("—") { DispatchQueue.main.async { workingCylinderMaterial = "" } }
-                                ForEach(materialOptions, id: \.self) { opt in
-                                    Button { DispatchQueue.main.async { workingCylinderMaterial = opt } } label: { Text(verbatim: localizedTankMaterial(opt)) }
-                                }
-                            } label: {
-                                Text(verbatim: workingCylinderMaterial.isEmpty ? "—" : localizedTankMaterial(workingCylinderMaterial))
-                            }
-                        }
-                        Divider()
-                        gazMacOSRow("Format") {
-                            Menu {
-                                Button("—") { DispatchQueue.main.async { workingCylinderType = "" } }
-                                ForEach(typeOptions, id: \.self) { opt in
-                                    Button { DispatchQueue.main.async { workingCylinderType = opt } } label: { Text(verbatim: localizedTankFormat(opt)) }
-                                }
-                            } label: {
-                                Text(verbatim: workingCylinderType.isEmpty ? "—" : localizedTankFormat(workingCylinderType))
-                            }
-                        }
-                        Text("Volume unit (\(dive.storedVolumeUnit.symbol)) matches the original import format and cannot be changed.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    gazMacOSGroup("Pressure", icon: "gauge.with.needle.fill", color: .red) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "gauge.with.needle.fill")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text("Start pressure (\(dive.storedPressureUnit.symbol))")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 180, alignment: .leading)
-                            TextField("Start pressure (\(dive.storedPressureUnit.symbol))", text: $workingStartPressureText)
-                                .textFieldStyle(.roundedBorder)
-                                .onChange(of: workingStartPressureText) {
-                                    workingStartPressure = Int(workingStartPressureText.trimmingCharacters(in: .whitespaces))
-                                }
-                                .overlay(alignment: .trailing) {
-                                    if !workingStartPressureText.isEmpty {
-                                        Button {
-                                            workingStartPressureText = ""
-                                            workingStartPressure = nil
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 6)
-                                        .accessibilityLabel(Text("Clear"))
-                                    }
-                                }
-                        }
-                        .padding(.vertical, 4)
-                        Divider()
-                        HStack(spacing: 12) {
-                            Image(systemName: "gauge.with.dots.needle.bottom.50percent")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text("End pressure (\(dive.storedPressureUnit.symbol))")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 180, alignment: .leading)
-                            TextField("End pressure (\(dive.storedPressureUnit.symbol))", text: $workingEndPressureText)
-                                .textFieldStyle(.roundedBorder)
-                                .onChange(of: workingEndPressureText) {
-                                    workingEndPressure = Int(workingEndPressureText.trimmingCharacters(in: .whitespaces))
-                                }
-                                .overlay(alignment: .trailing) {
-                                    if !workingEndPressureText.isEmpty {
-                                        Button {
-                                            workingEndPressureText = ""
-                                            workingEndPressure = nil
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 6)
-                                        .accessibilityLabel(Text("Clear"))
-                                    }
-                                }
-                        }
-                        .padding(.vertical, 4)
-                        Text("Pressure unit (\(dive.storedPressureUnit.symbol)) matches the original import format and cannot be changed.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    gazMacOSGroup("Usage Time", icon: "clock.fill", color: .cyan) {
-                        Picker("Unit", selection: $usageTimeUnit) {
-                            ForEach(UsageTimeUnit.allCases, id: \.self) { unit in
-                                Text(LocalizedStringKey(unit.rawValue)).tag(unit)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: usageTimeUnit) {
-                            // Re-display existing values in new unit
-                            usageStartTimeText = workingUsageStartTime.map {
-                                Self.formatDouble(usageTimeUnit.fromSeconds($0))
-                            } ?? ""
-                            usageEndTimeText = workingUsageEndTime.map {
-                                Self.formatDouble(usageTimeUnit.fromSeconds($0))
-                            } ?? ""
-                        }
-
-                        HStack(spacing: 12) {
-                            Image(systemName: "play.fill")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text(verbatim: NSLocalizedString("Usage Start", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 180, alignment: .leading)
-                            TextField("Usage Start", text: $usageStartTimeText)
-                                .textFieldStyle(.roundedBorder)
-                                .onChange(of: usageStartTimeText) {
-                                    if let parsed = parseFlexibleDouble(usageStartTimeText) {
-                                        workingUsageStartTime = usageTimeUnit.toSeconds(parsed)
-                                    } else {
-                                        workingUsageStartTime = nil
-                                    }
-                                }
-                                .overlay(alignment: .trailing) {
-                                    if workingUsageStartTime != nil {
-                                        Button {
-                                            workingUsageStartTime = nil
-                                            usageStartTimeText = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 6)
-                                        .accessibilityLabel(Text("Clear"))
-                                    }
-                                }
-                        }
-                        .padding(.vertical, 4)
-                        Divider()
-                        HStack(spacing: 12) {
-                            Image(systemName: "stop.fill")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text(verbatim: NSLocalizedString("Usage End", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 180, alignment: .leading)
-                            TextField("Usage End", text: $usageEndTimeText)
-                                .textFieldStyle(.roundedBorder)
-                                .onChange(of: usageEndTimeText) {
-                                    if let parsed = parseFlexibleDouble(usageEndTimeText) {
-                                        workingUsageEndTime = usageTimeUnit.toSeconds(parsed)
-                                    } else {
-                                        workingUsageEndTime = nil
-                                    }
-                                }
-                                .overlay(alignment: .trailing) {
-                                    if workingUsageEndTime != nil {
-                                        Button {
-                                            workingUsageEndTime = nil
-                                            usageEndTimeText = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 6)
-                                        .accessibilityLabel(Text("Clear"))
-                                    }
-                                }
-                        }
-                        .padding(.vertical, 4)
-                        Text("Optional. Specify when this tank was used during the dive for more accurate RMV/SAC calculation.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(24)
-            }
-        }
-        .frame(width: 600, minHeight: 640)
-        .background(Color.platformBackground)
-
-#else
         NavigationStack {
             ZStack {
                 Color.platformBackground.ignoresSafeArea()
@@ -3272,6 +1701,7 @@ struct EditGazView: View {
                                 }
                             }
                             Toggle("Update Samples", isOn: $rewriteSamples)
+                                .fullWidthSwitch()
                         } header: {
                             Label("Tank Slot", systemImage: "number.circle")
                                 .foregroundStyle(.orange)
@@ -3307,6 +1737,7 @@ struct EditGazView: View {
                             }
                             .disabled(selectedTemplateName.isEmpty)
                             .foregroundStyle(.orange)
+                            .listRowButton()
                         } header: {
                             Label("Copy from Tank Template", systemImage: "doc.on.doc")
                                 .foregroundStyle(.orange)
@@ -3378,7 +1809,7 @@ struct EditGazView: View {
                                 .frame(width: 24)
                             Text("Volume (\(dive.storedVolumeUnit.symbol))")
                                 .foregroundStyle(.primary)
-                            TextField("Volume (\(dive.storedVolumeUnit.symbol))", text: $cylinderSizeText)
+                            formTextField("Volume (\(dive.storedVolumeUnit.symbol))", text: $cylinderSizeText)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(cylinderSizeIsValid ? Color.primary : Color.orange)
                                 .onChange(of: cylinderSizeText) {
@@ -3403,7 +1834,7 @@ struct EditGazView: View {
                             Text("Service pressure (\(dive.storedPressureUnit.symbol))")
                                 .foregroundStyle(.primary)
                                 .fixedSize()
-                            TextField("Service pressure (\(dive.storedPressureUnit.symbol))", text: $workingPressureText)
+                            formTextField("Service pressure (\(dive.storedPressureUnit.symbol))", text: $workingPressureText)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(workingPressureIsValid ? Color.primary : Color.orange)
                                 .onChange(of: workingPressureText) {
@@ -3450,7 +1881,7 @@ struct EditGazView: View {
                             Text("Start pressure (\(dive.storedPressureUnit.symbol))")
                                 .foregroundStyle(.primary)
                                 .fixedSize()
-                            TextField("Start pressure (\(dive.storedPressureUnit.symbol))", text: $workingStartPressureText)
+                            formTextField("Start pressure (\(dive.storedPressureUnit.symbol))", text: $workingStartPressureText)
                                 .platformKeyboardType(.numberPad)
                                 .foregroundStyle(.primary)
                                 .onChange(of: workingStartPressureText) {
@@ -3473,7 +1904,7 @@ struct EditGazView: View {
                             Text("End pressure (\(dive.storedPressureUnit.symbol))")
                                 .foregroundStyle(.primary)
                                 .fixedSize()
-                            TextField("End pressure (\(dive.storedPressureUnit.symbol))", text: $workingEndPressureText)
+                            formTextField("End pressure (\(dive.storedPressureUnit.symbol))", text: $workingEndPressureText)
                                 .platformKeyboardType(.numberPad)
                                 .foregroundStyle(.primary)
                                 .onChange(of: workingEndPressureText) {
@@ -3501,7 +1932,7 @@ struct EditGazView: View {
                                 Text(LocalizedStringKey(unit.rawValue)).tag(unit)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .fullWidthSegmentedPicker()
                         .onChange(of: usageTimeUnit) {
                             usageStartTimeText = workingUsageStartTime.map {
                                 Self.formatDouble(usageTimeUnit.fromSeconds($0))
@@ -3518,7 +1949,7 @@ struct EditGazView: View {
                             Text(verbatim: NSLocalizedString("Usage Start", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
                                 .foregroundStyle(.primary)
                                 .fixedSize()
-                            TextField("Usage Start", text: $usageStartTimeText)
+                            formTextField("Usage Start", text: $usageStartTimeText)
                                 .platformKeyboardType(.decimalPad)
                                 .onChange(of: usageStartTimeText) {
                                     if let parsed = parseFlexibleDouble(usageStartTimeText) {
@@ -3544,7 +1975,7 @@ struct EditGazView: View {
                             Text(verbatim: NSLocalizedString("Usage End", bundle: Bundle.forAppLanguage(), comment: "") + " (\(usageTimeUnit.symbol))")
                                 .foregroundStyle(.primary)
                                 .fixedSize()
-                            TextField("Usage End", text: $usageEndTimeText)
+                            formTextField("Usage End", text: $usageEndTimeText)
                                 .platformKeyboardType(.decimalPad)
                                 .onChange(of: usageEndTimeText) {
                                     if let parsed = parseFlexibleDouble(usageEndTimeText) {
@@ -3570,6 +2001,7 @@ struct EditGazView: View {
                             .font(.caption2)
                     }
                 }
+                .groupedFormStyleOnMac()
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Edit Gas")
@@ -3583,52 +2015,12 @@ struct EditGazView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .foregroundStyle(.green)
+                        .confirmationActionForeground(.green)
                 }
             }
         }
-#endif
     }
 
-    #if os(macOS)
-    private func gazMacOSGroup(_ title: LocalizedStringKey, icon: String, color: Color, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.headline)
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-            }
-            .padding(.bottom, 4)
-
-            VStack(spacing: 12) {
-                content()
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(color.opacity(0.2), lineWidth: 1)
-        )
-    }
-
-    private func gazMacOSRow(_ label: LocalizedStringKey, @ViewBuilder trailing: () -> some View) -> some View {
-        HStack(spacing: 12) {
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 140, alignment: .leading)
-            Spacer()
-            trailing()
-        }
-    }
-    #endif
 
     // MARK: - Sample remapping helpers
 
