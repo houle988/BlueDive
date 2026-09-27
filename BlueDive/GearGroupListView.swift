@@ -57,10 +57,6 @@ struct GearGroupListView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 500, idealWidth: 650, maxWidth: 800,
-               minHeight: 400, idealHeight: 600, maxHeight: 800)
-        #endif
     }
 
     // MARK: - List

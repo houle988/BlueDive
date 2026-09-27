@@ -59,10 +59,6 @@ struct AddTankTemplateView: View {
                 }
                 .padding()
             }
-            #if os(macOS)
-            .frame(minWidth: 500, idealWidth: 600, maxWidth: 750,
-                   minHeight: 400, idealHeight: 550, maxHeight: 700)
-            #endif
             .background(Color(.systemGroupedBackground))
             .navigationTitle("New Template")
             #if os(iOS)
@@ -75,9 +71,6 @@ struct AddTankTemplateView: View {
                 Text(LocalizedStringKey(validationMessage))
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 500, idealWidth: 600, maxWidth: 750)
-        #endif
     }
 
     // MARK: - View Components

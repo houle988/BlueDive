@@ -52,10 +52,6 @@ struct AddGearGroupView: View {
                 }
                 .padding()
             }
-            #if os(macOS)
-            .frame(minWidth: 500, idealWidth: 600, maxWidth: 750,
-                   minHeight: 500, idealHeight: 700, maxHeight: 900)
-            #endif
             .background(Color(.systemGroupedBackground))
             .navigationTitle("New Group")
             #if os(iOS)
@@ -68,9 +64,6 @@ struct AddGearGroupView: View {
                 Text(LocalizedStringKey(validationMessage))
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 500, idealWidth: 600, maxWidth: 750)
-        #endif
     }
 
     // MARK: - View Components

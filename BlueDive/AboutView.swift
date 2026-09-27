@@ -159,9 +159,6 @@ struct AboutView: View {
                 .ignoresSafeArea()
             )
             .navigationTitle("About")
-            #if os(macOS)
-            .frame(minWidth: 420, idealWidth: 500, maxWidth: 600, minHeight: 500, idealHeight: 600, maxHeight: 800)
-            #endif
 
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -180,9 +180,6 @@ struct DiveTripsView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
-            #if os(macOS)
-            .frame(minWidth: 600, idealWidth: 750, maxWidth: 1000, minHeight: 500, idealHeight: 700, maxHeight: 900)
-            #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -443,9 +440,6 @@ struct TripDetailSheet: View {
             .navigationTitle(trip.name)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #if os(macOS)
-            .frame(minWidth: 550, idealWidth: 650, maxWidth: 850, minHeight: 500, idealHeight: 650, maxHeight: 900)
             #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {

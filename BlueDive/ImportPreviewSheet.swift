@@ -43,12 +43,6 @@ struct ImportPreviewSheet: View {
                 .padding(.vertical, 24)
             }
         }
-        #if os(macOS)
-        .frame(
-            minWidth: 480, idealWidth: 560, maxWidth: 700,
-            minHeight: 460, idealHeight: 580, maxHeight: 800
-        )
-        #endif
     }
 
     // MARK: - Header

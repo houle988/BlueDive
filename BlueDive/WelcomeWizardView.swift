@@ -207,9 +207,6 @@ struct WelcomeWizardView: View {
                 appeared = true
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 650, idealWidth: 750, maxWidth: 900, minHeight: 700, idealHeight: 800, maxHeight: 950)
-        #endif
     }
 
     // MARK: - Page View

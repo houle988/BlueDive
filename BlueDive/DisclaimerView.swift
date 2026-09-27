@@ -168,9 +168,6 @@ struct DisclaimerView: View {
                 appeared = true
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 550, idealWidth: 650, maxWidth: 800, minHeight: 600, idealHeight: 700, maxHeight: 850)
-        #endif
     }
 
     // MARK: - Disclaimer Row
@@ -348,9 +345,6 @@ struct CalculatorSafetyWarningView: View {
                 appeared = true
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 550, idealWidth: 650, maxWidth: 800, minHeight: 600, idealHeight: 700, maxHeight: 850)
-        #endif
     }
 
     private func warningRow(icon: String, color: Color, title: LocalizedStringKey, description: LocalizedStringKey) -> some View {

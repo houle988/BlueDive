@@ -157,9 +157,6 @@ struct MarineLifeView: View {
                 }
             }
             .navigationTitle("Marine Life")
-            #if os(macOS)
-            .frame(minWidth: 600, idealWidth: 750, maxWidth: 1000, minHeight: 500, idealHeight: 700, maxHeight: 900)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
@@ -442,9 +439,6 @@ struct SpeciesDivesSheet: View {
             .navigationTitle(speciesName)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #if os(macOS)
-            .frame(minWidth: 450, idealWidth: 550, maxWidth: 750, minHeight: 400, idealHeight: 500, maxHeight: 700)
             #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {

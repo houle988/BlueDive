@@ -154,9 +154,6 @@ struct DiveCalendarHeatmapView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
-            #if os(macOS)
-            .frame(minWidth: 650, idealWidth: 800, maxWidth: 1000, minHeight: 600, idealHeight: 900, maxHeight: .infinity)
-            #endif
             .background(Color.platformBackground.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -501,9 +498,6 @@ struct DayDivesSheetView: View {
                 }
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 500, idealWidth: 650, minHeight: 400, idealHeight: 600)
-        #endif
     }
 }
 

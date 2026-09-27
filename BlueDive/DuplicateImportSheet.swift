@@ -148,12 +148,6 @@ struct DuplicateImportSheet: View {
                 .padding(.vertical, 24)
             }
         }
-        #if os(macOS)
-        .frame(
-            minWidth: 540, idealWidth: 620, maxWidth: 800,
-            minHeight: 520, idealHeight: 640, maxHeight: 900
-        )
-        #endif
     }
 
     // MARK: - Header

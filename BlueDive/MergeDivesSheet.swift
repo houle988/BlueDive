@@ -82,9 +82,6 @@ struct MergeDivesSheet: View {
                 }
                 .padding()
             }
-            #if os(macOS)
-            .frame(minWidth: 550, idealWidth: 620, maxWidth: 750, minHeight: 500, idealHeight: 650, maxHeight: 850)
-            #endif
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Merge Dives")
             #if os(iOS)
@@ -92,9 +89,6 @@ struct MergeDivesSheet: View {
             #endif
             .toolbar { mergeToolbarContent }
         }
-        #if os(macOS)
-        .frame(minWidth: 550, idealWidth: 620, maxWidth: 750, minHeight: 500, idealHeight: 650, maxHeight: 900)
-        #endif
 
         .alert("Merge dives?", isPresented: $showConfirmation) {
             Button("Cancel", role: .cancel) { }

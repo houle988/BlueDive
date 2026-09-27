@@ -128,9 +128,6 @@ struct EditGearView: View {
                 }
                 .padding()
             }
-            #if os(macOS)
-            .frame(minWidth: 600, idealWidth: 650, maxWidth: 750, minHeight: 500, idealHeight: 650, maxHeight: 900)
-            #endif
             .background(Color(.systemGroupedBackground))
             .toolbar { toolbarContent }
             .alert("Error", isPresented: $showValidationError) {
@@ -139,9 +136,6 @@ struct EditGearView: View {
                 Text(LocalizedStringKey(validationMessage))
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 600, idealWidth: 650, maxWidth: 750)
-        #endif
         .task { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
         .onChange(of: allGearItems) { manufacturerSuggestions = GearIconView.manufacturerSuggestions(from: allGearItems) }
     }

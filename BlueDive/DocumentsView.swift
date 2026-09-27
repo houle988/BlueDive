@@ -1429,9 +1429,6 @@ struct CertificationDetailView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            #if os(macOS)
-            .frame(minWidth: 500, idealWidth: 560, maxWidth: 700, minHeight: 550, idealHeight: 650, maxHeight: 800)
-            #endif
             .sheet(isPresented: $showEditCertification) {
                 AddCertificationView(certificationToEdit: certification)
                     .presentationSizing(.page)
@@ -1690,9 +1687,6 @@ struct AddCertificationView: View {
             }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #if os(macOS)
-            .frame(minWidth: 500, idealWidth: 560, maxWidth: 700, minHeight: 550, idealHeight: 650, maxHeight: 800)
             #endif
             .onAppear {
                 if let cert = certificationToEdit {

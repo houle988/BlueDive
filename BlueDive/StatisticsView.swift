@@ -432,9 +432,6 @@ struct StatisticsView: View {
                 }
             }
             .navigationTitle("Statistics")
-            #if os(macOS)
-            .frame(minWidth: 600, idealWidth: 750, maxWidth: 1000, minHeight: 500, idealHeight: 700, maxHeight: 900)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
@@ -1614,9 +1611,6 @@ struct SiteDivesSheet: View {
                 }
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 500, idealWidth: 650, minHeight: 400, idealHeight: 600)
-        #endif
     }
 }
 

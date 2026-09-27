@@ -369,9 +369,6 @@ struct AddFishView: View {
             #endif
 
         }
-        #if os(macOS)
-        .frame(width: 380, height: 400)
-        #endif
     }
 
     @MainActor
@@ -624,9 +621,6 @@ struct EditFishView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
         }
-        #if os(macOS)
-        .frame(width: 380, height: 400)
-        #endif
     }
 
     @MainActor
@@ -816,9 +810,6 @@ struct AddGearToDiveView: View {
                 }
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 400, minHeight: 350)
-        #endif
     }
 
     private var emptyStateView: some View {

@@ -204,9 +204,6 @@ struct DiverProfileView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .navigationTitle("")
-            #if os(macOS)
-            .frame(minWidth: 600, idealWidth: 700, maxWidth: 900, minHeight: 500, idealHeight: 650, maxHeight: 900)
-            #endif
 
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1205,9 +1202,6 @@ struct InsuranceDetailView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            #if os(macOS)
-            .frame(minWidth: 500, idealWidth: 560, maxWidth: 700, minHeight: 550, idealHeight: 650, maxHeight: 800)
-            #endif
             .sheet(isPresented: $showEditInsurance) {
                 AddInsuranceView(insuranceToEdit: insurance)
                     .presentationSizing(.page)
@@ -1378,9 +1372,6 @@ struct AddInsuranceView: View {
             }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #if os(macOS)
-            .frame(minWidth: 500, idealWidth: 560, maxWidth: 700, minHeight: 550, idealHeight: 650, maxHeight: 800)
             #endif
 
             .onAppear {

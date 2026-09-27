@@ -535,9 +535,6 @@ struct SettingsView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
-            #if os(macOS)
-            .frame(minWidth: 400, idealWidth: 480, maxWidth: 600, minHeight: 500, idealHeight: 580, maxHeight: 780)
-            #endif
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
