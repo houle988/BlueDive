@@ -54,7 +54,6 @@ extension Color {
 struct DiverProfileView: View {
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     @Query(sort: \DivingInsurance.endDate, order: .reverse) private var insurances: [DivingInsurance]
-    @Query(sort: \Gear.name) private var allGear: [Gear]
 
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
@@ -73,9 +72,9 @@ struct DiverProfileView: View {
 
     // MARK: - Diver Filter
 
-    private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: certifications, insurances: insurances)
-    }
+    // DiveStore's complete diver list (dives, gear, certifications, insurance), kept current
+    // by DiverSourcesFeeder — no local recomputation over every dive on each body pass.
+    private var uniqueDivers: [String] { store.cachedUniqueDivers }
 
     private var filteredDives: [Dive] {
         DiverFilter.apply(selectedDiver, to: store.dives)
@@ -1229,18 +1228,13 @@ struct AddInsuranceView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(DiveStore.self) private var store
 
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
-
     var insuranceToEdit: DivingInsurance?
     var prefilledDiverName: String = ""
 
     private var isEditing: Bool { insuranceToEdit != nil }
 
-    private var diverNameSuggestions: [String] {
-        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
-    }
+    // DiveStore's complete diver list (dives, gear, certifications, insurance).
+    private var diverNameSuggestions: [String] { store.cachedUniqueDivers }
 
     @State private var diverName = ""
     @State private var insurerName = ""

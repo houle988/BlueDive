@@ -175,6 +175,42 @@ func resolveGearDiverName(forSerial computerSerial: String?, in context: ModelCo
     return ""
 }
 
+// MARK: - Diver Sources Feeder
+
+/// Feeds DiveStore's diver-name list (`store.cachedUniqueDivers`) from gear,
+/// certifications and insurance. Renders nothing.
+///
+/// Attached once, behind MainTabView's TabView, so it stays mounted and updating whatever
+/// tab is selected — including while the user adds gear or documents on the Equipment or
+/// Documents tab, or iCloud delivers them from another device. ContentView (the Dives tab)
+/// still owns the only Dive @Query and feeds the dive half of the list; this view owns the
+/// only Gear/Certification/DivingInsurance queries used for diver names, so no screen needs
+/// its own queries just to build a diver list.
+struct DiverSourcesFeeder: View {
+    @Environment(DiveStore.self) private var store
+    @Query private var allGear: [Gear]
+    @Query private var allCertifications: [Certification]
+    @Query private var allInsurances: [DivingInsurance]
+
+    var body: some View {
+        Color.clear
+            .accessibilityHidden(true)
+            .onAppear(perform: sync)
+            // Keyed on the diver-name arrays, not the model arrays: SwiftData models compare by
+            // persistentModelID, so observing them directly misses an in-place diverName rename.
+            .onChange(of: allGear.map(\.diverName)) { _, _ in sync() }
+            .onChange(of: allCertifications.map(\.diverName)) { _, _ in sync() }
+            .onChange(of: allInsurances.map(\.diverName)) { _, _ in sync() }
+    }
+
+    /// Gear/certification/insurance edits change only the diver-name list — never dive
+    /// order, row fields or badges — so they take DiveStore's narrow path, not the full
+    /// summary rebuild.
+    private func sync() {
+        store.updateDiverSources(gear: allGear, certifications: allCertifications, insurances: allInsurances)
+    }
+}
+
 // MARK: - Toolbar Picker
 
 /// Drop-in toolbar item that exposes the diver filter on iOS and macOS.

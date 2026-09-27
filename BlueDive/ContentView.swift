@@ -24,9 +24,6 @@ let widgetAppGroupSuite = "group.app.bluedive.universal"
 struct ContentView: View {
     @Environment(\.modelContext) var modelContext
     @Query(sort: \Dive.timestamp, order: .reverse) var dives: [Dive]
-    @Query private var allInsurances: [DivingInsurance]
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertifications: [Certification]
     @Query(sort: \MarineSight.name) private var allMarineSights: [MarineSight]
     @State private var prefs = UserPreferences.shared
     @Environment(DiveStore.self) private var store
@@ -494,7 +491,6 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
-            syncDiverSources()
             if !store.hasCacheBuilt {
                 // First mount: build caches immediately (cold launch or first appearance).
                 store.rebuildDerivedDiveState(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver)
@@ -514,15 +510,8 @@ struct ContentView: View {
             store.updateWidgetDiveData(dives: dives)
         }
         .onChange(of: dives) { _, _ in store.scheduleRebuild(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver) }
-        // Gear/cert/insurance edits change only the diver-name list — never dive order, row
-        // fields or badges — so they take DiveStore's narrow path, not the full summary rebuild.
-        // ContentView is the sole feeder for store.cachedUniqueDivers; every other
-        // diver-filtered screen reads it rather than recomputing.
-        // Keyed on the diver-name arrays, not the model arrays: SwiftData models compare by
-        // persistentModelID, so observing them directly misses an in-place diverName rename.
-        .onChange(of: allGear.map(\.diverName))           { _, _ in syncDiverSources() }
-        .onChange(of: allInsurances.map(\.diverName))     { _, _ in syncDiverSources() }
-        .onChange(of: allCertifications.map(\.diverName)) { _, _ in syncDiverSources() }
+        // Gear/certification/insurance diver names reach store.cachedUniqueDivers through
+        // DiverSourcesFeeder (attached in MainTabView, mounted whatever tab is shown), not here.
         .onChange(of: store.cachedWidgetFingerprint) { _, _ in store.updateWidgetDiveData(dives: dives) }
         .onChange(of: prefs.depthUnit) { _, _ in store.updateWidgetDiveData(dives: dives); store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
         .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
@@ -634,14 +623,6 @@ struct ContentView: View {
     private struct DiveNavTarget: Hashable {
         let summaryID: UUID
         let isGrouped: Bool
-    }
-
-    /// Pushes the current gear/certification/insurance arrays into DiveStore so
-    /// cachedUniqueDivers stays complete. Called once at mount (.onAppear) and again
-    /// whenever any of the three sources changes (.onChange) — kept as one function so
-    /// both call sites can never drift out of sync with each other's argument list.
-    private func syncDiverSources() {
-        store.updateDiverSources(gear: allGear, certifications: allCertifications, insurances: allInsurances)
     }
 
     /// True when the diver filter is the only active constraint on the dive list —

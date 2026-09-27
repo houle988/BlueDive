@@ -44,8 +44,6 @@ struct EditGearView: View {
     @State private var validationMessage = ""
 
     @Query(sort: \Gear.name) private var allGearItems: [Gear]
-    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
 
     private let currencies = ["CAD", "USD", "EUR", "GBP", "CHF", "AUD", "JPY", "Other"]
 
@@ -78,9 +76,8 @@ struct EditGearView: View {
 
     // MARK: - Computed Properties
 
-    private var diverNameSuggestions: [String] {
-        DiverFilter.uniqueDivers(in: store.dives, gear: allGearItems, certifications: allCertifications, insurances: allInsurances)
-    }
+    // DiveStore's complete diver list (dives, gear, certifications, insurance).
+    private var diverNameSuggestions: [String] { store.cachedUniqueDivers }
 
     @State private var manufacturerSuggestions: [String] = []
 

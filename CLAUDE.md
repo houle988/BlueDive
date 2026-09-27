@@ -215,8 +215,9 @@ SwiftData `@Query` has no delta mechanism — every observer receives a full re-
 
 ### @Query Ownership
 
-- **`ContentView` is the only `@Query Dive` owner.** It owns `@Query dives: [Dive]`, `@Query allInsurances: [DivingInsurance]`, `@Query allGear: [Gear]`, `@Query allCertifications: [Certification]`, and `@Query allMarineSights: [MarineSight]`.
-- When `dives`/`allMarineSights` change, `ContentView` passes them to `store.scheduleRebuild(dives:allMarineSights:selectedDiver:)`. When `allGear`/`allCertifications`/`allInsurances` change, it calls `store.updateDiverSources(gear:certifications:insurances:)` instead — a narrow path that only refreshes the diver-name list, not the full dive pipeline.
+- **`ContentView` is the only `@Query Dive` owner.** It owns `@Query dives: [Dive]` and `@Query allMarineSights: [MarineSight]`, and when they change passes them to `store.scheduleRebuild(dives:allMarineSights:selectedDiver:)`.
+- **`DiverSourcesFeeder` (`DiverFilter.swift`) feeds the rest of the diver-name list.** It owns `@Query` for `Gear`, `Certification` and `DivingInsurance`, and when any of their diver names change calls `store.updateDiverSources(gear:certifications:insurances:)` — a narrow path that only refreshes the diver-name list, not the full dive pipeline. It is attached once with `.background(DiverSourcesFeeder())` to the `TabView` in `MainTabView`, so it stays mounted whatever tab is selected (`ContentView` is not guaranteed to be mounted or updating while another tab is shown). Keep it a background view — putting the queries on `MainTabView` itself would re-evaluate all four tabs on every gear or document change.
+- **Diver-name lists read `store.cachedUniqueDivers`** — diver filter menus (`DiverFilterToolbar`, `.diverFilterReset`) and Diver field suggestions alike. Never call `DiverFilter.uniqueDivers(...)` outside `DiveStore`, and never add a `Gear`/`Certification`/`DivingInsurance` `@Query` just to build a diver list. `cachedUniqueDivers` is published only after both feeders have delivered at least once, so a persisted diver selection is never cleared by a half-built list at launch.
 - No other view may add a `@Query Dive`. Adding one reintroduces the full-re-delivery cascade freeze this architecture exists to prevent.
 
 ### The Three Commit Scopes
@@ -247,6 +248,7 @@ On any save, call `store.commit(_ dive: Dive, affects: DiveChangeScope)` with th
 ### What NOT To Do
 
 - Never add `@Query var dives: [Dive]` to any view other than `ContentView`.
+- Never compute a diver-name list locally (`DiverFilter.uniqueDivers(...)`) or add a `Gear`/`Certification`/`DivingInsurance` `@Query` only for one; read `store.cachedUniqueDivers`.
 - Never post `NotificationCenter` notifications to signal dive changes — call `store.commit(_:affects:)` directly.
 - Never call `store.scheduleRebuild(...)` from a child view. Only `ContentView` owns the query inputs; child views call `commit()`.
 - Never use `onChange(of: store.dives)` to re-trigger a view that displays `.rowFields`-affected data (site, country, gas stats); use `onChange(of: store.cachedSummaries)`.

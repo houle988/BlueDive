@@ -8,12 +8,7 @@ struct MoveDiverSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
 
-    @Query private var allGear: [Gear]
-    @Query private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
-
     @State private var targetName: String
-    @State private var diverNames: [String] = []
     @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
     let originalTrimmedName: String
 
@@ -49,14 +44,6 @@ struct MoveDiverSheet: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .onAppear {
-                diverNames = DiverFilter.uniqueDivers(
-                    in: store.dives,
-                    gear: allGear,
-                    certifications: allCertifications,
-                    insurances: allInsurances
-                )
-            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -124,7 +111,7 @@ struct MoveDiverSheet: View {
                 Text("No diver")
             }
 
-            ForEach(diverNames, id: \.self) { name in
+            ForEach(store.cachedUniqueDivers, id: \.self) { name in
                 diverRow(icon: "person", iconColor: .cyan, isSelected: resolvedName == name) {
                     targetName = name
                 } title: {

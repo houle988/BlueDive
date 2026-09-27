@@ -159,6 +159,13 @@ final class DiveStore {
     private var cachedInsurances: [DivingInsurance] = []
     private var cachedGear: [Gear] = []
     private var cachedCertifications: [Certification] = []
+    // cachedUniqueDivers has two independent feeders (ContentView for dives,
+    // DiverSourcesFeeder for gear/certifications/insurance) whose first calls can arrive in
+    // either order at launch. Until both halves have arrived once, a published list would be
+    // incomplete but non-empty — enough for diverFilterReset to clear a persisted diver
+    // selection that exists only in the missing half. See recomputeUniqueDivers().
+    private var hasReceivedDives = false
+    private var hasReceivedDiverSources = false
     private var cachedMarineSights: [MarineSight] = []
     private var cachedSelectedDiver: String = ""
     /// The trimmed searchText value actually applied to cachedFilteredSummaries as of the
@@ -397,6 +404,7 @@ final class DiveStore {
         selectedDiver: String
     ) {
         self.dives = dives
+        self.hasReceivedDives = true
         self.cachedSelectedDiver = selectedDiver
         self.cachedMarineSights = allMarineSights
         // Phase 1 — Fast synchronous work on MainActor. Must complete before returning
@@ -493,19 +501,21 @@ final class DiveStore {
     /// Deliberately bypasses scheduleRebuild()/rebuildDerivedDiveState(): a gear,
     /// certification or insurance edit cannot change dive order, row fields or row
     /// badges, so routing it through the full pipeline would rebuild every
-    /// DiveSummary (10 000+ dives) to refresh a name list. This replaces the per-screen
-    /// copies of the same narrow refresh (formerly DiveMapView.rebuildUniqueDivers(),
-    /// among others) for every screen whose gear/cert/insurance queries existed only to
-    /// feed the picker. DocumentsView, GearListView and DiverProfileView still compute
-    /// uniqueDivers locally — they already own those queries for their primary content.
+    /// DiveSummary (10 000+ dives) to refresh a name list. Called only by
+    /// DiverSourcesFeeder (always mounted behind MainTabView's TabView). Every screen that
+    /// shows a diver list — filter menus and Diver field suggestions alike — reads
+    /// cachedUniqueDivers instead of querying gear/certifications/insurance itself.
     func updateDiverSources(gear: [Gear], certifications: [Certification], insurances: [DivingInsurance]) {
         cachedGear = gear
         cachedCertifications = certifications
         cachedInsurances = insurances
+        hasReceivedDiverSources = true
         recomputeUniqueDivers()
     }
 
     private func recomputeUniqueDivers() {
+        // Publish only a complete list: see hasReceivedDives / hasReceivedDiverSources.
+        guard hasReceivedDives && hasReceivedDiverSources else { return }
         let names = DiverFilter.uniqueDivers(
             in: dives, gear: cachedGear,
             certifications: cachedCertifications, insurances: cachedInsurances

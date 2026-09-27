@@ -81,6 +81,10 @@ struct MainTabView: View {
                     .tag(3)
             }
             .accentColor(.cyan)
+            // Keeps store.cachedUniqueDivers fed from gear/certifications/insurance whatever
+            // tab is selected. A background view (not @Query on MainTabView itself) so a gear
+            // or document change doesn't re-evaluate MainTabView's body and all four tabs.
+            .background(DiverSourcesFeeder())
         }
         .onReceive(NotificationCenter.default.publisher(for: .addDiveManual)) { _ in
             selectedTab = 0

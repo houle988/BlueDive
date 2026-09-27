@@ -30,7 +30,6 @@ struct DocumentsView: View {
     @Environment(DiveStore.self) private var store
     @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
     @Query(sort: \DivingInsurance.endDate, order: .reverse) private var insurances: [DivingInsurance]
-    @Query(sort: \Gear.name) private var allGear: [Gear]
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     var onClose: (() -> Void)? = nil
 
@@ -86,9 +85,9 @@ struct DocumentsView: View {
 
     // MARK: - Computed Properties
 
-    private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: certifications, insurances: insurances)
-    }
+    // DiveStore's complete diver list (dives, gear, certifications, insurance), kept current
+    // by DiverSourcesFeeder — no local recomputation over every dive on each body pass.
+    private var uniqueDivers: [String] { store.cachedUniqueDivers }
 
     private var filteredCertifications: [Certification] {
         DiverFilter.apply(selectedDiver, to: certifications)
@@ -1505,8 +1504,6 @@ struct AddCertificationView: View {
     @Environment(DiveStore.self) private var store
 
     @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query private var allInsurances: [DivingInsurance]
 
     var certificationToEdit: Certification?
     var prefilledDiverName: String = ""
@@ -1527,9 +1524,8 @@ struct AddCertificationView: View {
     @State private var notes: String = ""
     @State private var nameManuallyEdited: Bool = false
 
-    private var diverNameSuggestions: [String] {
-        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
-    }
+    // DiveStore's complete diver list (dives, gear, certifications, insurance).
+    private var diverNameSuggestions: [String] { store.cachedUniqueDivers }
 
     private func certificationSuggestions(_ keyPath: KeyPath<Certification, String?>) -> [String] {
         let editingID = certificationToEdit?.id

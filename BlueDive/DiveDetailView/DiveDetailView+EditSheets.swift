@@ -12,9 +12,6 @@ struct EditMenuStatsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(DiveStore.self) private var store
     @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
-    @Query(sort: \Gear.name) private var allGear: [Gear]
-    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
 
     @State private var workingMaxDepth: Double
     @State private var workingAvgDepth: Double
@@ -164,9 +161,8 @@ struct EditMenuStatsView: View {
         }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    private var uniqueDiverNames: [String] {
-        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertifications, insurances: allInsurances)
-    }
+    // DiveStore's complete diver list (dives, gear, certifications, insurance).
+    private var uniqueDiverNames: [String] { store.cachedUniqueDivers }
 
     private var uniqueBuddyNames: [String] {
         var seen = Set<String>()

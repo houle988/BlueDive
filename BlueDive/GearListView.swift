@@ -9,8 +9,6 @@ struct GearListView: View {
     @Query(sort: \Gear.name) private var allGear: [Gear]
     @Query(sort: \GearGroup.name) private var allGearGroups: [GearGroup]
     @Query(sort: \TankTemplate.name) private var allTankTemplates: [TankTemplate]
-    @Query(sort: \Certification.issueDate, order: .reverse) private var allCertificationsForFilter: [Certification]
-    @Query private var allInsurances: [DivingInsurance]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.locale) private var locale
     @Environment(FileImportCoordinator.self) private var importCoordinator
@@ -57,9 +55,9 @@ struct GearListView: View {
 
     // MARK: - Computed Properties
 
-    private var uniqueDivers: [String] {
-        DiverFilter.uniqueDivers(in: store.dives, gear: allGear, certifications: allCertificationsForFilter, insurances: allInsurances)
-    }
+    // DiveStore's complete diver list (dives, gear, certifications, insurance), kept current
+    // by DiverSourcesFeeder — no local recomputation over every dive on each body pass.
+    private var uniqueDivers: [String] { store.cachedUniqueDivers }
 
     /// Équipement filtré par recherche et catégorie
     private var filteredGear: [Gear] {
