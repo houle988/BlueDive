@@ -9082,7 +9082,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Aktueller Taucher"
           }
         },
@@ -9094,7 +9094,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Huidige duiker"
           }
         }
@@ -11345,7 +11345,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Zu verschiebender Tauchgang"
           }
         },
@@ -11357,7 +11357,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Te verplaatsen duik"
           }
         }
@@ -11603,7 +11603,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Naam van de duiker"
           }
         }
@@ -26089,7 +26089,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Benachrichtigungen sind in iOS deaktiviert. Aktiviere sie unter Einstellungen → BlueDive → Benachrichtigungen."
+            "value" : "Benachrichtigungen sind in iOS deaktiviert. Aktiviere sie unter Einstellungen → BlueDive → Mitteilungen."
           }
         },
         "en" : {
@@ -26116,7 +26116,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Benachrichtigungen sind deaktiviert. Aktiviere sie unter Systemeinstellungen → Mitteilungen → BlueDive."
           }
         },
@@ -26128,7 +26128,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Meldingen zijn uitgeschakeld. Schakel ze in via Systeeminstellingen → Meldingen → BlueDive."
           }
         }
@@ -26308,7 +26308,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Öffnet den Ordner mit deinen Datenbankdateien."
           }
         },
@@ -26320,7 +26320,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Opent de map met je databasebestanden."
           }
         }
@@ -32441,7 +32441,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Einstellungen …"
           }
         },
@@ -32453,7 +32453,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Instellingen…"
           }
         }
@@ -32545,7 +32545,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Datenbank im Finder anzeigen"
           }
         },
@@ -32557,7 +32557,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Toon database in Finder"
           }
         }
@@ -33345,7 +33345,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Solotaucher"
           }
         },
