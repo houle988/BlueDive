@@ -109,6 +109,10 @@ struct DiveDetailView: View {
     @State var showFullScreenSiteMap = false
     @State private var dragOffset: CGFloat = 0
     @State private var pendingDive: Dive? = nil
+    // Side the incoming preview enters from when navigateTo starts with dragOffset still 0
+    // (previous/next buttons, VoiceOver actions). A swipe never needs it: the preview only
+    // appears once dragOffset is already non-zero, and its sign gives the side.
+    @State private var pendingEntersFromTrailing: Bool = false
     @State private var viewWidth: CGFloat = 400
     @State private var scrollLocked: Bool = false
     @State private var unlockToken: UUID = UUID()
@@ -227,7 +231,7 @@ struct DiveDetailView: View {
                 if let pending = pendingDive {
                     DiveSlidingPreview(dive: pending, diveNumber: pending.diveNumber ?? pendingDiveNumber(for: pending), initialTab: selectedTab)
                         .frame(width: geo.size.width, height: geo.size.height)
-                        .offset(x: dragOffset < 0
+                        .offset(x: (dragOffset < 0 || (dragOffset == 0 && pendingEntersFromTrailing))
                             ? dragOffset + geo.size.width
                             : dragOffset - geo.size.width)
                 }
@@ -500,10 +504,14 @@ struct DiveDetailView: View {
         // Prevent overlapping navigations from rapid chevron taps.
         guard !isNavigating else { return }
         isNavigating = true
-        pendingDive = targetDive
         // Visual direction: "forward" means the incoming dive comes from the trailing edge.
         let rtl = layoutDirection == .rightToLeft
         let visualForward = rtl ? !forward : forward
+        // Set before pendingDive so the preview is first placed on the correct side while
+        // dragOffset is still 0; otherwise "next" starts on the left and slides across the
+        // outgoing dive instead of in from the right.
+        pendingEntersFromTrailing = visualForward
+        pendingDive = targetDive
         let targetOffset: CGFloat = visualForward ? -viewWidth : viewWidth
         #if os(iOS)
         hapticGenerator.impactOccurred()
