@@ -11,6 +11,8 @@ struct MainTabView: View {
     @AppStorage("gearMaintenanceReminders") private var gearReminders = true
     @AppStorage("certificationReminders") private var certReminders = true
     @AppStorage("insuranceReminders") private var insuranceReminders = true
+    /// Written by `UserPreferences.languageMode`; observed to re-localize scheduled reminders.
+    @AppStorage("languageMode") private var languageMode = "system"
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
     @Environment(\.introVisible) private var introVisible
@@ -189,6 +191,11 @@ struct MainTabView: View {
                 // All reminders now use calendar triggers, so re-scheduling is safe.
                 Task { await scheduleNotificationsAtLaunch() }
         }
+        .onChange(of: languageMode) {
+            // Reminder text and action buttons are localized when scheduled/registered, so
+            // re-register and reschedule them in the new in-app language.
+            Task { await scheduleNotificationsAtLaunch() }
+        }
         #if os(iOS)
         .fullScreenCover(isPresented: disclaimerBinding) {
             DisclaimerView()
@@ -200,15 +207,11 @@ struct MainTabView: View {
         // fullScreenCover is unavailable on macOS; present as sheets instead.
         .sheet(isPresented: disclaimerBinding) {
             DisclaimerView()
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(isPresented: welcomeBinding) {
             WelcomeWizardView()
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         #endif
         .onChange(of: scenePhase) { _, newPhase in
@@ -220,21 +223,15 @@ struct MainTabView: View {
         }
         .sheet(item: $gearToOpen) { gear in
             GearServiceView(gear: gear)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(item: $certToRenew) { cert in
             AddCertificationView(certificationToEdit: cert)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(item: $insuranceToRenew) { insurance in
             AddInsuranceView(insuranceToEdit: insurance)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
     }
 

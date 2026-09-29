@@ -410,33 +410,23 @@ struct DiveDetailView: View {
         }
         .sheet(isPresented: $showEditSheet) {
             editSheetForCurrentTab
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(isPresented: $showAddFish) {
             AddFishView(dive: dive, fishNames: existingFishNames)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(item: $fishToEdit) { fish in
             EditFishView(fish: fish, fishNames: existingFishNames)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(isPresented: $showAddGear) {
             AddGearToDiveView(dive: dive)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(item: $selectedGearForDetail) { gear in
             GearServiceView(gear: gear)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         #if os(iOS)
         .fileExporter(

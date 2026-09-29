@@ -333,3 +333,37 @@ extension NSColor {
     static var systemGroupedBackground: NSColor { .windowBackgroundColor }
 }
 #endif
+
+// MARK: - Standard sheet presentation
+
+extension View {
+    /// The presentation every `.sheet` uses: page sizing, the large detent and a drag
+    /// indicator. On macOS it also applies the in-app language: there each sheet is hosted in
+    /// its own window whose root resets `\.locale` to the system language, so the override set
+    /// on the main window (`LanguageOverrideModifier` in `BlueDiveApp`) doesn't reach sheets,
+    /// including sheets presented from another sheet. On iOS sheets inherit the override and
+    /// this is exactly the three presentation modifiers.
+    func standardSheetPresentation(dragIndicator: Visibility = .visible) -> some View {
+        #if os(macOS)
+        self.modifier(AppLanguageSheetLocale())
+            .presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(dragIndicator)
+        #else
+        self.presentationSizing(.page)
+            .presentationDetents([.large])
+            .presentationDragIndicator(dragIndicator)
+        #endif
+    }
+}
+
+#if os(macOS)
+private struct AppLanguageSheetLocale: ViewModifier {
+    // Observed, so an open sheet follows a language change made in Settings.
+    @State private var prefs = UserPreferences.shared
+
+    func body(content: Content) -> some View {
+        content.modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
+    }
+}
+#endif

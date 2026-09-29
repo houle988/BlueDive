@@ -544,15 +544,11 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingAboutSheet) {
                 AboutView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showDisclaimer) {
                 DisclaimerView(isReview: true)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             #if os(iOS)
             .fullScreenCover(isPresented: $showWelcomeWizard) {
@@ -561,9 +557,7 @@ struct SettingsView: View {
             #else
             .sheet(isPresented: $showWelcomeWizard) {
                 WelcomeWizardView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             #endif
         }

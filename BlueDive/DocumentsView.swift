@@ -391,21 +391,15 @@ struct DocumentsView: View {
             // --- Certification Sheets ---
             .sheet(isPresented: $showAddCertification) {
                 AddCertificationView(prefilledDiverName: selectedDiver)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $selectedCertification) { cert in
                 CertificationDetailView(certification: cert, selectedCertification: $selectedCertification)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $showEditCertificationFor) { cert in
                 AddCertificationView(certificationToEdit: cert)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .alert("Delete certification?", isPresented: $showDeleteCertConfirmation) {
                 Button("Cancel", role: .cancel) { certificationToDelete = nil }
@@ -424,21 +418,15 @@ struct DocumentsView: View {
             // --- Insurance Sheets ---
             .sheet(isPresented: $showAddInsurance) {
                 AddInsuranceView(prefilledDiverName: selectedDiver)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $selectedInsurance) { insurance in
                 InsuranceDetailView(insurance: insurance, selectedInsurance: $selectedInsurance)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $showEditInsuranceFor) { insurance in
                 AddInsuranceView(insuranceToEdit: insurance)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .alert("Delete insurance?", isPresented: $showDeleteInsuranceConfirmation) {
                 Button("Cancel", role: .cancel) { insuranceToDelete = nil }
@@ -469,9 +457,7 @@ struct DocumentsView: View {
                         pendingInsuranceImport = []
                     }
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .onChange(of: showImportPreview) { _, isShown in
                 if !isShown {
@@ -1452,9 +1438,7 @@ struct CertificationDetailView: View {
             #endif
             .sheet(isPresented: $showEditCertification) {
                 AddCertificationView(certificationToEdit: certification)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .alert("Delete certification?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }

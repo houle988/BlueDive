@@ -180,9 +180,7 @@ struct MarineLifeView: View {
                     dives: filteredDives.filter { species.diveIDs.contains($0.id) },
                     numberMap: numberMap
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
         }
     }

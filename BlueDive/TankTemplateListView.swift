@@ -46,15 +46,11 @@ struct TankTemplateListView: View {
             }
             .sheet(isPresented: $showAddTemplate) {
                 AddTankTemplateView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $selectedTemplate) { template in
                 EditTankTemplateView(template: template)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
         }
     }

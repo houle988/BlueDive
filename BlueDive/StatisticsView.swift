@@ -497,9 +497,7 @@ struct StatisticsView: View {
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: $filterSortOrder
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .sheet(isPresented: Binding(
                 get: { selectedSiteName != nil },
@@ -510,9 +508,7 @@ struct StatisticsView: View {
                         siteName: siteName,
                         dives: filteredDives.filter { $0.siteName == siteName }
                     )
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
                 }
             }
             .navigationDestination(item: $selectedDive) { dive in

@@ -213,33 +213,23 @@ struct DiverProfileView: View {
             }
             .sheet(item: $documentsSection) { section in
                 DocumentsView(initialSection: section, onClose: { documentsSection = nil })
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showingAddCertification) {
                 AddCertificationView(prefilledDiverName: selectedDiver)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showingAddInsurance) {
                 AddInsuranceView(prefilledDiverName: selectedDiver)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $selectedCertification) { cert in
                 CertificationDetailView(certification: cert, selectedCertification: $selectedCertification)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $selectedInsurance) { insurance in
                 InsuranceDetailView(insurance: insurance, selectedInsurance: $selectedInsurance)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
         }
     }
@@ -1203,9 +1193,7 @@ struct InsuranceDetailView: View {
             #endif
             .sheet(isPresented: $showEditInsurance) {
                 AddInsuranceView(insuranceToEdit: insurance)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .alert("Delete insurance?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }

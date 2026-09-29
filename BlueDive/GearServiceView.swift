@@ -118,9 +118,7 @@ struct GearServiceView: View {
             .toolbar { toolbarContent }
             .sheet(isPresented: $showEditGear) {
                 EditGearView(gear: gear)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $serviceSheetMode) { mode in
                 NavigationStack {
@@ -298,9 +296,7 @@ struct GearServiceView: View {
                     }
                 }
                 .onDisappear { showDeleteConfirmation = false }
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .alert("Clear all service records?", isPresented: $showClearAllConfirmation) {
                 Button("Clear All Records", role: .destructive) {

@@ -178,76 +178,52 @@ struct ContentView: View {
                     filterMarineLifeMode: $store.filterMarineLifeMode,
                     sortOrder: $store.sortOrder
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showMinimumGasPlanning) {
                 MinimumGasCalculatorView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showGasDensityCalculator) {
                 GasDensityCalculatorView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showBestMixCalculator) {
                 BestMixCalculatorView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showFingerprintDebug) {
                 FingerprintDebugView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showProfile) {
                 DiverProfileView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
 
             .sheet(isPresented: $showDiveTrips) {
                 DiveTripsView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showCalendarHeatmap) {
                 DiveCalendarHeatmapView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showMarineLife) {
                 MarineLifeView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showDashboard) {
                 StatisticsView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showScannerSheet) {
                 BluetoothScannerView(isTeardownUnsafe: $isBluetoothSyncTeardownUnsafe)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
                     .interactiveDismissDisabled(isBluetoothSyncTeardownUnsafe)
             }
             // Widget deep-link hooks (bluedive://add/manual | bluedive://add/bluetooth)
@@ -266,15 +242,11 @@ struct ContentView: View {
                 MergeDivesSheet(dives: store.cachedFilteredDives) { diveA, diveB in
                     mergeDives(diveA, with: diveB)
                 }
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .sheet(item: $diveToMove) { dive in
                 MoveDiverSheet(dive: dive)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             #if os(iOS)
             .fileExporter(
@@ -312,9 +284,7 @@ struct ContentView: View {
                     pendingImport = nil
                     importProgressFileName = ""
                 }
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .sheet(item: $pendingDuplicateImport) { pending in
                 DuplicateImportSheet(
@@ -341,9 +311,7 @@ struct ContentView: View {
                         pendingDuplicateImport = nil
                     }
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .alert("Import error", isPresented: $showErrorAlert, presenting: importError) { _ in
                 Button("OK", role: .cancel) { }
@@ -389,9 +357,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .alert("Delete dive?", isPresented: $showDeleteSingleConfirmation, presenting: diveToDeleteDirectly) { dive in
                 Button("Cancel", role: .cancel) { diveToDeleteDirectly = nil }
@@ -486,9 +452,7 @@ struct ContentView: View {
         .animation(.linear(duration: 0.15), value: exportProgressCurrent)
         .sheet(isPresented: $showSyncStatusPopover) {
             CloudKitSyncStatusView()
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .onAppear {
             if !store.hasCacheBuilt {

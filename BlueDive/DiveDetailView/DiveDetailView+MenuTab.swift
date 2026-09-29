@@ -602,9 +602,7 @@ extension DiveDetailView {
                     }
                 }
             )
-            .presentationSizing(.page)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .standardSheetPresentation()
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
         .onChange(of: selectedPhotos) {

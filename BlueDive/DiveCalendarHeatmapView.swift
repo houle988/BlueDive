@@ -177,9 +177,7 @@ struct DiveCalendarHeatmapView: View {
             }) {
                 if let day = selectedDay {
                     DayDivesSheetView(day: day, dives: selectedDayDives, diverFilter: selectedDiver)
-                        .presentationSizing(.page)
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.visible)
+                        .standardSheetPresentation()
                 }
             }
         }

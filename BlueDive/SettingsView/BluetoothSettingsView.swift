@@ -90,9 +90,7 @@ struct BluetoothSettingsView: View {
         }
         .sheet(isPresented: $showFingerprintDebug) {
             FingerprintDebugView()
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         #if os(iOS)
         .fileExporter(

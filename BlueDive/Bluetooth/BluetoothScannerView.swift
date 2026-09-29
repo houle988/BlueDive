@@ -368,15 +368,11 @@ struct BluetoothScannerView: View {
                         }
                     }
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .sheet(isPresented: $showInfo) {
                 infoSheet
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
         }
         // ⚠️ Temporary — remove after testing delete feature - Add Dummy Dive computer to database

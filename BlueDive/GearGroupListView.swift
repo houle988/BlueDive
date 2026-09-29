@@ -46,15 +46,11 @@ struct GearGroupListView: View {
             }
             .sheet(isPresented: $showAddGearGroup) {
                 AddGearGroupView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(item: $selectedGearGroup) { group in
                 EditGearGroupView(gearGroup: group)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
         }
     }

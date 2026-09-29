@@ -189,9 +189,7 @@ struct DiveTripsView: View {
             }
             .sheet(item: $selectedTrip) { trip in
                 TripDetailSheet(trip: trip, prefs: prefs)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .task(id: "\(store.dives.count):\(selectedDiver):\(tripsVersion):\(store.dives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
                 tripsAppeared = false

@@ -898,9 +898,7 @@ struct DiveMapView: View {
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: .constant(.dateDesc)
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             .background(mapObservers)

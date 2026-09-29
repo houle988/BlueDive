@@ -380,15 +380,11 @@ struct MinimumGasCalculatorView: View {
             }
             .sheet(isPresented: $showInfo) {
                 infoSheet
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showCalculatorWarning) {
                 CalculatorSafetyWarningView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.hidden)
+                    .standardSheetPresentation(dragIndicator: .hidden)
             }
             .onAppear {
                 if lastAcknowledgedCalculatorWarningVersion != appVersionBuild() {

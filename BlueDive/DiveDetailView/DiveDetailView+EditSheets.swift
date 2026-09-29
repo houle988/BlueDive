@@ -931,9 +931,7 @@ struct EditSiteDetailsView: View {
                 workingLatitude  = String(format: "%.6f", coordinate.latitude)
                 workingLongitude = String(format: "%.6f", coordinate.longitude)
             }
-            .presentationSizing(.page)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .standardSheetPresentation()
         }
         .sheet(isPresented: $showExitCoordinatePicker) {
             CoordinatePickerView(
@@ -949,9 +947,7 @@ struct EditSiteDetailsView: View {
                 workingExitLatitude  = String(format: "%.6f", coordinate.latitude)
                 workingExitLongitude = String(format: "%.6f", coordinate.longitude)
             }
-            .presentationSizing(.page)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .standardSheetPresentation()
         }
         .alert("Replace Exit Coordinates", isPresented: $showSameAsEntryConfirm) {
             Button("Replace", role: .destructive) { copyEntryToExit() }

@@ -229,27 +229,19 @@ struct GearListView: View {
         }
         .sheet(isPresented: $showAddGear) {
             AddGearView()
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(item: $selectedGear) { gear in
             GearServiceView(gear: gear)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(isPresented: $showTankTemplates) {
             TankTemplateListView()
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(isPresented: $showGearGroups) {
             GearGroupListView()
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(isPresented: $showGearCSVFormatPicker) {
             ImportFormatPickerView(
@@ -269,9 +261,7 @@ struct GearListView: View {
                     importProgressFileName = ""
                 }
             )
-            .presentationSizing(.page)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .standardSheetPresentation()
         }
         .sheet(isPresented: $showGearImportPreview) {
             ImportPreviewSheet(
@@ -295,9 +285,7 @@ struct GearListView: View {
                     gearImportPreviewDuplicates = []
                 }
             )
-            .presentationSizing(.page)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .standardSheetPresentation()
         }
         .onChange(of: showGearImportPreview) { _, isShown in
             if !isShown {

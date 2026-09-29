@@ -402,9 +402,7 @@ extension BluetoothScannerView {
                     }
                 }
             )
-            .presentationSizing(.page)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .standardSheetPresentation()
         }
     }
 

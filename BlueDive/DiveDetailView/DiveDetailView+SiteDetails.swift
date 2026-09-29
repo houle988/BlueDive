@@ -175,9 +175,7 @@ extension DiveDetailView {
                     exitLat: exit?.lat, exitLon: exit?.lon,
                     siteName: dive.siteName
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
         }
     }
