@@ -28,6 +28,7 @@ struct MergeDivesSheet: View {
     let dives: [Dive]
     let onMerge: (Dive, Dive) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @State private var selectedDiveA: Dive?
     @State private var selectedDiveB: Dive?
     @State private var showConfirmation = false
@@ -56,9 +57,9 @@ struct MergeDivesSheet: View {
         let summary = String(
             format: format,
             earlier.siteName,
-            earlier.timestamp.formatted(date: .abbreviated, time: .shortened),
+            earlier.timestamp.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)),
             later.siteName,
-            later.timestamp.formatted(date: .abbreviated, time: .shortened)
+            later.timestamp.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale))
         )
         // Disclose that combined stats span the surface interval: the merged profile keeps
         // the surface interval between the two dives, so duration, average depth and SAC are
@@ -313,7 +314,7 @@ struct MergeDivesSheet: View {
                             .lineLimit(1)
                     }
                     Text("•")
-                    Text(dive.timestamp.formatted(date: .abbreviated, time: .shortened))
+                    Text(dive.timestamp.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)))
                     Text("•")
                     Text("\(dive.duration) min")
                 }
@@ -386,7 +387,7 @@ struct MergeDivesSheet: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(dive.timestamp.formatted(date: .abbreviated, time: .shortened))
+                Text(dive.timestamp.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
