@@ -62,6 +62,107 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSWindow.allowsAutomaticWindowTabbing = false
     }
 }
+
+/// Remembers the main window's size and position in UserDefaults.
+/// macOS only restores windows on relaunch when "Close windows when quitting an
+/// application" is off (it is on by default), so without this the window would
+/// reopen at `defaultWindowPlacement` every launch instead of where the user left it.
+/// The frame is stored under our own key rather than with AppKit's frame autosave
+/// names, which SwiftUI manages for its own windows.
+struct MainWindowFrameAutosave: NSViewRepresentable {
+    private static let defaultsKey = "macMainWindowFrame"
+
+    /// True once a frame has been saved for the main window (after its first launch).
+    static var hasSavedFrame: Bool {
+        UserDefaults.standard.string(forKey: defaultsKey) != nil
+    }
+
+    func makeNSView(context: Context) -> NSView { AutosaveView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class AutosaveView: NSView {
+        /// The window whose frame is saved. Only one window is tracked at a time: a window
+        /// opened with File → New Window while the main window is open keeps its default
+        /// placement instead of landing exactly on top of the main window.
+        private static weak var trackedWindow: NSWindow?
+        private weak var configuredWindow: NSWindow?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, window !== configuredWindow else { return }
+            configuredWindow = window
+            // A minimized main window is still open (isVisible is false while in the Dock).
+            if let tracked = Self.trackedWindow, tracked !== window,
+               tracked.isVisible || tracked.isMiniaturized { return }
+            // The helper view can be recreated inside a window that is already tracked (e.g.
+            // switching the in-app language rebuilds the content); only restore the frame when
+            // tracking starts, so a full-screen or deliberately placed window isn't moved.
+            let startsTracking = Self.trackedWindow !== window
+            Self.trackedWindow = window
+
+            // Restore the saved frame on the display it overlaps most, fitted to that display's
+            // visible area so it is never larger than the screen or has its title bar off-screen
+            // (e.g. saved on an external monitor, reopened on the laptop screen). If no connected
+            // display overlaps it, fill the current screen, as on first launch.
+            if startsTracking, let saved = UserDefaults.standard.string(forKey: MainWindowFrameAutosave.defaultsKey) {
+                let frame = NSRectFromString(saved)
+                if !frame.isEmpty, let screen = Self.screen(overlappingMost: frame) {
+                    window.setFrame(Self.fit(frame, in: screen.visibleFrame), display: true)
+                } else if let screen = window.screen ?? NSScreen.main {
+                    window.setFrame(screen.visibleFrame, display: true)
+                }
+            }
+
+            // Observe only after restoring, so applying the saved frame doesn't re-save it.
+            for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
+                NotificationCenter.default.addObserver(
+                    self, selector: #selector(windowFrameDidChange(_:)), name: name, object: window
+                )
+            }
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(windowWillClose(_:)),
+                name: NSWindow.willCloseNotification, object: window
+            )
+        }
+
+        @objc private func windowFrameDidChange(_ notification: Notification) {
+            guard let window = notification.object as? NSWindow else { return }
+            Self.save(window)
+        }
+
+        @objc private func windowWillClose(_ notification: Notification) {
+            guard let window = notification.object as? NSWindow else { return }
+            Self.save(window)
+            // The app keeps running after its last window closes; release tracking so the
+            // window reopened from the Dock takes over and restores the saved frame.
+            if Self.trackedWindow === window { Self.trackedWindow = nil }
+        }
+
+        /// The connected display sharing the largest area with `frame`, if any.
+        private static func screen(overlappingMost frame: NSRect) -> NSScreen? {
+            NSScreen.screens
+                .map { ($0, $0.visibleFrame.intersection(frame)) }
+                .filter { !$0.1.isNull && !$0.1.isEmpty }
+                .max { $0.1.width * $0.1.height < $1.1.width * $1.1.height }?
+                .0
+        }
+
+        /// Shrinks `frame` to fit within `visible`, then moves it fully inside.
+        private static func fit(_ frame: NSRect, in visible: NSRect) -> NSRect {
+            let width = min(frame.width, visible.width)
+            let height = min(frame.height, visible.height)
+            let x = min(max(frame.minX, visible.minX), visible.maxX - width)
+            let y = min(max(frame.minY, visible.minY), visible.maxY - height)
+            return NSRect(x: x, y: y, width: width, height: height)
+        }
+
+        private static func save(_ window: NSWindow) {
+            // Only the tracked window is saved, and never its full-screen frame.
+            guard window === trackedWindow, !window.styleMask.contains(.fullScreen) else { return }
+            UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: MainWindowFrameAutosave.defaultsKey)
+        }
+    }
+}
 #endif
 
 @main
@@ -125,6 +226,11 @@ struct BlueDiveApp: App {
             // Keep the app background visible behind the window toolbar; otherwise macOS
             // reveals its own lighter toolbar background when the pointer hovers over it.
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            // Sheets are sized to fit inside the window (.presentationSizing(.page)), so a
+            // minimum window size keeps them from being squeezed below a usable height.
+            // 600 pt still fits the smallest scaled display (13" "Larger Text", ~625 pt visible).
+            .frame(minWidth: 900, minHeight: 600)
+            .background(MainWindowFrameAutosave())
             #endif
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
             .environment(diveStore)
@@ -169,6 +275,14 @@ struct BlueDiveApp: App {
         }
         .modelContainer(Self.sharedModelContainer)
         #if os(macOS)
+        // On first launch, open the window filling the display's visible area (below the
+        // menu bar, beside the Dock) so the first-run disclaimer and every sheet have room.
+        // Afterwards MainWindowFrameAutosave reopens it at the frame the user last left it.
+        .defaultWindowPlacement { _, context in
+            guard !MainWindowFrameAutosave.hasSavedFrame else { return WindowPlacement() }
+            let visible = context.defaultDisplay.visibleRect
+            return WindowPlacement(visible.origin, size: visible.size)
+        }
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About BlueDive") {
