@@ -10715,8 +10715,8 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schliessen"
+            "state" : "needs_review",
+            "value" : "Schließen"
           }
         },
         "en" : {
