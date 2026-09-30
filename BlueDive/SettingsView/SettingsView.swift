@@ -386,7 +386,7 @@ class UserPreferences {
         didSet {
             UserDefaults.standard.set(depthUnit.rawValue, forKey: "depthUnit")
             // Write the widget-facing key so the widget reflects the correct unit
-            // even before ContentView.updateWidgetDiveData() runs.
+            // even before DiveStore.updateWidgetDiveData(dives:) runs.
             UserDefaults(suiteName: "group.app.bluedive.universal")?
                 .set(depthUnit == .feet ? "feet" : "meters", forKey: "depthUnit")
             WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")

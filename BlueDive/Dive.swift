@@ -458,14 +458,15 @@ final class Dive {
     var usedGear: [Gear]? = []
 
     // MARK: - JSON Decode Caches
-    // @Transient properties are not persisted; SwiftData resets them to their defaults
-    // whenever an object is re-faulted (e.g. after iCloud sync).
-    // Cache key = backing Data.count (O(1), no full-blob hash):
-    //   nil  → not yet decoded (@Transient initial / post-refault) → always decode
+    // @Transient properties are not persisted, and they are ordinary instance properties:
+    // they survive a merge that reloads the object's persistent attributes (e.g. an iCloud
+    // import merged into the main context), so the cache key must detect a changed blob.
+    //   nil  → not yet decoded (@Transient initial) → always decode
     //   -1   → decoded when Data was nil → return []
-    //   n≥0  → decoded when Data had n bytes → return cached if count unchanged
-    // A CloudKit sync that replaces the blob with a different profile will almost
-    // certainly change the byte count, forcing a re-decode.
+    //   else → key of the Data that was decoded → return cached if the key is unchanged
+    // Tanks and deco stops are small and key on a hash of every byte (contentKey), so a
+    // same-length change (e.g. EAN32 → EAN36) re-decodes. The profile blob is large and
+    // read often, so it keys on its byte count; it is not used by any list summary.
 
     @Transient private var _cachedProfileSamples: [DiveProfilePoint] = []
     @Transient private var _profileCacheKey: Int? = nil
@@ -503,14 +504,14 @@ final class Dive {
     /// Accès aux bouteilles
     var tanks: [TankData] {
         get {
-            let currentKey = tanksData?.count ?? -1
+            let currentKey = Self.contentKey(tanksData)
             if let k = _tanksCacheKey, k == currentKey { return _cachedTanks }
             guard let data = tanksData else {
                 _cachedTanks = []; _tanksCacheKey = -1; return []
             }
             let decoded = (try? JSONDecoder().decode([TankData].self, from: data)) ?? []
             _cachedTanks = decoded
-            _tanksCacheKey = data.count
+            _tanksCacheKey = currentKey
             return decoded
         }
         set {
@@ -518,21 +519,31 @@ final class Dive {
             let encoded = try? JSONEncoder().encode(newValue)
             tanksData = encoded
             _cachedTanks = newValue
-            _tanksCacheKey = encoded?.count ?? -1
+            _tanksCacheKey = Self.contentKey(encoded)
         }
+    }
+
+    /// Cache key over every byte of a small JSON blob (-1 for nil). Not `Data.hashValue`:
+    /// Foundation's Data hash covers only the count and the first 80 bytes.
+    private static func contentKey(_ data: Data?) -> Int {
+        guard let data else { return -1 }
+        var hasher = Hasher()
+        hasher.combine(data.count)
+        data.withUnsafeBytes { hasher.combine(bytes: $0) }
+        return hasher.finalize()
     }
 
     /// Arrêts de décompression
     var decoStops: [DecoStop] {
         get {
-            let currentKey = decoStopsData?.count ?? -1
+            let currentKey = Self.contentKey(decoStopsData)
             if let k = _decoStopsCacheKey, k == currentKey { return _cachedDecoStops }
             guard let data = decoStopsData else {
                 _cachedDecoStops = []; _decoStopsCacheKey = -1; return []
             }
             let decoded = (try? JSONDecoder().decode([DecoStop].self, from: data)) ?? []
             _cachedDecoStops = decoded
-            _decoStopsCacheKey = data.count
+            _decoStopsCacheKey = currentKey
             return decoded
         }
         set {
@@ -540,7 +551,7 @@ final class Dive {
             let encoded = try? JSONEncoder().encode(newValue)
             decoStopsData = encoded
             _cachedDecoStops = newValue
-            _decoStopsCacheKey = encoded?.count ?? -1
+            _decoStopsCacheKey = Self.contentKey(encoded)
         }
     }
     
@@ -1430,6 +1441,10 @@ final class Dive {
 // MARK: - Extensions
 
 extension Dive {
+    /// Key path of the private `tanksData` attribute (`gasType` is derived from it), so
+    /// DiveStore can recognise a gas change in persistent-history `updatedAttributes`.
+    static var tanksDataKeyPath: PartialKeyPath<Dive> { \Dive.tanksData }
+
     /// Precise duration in seconds, preferring the profile's last sample time over the whole-minute `duration` field.
     var durationSeconds: Int {
         if let last = profileSamples.last?.time, last > 0 {

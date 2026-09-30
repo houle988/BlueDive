@@ -434,7 +434,10 @@ struct BlueDiveApp: App {
             // Main context configuration
             let context = container.mainContext
             context.autosaveEnabled = true
-            
+            // Tags this app's own saves in persistent history, so they can be told apart
+            // from transactions imported from iCloud (another device's edits).
+            context.author = "BlueDive.main"
+
             let syncStatus = iCloudEnabled ? "iCloud sync ON" : "iCloud sync OFF (local only)"
             logger.info("✅ ModelContainer created successfully - \(syncStatus)")
             logger.debug("📂 Storage path: \(getStorePath())")

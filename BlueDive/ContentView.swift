@@ -476,7 +476,8 @@ struct ContentView: View {
         .onChange(of: dives) { _, _ in store.scheduleRebuild(dives: dives, allMarineSights: allMarineSights, selectedDiver: selectedDiver) }
         // Gear/certification/insurance diver names reach store.cachedUniqueDivers through
         // DiverSourcesFeeder (attached in MainTabView, mounted whatever tab is shown), not here.
-        .onChange(of: store.cachedWidgetFingerprint) { _, _ in store.updateWidgetDiveData(dives: dives) }
+        // Widget data is rewritten by DiveStore itself when its fingerprint changes (see
+        // scheduleAggregation), so it stays current while another tab is shown.
         .onChange(of: prefs.depthUnit) { _, _ in store.updateWidgetDiveData(dives: dives); store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
         .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
         .onChange(of: store.cachedUniqueDivers) { _, newDivers in

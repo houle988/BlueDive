@@ -87,6 +87,9 @@ struct MainTabView: View {
             // tab is selected. A background view (not @Query on MainTabView itself) so a gear
             // or document change doesn't re-evaluate MainTabView's body and all four tabs.
             .background(DiverSourcesFeeder())
+            // Applies other devices' edits to existing dives (iCloud) to DiveStore's caches,
+            // whatever tab is selected. See RemoteChangeFeeder.
+            .background(RemoteChangeFeeder())
         }
         .onReceive(NotificationCenter.default.publisher(for: .addDiveManual)) { _ in
             selectedTab = 0

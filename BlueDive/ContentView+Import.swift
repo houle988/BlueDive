@@ -103,7 +103,9 @@ private func gearMatchKey(name: String, category: String, diverName: String, ser
 @ModelActor
 actor GearSnapshotReader {
     func snapshots() throws -> [GearSnapshot] {
-        try modelContext.fetch(FetchDescriptor<Gear>()).map {
+        // Every app context carries a "BlueDive." author (CLAUDE.md), even read-only ones.
+        modelContext.author = "BlueDive.gearSnapshot"
+        return try modelContext.fetch(FetchDescriptor<Gear>()).map {
             GearSnapshot(id: $0.id, name: $0.name, category: $0.category, diverName: $0.diverName, serialNumber: $0.serialNumber)
         }
     }
