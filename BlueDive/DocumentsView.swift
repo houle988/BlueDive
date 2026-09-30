@@ -373,7 +373,10 @@ struct DocumentsView: View {
                 #if os(macOS)
                 // One ToolbarItemGroup so macOS shares a single glass capsule, as the iOS
                 // navigation bar does; separate items (especially menus) get separate capsules.
-                ToolbarItemGroup(placement: .primaryAction) {
+                // Shown as a sheet (from Diver Profile, which passes onClose), macOS would draw
+                // a .primaryAction item as the sheet's accent-filled default button, so the
+                // sheet uses .sheetPrimaryAction.
+                ToolbarItemGroup(placement: onClose != nil ? .sheetPrimaryAction : .primaryAction) {
                     addDocumentMenu
                         .toolbarMenuIndicatorHiddenOnMac()
                     documentsMoreMenu

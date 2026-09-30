@@ -66,17 +66,38 @@ extension View {
     /// root page first. Pass the dismiss action of the view that presents the stack's root:
     /// inside a pushed page, `@Environment(\.dismiss)` only pops the page. On iOS the view
     /// is returned unchanged, since the sheet can be swiped down from any page.
+    ///
+    /// On macOS it also sets `\.isPushedInSheet`, so a page that is shown both in the main
+    /// window and inside a sheet (e.g. `DiveDetailView`) can place its utility items with
+    /// `.sheetPrimaryAction` instead of `.primaryAction` when it is in a sheet.
     func closeSheetButtonOnMac(action: @escaping () -> Void) -> some View {
         #if os(macOS)
-        self.toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                closeToolbarButton(action: action)
-                    .keyboardShortcut(.escape, modifiers: [])
+        self
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton(action: action)
+                        .keyboardShortcut(.escape, modifiers: [])
+                }
             }
-        }
+            .environment(\.isPushedInSheet, true)
         #else
         self
         #endif
+    }
+}
+
+private struct IsPushedInSheetKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True for a page pushed inside a sheet's NavigationStack on macOS (set by
+    /// `closeSheetButtonOnMac`). In a sheet, macOS draws a `.primaryAction` toolbar item as
+    /// the sheet's accent-filled default button, so such a page uses `.sheetPrimaryAction`
+    /// for its utility items. Always false on iOS.
+    var isPushedInSheet: Bool {
+        get { self[IsPushedInSheetKey.self] }
+        set { self[IsPushedInSheetKey.self] = newValue }
     }
 }
 

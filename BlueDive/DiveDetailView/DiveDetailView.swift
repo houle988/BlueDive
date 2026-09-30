@@ -125,6 +125,8 @@ struct DiveDetailView: View {
     /// Natural widths of the Samples table header titles, measured in the current language.
     @State var sampleHeaderWidths: [SampleColumn: CGFloat] = [:]
     @Environment(\.layoutDirection) private var layoutDirection
+    /// True when pushed inside a sheet on macOS (Statistics, Trips, Marine Life, Calendar).
+    @Environment(\.isPushedInSheet) private var isPushedInSheet
 
     // Swipe navigation tuning
     private static let swipeCommitDuration: Double = 0.28
@@ -374,8 +376,11 @@ struct DiveDetailView: View {
                 #if os(macOS)
                 // One ToolbarItemGroup per cluster so macOS shares a glass capsule, as the iOS
                 // navigation bar does; separate items (especially menus) get separate capsules.
+                // In a sheet, macOS draws a .primaryAction item as the sheet's accent-filled
+                // default button at the bottom (cyan icons on a cyan fill), so a dive pushed
+                // inside a sheet uses .sheetPrimaryAction for both groups instead.
                 if !sortedDives.isEmpty {
-                    ToolbarItemGroup(placement: .principalOutsideTabBar) {
+                    ToolbarItemGroup(placement: isPushedInSheet ? .sheetPrimaryAction : .principalOutsideTabBar) {
                         previousDiveButton
                         nextDiveButton
                     }
@@ -384,10 +389,10 @@ struct DiveDetailView: View {
                     // a fixed spacer keeps previous/next and Export/Edit as distinct groups.
                     // (Pre-26 toolbars have no Liquid Glass merging, so no spacer is needed there.)
                     if #available(iOS 26.0, macOS 26.0, *) {
-                        ToolbarSpacer(.fixed, placement: .primaryAction)
+                        ToolbarSpacer(.fixed, placement: isPushedInSheet ? .sheetPrimaryAction : .primaryAction)
                     }
                 }
-                ToolbarItemGroup(placement: .primaryAction) {
+                ToolbarItemGroup(placement: isPushedInSheet ? .sheetPrimaryAction : .primaryAction) {
                     exportDiveMenu
                         .toolbarMenuIndicatorHiddenOnMac()
                     editDiveButton

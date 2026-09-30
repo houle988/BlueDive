@@ -472,7 +472,7 @@ struct DayDivesSheetView: View {
         NavigationStack {
             List {
                 ForEach(dives) { dive in
-                    NavigationLink(destination: DiveDetailView(dive: dive, diveNumber: numberMap[dive.persistentModelID] ?? 0)) {
+                    NavigationLink(destination: DiveDetailView(dive: dive, diveNumber: numberMap[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { dismiss() }) {
                         DiveRowView(
                             summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
                             diveNumber: numberMap[dive.persistentModelID] ?? 0

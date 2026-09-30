@@ -400,7 +400,7 @@ struct SpeciesDivesSheet: View {
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(sortedDives) { dive in
-                        NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0)) {
+                        NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { dismiss() }) {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))

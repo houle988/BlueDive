@@ -423,10 +423,11 @@ extension DiveDetailView {
             case .sensor:                                     return 42
             case .cns:                                        return 40
             case .gas:                                        return 35
-            // Wide and not sized to its content: rows are built lazily, so a row built later
-            // with a long event list must not widen the table and misalign it with the header.
-            // Long lists wrap instead.
-            case .events:                                     return 220
+            // Fixed rather than sized to its content: rows are built lazily, so a row built
+            // later with a long event list must not widen the table and misalign it with the
+            // header. Long lists wrap instead; kept narrow so the whole table (≈ 680 pt) still
+            // fits on iPad and in a Mac window without horizontal scrolling.
+            case .events:                                     return 140
             }
         }
     }

@@ -501,7 +501,7 @@ struct TripDetailSheet: View {
                 .padding(.bottom, 4)
 
             ForEach(sortedDives) { dive in
-                NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0)) {
+                NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { dismiss() }) {
                     DiveRowView(
                         summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
                         diveNumber: numberMap[dive.persistentModelID] ?? 0

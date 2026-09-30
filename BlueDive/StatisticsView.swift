@@ -514,6 +514,7 @@ struct StatisticsView: View {
             .navigationDestination(item: $selectedDive) { dive in
                 DiveDetailView(dive: dive, sortedDives: cachedSortedDives,
                                diveNumber: dive.diveNumber ?? (cachedSortedDives.firstIndex(where: { $0.id == dive.id }).map { cachedSortedDives.count - $0 } ?? 0))
+                    .closeSheetButtonOnMac { dismiss() }
             }
         }
     }
@@ -1583,7 +1584,7 @@ struct SiteDivesSheet: View {
         NavigationStack {
             List {
                 ForEach(sortedDives) { dive in
-                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0)) {
+                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { dismiss() }) {
                         DiveRowView(
                             summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
                             diveNumber: numberMap[dive.persistentModelID] ?? 0
