@@ -51,7 +51,7 @@ struct LanguageOverrideModifier: ViewModifier {
 
 #if os(macOS)
 /// App delegate that keeps the app running after its last window closes, turns off window
-/// tabbing and removes obsolete saved window frames.
+/// tabbing, removes obsolete saved window frames and brings the app to the front at launch.
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
@@ -62,6 +62,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // offer to open multiple window-tabs alongside the app's own TabView.
         NSWindow.allowsAutomaticWindowTabbing = false
         removeObsoleteWindowFrames()
+        // Bring the app to the front once it has launched. Launched from Spotlight or right
+        // after download, it could otherwise stay behind other windows. Activation is
+        // cooperative: macOS may decline the request, for example when another app is in use.
+        NSApp.activate()
     }
 
     /// Version of the obsolete-window-frame cleanup already done, so it runs only once.

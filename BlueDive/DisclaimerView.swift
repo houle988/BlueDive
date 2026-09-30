@@ -110,6 +110,13 @@ struct DisclaimerView: View {
                                 .multilineTextAlignment(.leading)
                         }
                         .padding(.horizontal, 24)
+                        #if os(macOS)
+                        // Room between the text and the focus ring macOS draws around this
+                        // button (icon and text) when Keyboard navigation is on; the whole
+                        // padded area toggles the checkbox, not only the icon and text.
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                        #endif
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(.isToggle)
@@ -309,6 +316,13 @@ struct CalculatorSafetyWarningView: View {
                                 .multilineTextAlignment(.leading)
                         }
                         .padding(.horizontal, 24)
+                        #if os(macOS)
+                        // Room between the text and the focus ring macOS draws around this
+                        // button (icon and text) when Keyboard navigation is on; the whole
+                        // padded area toggles the checkbox, not only the icon and text.
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                        #endif
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(.isToggle)
