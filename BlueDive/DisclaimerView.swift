@@ -16,6 +16,33 @@ struct DisclaimerView: View {
     var isReview: Bool = false
 
     var body: some View {
+        Group {
+            if isReview {
+                // Re-read from Settings: the standard close button in a toolbar, as in
+                // Settings and About.
+                NavigationStack {
+                    disclaimerContent
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                closeToolbarButton { dismiss() }
+                                    .keyboardShortcut(.escape, modifiers: [])
+                            }
+                        }
+                }
+            } else {
+                // First-run gate: no close button; only Continue (after agreeing) dismisses.
+                disclaimerContent
+            }
+        }
+        .interactiveDismissDisabled(!isReview)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5)) {
+                appeared = true
+            }
+        }
+    }
+
+    private var disclaimerContent: some View {
         ZStack {
             LinearGradient(
                 colors: [Color.platformBackground, Color.orange.opacity(0.06), Color.platformBackground],
@@ -53,7 +80,7 @@ struct DisclaimerView: View {
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
 
-                            Text(verbatim: "Version \(appVersionBuild())")
+                            Text("Version \(appVersionBuild())")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
@@ -147,33 +174,6 @@ struct DisclaimerView: View {
             }
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 20)
-
-            if isReview {
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button { dismiss() } label: {
-                            Image(systemName: "xmark.circle")
-                                .font(.title2)
-                                .foregroundStyle(.secondary)
-                                // Floating close affordance in the review overlay: 16 pt of
-                                // padding around it and nothing else interactive nearby — the
-                                // overlay is the last sibling, so it wins the hit test. 44 × 44 pt.
-                                .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Text("Close"))
-                    }
-                    Spacer()
-                }
-                .padding()
-            }
-        }
-        .interactiveDismissDisabled(!isReview)
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.5)) {
-                appeared = true
-            }
         }
     }
 
@@ -262,7 +262,7 @@ struct CalculatorSafetyWarningView: View {
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
 
-                            Text(verbatim: "Version \(appVersionBuild())")
+                            Text("Version \(appVersionBuild())")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)

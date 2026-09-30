@@ -160,6 +160,20 @@ struct ImportFormatPickerView: View {
     // MARK: - Body
 
     var body: some View {
+        // The standard close button in a toolbar, as in Settings and About; it cancels
+        // like the Cancel button at the bottom of the sheet.
+        NavigationStack {
+            sheetContent
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        closeToolbarButton(action: onCancel)
+                            .keyboardShortcut(.escape, modifiers: [])
+                    }
+                }
+        }
+    }
+
+    private var sheetContent: some View {
         ZStack {
             Color.platformBackground.ignoresSafeArea()
             ScrollView {
@@ -275,16 +289,6 @@ struct ImportFormatPickerView: View {
                 }
             }
             Spacer()
-            Button(action: onCancel) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                    // Only control in the header card: empty Spacer leading, 16 pt of card
-                    // padding on the other three sides. 44 × 44 pt.
-                    .tapTargetInsets(top: 9, leading: 9, bottom: 9, trailing: 9)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Close"))
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.primary.opacity(0.05)))
