@@ -41,6 +41,38 @@ struct DiveProfileSettingsView: View {
                         )
                 )
                 .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $prefs.showSamplesTab) {
+                            // Teal to match the Samples tab's colour in the dive detail view.
+                            Label {
+                                Text("Show Samples tab")
+                            } icon: {
+                                Image(systemName: "waveform.path.ecg")
+                                    .foregroundStyle(.teal)
+                            }
+                        }
+                        .fullWidthSwitch()
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    Text("When on, the dive details show a Samples tab with the raw data recorded by your dive computer at each sample point. Long dives can take a moment to display in full.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
             }
             .padding(.vertical)
         }

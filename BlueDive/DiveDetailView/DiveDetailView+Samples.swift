@@ -189,7 +189,14 @@ extension DiveDetailView {
         return indices.sorted()
     }
 
+    /// Rows shown before "Show all" is tapped. The table sits in a horizontal ScrollView,
+    /// so its LazyVStack is not lazy vertically and every row is built at once — thousands
+    /// of rows on a long dive freeze the tab when it opens.
+    static let samplesPreviewLimit = 150
+
     var samplesTableSection: some View {
+        let allSamples = dive.profileSamples
+        let visibleSamples = showAllSamples ? allSamples : Array(allSamples.prefix(Self.samplesPreviewLimit))
         let tankIndices = sampleTankIndices
         let hasMultiTank = tankIndices.count > 1
         let sensorIndices = sampleSensorIndices
@@ -237,7 +244,7 @@ extension DiveDetailView {
                     Divider().background(.primary.opacity(0.15))
 
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(dive.profileSamples.enumerated()), id: \.offset) { i, sample in
+                        ForEach(Array(visibleSamples.enumerated()), id: \.offset) { i, sample in
                             HStack(spacing: 8) {
                                 Text(verbatim: (sample.time * 60).localizedString(decimals: 2))
                                     .font(.caption).foregroundStyle(.primary)
@@ -343,6 +350,20 @@ extension DiveDetailView {
                 }
             }
 
+            if visibleSamples.count < allSamples.count {
+                Button {
+                    showAllSamples = true
+                } label: {
+                    Text("Show all \(Double(allSamples.count).localizedString(decimals: 0)) points")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.teal)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                }
+                .borderlessButton()
+            }
         }
         .padding()
         .detailCardBackground()

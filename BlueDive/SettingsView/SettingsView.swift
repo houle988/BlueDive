@@ -396,6 +396,12 @@ class UserPreferences {
     var hideClearedDecoStops: Bool {
         didSet { UserDefaults.standard.set(hideClearedDecoStops, forKey: "hideClearedDecoStops") }
     }
+    /// When true, the dive detail view shows the Samples tab (raw dive computer data).
+    /// Off by default: the tab is a diagnostic view and a long table is slow to render.
+    /// No App Group write: the widget does not show dive detail tabs.
+    var showSamplesTab: Bool {
+        didSet { UserDefaults.standard.set(showSamplesTab, forKey: "showSamplesTab") }
+    }
 
     init() {
         self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "meters") ?? .meters
@@ -408,6 +414,7 @@ class UserPreferences {
         // bool(forKey:) returns false when the key is absent, which is exactly the required
         // OFF default — no registerDefaults entry needed.
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
+        self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
         // Seed shared container after self is fully initialised (required by @Observable)
         let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
         shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
@@ -424,6 +431,7 @@ class UserPreferences {
         appearanceMode  = .system
         languageMode    = .system
         hideClearedDecoStops = false
+        showSamplesTab = false
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
         UserDefaults.standard.set(false, forKey: "filterUnusedTanks")

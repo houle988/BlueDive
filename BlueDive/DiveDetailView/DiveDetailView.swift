@@ -120,6 +120,8 @@ struct DiveDetailView: View {
     @State private var cachedDiveNumber: Int = 0
     @State private var cachedCurrentIndex: Int? = nil
     @State var profileSamplesLoaded = false
+    /// When false, the Samples tab table shows only the first `samplesPreviewLimit` rows.
+    @State var showAllSamples = false
     @Environment(\.layoutDirection) private var layoutDirection
 
     // Swipe navigation tuning
@@ -259,7 +261,12 @@ struct DiveDetailView: View {
                         }
                         .scrollDisabled(scrollLocked)
                         .onChange(of: dive) { _, _ in
+                            showAllSamples = false
                             proxy.scrollTo("diveTop", anchor: .top)
+                        }
+                        // Leave the Samples tab if it is hidden in Settings while it is shown.
+                        .onChange(of: prefs.showSamplesTab) { _, isShown in
+                            if !isShown && selectedTab == .samples { selectedTab = .menu }
                         }
                     }
                 }
@@ -594,7 +601,7 @@ struct DiveDetailView: View {
         // iOS : tab bar scrollable avec indicateur coloré
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
-                ForEach(DiveTab.visibleCases) { tab in
+                ForEach(DiveTab.visibleCases.filter { $0 != .samples || prefs.showSamplesTab }) { tab in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTab = tab
