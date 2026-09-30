@@ -50,7 +50,8 @@ struct LanguageOverrideModifier: ViewModifier {
 }
 
 #if os(macOS)
-/// App delegate that ensures the app terminates when the last window is closed.
+/// App delegate that keeps the app running after its last window closes, turns off window
+/// tabbing and removes obsolete saved window frames.
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
@@ -60,107 +61,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Disable macOS window tabbing so "View > Show Tab Bar" doesn't
         // offer to open multiple window-tabs alongside the app's own TabView.
         NSWindow.allowsAutomaticWindowTabbing = false
+        removeObsoleteWindowFrames()
+    }
+
+    /// Version of the obsolete-window-frame cleanup already done, so it runs only once.
+    private static let windowFrameCleanupVersionKey = "windowFrameCleanupVersion"
+
+    /// Removes, once, window frames that are never read back. Before the main window group had
+    /// a stable id, SwiftUI's frame autosave name embedded a memory address that changed on
+    /// every launch, so each launch wrote a new "NSWindow Frame SwiftUI.WindowGroup<…>" key.
+    /// "macMainWindowFrame" was saved by an earlier, custom frame autosave. It runs only once so
+    /// it can never delete the saved frame of a window scene added later.
+    private func removeObsoleteWindowFrames() {
+        let defaults = UserDefaults.standard
+        guard defaults.integer(forKey: Self.windowFrameCleanupVersionKey) < 1 else { return }
+        let obsoleteKeys = defaults.dictionaryRepresentation().keys.filter {
+            $0.hasPrefix("NSWindow Frame SwiftUI.WindowGroup<") || $0 == "macMainWindowFrame"
+        }
+        for key in obsoleteKeys {
+            defaults.removeObject(forKey: key)
+        }
+        defaults.set(1, forKey: Self.windowFrameCleanupVersionKey)
     }
 }
 
-/// Remembers the main window's size and position in UserDefaults.
-/// macOS only restores windows on relaunch when "Close windows when quitting an
-/// application" is off (it is on by default), so without this the window would
-/// reopen at `defaultWindowPlacement` every launch instead of where the user left it.
-/// The frame is stored under our own key rather than with AppKit's frame autosave
-/// names, which SwiftUI manages for its own windows.
-struct MainWindowFrameAutosave: NSViewRepresentable {
-    private static let defaultsKey = "macMainWindowFrame"
+enum MainWindowPlacement {
+    /// The id of the main window group (see mainWindowGroup).
+    static let windowGroupID = "main"
 
-    /// True once a frame has been saved for the main window (after its first launch).
-    static var hasSavedFrame: Bool {
-        UserDefaults.standard.string(forKey: defaultsKey) != nil
-    }
+    /// Prefix of the frame autosave names SwiftUI gives the main window group's windows
+    /// ("main-AppWindow-1", "main-AppWindow-2", …). Observed, not documented by Apple.
+    static let autosaveNamePrefix = "\(windowGroupID)-AppWindow-"
 
-    func makeNSView(context: Context) -> NSView { AutosaveView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
-
-    private final class AutosaveView: NSView {
-        /// The window whose frame is saved. Only one window is tracked at a time: a window
-        /// opened with File → New Window while the main window is open keeps its default
-        /// placement instead of landing exactly on top of the main window.
-        private static weak var trackedWindow: NSWindow?
-        private weak var configuredWindow: NSWindow?
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            guard let window, window !== configuredWindow else { return }
-            configuredWindow = window
-            // A minimized main window is still open (isVisible is false while in the Dock).
-            if let tracked = Self.trackedWindow, tracked !== window,
-               tracked.isVisible || tracked.isMiniaturized { return }
-            // The helper view can be recreated inside a window that is already tracked (e.g.
-            // switching the in-app language rebuilds the content); only restore the frame when
-            // tracking starts, so a full-screen or deliberately placed window isn't moved.
-            let startsTracking = Self.trackedWindow !== window
-            Self.trackedWindow = window
-
-            // Restore the saved frame on the display it overlaps most, fitted to that display's
-            // visible area so it is never larger than the screen or has its title bar off-screen
-            // (e.g. saved on an external monitor, reopened on the laptop screen). If no connected
-            // display overlaps it, fill the current screen, as on first launch.
-            if startsTracking, let saved = UserDefaults.standard.string(forKey: MainWindowFrameAutosave.defaultsKey) {
-                let frame = NSRectFromString(saved)
-                if !frame.isEmpty, let screen = Self.screen(overlappingMost: frame) {
-                    window.setFrame(Self.fit(frame, in: screen.visibleFrame), display: true)
-                } else if let screen = window.screen ?? NSScreen.main {
-                    window.setFrame(screen.visibleFrame, display: true)
-                }
-            }
-
-            // Observe only after restoring, so applying the saved frame doesn't re-save it.
-            for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
-                NotificationCenter.default.addObserver(
-                    self, selector: #selector(windowFrameDidChange(_:)), name: name, object: window
-                )
-            }
-            NotificationCenter.default.addObserver(
-                self, selector: #selector(windowWillClose(_:)),
-                name: NSWindow.willCloseNotification, object: window
-            )
+    /// The top-left corner, in the global screen coordinates `WindowPlacement` positions use,
+    /// of the display SwiftUI reports as the default (focused) display. `DisplayProxy`
+    /// rectangles are relative to their own display (their bounds start at the origin), so a
+    /// rectangle from a display other than the primary one must be offset by this origin.
+    /// The display is identified as NSScreen.main when its size matches `bounds`, otherwise as
+    /// the only connected display of that size. Returns nil, meaning no offset, when neither
+    /// applies or when `bounds` doesn't start at the origin (already global, so offsetting it
+    /// again could place the window off-screen).
+    static func globalOrigin(ofDisplayWithBounds bounds: CGRect) -> CGPoint? {
+        guard bounds.origin == .zero else { return nil }
+        let screen: NSScreen?
+        if let main = NSScreen.main, main.frame.size == bounds.size {
+            screen = main
+        } else {
+            let matches = NSScreen.screens.filter { $0.frame.size == bounds.size }
+            screen = matches.count == 1 ? matches.first : nil
         }
-
-        @objc private func windowFrameDidChange(_ notification: Notification) {
-            guard let window = notification.object as? NSWindow else { return }
-            Self.save(window)
-        }
-
-        @objc private func windowWillClose(_ notification: Notification) {
-            guard let window = notification.object as? NSWindow else { return }
-            Self.save(window)
-            // The app keeps running after its last window closes; release tracking so the
-            // window reopened from the Dock takes over and restores the saved frame.
-            if Self.trackedWindow === window { Self.trackedWindow = nil }
-        }
-
-        /// The connected display sharing the largest area with `frame`, if any.
-        private static func screen(overlappingMost frame: NSRect) -> NSScreen? {
-            NSScreen.screens
-                .map { ($0, $0.visibleFrame.intersection(frame)) }
-                .filter { !$0.1.isNull && !$0.1.isEmpty }
-                .max { $0.1.width * $0.1.height < $1.1.width * $1.1.height }?
-                .0
-        }
-
-        /// Shrinks `frame` to fit within `visible`, then moves it fully inside.
-        private static func fit(_ frame: NSRect, in visible: NSRect) -> NSRect {
-            let width = min(frame.width, visible.width)
-            let height = min(frame.height, visible.height)
-            let x = min(max(frame.minX, visible.minX), visible.maxX - width)
-            let y = min(max(frame.minY, visible.minY), visible.maxY - height)
-            return NSRect(x: x, y: y, width: width, height: height)
-        }
-
-        private static func save(_ window: NSWindow) {
-            // Only the tracked window is saved, and never its full-screen frame.
-            guard window === trackedWindow, !window.styleMask.contains(.fullScreen) else { return }
-            UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: MainWindowFrameAutosave.defaultsKey)
-        }
+        guard let screen, let primary = NSScreen.screens.first else { return nil }
+        // NSScreen frames have a bottom-left origin at the primary display's corner;
+        // WindowPlacement measures from its top-left corner, with y increasing downwards.
+        return CGPoint(x: screen.frame.minX, y: primary.frame.maxY - screen.frame.maxY)
     }
 }
 #endif
@@ -215,8 +168,23 @@ struct BlueDiveApp: App {
     @State private var showingAbout = false
     #endif
     
+    /// The main window group. On macOS it has a stable id; SwiftUI then gives the window a
+    /// stable frame autosave name ("main-AppWindow-1" — observed, not documented by Apple), so
+    /// AppKit saves the window's size and position and restores them on relaunch and when the
+    /// window is reopened from the Dock, even when "Close windows when quitting an application"
+    /// is on (the macOS default). Without an id, the observed name is derived from the content's
+    /// type and includes a memory address that changes on every launch, so the saved frame was
+    /// never found. On iOS the window group is unchanged.
+    private func mainWindowGroup<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some Scene {
+        #if os(macOS)
+        return WindowGroup(id: MainWindowPlacement.windowGroupID) { content() }
+        #else
+        return WindowGroup { content() }
+        #endif
+    }
+
     var body: some Scene {
-        WindowGroup {
+        mainWindowGroup {
             RootLaunchContainer {
                 MainTabView()
             }
@@ -230,7 +198,6 @@ struct BlueDiveApp: App {
             // minimum window size keeps them from being squeezed below a usable height.
             // 600 pt still fits the smallest scaled display (13" "Larger Text", ~625 pt visible).
             .frame(minWidth: 900, minHeight: 600)
-            .background(MainWindowFrameAutosave())
             #endif
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
             .environment(diveStore)
@@ -273,12 +240,27 @@ struct BlueDiveApp: App {
         }
         .modelContainer(Self.sharedModelContainer)
         #if os(macOS)
-        // On first launch, open the window filling the display's visible area (below the
-        // menu bar, beside the Dock) so the first-run disclaimer and every sheet have room.
-        // Afterwards MainWindowFrameAutosave reopens it at the frame the user last left it.
+        // On first launch, open the window maximized on the focused display: filling its
+        // visible area (below the menu bar, beside the Dock), so the first-run disclaimer and
+        // every sheet have room. Afterwards AppKit's frame autosave (see mainWindowGroup) moves
+        // it to the size and position the user last left it at, before the window is shown.
+        // AppKit restores that frame onto the focused display: when the window was last on
+        // another display, it keeps its size but is moved onto the focused one.
+        // A window opened with File → New Window while another one is open keeps the system
+        // default placement instead of covering the whole screen.
         .defaultWindowPlacement { _, context in
-            guard !MainWindowFrameAutosave.hasSavedFrame else { return WindowPlacement() }
-            let visible = context.defaultDisplay.visibleRect
+            // The closure isn't documented to run on the main thread (AppKit creates windows
+            // there in practice); off it, fall back to the default placement instead of trapping.
+            guard Thread.isMainThread else { return WindowPlacement() }
+            let display = context.defaultDisplay
+            let (hasOpenWindow, displayOrigin) = MainActor.assumeIsolated {
+                (NSApp.windows.contains {
+                    $0.frameAutosaveName.hasPrefix(MainWindowPlacement.autosaveNamePrefix)
+                        && ($0.isVisible || $0.isMiniaturized)
+                }, MainWindowPlacement.globalOrigin(ofDisplayWithBounds: display.bounds))
+            }
+            guard !hasOpenWindow else { return WindowPlacement() }
+            let visible = display.visibleRect.offsetBy(dx: displayOrigin?.x ?? 0, dy: displayOrigin?.y ?? 0)
             return WindowPlacement(visible.origin, size: visible.size)
         }
         .commands {
