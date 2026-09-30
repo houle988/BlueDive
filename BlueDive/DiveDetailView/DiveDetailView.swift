@@ -122,6 +122,8 @@ struct DiveDetailView: View {
     @State var profileSamplesLoaded = false
     /// When false, the Samples tab table shows only the first `samplesPreviewLimit` rows.
     @State var showAllSamples = false
+    /// Natural widths of the Samples table header titles, measured in the current language.
+    @State var sampleHeaderWidths: [SampleColumn: CGFloat] = [:]
     @Environment(\.layoutDirection) private var layoutDirection
 
     // Swipe navigation tuning

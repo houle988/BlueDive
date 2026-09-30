@@ -189,10 +189,36 @@ extension DiveDetailView {
         return indices.sorted()
     }
 
-    /// Rows shown before "Show all" is tapped. The table sits in a horizontal ScrollView,
-    /// so its LazyVStack is not lazy vertically and every row is built at once — thousands
-    /// of rows on a long dive freeze the tab when it opens.
+    /// Rows shown before "Show all" is tapped. Keeps the tab short so the page stays easy
+    /// to scroll through; the rows themselves are built lazily either way.
     static let samplesPreviewLimit = 150
+
+    /// Width of a samples table column: its default width, widened to the header title's
+    /// natural single-line width when the title is longer (e.g. French "Profondeur"), so
+    /// headers never wrap in any language or text size. Header and row cells use this width
+    /// so they stay aligned; it adapts to the header only, so a wide value can still wrap.
+    private func sampleColumnWidth(_ column: SampleColumn) -> CGFloat {
+        max(column.defaultWidth, sampleHeaderWidths[column] ?? 0)
+    }
+
+    /// A samples table header cell that reports its title's natural width, used by
+    /// `sampleColumnWidth(_:)`. The title is measured before the column frame is applied,
+    /// so the measurement does not depend on the width it produces.
+    private func sampleHeader(_ title: Text, _ column: SampleColumn, alignment: Alignment) -> some View {
+        title
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize()
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { width in
+                // Only write a changed width: each write updates the whole dive detail view.
+                if sampleHeaderWidths[column] != width {
+                    sampleHeaderWidths[column] = width
+                }
+            }
+            .frame(width: sampleColumnWidth(column), alignment: alignment)
+    }
 
     var samplesTableSection: some View {
         let allSamples = dive.profileSamples
@@ -206,141 +232,147 @@ extension DiveDetailView {
             HStack(spacing: 8) {
                 Image(systemName: "tablecells")
                     .foregroundStyle(.teal)
-                Text("Raw Data (\(dive.profileSamples.count) points)")
+                Text("Raw Data (\(Double(allSamples.count).localizedString(decimals: 0)) points)")
                     .font(.headline)
                     .foregroundStyle(.primary)
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                VStack(spacing: 0) {
+            HorizontalPanContainer {
+                VStack(alignment: .leading, spacing: 0) {
                     // Table header
                     HStack(spacing: 8) {
-                        Text("Time").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .leading)
-                        Text("Depth").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
-                        Text("Temp.").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                        sampleHeader(Text("Time"), .time, alignment: .leading)
+                        sampleHeader(Text("Depth"), .depth, alignment: .trailing)
+                        sampleHeader(Text("Temp."), .temperature, alignment: .trailing)
                         if hasMultiTank {
                             ForEach(tankIndices, id: \.self) { idx in
-                                Text("T\(idx + 1)").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                sampleHeader(Text("T\(idx + 1)"), .tank(idx), alignment: .trailing)
                             }
                         } else {
-                            Text("Press.").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                            sampleHeader(Text("Press."), .pressure, alignment: .trailing)
                         }
-                        Text("PPO₂").font(.caption2).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                        sampleHeader(Text("PPO₂"), .ppo2, alignment: .trailing)
                         if hasSensorPPO2 {
                             ForEach(sensorIndices, id: \.self) { idx in
-                                Text(verbatim: "S\(idx + 1)").font(.caption2).foregroundStyle(.secondary).frame(width: 42, alignment: .trailing)
+                                sampleHeader(Text(verbatim: "S\(idx + 1)"), .sensor(idx), alignment: .trailing)
                             }
                         }
-                        Text("CNS").font(.caption2).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
-                        Text("NDL").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
-                        Text("Ceiling").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
-                        Text("Stop").font(.caption2).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
-                        Text("Gas").font(.caption2).foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
-                        Text("Events").font(.caption2).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
-                        Spacer()
+                        sampleHeader(Text("CNS"), .cns, alignment: .trailing)
+                        sampleHeader(Text("NDL"), .ndl, alignment: .trailing)
+                        sampleHeader(Text("Ceiling"), .ceiling, alignment: .trailing)
+                        sampleHeader(Text("Stop"), .stop, alignment: .trailing)
+                        sampleHeader(Text("Gas"), .gas, alignment: .trailing)
+                        sampleHeader(Text("Events"), .events, alignment: .leading)
                     }
                     .padding(.horizontal, 4)
+                    .padding(.bottom, 1)
+                    .overlay(alignment: .bottom) {
+                        Divider().background(.primary.opacity(0.15))
+                    }
 
-                    Divider().background(.primary.opacity(0.15))
-
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(visibleSamples.enumerated()), id: \.offset) { i, sample in
-                            HStack(spacing: 8) {
+                    // Lazy because its enclosing scroll view is now the page's vertical
+                    // ScrollView: only the rows on screen are built.
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(visibleSamples.indices, id: \.self) { i in
+                            let sample = visibleSamples[i]
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text(verbatim: (sample.time * 60).localizedString(decimals: 2))
                                     .font(.caption).foregroundStyle(.primary)
-                                    .frame(width: 50, alignment: .leading)
+                                    .frame(width: sampleColumnWidth(.time), alignment: .leading)
                                 Text(verbatim: sample.depth.localizedString(decimals: 2))
                                     .font(.caption).foregroundStyle(.cyan)
-                                    .frame(width: 45, alignment: .trailing)
+                                    .frame(width: sampleColumnWidth(.depth), alignment: .trailing)
                                 if let temp = sample.temperature {
                                     Text(UserPreferences.shared.temperatureUnit.formatted(temp, from: dive.storedTemperatureUnit))
                                         .font(.caption).foregroundStyle(.orange)
-                                        .frame(width: 50, alignment: .trailing)
+                                        .frame(width: sampleColumnWidth(.temperature), alignment: .trailing)
                                 } else {
-                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.temperature), alignment: .trailing)
                                 }
                                 if hasMultiTank {
                                     ForEach(tankIndices, id: \.self) { idx in
                                         if let press = sample.tankPressures?[idx] {
                                             Text(verbatim: dive.displayProfilePressure(press).localizedString(decimals: 0))
                                                 .font(.caption).foregroundStyle(.red)
-                                                .frame(width: 50, alignment: .trailing)
+                                                .frame(width: sampleColumnWidth(.tank(idx)), alignment: .trailing)
                                         } else {
-                                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.tank(idx)), alignment: .trailing)
                                         }
                                     }
                                 } else {
                                     if let press = sample.tankPressure {
                                         Text(verbatim: dive.displayProfilePressure(press).localizedString(decimals: 2))
                                             .font(.caption).foregroundStyle(.red)
-                                            .frame(width: 50, alignment: .trailing)
+                                            .frame(width: sampleColumnWidth(.pressure), alignment: .trailing)
                                     } else {
-                                        Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                        Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.pressure), alignment: .trailing)
                                     }
                                 }
                                 if let ppo2 = sample.ppo2 {
                                     Text(verbatim: ppo2.localizedString(decimals: 2))
                                         .font(.caption).foregroundStyle(ppo2Color(for: ppo2))
-                                        .frame(width: 50, alignment: .trailing)
+                                        .frame(width: sampleColumnWidth(.ppo2), alignment: .trailing)
                                 } else {
-                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.ppo2), alignment: .trailing)
                                 }
                                 if hasSensorPPO2 {
                                     ForEach(sensorIndices, id: \.self) { idx in
                                         if let p = sample.sensorPPO2?[idx] {
                                             Text(verbatim: p.localizedString(decimals: 2))
                                                 .font(.caption).foregroundStyle(ppo2Color(for: p))
-                                                .frame(width: 42, alignment: .trailing)
+                                                .frame(width: sampleColumnWidth(.sensor(idx)), alignment: .trailing)
                                         } else {
-                                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 42, alignment: .trailing)
+                                            Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.sensor(idx)), alignment: .trailing)
                                         }
                                     }
                                 }
                                 if let cns = sample.cns {
                                     Text(verbatim: cns.localizedString(decimals: 0) + "%")
                                         .font(.caption).foregroundStyle(cnsColor(for: cns))
-                                        .frame(width: 40, alignment: .trailing)
+                                        .frame(width: sampleColumnWidth(.cns), alignment: .trailing)
                                 } else {
-                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.cns), alignment: .trailing)
                                 }
                                 if let ndl = sample.ndl {
                                     Text(verbatim: ndl >= ndlSentinel ? "—" : ndl.localizedString(decimals: 0))
                                         .font(.caption).foregroundStyle(.yellow)
-                                        .frame(width: 45, alignment: .trailing)
+                                        .frame(width: sampleColumnWidth(.ndl), alignment: .trailing)
                                 } else {
-                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.ndl), alignment: .trailing)
                                 }
                                 // Raw stored ceiling, unconverted like the Depth column above,
                                 // so both stay directly comparable in this debug table.
                                 if let ceiling = sample.ceilingDepth {
                                     Text(verbatim: ceiling.localizedString(decimals: 2))
                                         .font(.caption).foregroundStyle(.orange)
-                                        .frame(width: 45, alignment: .trailing)
+                                        .frame(width: sampleColumnWidth(.ceiling), alignment: .trailing)
                                 } else {
-                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.ceiling), alignment: .trailing)
                                 }
                                 if let ceilingTime = sample.ceilingTime {
                                     Text(verbatim: ceilingTime.localizedString(decimals: 0))
                                         .font(.caption).foregroundStyle(.orange.opacity(0.7))
-                                        .frame(width: 45, alignment: .trailing)
+                                        .frame(width: sampleColumnWidth(.stop), alignment: .trailing)
                                 } else {
-                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.stop), alignment: .trailing)
                                 }
                                 if let gas = sample.currentGas, gas >= 0, gas < dive.tanks.count {
                                     Text(verbatim: "T\(gas + 1)")
                                         .font(.caption).foregroundStyle(.purple)
-                                        .frame(width: 35, alignment: .trailing)
+                                        .frame(width: sampleColumnWidth(.gas), alignment: .trailing)
                                 } else {
-                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: 35, alignment: .trailing)
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.gas), alignment: .trailing)
                                 }
                                 if sample.events.isEmpty {
-                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(minWidth: 50, alignment: .leading)
+                                    Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.events), alignment: .leading)
                                 } else {
+                                    // Wraps onto more lines rather than truncating, so every event
+                                    // stays readable in the fixed-width column on every platform.
                                     Text(sample.events.map(\.label).joined(separator: ", "))
                                         .font(.caption).foregroundStyle(.mint)
-                                        .frame(minWidth: 50, alignment: .leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(width: sampleColumnWidth(.events), alignment: .leading)
                                 }
-                                Spacer()
                             }
                             .padding(.vertical, 4)
                             .padding(.horizontal, 4)
@@ -349,6 +381,9 @@ extension DiveDetailView {
                     }
                 }
             }
+            // A new container per dive starts every dive at the first column, as the page
+            // already returns to the top and the table to its first rows on a dive change.
+            .id(dive.id)
 
             if visibleSamples.count < allSamples.count {
                 Button {
@@ -368,5 +403,97 @@ extension DiveDetailView {
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
+    }
+}
+
+// MARK: - Samples Table Columns
+
+extension DiveDetailView {
+    /// Columns of the samples table whose width adapts to their header title.
+    enum SampleColumn: Hashable {
+        case time, depth, temperature, pressure, ppo2, cns, ndl, ceiling, stop, gas, events
+        case tank(Int)
+        case sensor(Int)
+
+        /// Width used when the header title fits (the table's original fixed widths).
+        var defaultWidth: CGFloat {
+            switch self {
+            case .time, .temperature, .pressure, .ppo2, .tank: return 50
+            case .depth, .ndl, .ceiling, .stop:                return 45
+            case .sensor:                                     return 42
+            case .cns:                                        return 40
+            case .gas:                                        return 35
+            // Wide and not sized to its content: rows are built lazily, so a row built later
+            // with a long event list must not widen the table and misalign it with the header.
+            // Long lists wrap instead.
+            case .events:                                     return 220
+            }
+        }
+    }
+}
+
+// MARK: - Horizontal Pan Container
+
+/// Scrolls wide content horizontally without placing it inside a horizontal ScrollView.
+///
+/// A horizontal ScrollView around the samples table caused two problems: its LazyVStack was
+/// not lazy vertically (every row was built at once), and on macOS every Magic Mouse or
+/// trackpad scroll event over the table went through that scroll view, whose work grew with
+/// the number of rows. Here the content stays in the page's vertical ScrollView and is only
+/// shifted with `.offset(x:)`. The horizontal scrolling is done by an empty ScrollView laid
+/// over the content, so the scroll view under the pointer holds a single empty view.
+/// The offset lives in this view's own state, so scrolling redraws only this view, not the
+/// whole dive detail page.
+private struct HorizontalPanContainer<Content: View>: View {
+    @ViewBuilder let content: Content
+    @State private var xOffset: CGFloat = 0
+    @State private var contentWidth: CGFloat = 0
+
+    var body: some View {
+        OverflowingWidthLayout {
+            content
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { width in
+                    contentWidth = width
+                }
+                .offset(x: -xOffset)
+        }
+        .clipped()
+        .overlay {
+            ScrollView(.horizontal, showsIndicators: false) {
+                // Full height and an explicit content shape: on iOS a scroll view only
+                // receives touches over its content, and Color.clear is not hit-testable.
+                Color.clear
+                    .frame(width: contentWidth)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.x
+            } action: { _, x in
+                xOffset = x
+            }
+            // The empty scroll view is only a gesture target; hiding it lets VoiceOver
+            // read the table cells underneath, including clipped columns (VoiceOver does not
+            // scroll a clipped column into view).
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+/// Lays out its single subview at its natural width, pinned to the leading edge, while
+/// reporting only the width it is offered. A plain `.frame(maxWidth: .infinity)` would
+/// report the subview's width instead and widen the card to the full table width.
+private struct OverflowingWidthLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+        let natural = subview.sizeThatFits(ProposedViewSize(width: nil, height: proposal.height))
+        return CGSize(width: proposal.width ?? natural.width, height: natural.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
+                              proposal: ProposedViewSize(width: nil, height: bounds.height))
     }
 }
