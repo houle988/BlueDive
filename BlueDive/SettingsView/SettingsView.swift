@@ -303,6 +303,23 @@ enum AppearanceMode: String, CaseIterable {
         }
     }
 
+    /// Same text as `label`, as a `String` for places that build text, such as the
+    /// Settings row detail.
+    var displayName: String {
+        switch self {
+        case .system: return NSLocalizedString("System", bundle: .forAppLanguage(), value: "System", comment: "Theme option that follows the device appearance")
+        case .light:  return NSLocalizedString("Light", bundle: .forAppLanguage(), value: "Light", comment: "Theme option: always light")
+        case .dark:   return NSLocalizedString("Dark", bundle: .forAppLanguage(), value: "Dark", comment: "Theme option: always dark")
+        }
+    }
+
+    /// The theme actually shown: for System, Light or Dark according to `colorScheme`,
+    /// the scheme currently in effect (pass the view's `@Environment(\.colorScheme)`).
+    func effective(in colorScheme: ColorScheme) -> AppearanceMode {
+        guard self == .system else { return self }
+        return colorScheme == .dark ? .dark : .light
+    }
+
     var colorScheme: ColorScheme? {
         switch self {
         case .system: return nil
@@ -333,6 +350,18 @@ enum AppLanguage: String, CaseIterable {
         case .german:       return "Deutsch"
         case .dutch:        return "Nederlands"
         }
+    }
+
+    /// The language the app actually shows: for System, the localization the system chose
+    /// from the device's languages (or BlueDive's per-app language setting); English when
+    /// none of them is available in BlueDive. Matches by language code only, which assumes
+    /// one case per language; compare full identifiers if a second regional variant is added.
+    var effective: AppLanguage {
+        guard self == .system else { return self }
+        let resolved = Bundle.main.preferredLocalizations.first.map { Locale(identifier: $0).language.languageCode }
+        return AppLanguage.allCases.first { language in
+            language != .system && Locale(identifier: language.rawValue).language.languageCode == resolved
+        } ?? .english
     }
 
     var locale: Locale? {
@@ -444,6 +473,7 @@ class UserPreferences {
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var prefs = UserPreferences.shared
     @State private var showingAboutSheet = false
     @State private var showWelcomeWizard = false
@@ -457,7 +487,16 @@ struct SettingsView: View {
                         AppearanceSettingsView(onNeedsRootDismiss: { dismiss() })
                             .closeSheetButtonOnMac { dismiss() }
                     } label: {
-                        SettingsListRow(title: "Appearance", icon: "paintbrush", color: .pink)
+                        // The detail shows the language in use, written in its own language
+                        // (e.g. "Deutsch"), so the row is recognisable to someone who does not
+                        // read the app's current language, followed by the theme in use. For
+                        // System, both show what the device resolves to rather than "System".
+                        SettingsListRow(
+                            title: "Appearance & Language",
+                            icon: "paintbrush",
+                            color: .pink,
+                            detail: "\(prefs.languageMode.effective.displayName) · \(prefs.appearanceMode.effective(in: colorScheme).displayName)"
+                        )
                     }
 
                     NavigationLink {

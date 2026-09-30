@@ -22,7 +22,7 @@ All public-facing text must be defined in code as localizable strings and transl
 
 ### In-App Language Override
 
-The in-app language (Settings → Appearance → Language, `UserPreferences.languageMode`) changes only the app's own text; the process still runs in the system language. It reaches text through two independent paths, and every new piece of UI must be covered by one of them:
+The in-app language (Settings → Appearance & Language → Language, `UserPreferences.languageMode`) changes only the app's own text; the process still runs in the system language. It reaches text through two independent paths, and every new piece of UI must be covered by one of them:
 
 - **`LocalizedStringKey` text and environment-formatted dates** resolve through `\.locale`, which `LanguageOverrideModifier` sets on the main window's content in `BlueDiveApp` (only when a specific language is chosen; "System" leaves `\.locale` untouched).
 - **`NSLocalizedString(…, bundle: Bundle.forAppLanguage())`** reads `UserPreferences` directly and does not depend on the environment.

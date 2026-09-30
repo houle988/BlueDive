@@ -11,44 +11,6 @@ struct AppearanceSettingsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 VStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Theme", systemImage: "circle.lefthalf.filled")
-                            .font(.subheadline)
-                            .foregroundStyle(.cyan)
-                        Picker("Theme", selection: $prefs.appearanceMode) {
-                            ForEach(AppearanceMode.allCases, id: \.self) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        .fullWidthSegmentedPicker()
-                    }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-
-                    #if os(macOS)
-                    Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                    #else
-                    Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                    #endif
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal)
-
-                VStack(spacing: 12) {
                     HStack {
                         Label("Language", systemImage: "globe")
                             .font(.subheadline)
@@ -87,11 +49,49 @@ struct AppearanceSettingsView: View {
                         )
                 )
                 .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Theme", systemImage: "circle.lefthalf.filled")
+                            .font(.subheadline)
+                            .foregroundStyle(.cyan)
+                        Picker("Theme", selection: $prefs.appearanceMode) {
+                            ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                                Text(mode.label).tag(mode)
+                            }
+                        }
+                        .fullWidthSegmentedPicker()
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    #if os(macOS)
+                    Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #else
+                    Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #endif
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
             }
             .padding(.vertical)
         }
         .settingsGradientBackground()
-        .navigationTitle(Text(verbatim: NSLocalizedString("Appearance", bundle: .forAppLanguage(), value: "Appearance", comment: "")))
+        .navigationTitle(Text(verbatim: NSLocalizedString("Appearance & Language", bundle: .forAppLanguage(), value: "Appearance & Language", comment: "Title of the settings page for the theme and the in-app language")))
         .preferredColorScheme(prefs.appearanceMode.colorScheme)
         .onChange(of: prefs.appearanceMode) {
             if previousAppearance == .system || prefs.appearanceMode == .system {
