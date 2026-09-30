@@ -455,12 +455,14 @@ struct SettingsView: View {
                 Section {
                     NavigationLink {
                         AppearanceSettingsView(onNeedsRootDismiss: { dismiss() })
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Appearance", icon: "paintbrush", color: .pink)
                     }
 
                     NavigationLink {
                         UnitsSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(
                             title: "Units of Measure",
@@ -472,36 +474,42 @@ struct SettingsView: View {
 
                     NavigationLink {
                         BluetoothSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Bluetooth Import", icon: "antenna.radiowaves.left.and.right", color: .blue)
                     }
 
                     NavigationLink {
                         NotificationsSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Notifications", icon: "bell", color: .purple)
                     }
 
                     NavigationLink {
                         DiveSequenceSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Dive Sequence", icon: "arrow.triangle.2.circlepath", color: .indigo)
                     }
 
                     NavigationLink {
                         DiveProfileSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Dive Profile", icon: "chart.xyaxis.line", color: .green)
                     }
 
                     NavigationLink {
                         ICloudSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "iCloud", icon: "icloud", color: .cyan)
                     }
 
                     NavigationLink {
                         DataManagementSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Data Management", icon: "externaldrive", color: .red)
                     }

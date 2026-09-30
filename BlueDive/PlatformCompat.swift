@@ -58,6 +58,28 @@ extension View {
     }
 }
 
+// MARK: - Close button on pushed sheet pages
+
+extension View {
+    /// Adds the standard close button (and Escape) to a page pushed inside a sheet's
+    /// NavigationStack on macOS, so the whole sheet can be closed without going back to the
+    /// root page first. Pass the dismiss action of the view that presents the stack's root:
+    /// inside a pushed page, `@Environment(\.dismiss)` only pops the page. On iOS the view
+    /// is returned unchanged, since the sheet can be swiped down from any page.
+    func closeSheetButtonOnMac(action: @escaping () -> Void) -> some View {
+        #if os(macOS)
+        self.toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                closeToolbarButton(action: action)
+                    .keyboardShortcut(.escape, modifiers: [])
+            }
+        }
+        #else
+        self
+        #endif
+    }
+}
+
 // MARK: - Grouped form style
 
 extension View {
