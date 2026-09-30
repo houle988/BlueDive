@@ -20115,7 +20115,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "\"%1$@\" (%2$@) behalten und Datenpunkte von \"%3$@\" (%4$@) anhängen. Der zweite Tauchgang wird gelöscht."
+            "value" : "„%1$@“ (%2$@) behalten und Messpunkte von „%3$@“ (%4$@) anhängen. Der zweite Tauchgang wird gelöscht."
           }
         },
         "en" : {
@@ -20133,7 +20133,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bewaar \"%1$@\" (%2$@) en voeg daar de opnames uit \"%3$@\" (%4$@) aan toe. De tweede duik wordt verwijderd."
+            "value" : "Bewaar \"%1$@\" (%2$@) en voeg daar de meetpunten uit \"%3$@\" (%4$@) aan toe. De tweede duik wordt verwijderd."
           }
         }
       }
@@ -25386,7 +25386,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Messwerte verfügbar"
+            "value" : "Keine Messpunkte verfügbar"
           }
         },
         "en" : {
@@ -28062,7 +28062,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rohdaten (%lld Punkte)"
+            "value" : "Rohdaten (%lld Messpunkte)"
           }
         },
         "en" : {
@@ -30444,7 +30444,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messwerte"
+            "value" : "Messpunkte"
           }
         },
         "en" : {
@@ -30474,7 +30474,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messwerte stammen von deinem Tauchcomputer und können nicht manuell bearbeitet werden."
+            "value" : "Messpunkte stammen von deinem Tauchcomputer und können nicht manuell bearbeitet werden."
           }
         },
         "en" : {
@@ -31587,7 +31587,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle genau zwei Tauchgänge aus, die zusammengeführt werden sollen. Der frühere Tauchgang wird beibehalten und die Messwerte des späteren Tauchgangs werden angehängt."
+            "value" : "Wähle genau zwei Tauchgänge aus, die zusammengeführt werden sollen. Der frühere Tauchgang wird beibehalten und die Messpunkte des späteren Tauchgangs werden angehängt."
           }
         },
         "en" : {
@@ -31605,7 +31605,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kies precies twee duiken om te combineren. De vroegste duik blijft behouden en de gegevens van de latere duik worden eraan toegevoegd."
+            "value" : "Kies precies twee duiken om te combineren. De vroegste duik blijft behouden en de meetpunten van de latere duik worden eraan toegevoegd."
           }
         }
       }
@@ -37682,7 +37682,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messwerte aktualisieren"
+            "value" : "Messpunkte aktualisieren"
           }
         },
         "en" : {
@@ -37700,7 +37700,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Metingen bijwerken"
+            "value" : "Meetpunten bijwerken"
           }
         }
       }
@@ -37710,7 +37710,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "\"Messwerte aktualisieren\" ordnet Flaschendrücke und die aktive Gaszuweisung im Tauchprofil entsprechend der neuen Reihenfolge neu zu."
+            "value" : "„Messpunkte aktualisieren“ ordnet Flaschendrücke und die aktive Gaszuweisung im Tauchprofil entsprechend der neuen Reihenfolge neu zu."
           }
         },
         "en" : {
@@ -37728,7 +37728,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bij het bijwerken van de metingen worden de tankdrukken en de toewijzing van het actieve gas in het duikprofiel aangepast, zodat deze overeenkomen met de nieuwe volgorde van de slots."
+            "value" : "Bij het bijwerken van de meetpunten worden de tankdrukken en de toewijzing van het actieve gas in het duikprofiel aangepast, zodat deze overeenkomen met de nieuwe volgorde van de slots."
           }
         }
       }
