@@ -223,7 +223,7 @@ struct EditMenuStatsView: View {
                     .frame(width: 24)
                 Text("Max Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))")
                     .foregroundStyle(.primary)
-                TextField("Max Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingMaxDepthText)
+                formTextField("Max Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingMaxDepthText)
                     .platformKeyboardType(.decimalPad)
                     .foregroundStyle(.primary)
                     .onChange(of: workingMaxDepthText) {
@@ -245,7 +245,7 @@ struct EditMenuStatsView: View {
                     .frame(width: 24)
                 Text("Avg Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))")
                     .foregroundStyle(.primary)
-                TextField("Avg Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingAvgDepthText)
+                formTextField("Avg Depth (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit))", text: $workingAvgDepthText)
                     .platformKeyboardType(.decimalPad)
                     .foregroundStyle(.primary)
                     .onChange(of: workingAvgDepthText) {
@@ -267,7 +267,7 @@ struct EditMenuStatsView: View {
                     .frame(width: 24)
                 Text("Duration (min)")
                     .foregroundStyle(.primary)
-                TextField("Duration (min)", text: $workingDurationText)
+                formTextField("Duration (min)", text: $workingDurationText)
                     .platformKeyboardType(.numberPad)
                     .foregroundStyle(.primary)
                     .onChange(of: workingDurationText) {
