@@ -104,17 +104,60 @@ struct DiveFilterSheet: View {
         }
     }
     
+    // MARK: - Chip Rows
+
+    /// A row of filter chips. iOS: one line that scrolls sideways, with an edge fade
+    /// hinting at more chips (`fade: false` drops the fade). macOS: the chips wrap onto
+    /// as many lines as needed — scrolling a row sideways needs a trackpad swipe or
+    /// Shift-scroll with a mouse, and the sheet has room to show every chip.
+    @ViewBuilder
+    private func chipRow<Content: View>(spacing: CGFloat, fade: Bool = true, @ViewBuilder content: () -> Content) -> some View {
+        #if os(macOS)
+        WrappingChipLayout(spacing: spacing) {
+            content()
+        }
+        .padding(.horizontal, 4)
+        #else
+        if fade {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: spacing) {
+                    content()
+                }
+                .padding(.horizontal, 4)
+            }
+            .chipRowFade()
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: spacing) {
+                    content()
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+        #endif
+    }
+
     // MARK: - Sections
     
     private var sortSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             FilterSectionHeader(title: "Sort", icon: "arrow.up.arrow.down")
 
+            #if os(macOS)
+            // The Mac sheet is wide: the four sort rows in two columns
+            // (Date | Depth, Duration | Dive #), same spacing as the iOS list.
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                ForEach(DiveSortField.allCases) { field in
+                    SortFieldRow(field: field, sortOrder: $sortOrder)
+                }
+            }
+            #else
             VStack(spacing: 8) {
                 ForEach(DiveSortField.allCases) { field in
                     SortFieldRow(field: field, sortOrder: $sortOrder)
                 }
             }
+            #endif
         }
         .filterCardStyle()
     }
@@ -143,8 +186,20 @@ struct DiveFilterSheet: View {
             marineLifeFilterSection
         }
 
+        #if os(macOS)
+        // The Mac sheet is wide enough to pair the two short cards; fixedSize gives
+        // both the height of the taller one.
+        HStack(alignment: .top, spacing: 20) {
+            depthFilterSection
+                .frame(maxWidth: .infinity)
+            ratingFilterSection
+                .frame(maxWidth: .infinity)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        #else
         depthFilterSection
         ratingFilterSection
+        #endif
     }
     
     private var yearFilterSection: some View {
@@ -168,32 +223,28 @@ struct DiveFilterSheet: View {
             }
             .padding(.horizontal, 4)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ModernFilterChip(
-                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                        isSelected: filterYear == nil,
-                        color: .cyan
-                    ) {
-                        withAnimation {
-                            filterYear = nil
-                            filterYearNegate = false
-                        }
-                    }
-
-                    ForEach(availableYears, id: \.self) { year in
-                        ModernFilterChip(
-                            label: "\(year)",
-                            isSelected: filterYear == year,
-                            color: filterYearNegate ? .orange : .cyan
-                        ) {
-                            withAnimation { filterYear = year }
-                        }
+            chipRow(spacing: 12) {
+                ModernFilterChip(
+                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
+                    isSelected: filterYear == nil,
+                    color: .cyan
+                ) {
+                    withAnimation {
+                        filterYear = nil
+                        filterYearNegate = false
                     }
                 }
-                .padding(.horizontal, 4)
+
+                ForEach(availableYears, id: \.self) { year in
+                    ModernFilterChip(
+                        label: "\(year)",
+                        isSelected: filterYear == year,
+                        color: filterYearNegate ? .orange : .cyan
+                    ) {
+                        withAnimation { filterYear = year }
+                    }
+                }
             }
-            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -219,43 +270,39 @@ struct DiveFilterSheet: View {
             }
             .padding(.horizontal, 4)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ModernFilterChip(
-                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                        isSelected: filterCountry == nil,
-                        color: .blue
-                    ) {
-                        withAnimation {
-                            filterCountry = nil
-                            filterCountryNegate = false
-                        }
-                    }
-
-                    ModernFilterChip(
-                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no country set"),
-                        isSelected: filterCountry == "",
-                        color: .blue
-                    ) {
-                        withAnimation {
-                            filterCountry = ""
-                            filterCountryNegate = false
-                        }
-                    }
-
-                    ForEach(availableCountries, id: \.self) { country in
-                        ModernFilterChip(
-                            label: country,
-                            isSelected: filterCountry == country,
-                            color: filterCountryNegate ? .orange : .blue
-                        ) {
-                            withAnimation { filterCountry = country }
-                        }
+            chipRow(spacing: 12) {
+                ModernFilterChip(
+                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
+                    isSelected: filterCountry == nil,
+                    color: .blue
+                ) {
+                    withAnimation {
+                        filterCountry = nil
+                        filterCountryNegate = false
                     }
                 }
-                .padding(.horizontal, 4)
+
+                ModernFilterChip(
+                    label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no country set"),
+                    isSelected: filterCountry == "",
+                    color: .blue
+                ) {
+                    withAnimation {
+                        filterCountry = ""
+                        filterCountryNegate = false
+                    }
+                }
+
+                ForEach(availableCountries, id: \.self) { country in
+                    ModernFilterChip(
+                        label: country,
+                        isSelected: filterCountry == country,
+                        color: filterCountryNegate ? .orange : .blue
+                    ) {
+                        withAnimation { filterCountry = country }
+                    }
+                }
             }
-            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -281,43 +328,39 @@ struct DiveFilterSheet: View {
             }
             .padding(.horizontal, 4)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ModernFilterChip(
-                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                        isSelected: filterDiveType == nil,
-                        color: .purple
-                    ) {
-                        withAnimation {
-                            filterDiveType = nil
-                            filterDiveTypeNegate = false
-                        }
-                    }
-
-                    ModernFilterChip(
-                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no dive type set"),
-                        isSelected: filterDiveType == "",
-                        color: .purple
-                    ) {
-                        withAnimation {
-                            filterDiveType = ""
-                            filterDiveTypeNegate = false
-                        }
-                    }
-
-                    ForEach(availableDiveTypes, id: \.self) { diveType in
-                        ModernFilterChip(
-                            label: diveType,
-                            isSelected: filterDiveType == diveType,
-                            color: filterDiveTypeNegate ? .orange : .purple
-                        ) {
-                            withAnimation { filterDiveType = diveType }
-                        }
+            chipRow(spacing: 12) {
+                ModernFilterChip(
+                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
+                    isSelected: filterDiveType == nil,
+                    color: .purple
+                ) {
+                    withAnimation {
+                        filterDiveType = nil
+                        filterDiveTypeNegate = false
                     }
                 }
-                .padding(.horizontal, 4)
+
+                ModernFilterChip(
+                    label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no dive type set"),
+                    isSelected: filterDiveType == "",
+                    color: .purple
+                ) {
+                    withAnimation {
+                        filterDiveType = ""
+                        filterDiveTypeNegate = false
+                    }
+                }
+
+                ForEach(availableDiveTypes, id: \.self) { diveType in
+                    ModernFilterChip(
+                        label: diveType,
+                        isSelected: filterDiveType == diveType,
+                        color: filterDiveTypeNegate ? .orange : .purple
+                    ) {
+                        withAnimation { filterDiveType = diveType }
+                    }
+                }
             }
-            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -326,37 +369,33 @@ struct DiveFilterSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             FilterSectionHeader(title: "Tags", icon: "tag.fill")
             
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ModernFilterChip(
-                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                        isSelected: filterTag == nil,
-                        color: .orange
-                    ) {
-                        withAnimation { filterTag = nil }
-                    }
+            chipRow(spacing: 12) {
+                ModernFilterChip(
+                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
+                    isSelected: filterTag == nil,
+                    color: .orange
+                ) {
+                    withAnimation { filterTag = nil }
+                }
 
+                ModernFilterChip(
+                    label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no tag set"),
+                    isSelected: filterTag == "",
+                    color: .orange
+                ) {
+                    withAnimation { filterTag = "" }
+                }
+                
+                ForEach(availableTags, id: \.self) { tag in
                     ModernFilterChip(
-                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no tag set"),
-                        isSelected: filterTag == "",
+                        label: tag,
+                        isSelected: filterTag == tag,
                         color: .orange
                     ) {
-                        withAnimation { filterTag = "" }
-                    }
-                    
-                    ForEach(availableTags, id: \.self) { tag in
-                        ModernFilterChip(
-                            label: tag,
-                            isSelected: filterTag == tag,
-                            color: .orange
-                        ) {
-                            withAnimation { filterTag = tag }
-                        }
+                        withAnimation { filterTag = tag }
                     }
                 }
-                .padding(.horizontal, 4)
             }
-            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -384,40 +423,37 @@ struct DiveFilterSheet: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 if !filterMarineLife.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(filterMarineLife, id: \.self) { species in
-                                HStack(spacing: 4) {
-                                    Text(species)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                    Button {
-                                        withAnimation {
-                                            filterMarineLife.removeAll { $0 == species }
-                                        }
-                                    } label: {
-                                        // Chip: 10 pt horizontal / 6 pt vertical padding, 8 pt
-                                        // between chips. Grows 4 pt into the inter-chip gap
-                                        // (half of 8) and 8 pt above/below the chip, which stays
-                                        // clear of the 16 pt gap to the header picker and the
-                                        // 8 pt gap to the search field. 34 × 42 pt.
-                                        // No .foregroundStyle: inherits the chip's own tint.
-                                        TapTargetInset(top: 14, leading: 6, bottom: 14, trailing: 14) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.caption)
-                                        }
+                    chipRow(spacing: 8, fade: false) {
+                        ForEach(filterMarineLife, id: \.self) { species in
+                            HStack(spacing: 4) {
+                                Text(species)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Button {
+                                    withAnimation {
+                                        filterMarineLife.removeAll { $0 == species }
                                     }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), species)))
+                                } label: {
+                                    // Chip: 10 pt horizontal / 6 pt vertical padding, 8 pt
+                                    // between chips. Grows 4 pt into the inter-chip gap
+                                    // (half of 8) and 8 pt above/below the chip, which stays
+                                    // clear of the 16 pt gap to the header picker and the
+                                    // 8 pt gap to the search field. 34 × 42 pt.
+                                    // No .foregroundStyle: inherits the chip's own tint.
+                                    TapTargetInset(top: 14, leading: 6, bottom: 14, trailing: 14) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.caption)
+                                    }
                                 }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(Color.teal.opacity(0.2)))
-                                .overlay(Capsule().stroke(Color.teal, lineWidth: 1.5))
-                                .foregroundStyle(.teal)
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), species)))
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.teal.opacity(0.2)))
+                            .overlay(Capsule().stroke(Color.teal, lineWidth: 1.5))
+                            .foregroundStyle(.teal)
                         }
-                        .padding(.horizontal, 4)
                     }
                 }
 
@@ -442,29 +478,26 @@ struct DiveFilterSheet: View {
                 .cornerRadius(12)
 
                 if !marineLifeSuggestions.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(marineLifeSuggestions.prefix(8), id: \.self) { suggestion in
-                                Button {
-                                    withAnimation {
-                                        if !filterMarineLife.contains(where: { $0.lowercased() == suggestion.lowercased() }) {
-                                            filterMarineLife.append(suggestion)
-                                        }
-                                        marineLifeInput = ""
+                    chipRow(spacing: 8, fade: false) {
+                        ForEach(marineLifeSuggestions.prefix(8), id: \.self) { suggestion in
+                            Button {
+                                withAnimation {
+                                    if !filterMarineLife.contains(where: { $0.lowercased() == suggestion.lowercased() }) {
+                                        filterMarineLife.append(suggestion)
                                     }
-                                } label: {
-                                    Text(suggestion)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background(Capsule().fill(Color.teal.opacity(0.15)))
-                                        .foregroundStyle(.teal)
+                                    marineLifeInput = ""
                                 }
-                                .buttonStyle(.plain)
+                            } label: {
+                                Text(suggestion)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Capsule().fill(Color.teal.opacity(0.15)))
+                                    .foregroundStyle(.teal)
                             }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 4)
                     }
                     if marineLifeSuggestions.count > 8 {
                         Text(String(format: NSLocalizedString("and %lld more…", bundle: Bundle.forAppLanguage(), comment: "Hint shown below marine life suggestions when more than 8 results match"), marineLifeSuggestions.count - 8))
@@ -512,43 +545,39 @@ struct DiveFilterSheet: View {
             }
             .padding(.horizontal, 4)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ModernFilterChip(
-                        label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                        isSelected: filterGasType == nil,
-                        color: .green
-                    ) {
-                        withAnimation {
-                            filterGasType = nil
-                            filterGasTypeNegate = false
-                        }
-                    }
-
-                    ModernFilterChip(
-                        label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no gas type set"),
-                        isSelected: filterGasType == "",
-                        color: .green
-                    ) {
-                        withAnimation {
-                            filterGasType = ""
-                            filterGasTypeNegate = false
-                        }
-                    }
-
-                    ForEach(availableGasTypes, id: \.self) { gas in
-                        ModernFilterChip(
-                            label: gas,
-                            isSelected: filterGasType == gas,
-                            color: filterGasTypeNegate ? .orange : .green
-                        ) {
-                            withAnimation { filterGasType = gas }
-                        }
+            chipRow(spacing: 12) {
+                ModernFilterChip(
+                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
+                    isSelected: filterGasType == nil,
+                    color: .green
+                ) {
+                    withAnimation {
+                        filterGasType = nil
+                        filterGasTypeNegate = false
                     }
                 }
-                .padding(.horizontal, 4)
+
+                ModernFilterChip(
+                    label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no gas type set"),
+                    isSelected: filterGasType == "",
+                    color: .green
+                ) {
+                    withAnimation {
+                        filterGasType = ""
+                        filterGasTypeNegate = false
+                    }
+                }
+
+                ForEach(availableGasTypes, id: \.self) { gas in
+                    ModernFilterChip(
+                        label: gas,
+                        isSelected: filterGasType == gas,
+                        color: filterGasTypeNegate ? .orange : .green
+                    ) {
+                        withAnimation { filterGasType = gas }
+                    }
+                }
             }
-            .chipRowFade()
         }
         .filterCardStyle()
     }
@@ -747,6 +776,7 @@ struct DiveFilterSheet: View {
                 maxDepthText = filterMaxDepth > 0 ? filterMaxDepth.editableString(decimals: 1) : ""
             }
         }
+        .fillsAvailableHeightOnMac()
         .filterCardStyle()
     }
     
@@ -754,7 +784,7 @@ struct DiveFilterSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             FilterSectionHeader(title: "Minimum rating", icon: "star.fill")
             
-            HStack(spacing: 12) {
+            ratingChipsLayout {
                 ModernFilterChip(
                     label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
                     isSelected: filterMinRating == 0,
@@ -775,7 +805,23 @@ struct DiveFilterSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .fillsAvailableHeightOnMac()
         .filterCardStyle()
+    }
+
+    /// Rating chips: one row (iOS), or wrapping lines on macOS, where the card is half
+    /// the sheet's width beside Depth range.
+    @ViewBuilder
+    private func ratingChipsLayout<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        #if os(macOS)
+        WrappingChipLayout(spacing: 12) {
+            content()
+        }
+        #else
+        HStack(spacing: 12) {
+            content()
+        }
+        #endif
     }
     
     private var filterResetButtonLabel: String {
@@ -1056,3 +1102,63 @@ extension DiveSortDirection {
         }
     }
 }
+
+// MARK: - Wrapping Chip Layout
+
+#if os(macOS)
+/// Lays out chips left to right and wraps onto a new line when the next chip would not
+/// fit the proposed width (macOS filter sheet). Lines are separated by `spacing`, like
+/// the chips within a line.
+struct WrappingChipLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let rows = arrangeRows(maxWidth: maxWidth, subviews: subviews)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrangeRows(maxWidth: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for (index, size) in zip(row.indices, row.sizes) {
+                subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                                      proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var sizes: [CGSize] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    /// Greedy line breaking: each chip at its ideal size (capped at the line width).
+    private func arrangeRows(maxWidth: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            var size = subviews[index].sizeThatFits(.unspecified)
+            size.width = min(size.width, maxWidth)
+            let neededWidth = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if !current.indices.isEmpty && neededWidth > maxWidth {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+            current.sizes.append(size)
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
+}
+#endif
