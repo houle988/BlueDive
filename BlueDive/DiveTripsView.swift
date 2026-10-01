@@ -15,7 +15,9 @@ struct DiveTrip: Identifiable {
 
     var totalDives: Int        { dives.count }
     var totalMinutes: Int      { dives.map(\.duration).reduce(0, +) }
-    var deepestDive: Dive?     { dives.max(by: { $0.maxDepth < $1.maxDepth }) }
+    /// Compared in the display unit: each dive keeps its depth in the unit it was imported
+    /// in, so raw `maxDepth` values of metric and imperial dives are not comparable.
+    var deepestDive: Dive?     { dives.max(by: { $0.displayMaxDepth < $1.displayMaxDepth }) }
     var longestDive: Dive?     { dives.max(by: { $0.duration < $1.duration }) }
     var bestRatedDive: Dive?   { dives.max(by: { $0.rating < $1.rating }) }
     var averageRating: Double  {
@@ -23,9 +25,11 @@ struct DiveTrip: Identifiable {
         guard !rated.isEmpty else { return 0 }
         return Double(rated.map(\.rating).reduce(0, +)) / Double(rated.count)
     }
+    /// Average maximum depth in the user's display unit (each dive converted from its own
+    /// stored unit before averaging).
     var averageMaxDepth: Double {
         guard !dives.isEmpty else { return 0 }
-        return dives.map(\.maxDepth).reduce(0, +) / Double(dives.count)
+        return dives.map(\.displayMaxDepth).reduce(0, +) / Double(dives.count)
     }
     var averageRMV: Double {
         var sum = 0.0
@@ -157,18 +161,21 @@ struct DiveTripsView: View {
                                 .opacity(tripsAppeared ? 1.0 : 0.0)
                                 .offset(y: tripsAppeared ? 0 : 20)
 
-                            ForEach(Array(cachedTrips.enumerated()), id: \.element.id) { index, trip in
-                                TripCard(trip: trip, prefs: prefs)
-                                    .padding(.horizontal)
-                                    .onTapGesture { selectedTrip = trip }
-                                    .accessibilityElement(children: .combine)
-                                    .accessibilityAddTraits(.isButton)
-                                    // onTapGesture isn't reliably fired by VoiceOver's activate
-                                    // gesture; this makes double-tap open the trip.
-                                    .accessibilityAction { selectedTrip = trip }
-                                    .opacity(tripsAppeared ? 1.0 : 0.0)
-                                    .offset(y: tripsAppeared ? 0 : 20)
+                            #if os(macOS)
+                            // The Mac sheet is wide: trip cards in a grid, as many per row as
+                            // fit at a readable width: two on the page-sized sheet (~700 pt).
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], spacing: 16) {
+                                ForEach(cachedTrips) { trip in
+                                    tripCard(trip)
+                                }
                             }
+                            .padding(.horizontal)
+                            #else
+                            ForEach(Array(cachedTrips.enumerated()), id: \.element.id) { index, trip in
+                                tripCard(trip)
+                                    .padding(.horizontal)
+                            }
+                            #endif
 
                             Spacer(minLength: 30)
                         }
@@ -204,6 +211,30 @@ struct DiveTripsView: View {
             }
             .diverFilterReset(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
         }
+    }
+
+    /// A tappable trip card (opens the trip's detail sheet), with its VoiceOver action
+    /// and appear animation.
+    private func tripCard(_ trip: DiveTrip) -> some View {
+        tripCardContent(trip)
+            .onTapGesture { selectedTrip = trip }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            // onTapGesture isn't reliably fired by VoiceOver's activate
+            // gesture; this makes double-tap open the trip.
+            .accessibilityAction { selectedTrip = trip }
+            .opacity(tripsAppeared ? 1.0 : 0.0)
+            .offset(y: tripsAppeared ? 0 : 20)
+    }
+
+    /// macOS: cards of a grid row share the tallest card's height; iOS: the plain card.
+    @ViewBuilder
+    private func tripCardContent(_ trip: DiveTrip) -> some View {
+        #if os(macOS)
+        TripCard(trip: trip, prefs: prefs, fillsRowHeight: true)
+        #else
+        TripCard(trip: trip, prefs: prefs)
+        #endif
     }
 }
 
@@ -257,6 +288,11 @@ struct TripSummaryStat: View {
 struct TripCard: View {
     let trip: DiveTrip
     let prefs: UserPreferences
+    #if os(macOS)
+    /// macOS trips grid: stretch to the tallest card of the row (a trip without a rating
+    /// has no star line), extending the card's bottom background.
+    var fillsRowHeight = false
+    #endif
     @Environment(\.locale) private var locale
 
     private var coverPhoto: PlatformImage? {
@@ -307,6 +343,12 @@ struct TripCard: View {
                 }
                 .padding(12)
             }
+            #if os(macOS)
+            // In the row-height grid the header's overlay gradient would otherwise grow
+            // with the extra height; keep the header at its 140 pt so the extra space goes
+            // to the card's bottom background.
+            .frame(height: fillsRowHeight ? 140 : nil)
+            #endif
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16))
 
             // Stats row
@@ -315,7 +357,7 @@ struct TripCard: View {
                 Divider().frame(height: 30)
                 TripStatMini(icon: "timer", value: trip.formattedTotalTime, label: "Total")
                 Divider().frame(height: 30)
-                TripStatMini(icon: "arrow.down", value: prefs.depthUnit.formatted(trip.deepestDive?.maxDepth ?? 0, decimals: 0), label: "Max")
+                TripStatMini(icon: "arrow.down", value: (trip.deepestDive?.displayMaxDepth ?? 0).localizedString(decimals: 0) + " " + prefs.depthUnit.symbol, label: "Max")
                 Divider().frame(height: 30)
                 TripStatMini(icon: "mappin", value: Double(trip.uniqueSites).localizedString(decimals: 0), label: "Sites")
             }
@@ -350,6 +392,10 @@ struct TripCard: View {
                     .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 16, bottomTrailingRadius: 16))
             }
         }
+        #if os(macOS)
+        .frame(maxHeight: fillsRowHeight ? .infinity : nil, alignment: .top)
+        .background(fillsRowHeight ? Color.platformSecondaryBackground : Color.clear)
+        #endif
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
     }
@@ -422,13 +468,27 @@ struct TripDetailSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    #if os(macOS)
+                    // The Mac sheet is wide: hero stats beside Highlights (hero alone keeps
+                    // the full width); fixedSize gives both the height of the taller one.
+                    HStack(alignment: .top, spacing: 20) {
+                        heroSection
+                            .frame(maxWidth: .infinity)
+                        if hasHighlights {
+                            highlightsSection
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    #else
                     // Hero stats
                     heroSection
 
                     // Highlights
-                    if trip.deepestDive != nil || trip.longestDive != nil || trip.bestRatedDive != nil {
+                    if hasHighlights {
                         highlightsSection
                     }
+                    #endif
 
                     // All dives list
                     divesListSection
@@ -449,12 +509,16 @@ struct TripDetailSheet: View {
 
     }
 
+    private var hasHighlights: Bool {
+        trip.deepestDive != nil || trip.longestDive != nil || trip.bestRatedDive != nil
+    }
+
     private var heroSection: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             TripHeroStat(value: Double(trip.totalDives).localizedString(decimals: 0), label: "Dives", icon: "bubbles.and.sparkles.fill", color: .cyan)
             TripHeroStat(value: trip.formattedTotalTime, label: "Underwater", icon: "timer", color: .green)
             TripHeroStat(value: Double(trip.durationDays).localizedString(decimals: 0) + "d", label: "Trip Duration", icon: "calendar", color: .orange)
-            TripHeroStat(value: prefs.depthUnit.formatted(trip.averageMaxDepth), label: "Avg. Depth", icon: "arrow.down.circle", color: .blue)
+            TripHeroStat(value: trip.averageMaxDepth.localizedString(decimals: 1) + " " + prefs.depthUnit.symbol, label: "Avg. Depth", icon: "arrow.down.circle", color: .blue)
             TripHeroStat(value: Double(trip.uniqueSites).localizedString(decimals: 0), label: "Sites", icon: "mappin.and.ellipse", color: .purple)
             if trip.averageRMV > 0 {
                 TripHeroStat(value: trip.averageRMV.localizedString(decimals: 1) + " L/m", label: "Avg. RMV", icon: "wind", color: .teal)
@@ -462,6 +526,7 @@ struct TripDetailSheet: View {
                 TripHeroStat(value: trip.averageRating.localizedString(decimals: 1) + "★", label: "Avg. Rating", icon: "star.fill", color: .yellow)
             }
         }
+        .fillsAvailableHeightOnMac()
         .padding()
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.platformSecondaryBackground))
     }
@@ -475,7 +540,7 @@ struct TripDetailSheet: View {
                 if let d = trip.deepestDive {
                     HighlightRow(icon: "arrow.down.circle.fill", color: .indigo,
                                  title: "Deepest Dive",
-                                 subtitle: "\(d.siteName) — \(prefs.depthUnit.formatted(d.maxDepth))")
+                                 subtitle: "\(d.siteName) — \(d.displayMaxDepth.localizedString(decimals: 1)) \(prefs.depthUnit.symbol)")
                 }
                 if let d = trip.longestDive {
                     HighlightRow(icon: "timer", color: .green,
@@ -489,6 +554,7 @@ struct TripDetailSheet: View {
                 }
             }
         }
+        .fillsAvailableHeightOnMac()
         .padding()
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.platformSecondaryBackground))
     }
