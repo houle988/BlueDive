@@ -129,20 +129,32 @@ struct DiveCalendarHeatmapView: View {
                     ScrollView {
                         VStack(spacing: 20) {
                             yearSelector
+                            #if os(macOS)
+                            // The Mac sheet is wide: summary and legend share one line (falling
+                            // back to the stacked iOS layout), and the months sit side by side,
+                            // as many per row as fit at a readable width (usually two).
+                            ViewThatFits(in: .horizontal) {
+                                HStack(spacing: 20) {
+                                    yearSummary
+                                        .frame(maxWidth: .infinity)
+                                    legend
+                                        .frame(maxWidth: .infinity)
+                                }
+                                VStack(spacing: 20) {
+                                    yearSummary
+                                    legend
+                                }
+                            }
+
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], spacing: 16) {
+                                monthSections
+                            }
+                            #else
                             yearSummary
                             legend
 
-                            // Month-by-month calendar grids
-                            let weekdays = weekdaySymbols
-                            let monthNames = allMonthNames
-                            ForEach(1...12, id: \.self) { month in
-                                let days = daysInMonth(month)
-                                let monthDiveCount = cachedMonthDiveCounts[month] ?? 0
-
-                                if !days.isEmpty {
-                                    monthSection(month: month, days: days, diveCount: monthDiveCount, weekdays: weekdays, monthName: monthNames[month - 1])
-                                }
-                            }
+                            monthSections
+                            #endif
 
                             Spacer(minLength: 40)
                         }
@@ -338,6 +350,21 @@ struct DiveCalendarHeatmapView: View {
 
     // MARK: - Month Section
 
+    /// Month-by-month calendar grids, January to December (months with no days are skipped).
+    @ViewBuilder
+    private var monthSections: some View {
+        let weekdays = weekdaySymbols
+        let monthNames = allMonthNames
+        ForEach(1...12, id: \.self) { month in
+            let days = daysInMonth(month)
+            let monthDiveCount = cachedMonthDiveCounts[month] ?? 0
+
+            if !days.isEmpty {
+                monthSection(month: month, days: days, diveCount: monthDiveCount, weekdays: weekdays, monthName: monthNames[month - 1])
+            }
+        }
+    }
+
     private func monthSection(month: Int, days: [Date], diveCount: Int, weekdays: [String], monthName: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Month header
@@ -418,6 +445,16 @@ struct DiveCalendarHeatmapView: View {
                         }
                     }
                 }
+
+                #if os(macOS)
+                // Months sit side by side on the Mac: pad every month to six week rows
+                // (42 cells) so all month cards have the same height and line up.
+                ForEach(0..<max(0, 42 - offset - days.count), id: \.self) { _ in
+                    Color.clear
+                        .frame(height: 36)
+                        .accessibilityHidden(true)
+                }
+                #endif
             }
         }
         .padding(12)
