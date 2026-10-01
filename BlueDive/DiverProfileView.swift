@@ -173,6 +173,36 @@ struct DiverProfileView: View {
                         statsGrid
                             .opacity(profileAppeared ? 1.0 : 0.0)
                             .offset(y: profileAppeared ? 0 : 15)
+                        #if os(macOS)
+                        // The Mac sheet is wide enough to pair the sections: Next Goals beside
+                        // Most Observed Creatures (either one alone keeps the full width), and
+                        // Certifications beside Insurance. fixedSize gives each pair the height
+                        // of its taller card.
+                        if !goals.isEmpty || !topCreatures.isEmpty {
+                            HStack(alignment: .top, spacing: 22) {
+                                if !goals.isEmpty {
+                                    goalsSection
+                                        .frame(maxWidth: .infinity)
+                                }
+                                if !topCreatures.isEmpty {
+                                    topCreaturesSection
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                            .opacity(profileAppeared ? 1.0 : 0.0)
+                            .offset(y: profileAppeared ? 0 : 15)
+                        }
+                        HStack(alignment: .top, spacing: 22) {
+                            certificationsSection
+                                .frame(maxWidth: .infinity)
+                            insuranceSection
+                                .frame(maxWidth: .infinity)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(profileAppeared ? 1.0 : 0.0)
+                        .offset(y: profileAppeared ? 0 : 15)
+                        #else
                         if !goals.isEmpty        { goalsSection
                                 .opacity(profileAppeared ? 1.0 : 0.0)
                                 .offset(y: profileAppeared ? 0 : 15)
@@ -187,6 +217,7 @@ struct DiverProfileView: View {
                         insuranceSection
                             .opacity(profileAppeared ? 1.0 : 0.0)
                             .offset(y: profileAppeared ? 0 : 15)
+                        #endif
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 40)
@@ -771,6 +802,8 @@ private struct ProfileCard<Content: View>: View {
 
             content()
         }
+        // macOS: stretch to the taller card of a side-by-side pair; iOS: unchanged.
+        .fillsAvailableHeightOnMac()
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 20)
