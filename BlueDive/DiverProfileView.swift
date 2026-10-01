@@ -1104,6 +1104,34 @@ struct InsuranceDetailView: View {
 
     private var statusColor: Color { insurance.statusColor }
 
+    /// The insurance's label/value rows, in display order; empty optional fields are left out.
+    private var detailItems: [DetailRowItem] {
+        var items: [DetailRowItem] = []
+        if !insurance.diverName.isEmpty {
+            items.append(DetailRowItem(icon: "person.fill", title: "Diver Name", value: insurance.diverName))
+        }
+        items.append(DetailRowItem(icon: "building.2.fill", title: "Insurer", value: insurance.insurerName))
+        if !insurance.policyNumber.isEmpty {
+            items.append(DetailRowItem(icon: "number", title: "Policy Number", value: insurance.policyNumber))
+        }
+
+        if !insurance.coverageType.isEmpty {
+            items.append(DetailRowItem(icon: "shield.fill", title: "Coverage Type", value: insurance.coverageType))
+        }
+
+        items.append(DetailRowItem(icon: "calendar", title: "Start Date", value: formattedDate(insurance.startDate)))
+        items.append(DetailRowItem(icon: "clock", title: "End Date", value: formattedDate(insurance.endDate)))
+
+        if let phone = insurance.contactPhone, !phone.isEmpty {
+            items.append(DetailRowItem(icon: "phone.fill", title: "Emergency Phone", value: phone))
+        }
+
+        if let email = insurance.contactEmail, !email.isEmpty {
+            items.append(DetailRowItem(icon: "envelope.fill", title: "Email", value: email))
+        }
+        return items
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -1147,28 +1175,7 @@ struct InsuranceDetailView: View {
 
                         // Details
                         VStack(spacing: 16) {
-                            if !insurance.diverName.isEmpty {
-                                DetailRow(icon: "person.fill", title: "Diver Name", value: insurance.diverName)
-                            }
-                            DetailRow(icon: "building.2.fill", title: "Insurer", value: insurance.insurerName)
-                            if !insurance.policyNumber.isEmpty {
-                                DetailRow(icon: "number", title: "Policy Number", value: insurance.policyNumber)
-                            }
-
-                            if !insurance.coverageType.isEmpty {
-                                DetailRow(icon: "shield.fill", title: "Coverage Type", value: insurance.coverageType)
-                            }
-
-                            DetailRow(icon: "calendar", title: "Start Date", value: formattedDate(insurance.startDate))
-                            DetailRow(icon: "clock", title: "End Date", value: formattedDate(insurance.endDate))
-
-                            if let phone = insurance.contactPhone, !phone.isEmpty {
-                                DetailRow(icon: "phone.fill", title: "Emergency Phone", value: phone)
-                            }
-
-                            if let email = insurance.contactEmail, !email.isEmpty {
-                                DetailRow(icon: "envelope.fill", title: "Email", value: email)
-                            }
+                            detailRowList(detailItems)
 
                             if let notes = insurance.notes, !notes.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {

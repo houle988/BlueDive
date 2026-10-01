@@ -1333,6 +1333,35 @@ struct CertificationDetailView: View {
     @State private var showEditCertification = false
     @State private var showDeleteConfirmation = false
 
+    /// The certification's label/value rows, in display order; empty optional fields are left out.
+    private var detailItems: [DetailRowItem] {
+        var items: [DetailRowItem] = []
+        if !certification.diverName.isEmpty {
+            items.append(DetailRowItem(icon: "person.fill", title: "Diver Name", value: certification.diverName))
+        }
+        items.append(DetailRowItem(icon: "building.2.fill", title: "Organization", value: certification.localizedOrganization))
+        items.append(DetailRowItem(icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : certification.level))
+        items.append(DetailRowItem(icon: "number", title: "Number", value: certification.certificationNumber))
+        items.append(DetailRowItem(icon: "calendar", title: "Issue Date", value: formattedDate(certification.issueDate, style: .long)))
+
+        if let expiration = certification.expirationDate {
+            items.append(DetailRowItem(icon: "clock", title: "Expiration", value: formattedDate(expiration, style: .long)))
+        }
+
+        if let instructor = certification.instructorName, !instructor.isEmpty {
+            items.append(DetailRowItem(icon: "person.fill", title: "Instructor", value: instructor))
+        }
+
+        if let instructorCertNum = certification.instructorNumber, !instructorCertNum.isEmpty {
+            items.append(DetailRowItem(icon: "number", title: "Instructor Number", value: instructorCertNum))
+        }
+
+        if let center = certification.divingCentre, !center.isEmpty {
+            items.append(DetailRowItem(icon: "building.2.fill", title: "Diving Centre", value: center))
+        }
+        return items
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -1367,29 +1396,7 @@ struct CertificationDetailView: View {
                         .padding(.top, 20)
 
                         VStack(spacing: 16) {
-                            if !certification.diverName.isEmpty {
-                                DetailRow(icon: "person.fill", title: "Diver Name", value: certification.diverName)
-                            }
-                            DetailRow(icon: "building.2.fill", title: "Organization", value: certification.localizedOrganization)
-                            DetailRow(icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : certification.level)
-                            DetailRow(icon: "number", title: "Number", value: certification.certificationNumber)
-                            DetailRow(icon: "calendar", title: "Issue Date", value: formattedDate(certification.issueDate, style: .long))
-
-                            if let expiration = certification.expirationDate {
-                                DetailRow(icon: "clock", title: "Expiration", value: formattedDate(expiration, style: .long))
-                            }
-
-                            if let instructor = certification.instructorName, !instructor.isEmpty {
-                                DetailRow(icon: "person.fill", title: "Instructor", value: instructor)
-                            }
-
-                            if let instructorCertNum = certification.instructorNumber, !instructorCertNum.isEmpty {
-                                DetailRow(icon: "number", title: "Instructor Number", value: instructorCertNum)
-                            }
-
-                            if let center = certification.divingCentre, !center.isEmpty {
-                                DetailRow(icon: "building.2.fill", title: "Diving Centre", value: center)
-                            }
+                            detailRowList(detailItems)
 
                             if let notes = certification.notes, !notes.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
@@ -1478,9 +1485,44 @@ struct DetailRow: View {
 
             Spacer()
         }
+        // macOS: rows sit two per line in a Grid; stretch to the taller row of the pair.
+        .fillsAvailableHeightOnMac()
         .padding()
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)))
     }
+}
+
+/// One label/value row of a certification or insurance detail sheet.
+struct DetailRowItem {
+    let icon: String
+    let title: LocalizedStringKey
+    let value: String
+}
+
+/// The detail rows of a certification or insurance sheet. iOS: one `DetailRow` per item,
+/// laid out by the enclosing VStack. macOS: two rows per line, filling left to right in
+/// the same order, in a Grid that gives both rows of a line the same height.
+@ViewBuilder
+func detailRowList(_ items: [DetailRowItem]) -> some View {
+    #if os(macOS)
+    Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+        ForEach(Array(stride(from: 0, to: items.count, by: 2)), id: \.self) { index in
+            GridRow {
+                DetailRow(icon: items[index].icon, title: items[index].title, value: items[index].value)
+                if index + 1 < items.count {
+                    DetailRow(icon: items[index + 1].icon, title: items[index + 1].title, value: items[index + 1].value)
+                } else {
+                    Color.clear
+                        .gridCellUnsizedAxes([.horizontal, .vertical])
+                }
+            }
+        }
+    }
+    #else
+    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+        DetailRow(icon: item.icon, title: item.title, value: item.value)
+    }
+    #endif
 }
 
 // MARK: - Add Certification View
