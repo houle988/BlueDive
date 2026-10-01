@@ -32,135 +32,95 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            // Dive Site
-            ConditionRow(icon: "location", color: .cyan, label: "Dive Site",
-                        value: dive.siteName.isEmpty ? "—" : dive.siteName)
-
-            Divider().background(.primary.opacity(0.2))
-
-            // Country with flag
-            let countryInfo = CountryLookup.resolve(dive.siteCountry)
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(countryInfo.color.opacity(0.2))
-                        .frame(width: 36, height: 36)
-                    Text(countryInfo.flag)
-                        .font(.system(size: 20))
-                        .accessibilityHidden(true)
+            #if os(macOS)
+            // The Mac window is wide enough for two columns: the first five rows on the
+            // left, the other four on the right. A Grid keeps each pair of rows aligned,
+            // while each column draws its own dividers and a vertical line separates them.
+            Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
+                GridRow {
+                    siteNameRow.detailGridCell(column: 0, row: 0)
+                    siteBodyOfWaterRow.detailGridCell(column: 1, row: 0)
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Country")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(dive.siteCountry?.isEmpty == false ? dive.siteCountry! : "—")
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundStyle(dive.siteCountry?.isEmpty == false ? .primary : .secondary)
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
                 }
-                Spacer()
+                GridRow {
+                    siteCountryRow.detailGridCell(column: 0, row: 1)
+                    siteEntryCoordinatesRow.detailGridCell(column: 1, row: 1)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    siteLocationRow.detailGridCell(column: 0, row: 2)
+                    siteExitCoordinatesRow.detailGridCell(column: 1, row: 2)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    difficultyDisplayRow.detailGridCell(column: 0, row: 3)
+                    siteAltitudeRow.detailGridCell(column: 1, row: 3)
+                }
+                GridRow {
+                    detailColumnDivider
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                }
+                GridRow {
+                    siteWaterTypeRow.detailGridCell(column: 0, row: 4)
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                }
             }
-            .accessibilityElement(children: .combine)
+            .overlay {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.2))
+                    .frame(width: 1)
+            }
+            .accessibilityElement(children: .contain)
+            #else
+            siteNameRow
 
             Divider().background(.primary.opacity(0.2))
 
-            // Location
-            ConditionRow(icon: "mappin.and.ellipse", color: .orange, label: "Location",
-                        value: dive.location.isEmpty ? "—" : dive.location)
+            siteCountryRow
 
             Divider().background(.primary.opacity(0.2))
 
-            // Difficulty
+            siteLocationRow
+
+            Divider().background(.primary.opacity(0.2))
+
             difficultyDisplayRow
 
             Divider().background(.primary.opacity(0.2))
 
-            // Water Type
-            ConditionRow(icon: "drop", color: .blue, label: "Water Type",
-                        value: localizedWaterType(dive.siteWaterType))
+            siteWaterTypeRow
 
             Divider().background(.primary.opacity(0.2))
 
-            // Body of Water
-            ConditionRow(icon: "water.waves", color: .teal, label: "Body of Water",
-                        value: dive.siteBodyOfWater?.isEmpty == false ? dive.siteBodyOfWater! : "—")
+            siteBodyOfWaterRow
 
             Divider().background(.primary.opacity(0.2))
 
-            // GPS Coordinates — when entry and exit are the exact same point, both
-            // rows use the combined up/down purple marker, mirroring the single
-            // combined pin shown on the map.
-            let coordsIdentical: Bool = {
-                guard let lat = dive.siteLatitude, let lon = dive.siteLongitude,
-                      let eLat = dive.exitLatitude, let eLon = dive.exitLongitude else { return false }
-                return lat == eLat && lon == eLon
-            }()
-            let entryIcon = coordsIdentical ? "arrow.up.arrow.down.circle" : "arrow.down.circle"
-            let entryColor: Color = coordsIdentical ? .purple : .green
-            let exitIcon = coordsIdentical ? "arrow.up.arrow.down.circle" : "arrow.up.circle"
-            let exitColor: Color = coordsIdentical ? .purple : .orange
-
-            // GPS Coordinates (Entry)
-            if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
-                ConditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
-                            value: String(format: "%.6f, %.6f", lat, lon))
-            } else {
-                ConditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
-                            value: "—")
-            }
+            siteEntryCoordinatesRow
 
             Divider().background(.primary.opacity(0.2))
 
-            // GPS Coordinates (Exit)
-            if let exitLat = dive.exitLatitude, let exitLon = dive.exitLongitude {
-                ConditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
-                            value: String(format: "%.6f, %.6f", exitLat, exitLon))
-            } else {
-                ConditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
-                            value: "—")
-            }
+            siteExitCoordinatesRow
 
             Divider().background(.primary.opacity(0.2))
 
-            // Altitude
-            if let alt = dive.displaySiteAltitude {
-                let depthUnit = prefs.depthUnit.symbol
-                ConditionRow(icon: "mountain.2", color: .brown, label: "Altitude",
-                            value: alt.localizedString(decimals: 0) + " \(depthUnit)")
-            } else {
-                ConditionRow(icon: "mountain.2", color: .brown, label: "Altitude",
-                            value: "—")
-            }
+            siteAltitudeRow
+            #endif
 
             // Map view — tap to open a larger, zoomable map.
             if dive.hasGPSCoordinates {
                 Divider().background(.primary.opacity(0.2))
 
-                let entry = validGPSCoordinate(lat: dive.siteLatitude, lon: dive.siteLongitude)
-                let exit = validGPSCoordinate(lat: dive.exitLatitude, lon: dive.exitLongitude)
-                siteMap(entryLat: entry?.lat, entryLon: entry?.lon,
-                        exitLat: exit?.lat, exitLon: exit?.lon)
-                    .frame(height: 200)
-                    // Keep the preview itself non-interactive so the tap gesture
-                    // below (not the map's own pan/zoom) receives the touch.
-                    .allowsHitTesting(false)
-                    .overlay(alignment: .topTrailing) {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(6)
-                            .background(.black.opacity(0.45), in: Circle())
-                            .padding(8)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
-                    .onTapGesture { showFullScreenSiteMap = true }
-                    .accessibilityElement()
-                    .accessibilityLabel(Text("View larger map"))
-                    .accessibilityAddTraits(.isButton)
-                    // onTapGesture isn't reliably fired by VoiceOver's activate
-                    // gesture; this makes double-tap open the large map.
-                    .accessibilityAction { showFullScreenSiteMap = true }
+                siteMapPreview
             }
         }
         .padding()
@@ -178,6 +138,137 @@ extension DiveDetailView {
                 .standardSheetPresentation()
             }
         }
+    }
+
+    // Dive Site
+    private var siteNameRow: some View {
+        ConditionRow(icon: "location", color: .cyan, label: "Dive Site",
+                    value: dive.siteName.isEmpty ? "—" : dive.siteName)
+    }
+
+    // Country with flag
+    @ViewBuilder
+    private var siteCountryRow: some View {
+        let countryInfo = CountryLookup.resolve(dive.siteCountry)
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(countryInfo.color.opacity(0.2))
+                    .frame(width: 36, height: 36)
+                Text(countryInfo.flag)
+                    .font(.system(size: 20))
+                    .accessibilityHidden(true)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Country")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(dive.siteCountry?.isEmpty == false ? dive.siteCountry! : "—")
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(dive.siteCountry?.isEmpty == false ? .primary : .secondary)
+            }
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    // Location
+    private var siteLocationRow: some View {
+        ConditionRow(icon: "mappin.and.ellipse", color: .orange, label: "Location",
+                    value: dive.location.isEmpty ? "—" : dive.location)
+    }
+
+    // Water Type
+    private var siteWaterTypeRow: some View {
+        ConditionRow(icon: "drop", color: .blue, label: "Water Type",
+                    value: localizedWaterType(dive.siteWaterType))
+    }
+
+    // Body of Water
+    private var siteBodyOfWaterRow: some View {
+        ConditionRow(icon: "water.waves", color: .teal, label: "Body of Water",
+                    value: dive.siteBodyOfWater?.isEmpty == false ? dive.siteBodyOfWater! : "—")
+    }
+
+    // GPS Coordinates — when entry and exit are the exact same point, both
+    // rows use the combined up/down purple marker, mirroring the single
+    // combined pin shown on the map.
+    private var siteCoordsIdentical: Bool {
+        guard let lat = dive.siteLatitude, let lon = dive.siteLongitude,
+              let eLat = dive.exitLatitude, let eLon = dive.exitLongitude else { return false }
+        return lat == eLat && lon == eLon
+    }
+
+    // GPS Coordinates (Entry)
+    @ViewBuilder
+    private var siteEntryCoordinatesRow: some View {
+        let entryIcon = siteCoordsIdentical ? "arrow.up.arrow.down.circle" : "arrow.down.circle"
+        let entryColor: Color = siteCoordsIdentical ? .purple : .green
+        if let lat = dive.siteLatitude, let lon = dive.siteLongitude {
+            ConditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
+                        value: String(format: "%.6f, %.6f", lat, lon))
+        } else {
+            ConditionRow(icon: entryIcon, color: entryColor, label: "Coordinates (entry)",
+                        value: "—")
+        }
+    }
+
+    // GPS Coordinates (Exit)
+    @ViewBuilder
+    private var siteExitCoordinatesRow: some View {
+        let exitIcon = siteCoordsIdentical ? "arrow.up.arrow.down.circle" : "arrow.up.circle"
+        let exitColor: Color = siteCoordsIdentical ? .purple : .orange
+        if let exitLat = dive.exitLatitude, let exitLon = dive.exitLongitude {
+            ConditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
+                        value: String(format: "%.6f, %.6f", exitLat, exitLon))
+        } else {
+            ConditionRow(icon: exitIcon, color: exitColor, label: "Coordinates (exit)",
+                        value: "—")
+        }
+    }
+
+    // Altitude
+    @ViewBuilder
+    private var siteAltitudeRow: some View {
+        if let alt = dive.displaySiteAltitude {
+            let depthUnit = prefs.depthUnit.symbol
+            ConditionRow(icon: "mountain.2", color: .brown, label: "Altitude",
+                        value: alt.localizedString(decimals: 0) + " \(depthUnit)")
+        } else {
+            ConditionRow(icon: "mountain.2", color: .brown, label: "Altitude",
+                        value: "—")
+        }
+    }
+
+    // Map preview — tap to open a larger, zoomable map.
+    @ViewBuilder
+    private var siteMapPreview: some View {
+        let entry = validGPSCoordinate(lat: dive.siteLatitude, lon: dive.siteLongitude)
+        let exit = validGPSCoordinate(lat: dive.exitLatitude, lon: dive.exitLongitude)
+        siteMap(entryLat: entry?.lat, entryLon: entry?.lon,
+                exitLat: exit?.lat, exitLon: exit?.lon)
+            .frame(height: 200)
+            // Keep the preview itself non-interactive so the tap gesture
+            // below (not the map's own pan/zoom) receives the touch.
+            .allowsHitTesting(false)
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(6)
+                    .background(.black.opacity(0.45), in: Circle())
+                    .padding(8)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .onTapGesture { showFullScreenSiteMap = true }
+            .accessibilityElement()
+            .accessibilityLabel(Text("View larger map"))
+            .accessibilityAddTraits(.isButton)
+            // onTapGesture isn't reliably fired by VoiceOver's activate
+            // gesture; this makes double-tap open the large map.
+            .accessibilityAction { showFullScreenSiteMap = true }
     }
 
     @ViewBuilder

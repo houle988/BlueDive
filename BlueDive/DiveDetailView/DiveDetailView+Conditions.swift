@@ -73,66 +73,151 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            ConditionRow(
-                icon: "thermometer.medium",
-                color: .orange,
-                label: "Surface Temp.",
-                value: dive.airTemperature.map {
-                    UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
-                } ?? "—"
-            )
-            ConditionRow(
-                icon: "thermometer.low",
-                color: .blue,
-                label: "Minimum Temperature",
-                value: dive.minTemperature.map { UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit) } ?? "—"
-            )
-            ConditionRow(
-                icon: "thermometer.high",
-                color: .red,
-                label: "Maximum Temp.",
-                value: dive.maxTemperature.map {
-                    UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
-                } ?? "—"
-            )
-
-            // Always display Weather field
-            ConditionRow(icon: "cloud.sun", color: .yellow, label: "Weather",
-                        value: dive.weather.map { localizedWeather($0) } ?? "—")
-
-            // Always display Surface conditions field
-            ConditionRow(icon: "water.waves", color: .cyan, label: "Surface",
-                        value: dive.surfaceConditions.map { localizedSurface($0) } ?? "—")
-
-            // Always display Current field
-            ConditionRow(icon: "wind", color: .teal, label: "Current",
-                        value: dive.current.map { localizedCurrent($0) } ?? "—")
-
-            // Always display Visibility field
-            let depthUnit = prefs.depthUnit.symbol
-            if let visibility = dive.visibility {
-                let visibilityDisplay: String = {
-                    let trimmed = visibility.trimmingCharacters(in: .whitespaces)
-                    return Double(trimmed) != nil ? "\(trimmed) \(depthUnit)" : trimmed
-                }()
-                ConditionRow(
-                    icon: "eye",
-                    color: .green,
-                    label: "Visibility",
-                    value: visibilityDisplay
-                )
-            } else {
-                ConditionRow(
-                    icon: "eye",
-                    color: .green,
-                    label: "Visibility",
-                    value: "—"
-                )
+            #if os(macOS)
+            // The Mac window is wide enough for two columns: the first four rows on the
+            // left, the other three on the right. A Grid keeps each pair of rows aligned,
+            // while each column draws its own dividers and a vertical line separates them.
+            Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
+                GridRow {
+                    conditionsSurfaceTempRow.detailGridCell(column: 0, row: 0)
+                    conditionsSurfaceRow.detailGridCell(column: 1, row: 0)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    conditionsMinTempRow.detailGridCell(column: 0, row: 1)
+                    conditionsCurrentRow.detailGridCell(column: 1, row: 1)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    conditionsMaxTempRow.detailGridCell(column: 0, row: 2)
+                    conditionsVisibilityRow.detailGridCell(column: 1, row: 2)
+                }
+                GridRow {
+                    detailColumnDivider
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                }
+                GridRow {
+                    conditionsWeatherRow.detailGridCell(column: 0, row: 3)
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                }
             }
+            .overlay {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.2))
+                    .frame(width: 1)
+            }
+            .accessibilityElement(children: .contain)
+            #else
+            conditionsSurfaceTempRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsMinTempRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsMaxTempRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsWeatherRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsSurfaceRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsCurrentRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsVisibilityRow
+            #endif
         }
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
+    }
+
+    private var conditionsSurfaceTempRow: some View {
+        ConditionRow(
+            icon: "thermometer.medium",
+            color: .orange,
+            label: "Surface Temp.",
+            value: dive.airTemperature.map {
+                UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
+            } ?? "—"
+        )
+    }
+
+    private var conditionsMinTempRow: some View {
+        ConditionRow(
+            icon: "thermometer.low",
+            color: .blue,
+            label: "Minimum Temperature",
+            value: dive.minTemperature.map { UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit) } ?? "—"
+        )
+    }
+
+    private var conditionsMaxTempRow: some View {
+        ConditionRow(
+            icon: "thermometer.high",
+            color: .red,
+            label: "Maximum Temp.",
+            value: dive.maxTemperature.map {
+                UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
+            } ?? "—"
+        )
+    }
+
+    // Weather
+    private var conditionsWeatherRow: some View {
+        ConditionRow(icon: "cloud.sun", color: .yellow, label: "Weather",
+                    value: dive.weather.map { localizedWeather($0) } ?? "—")
+    }
+
+    // Surface conditions
+    private var conditionsSurfaceRow: some View {
+        ConditionRow(icon: "water.waves", color: .cyan, label: "Surface",
+                    value: dive.surfaceConditions.map { localizedSurface($0) } ?? "—")
+    }
+
+    // Current
+    private var conditionsCurrentRow: some View {
+        ConditionRow(icon: "wind", color: .teal, label: "Current",
+                    value: dive.current.map { localizedCurrent($0) } ?? "—")
+    }
+
+    // Visibility
+    @ViewBuilder
+    private var conditionsVisibilityRow: some View {
+        let depthUnit = prefs.depthUnit.symbol
+        if let visibility = dive.visibility {
+            let visibilityDisplay: String = {
+                let trimmed = visibility.trimmingCharacters(in: .whitespaces)
+                return Double(trimmed) != nil ? "\(trimmed) \(depthUnit)" : trimmed
+            }()
+            ConditionRow(
+                icon: "eye",
+                color: .green,
+                label: "Visibility",
+                value: visibilityDisplay
+            )
+        } else {
+            ConditionRow(
+                icon: "eye",
+                color: .green,
+                label: "Visibility",
+                value: "—"
+            )
+        }
     }
 
     private func localizedWeather(_ raw: String) -> String {

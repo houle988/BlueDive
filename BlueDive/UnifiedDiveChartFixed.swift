@@ -513,7 +513,15 @@ private struct StaticChartLayer: View, Equatable {
                 }
             }
         }
+        #if os(macOS)
+        // Mac windows are tall and resizable: grow the chart with the visible height of
+        // the enclosing scroll view (45 %), never below the iOS height or above 600 pt.
+        .containerRelativeFrame(.vertical) { height, _ in
+            min(max(height * 0.45, 300), 600)
+        }
+        #else
         .frame(height: 300)
+        #endif
     }
 
     // MARK: - Gas change markers
@@ -1225,68 +1233,93 @@ struct UnifiedDiveChartOptimized: View {
         )
     }
     
+    /// First group of chips: Depth, Temperature, NDL.
+    @ViewBuilder
+    private var primaryToggleChips: some View {
+        // Depth button - always on, non-interactive (using a constant binding)
+        ToggleButton(
+            isOn: .constant(true),
+            icon: "arrow.down.circle.fill",
+            label: "Depth",
+            shortLabel: "Prof.",
+            color: .cyan,
+            isAvailable: true
+        )
+
+        ToggleButton(
+            isOn: exclusiveBinding(for: \.showTemperature),
+            icon: "thermometer",
+            label: "Temperature",
+            shortLabel: "Temp.",
+            color: .green,
+            isAvailable: hasTemperatureData
+        )
+
+        ToggleButton(
+            isOn: exclusiveBinding(for: \.showNDL),
+            icon: "timer",
+            label: "NDL",
+            color: .ndlYellow,
+            isAvailable: hasNDLData
+        )
+    }
+
+    /// Second group of chips: Pressure, PPO₂, Deco.
+    @ViewBuilder
+    private var secondaryToggleChips: some View {
+        ToggleButton(
+            isOn: exclusiveBinding(for: \.showPressure),
+            icon: "gauge.with.needle.fill",
+            label: "Pressure",
+            shortLabel: "Press.",
+            color: .red,
+            isAvailable: hasPressureData
+        )
+
+        ToggleButton(
+            isOn: exclusiveBinding(for: \.showPPO2),
+            icon: "lungs.fill",
+            label: "PPO₂",
+            color: .indigo,
+            isAvailable: ppo2Available
+        )
+
+        // Deco is independent — it overlays background shading and can be shown
+        // alongside any of the axis-mapped secondary metrics above.
+        ToggleButton(
+            isOn: Binding(
+                get: { visibility.showDeco },
+                set: { visibility.showDeco = $0; visibility.save() }
+            ),
+            icon: "exclamationmark.triangle.fill",
+            label: "Deco",
+            color: .orange,
+            isAvailable: hasDecoData
+        )
+    }
+
     private var toggleControls: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                // Depth button - always on, non-interactive (using a constant binding)
-                ToggleButton(
-                    isOn: .constant(true),
-                    icon: "arrow.down.circle.fill",
-                    label: "Depth",
-                    shortLabel: "Prof.",
-                    color: .cyan,
-                    isAvailable: true
-                )
-                
-                ToggleButton(
-                    isOn: exclusiveBinding(for: \.showTemperature),
-                    icon: "thermometer",
-                    label: "Temperature",
-                    shortLabel: "Temp.",
-                    color: .green,
-                    isAvailable: hasTemperatureData
-                )
-
-                ToggleButton(
-                    isOn: exclusiveBinding(for: \.showNDL),
-                    icon: "timer",
-                    label: "NDL",
-                    color: .ndlYellow,
-                    isAvailable: hasNDLData
-                )
+            #if os(macOS)
+            // The Mac window is usually wide enough for all six chips on one row;
+            // fall back to the two iOS rows when it is not. ViewThatFits measures
+            // the chips at their full-label width, so the single row is only used
+            // when no chip would have to switch to its short label.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    primaryToggleChips
+                    secondaryToggleChips
+                }
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) { primaryToggleChips }
+                    HStack(spacing: 12) { secondaryToggleChips }
+                }
             }
-            
-            HStack(spacing: 12) {
-                ToggleButton(
-                    isOn: exclusiveBinding(for: \.showPressure),
-                    icon: "gauge.with.needle.fill",
-                    label: "Pressure",
-                    shortLabel: "Press.",
-                    color: .red,
-                    isAvailable: hasPressureData
-                )
+            #else
+            HStack(spacing: 12) { primaryToggleChips }
 
-                ToggleButton(
-                    isOn: exclusiveBinding(for: \.showPPO2),
-                    icon: "lungs.fill",
-                    label: "PPO₂",
-                    color: .indigo,
-                    isAvailable: ppo2Available
-                )
-
-                // Deco is independent — it overlays background shading and can be shown
-                // alongside any of the axis-mapped secondary metrics above.
-                ToggleButton(
-                    isOn: Binding(
-                        get: { visibility.showDeco },
-                        set: { visibility.showDeco = $0; visibility.save() }
-                    ),
-                    icon: "exclamationmark.triangle.fill",
-                    label: "Deco",
-                    color: .orange,
-                    isAvailable: hasDecoData
-                )
-            }
+            HStack(spacing: 12) { secondaryToggleChips }
+            #endif
             Text("Depth is always displayed on the chart")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -1616,74 +1649,172 @@ struct UnifiedDiveChartOptimized: View {
 
     // MARK: - Legend View
 
+    @ViewBuilder
     private var legendView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Legend")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-            
-            VStack(alignment: .leading, spacing: 6) {
-                if visibility.showDepth {
-                    HStack(spacing: 8) {
-                        LegendDot(.cyan, "Normal")
-                        LegendDot(.orange, ascentRateLegendFast)
-                        LegendDot(.red, ascentRateLegendDangerous)
-                    }
-                }
-
-                if visibility.showTemperature && hasTemperatureData {
-                    MetricLegendRow(color: .green, label: "Temperature", range: temperatureRange)
-                }
-
-                if visibility.showPressure && hasPressureData {
-                    let tankIndices = chartTankIndicesForLegend
-                    if tankIndices.count > 1 {
-                        ForEach(tankIndices, id: \.self) { idx in
-                            MetricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
-                        }
-                    } else {
-                        MetricLegendRow(color: .red, label: "Pressure", range: pressureRange)
-                    }
-                }
-
-                if visibility.showNDL && hasNDLData {
-                    MetricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
-                }
-
-                if visibility.showPPO2 && ppo2Available {
-                    let sensorIndices = sensorPPO2Indices(for: dive)
-                    if sensorIndices.isEmpty {
-                        LegendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
-                    } else {
-                        ForEach(sensorIndices, id: \.self) { idx in
-                            LegendDot(ppo2SensorColor(for: idx), verbatim: String(format: NSLocalizedString("S%ld PPO₂ (0–2 bar)", bundle: Bundle.forAppLanguage(), comment: "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)"), idx + 1))
-                        }
-                    }
-                }
-
-                if visibility.showDeco && hasDecoData {
-                    HStack(spacing: 8) {
-                        if hasCeilingData {
-                            LegendBand(color: .orange, text: "Deco ceiling", alpha: 0.4)
-                        } else {
-                            LegendBand(color: .orange, text: "Deco obligation", alpha: 0.2)
-                        }
-                        // Only consult the async cache when the filter is active, so the
-                        // default (OFF) path stays synchronous and completely unchanged:
-                        // cachedDecoStopEntries is built in .task and is empty on frame one.
-                        if !prefs.hideClearedDecoStops || !cachedDecoStopEntries.isEmpty {
-                            LegendDiamond(color: .orange, text: "Mandatory stop")
-                        }
-                    }
-                }
-
-                if hasGasChangeData {
-                    LegendGasChange(color: .brown, text: "Gas switch")
+        #if os(macOS)
+        // The Mac window is usually wide enough for the whole legend on one line.
+        // When it is not (narrow window, or many tank-pressure / PPO₂-sensor entries),
+        // split the shown groups evenly over two lines; the stacked iOS layout is the
+        // last resort for very narrow windows.
+        let groups = shownLegendGroups
+        let firstLineCount = (groups.count + 1) / 2
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                legendTitle
+                legendLine(groups)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                legendTitle
+                VStack(alignment: .leading, spacing: 6) {
+                    legendLine(Array(groups.prefix(firstLineCount)))
+                    legendLine(Array(groups.dropFirst(firstLineCount)))
                 }
             }
+            stackedLegend
         }
         .padding(.horizontal)
+        #else
+        stackedLegend
+            .padding(.horizontal)
+        #endif
+    }
+
+    private var legendTitle: some View {
+        Text("Legend")
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundStyle(.secondary)
+    }
+
+    /// Title above the legend groups, one group per line.
+    private var stackedLegend: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            legendTitle
+
+            VStack(alignment: .leading, spacing: 6) {
+                if showsDepthLegend { depthLegendGroup }
+                if showsTemperatureLegend { temperatureLegendGroup }
+                if showsPressureLegend { pressureLegendGroup }
+                if showsNDLLegend { ndlLegendGroup }
+                if showsPPO2Legend { ppo2LegendGroup }
+                if showsDecoLegend { decoLegendGroup }
+                if hasGasChangeData { gasSwitchLegendGroup }
+            }
+        }
+    }
+
+    #if os(macOS)
+    /// Indices (0 = depth … 6 = gas switch, the stacked legend's order) of the legend
+    /// groups currently shown (macOS only).
+    private var shownLegendGroups: [Int] {
+        let shown = [showsDepthLegend, showsTemperatureLegend, showsPressureLegend,
+                     showsNDLLegend, showsPPO2Legend, showsDecoLegend, hasGasChangeData]
+        return shown.indices.filter { shown[$0] }
+    }
+
+    /// The given legend groups side by side, separated by a vertical line (macOS only).
+    private func legendLine(_ groups: [Int]) -> some View {
+        HStack(spacing: 8) {
+            ForEach(Array(groups.enumerated()), id: \.element) { position, group in
+                if position > 0 { legendSeparator }
+                legendGroup(group)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func legendGroup(_ index: Int) -> some View {
+        switch index {
+        case 0: depthLegendGroup
+        case 1: temperatureLegendGroup
+        case 2: pressureLegendGroup
+        case 3: ndlLegendGroup
+        case 4: ppo2LegendGroup
+        case 5: decoLegendGroup
+        default: gasSwitchLegendGroup
+        }
+    }
+
+    private var legendSeparator: some View {
+        // A plain Divider is too faint against the dark card; use a slightly
+        // wider, taller line in the secondary colour so groups read as distinct.
+        Capsule()
+            .fill(Color.secondary.opacity(0.6))
+            .frame(width: 1.5, height: 14)
+            .padding(.horizontal, 4)
+    }
+    #endif
+
+    // MARK: Legend Groups
+
+    private var showsDepthLegend: Bool { visibility.showDepth }
+    private var showsTemperatureLegend: Bool { visibility.showTemperature && hasTemperatureData }
+    private var showsPressureLegend: Bool { visibility.showPressure && hasPressureData }
+    private var showsNDLLegend: Bool { visibility.showNDL && hasNDLData }
+    private var showsPPO2Legend: Bool { visibility.showPPO2 && ppo2Available }
+    private var showsDecoLegend: Bool { visibility.showDeco && hasDecoData }
+
+    private var depthLegendGroup: some View {
+        HStack(spacing: 8) {
+            LegendDot(.cyan, "Normal")
+            LegendDot(.orange, ascentRateLegendFast)
+            LegendDot(.red, ascentRateLegendDangerous)
+        }
+    }
+
+    private var temperatureLegendGroup: some View {
+        MetricLegendRow(color: .green, label: "Temperature", range: temperatureRange)
+    }
+
+    /// One entry per tank on multi-tank dives — stacked on separate lines in the
+    /// stacked legend, side by side in the single-line legend.
+    @ViewBuilder
+    private var pressureLegendGroup: some View {
+        let tankIndices = chartTankIndicesForLegend
+        if tankIndices.count > 1 {
+            ForEach(tankIndices, id: \.self) { idx in
+                MetricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
+            }
+        } else {
+            MetricLegendRow(color: .red, label: "Pressure", range: pressureRange)
+        }
+    }
+
+    private var ndlLegendGroup: some View {
+        MetricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
+    }
+
+    /// One entry per PPO₂ sensor when the dive has sensor readings.
+    @ViewBuilder
+    private var ppo2LegendGroup: some View {
+        let sensorIndices = sensorPPO2Indices(for: dive)
+        if sensorIndices.isEmpty {
+            LegendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
+        } else {
+            ForEach(sensorIndices, id: \.self) { idx in
+                LegendDot(ppo2SensorColor(for: idx), verbatim: String(format: NSLocalizedString("S%ld PPO₂ (0–2 bar)", bundle: Bundle.forAppLanguage(), comment: "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)"), idx + 1))
+            }
+        }
+    }
+
+    private var decoLegendGroup: some View {
+        HStack(spacing: 8) {
+            if hasCeilingData {
+                LegendBand(color: .orange, text: "Deco ceiling", alpha: 0.4)
+            } else {
+                LegendBand(color: .orange, text: "Deco obligation", alpha: 0.2)
+            }
+            // Only consult the async cache when the filter is active, so the
+            // default (OFF) path stays synchronous and completely unchanged:
+            // cachedDecoStopEntries is built in .task and is empty on frame one.
+            if !prefs.hideClearedDecoStops || !cachedDecoStopEntries.isEmpty {
+                LegendDiamond(color: .orange, text: "Mandatory stop")
+            }
+        }
+    }
+
+    private var gasSwitchLegendGroup: some View {
+        LegendGasChange(color: .brown, text: "Gas switch")
     }
     
     private var ascentRateLegendFast: LocalizedStringKey {

@@ -10355,6 +10355,29 @@
         }
       }
     },
+    "Depth %1$@, duration %2$@, %3$@" : {
+      "comment" : "VoiceOver label for one deco stop in the deco stops table: %1$@ = depth with unit, %2$@ = stop duration, %3$@ = stop type (e.g. Mandatory)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tiefe %1$@, Dauer %2$@, %3$@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profondeur %1$@, durée %2$@, %3$@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diepte %1$@, duur %2$@, %3$@"
+          }
+        }
+      }
+    },
     "Depth is always displayed on the chart" : {
       "localizations" : {
         "de" : {

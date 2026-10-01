@@ -1155,279 +1155,381 @@ extension DiveDetailView {
                 .font(.headline)
                 .foregroundStyle(.primary)
 
-            // Dive Number
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.orange.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "number")
-                        .foregroundStyle(.orange)
-                        .font(.system(size: 18))
+            #if os(macOS)
+            // The Mac window is wide enough for two columns of five rows. A Grid keeps
+            // each pair of rows aligned, while each column draws its own dividers and a
+            // vertical line separates the two columns.
+            Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
+                GridRow {
+                    diveInfoNumberRow.detailGridCell(column: 0, row: 0)
+                    diveInfoGuideRow.detailGridCell(column: 1, row: 0)
                 }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Dive #")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(verbatim: "\(dive.diveNumber ?? diveNumber)")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
                 }
-
-                Spacer()
+                GridRow {
+                    diveInfoDiverRow.detailGridCell(column: 0, row: 1)
+                    diveInfoCaptainRow.detailGridCell(column: 1, row: 1)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    diveInfoBuddiesRow.detailGridCell(column: 0, row: 2)
+                    diveInfoBoatRow.detailGridCell(column: 1, row: 2)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    diveInfoTypeRow.detailGridCell(column: 0, row: 3)
+                    diveInfoTagsRow.detailGridCell(column: 1, row: 3)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    diveInfoCenterRow.detailGridCell(column: 0, row: 4)
+                    diveInfoEntryTypeRow.detailGridCell(column: 1, row: 4)
+                }
             }
+            .overlay {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.2))
+                    .frame(width: 1)
+            }
+            .accessibilityElement(children: .contain)
+            #else
+            diveInfoNumberRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Diver Name
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.cyan.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person")
-                        .foregroundStyle(.cyan)
-                        .font(.system(size: 18))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Diver")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.diverName.isEmpty ? "—" : dive.diverName)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.diverName.isEmpty ? Color.secondary : Color.primary)
-                }
-
-                Spacer()
-            }
+            diveInfoDiverRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Buddies
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.green.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person.2")
-                        .foregroundStyle(.green)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Buddies")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-
-                    Text(dive.buddies.isEmpty ? "—" : dive.buddies)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.buddies.isEmpty ? Color.secondary : Color.primary)
-                }
-
-                Spacer()
-            }
+            diveInfoBuddiesRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Dive Type with multiple types support
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.purple.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: diveTypeIcon(for: dive.primaryDiveType ?? ""))
-                        .foregroundStyle(.purple)
-                        .font(.system(size: 18))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Dive Type")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-
-                    Text(dive.diveTypes ?? "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                }
-
-                Spacer()
-            }
+            diveInfoTypeRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Dive Operator
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "building.2")
-                        .foregroundStyle(.blue)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Dive Center")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.diveOperator?.isEmpty == false ? dive.diveOperator! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.diveOperator?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoCenterRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Dive Master
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.teal.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person.badge.shield.checkmark")
-                        .foregroundStyle(.teal)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Guide/Instructor")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.diveMaster?.isEmpty == false ? dive.diveMaster! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.diveMaster?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoGuideRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Skipper
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.indigo.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person.fill.turn.right")
-                        .foregroundStyle(.indigo)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Captain")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.skipper?.isEmpty == false ? dive.skipper! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.skipper?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoCaptainRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Boat
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.mint.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "ferry")
-                        .foregroundStyle(.mint)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Boat")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.boat?.isEmpty == false ? dive.boat! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.boat?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoBoatRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Tags
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.pink.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "tag")
-                        .foregroundStyle(.pink)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Tags")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.tags?.isEmpty == false ? dive.tags! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.tags?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoTagsRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Entry Type
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.yellow.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "arrow.down.to.line.circle")
-                        .foregroundStyle(.yellow)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Entry Type")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.entryType?.isEmpty == false ? dive.entryType! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.entryType?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoEntryTypeRow
+            #endif
         }
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
     }
+
+    // Dive Number
+    private var diveInfoNumberRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.orange.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "number")
+                    .foregroundStyle(.orange)
+                    .font(.system(size: 18))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dive #")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(verbatim: "\(dive.diveNumber ?? diveNumber)")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Diver Name
+    private var diveInfoDiverRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.cyan.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "person")
+                    .foregroundStyle(.cyan)
+                    .font(.system(size: 18))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Diver")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.diverName.isEmpty ? "—" : dive.diverName)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.diverName.isEmpty ? Color.secondary : Color.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Buddies
+    private var diveInfoBuddiesRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "person.2")
+                    .foregroundStyle(.green)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Buddies")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+
+                Text(dive.buddies.isEmpty ? "—" : dive.buddies)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.buddies.isEmpty ? Color.secondary : Color.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Dive Type with multiple types support
+    private var diveInfoTypeRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.purple.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: diveTypeIcon(for: dive.primaryDiveType ?? ""))
+                    .foregroundStyle(.purple)
+                    .font(.system(size: 18))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dive Type")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+
+                Text(dive.diveTypes ?? "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Dive Operator
+    private var diveInfoCenterRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "building.2")
+                    .foregroundStyle(.blue)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dive Center")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.diveOperator?.isEmpty == false ? dive.diveOperator! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.diveOperator?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Dive Master
+    private var diveInfoGuideRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.teal.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "person.badge.shield.checkmark")
+                    .foregroundStyle(.teal)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Guide/Instructor")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.diveMaster?.isEmpty == false ? dive.diveMaster! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.diveMaster?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Skipper
+    private var diveInfoCaptainRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.indigo.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "person.fill.turn.right")
+                    .foregroundStyle(.indigo)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Captain")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.skipper?.isEmpty == false ? dive.skipper! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.skipper?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Boat
+    private var diveInfoBoatRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.mint.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "ferry")
+                    .foregroundStyle(.mint)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Boat")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.boat?.isEmpty == false ? dive.boat! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.boat?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Tags
+    private var diveInfoTagsRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.pink.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "tag")
+                    .foregroundStyle(.pink)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Tags")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.tags?.isEmpty == false ? dive.tags! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.tags?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Entry Type
+    private var diveInfoEntryTypeRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.yellow.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "arrow.down.to.line.circle")
+                    .foregroundStyle(.yellow)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Entry Type")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.entryType?.isEmpty == false ? dive.entryType! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.entryType?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    #if os(macOS)
+    /// Horizontal divider for one column of the two-column detail-card layouts (macOS only).
+    /// Wrapped in a VStack so the Divider is horizontal inside the Grid cell.
+    var detailColumnDivider: some View {
+        VStack {
+            Divider()
+                .background(.primary.opacity(0.2))
+        }
+    }
+
+    #endif
 
     // Helper pour obtenir l'icône selon le type de plongée
     func diveTypeIcon(for type: String) -> String {
@@ -1470,3 +1572,16 @@ extension DiveDetailView {
         .padding(.horizontal)
     }
 }
+
+#if os(macOS)
+extension View {
+    /// One cell of a two-column detail-card `Grid` (macOS only): equal-width column, and
+    /// a VoiceOver sort priority that reads the whole left column (`column` 0) before the
+    /// right one (`column` 1), top to bottom — the same order as the single iOS column.
+    /// The Grid must be marked `.accessibilityElement(children: .contain)`.
+    func detailGridCell(column: Int, row: Int) -> some View {
+        frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilitySortPriority(Double(1000 * (2 - column) - row))
+    }
+}
+#endif

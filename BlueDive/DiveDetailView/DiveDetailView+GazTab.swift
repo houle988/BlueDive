@@ -15,8 +15,20 @@ extension DiveDetailView {
     var gazTabContent: some View {
         VStack(spacing: 20) {
             tankSelectorCard
+            #if os(macOS)
+            // The Mac window is wide enough to show the tank and the pressure cards side
+            // by side; fixedSize gives both the height of the taller one.
+            HStack(alignment: .top, spacing: 0) {
+                gazInfoCard
+                    .frame(maxWidth: .infinity)
+                pressureCard
+                    .frame(maxWidth: .infinity)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            #else
             gazInfoCard
             pressureCard
+            #endif
             decompressionCard
         }
         .onChange(of: dive.tanks.count) {
@@ -155,9 +167,10 @@ extension DiveDetailView {
             ConditionRow(icon: "cylinder.split.1x2", color: .indigo, label: "Format",
                         value: tank?.tankType.flatMap { $0.isEmpty ? nil : localizedTankFormat($0) } ?? "—")
         }
+        .fillsAvailableHeightOnMac()
         .padding()
         .detailCardBackground()
-        .padding(.horizontal)
+        .sideBySideCardPadding(.leading)
     }
 
     var pressureCard: some View {
@@ -237,9 +250,10 @@ extension DiveDetailView {
                     .padding(.top, 2)
             }
         }
+        .fillsAvailableHeightOnMac()
         .padding()
         .detailCardBackground()
-        .padding(.horizontal)
+        .sideBySideCardPadding(.trailing)
     }
 
     var decompressionCard: some View {
@@ -255,201 +269,306 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            // Decompression Algorithm with GF values - always display
-            VStack(alignment: .leading, spacing: 8) {
-                let decoAlgo = dive.decompressionAlgorithm ?? ""
-                ConditionRow(icon: "function", color: .cyan, label: "Algorithm",
-                            value: !decoAlgo.isEmpty ? decoAlgo : "—")
-
-                // Try to extract GF Low/High from algorithm string
-                if let gfValues = extractGFValues(from: decoAlgo) {
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("GF Low")
-                                .font(.caption)
-                                .foregroundStyle(.gray)
-                            Text((Double(gfValues.low) / 100).formatted(.percent.precision(.fractionLength(0))))
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.cyan)
-                        }
-
-                        Divider()
-                            .frame(height: 30)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("GF High")
-                                .font(.caption)
-                                .foregroundStyle(.gray)
-                            Text((Double(gfValues.high) / 100).formatted(.percent.precision(.fractionLength(0))))
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.orange)
-                        }
+            #if os(macOS)
+            // The Mac window is wide enough to put the deco stops in their own column
+            // beside the algorithm, CNS and dive type; without stops the card keeps a
+            // single full-width column.
+            if showsDecoStops {
+                HStack(alignment: .top, spacing: 48) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        decoSummaryRows
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.primary.opacity(0.05))
-                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    decoStopsList
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            // CNS % - always display
-            if let cns = dive.cnsPercentage {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(cnsColor(for: cns).opacity(0.15))
-                            .frame(width: 40, height: 40)
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundStyle(cnsColor(for: cns))
-                            .font(.system(size: 18))
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("CNS O₂ Toxicity")
-                            .font(.caption)
-                            .foregroundStyle(.gray)
-                        HStack(spacing: 8) {
-                            Text(verbatim: cns.localizedString(decimals: 1) + "%")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(cnsColor(for: cns))
-
-                            // Status indicator
-                            Text(cnsStatus(for: cns))
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.primary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(cnsColor(for: cns).opacity(0.3))
-                                )
-                        }
-
-                        // Progress bar — clamped to 0–100 %
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.primary.opacity(0.1))
-                                    .frame(height: 6)
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(cnsColor(for: cns))
-                                    .frame(
-                                        width: geo.size.width * min(cns / 100.0, 1.0),
-                                        height: 6
-                                    )
-                            }
-                        }
-                        .frame(height: 6)
-                    }
-
-                    Spacer()
+                .overlay {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.2))
+                        .frame(width: 1)
                 }
             } else {
-                ConditionRow(icon: "exclamationmark.triangle", color: .yellow, label: "CNS O₂ Toxicity", value: "—")
+                decoSummaryRows
             }
+            #else
+            decoSummaryRows
 
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            // Decompression dive indicator - always display
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill((dive.isDecompressionDive ? Color.orange : Color.green).opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: dive.isDecompressionDive ? "arrow.up.arrow.down" : "checkmark.circle")
-                        .foregroundStyle(dive.isDecompressionDive ? .orange : .green)
-                        .font(.system(size: 18))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Dive Type")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.isDecompressionDive ? "With mandatory deco stops" : "No-deco (NDL)")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.isDecompressionDive ? .orange : .green)
-                }
-
-                Spacer()
-            }
-
-            if dive.isDecompressionDive && !dive.decoStops.isEmpty {
+            if showsDecoStops {
                 Divider()
                     .background(.primary.opacity(0.2))
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Deco Stops")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-
-                    ForEach(dive.decoStops) { stop in
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.orange.opacity(0.15))
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "arrow.down.to.line")
-                                    .foregroundStyle(.orange)
-                                    .font(.system(size: 15))
-                            }
-
-                            HStack(spacing: 16) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Depth")
-                                        .font(.caption2)
-                                        .foregroundStyle(.gray)
-                                    Text(decoStopDepthLabel(stop.depth))
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(.primary)
-                                }
-
-                                Divider().frame(height: 24)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Duration")
-                                        .font(.caption2)
-                                        .foregroundStyle(.gray)
-                                    Text(decoStopTimeLabel(stop.time))
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(.primary)
-                                }
-
-                                Divider().frame(height: 24)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Type")
-                                        .font(.caption2)
-                                        .foregroundStyle(.gray)
-                                    Text(verbatim: decoStopTypeLabel(stop.type))
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
+                decoStopsList
             }
+            #endif
         }
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
+    }
+
+    /// Deco stops are listed only for a deco dive that has stops recorded.
+    private var showsDecoStops: Bool {
+        dive.isDecompressionDive && !dive.decoStops.isEmpty
+    }
+
+    /// Algorithm (with GF values), CNS O₂ toxicity and dive type, separated by dividers.
+    @ViewBuilder
+    private var decoSummaryRows: some View {
+        // Decompression Algorithm with GF values - always display
+        VStack(alignment: .leading, spacing: 8) {
+            let decoAlgo = dive.decompressionAlgorithm ?? ""
+            ConditionRow(icon: "function", color: .cyan, label: "Algorithm",
+                        value: !decoAlgo.isEmpty ? decoAlgo : "—")
+
+            // Try to extract GF Low/High from algorithm string
+            if let gfValues = extractGFValues(from: decoAlgo) {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("GF Low")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                        Text((Double(gfValues.low) / 100).formatted(.percent.precision(.fractionLength(0))))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.cyan)
+                    }
+
+                    Divider()
+                        .frame(height: 30)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("GF High")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                        Text((Double(gfValues.high) / 100).formatted(.percent.precision(.fractionLength(0))))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.primary.opacity(0.05))
+                )
+            }
+        }
+
+        Divider()
+            .background(.primary.opacity(0.2))
+
+        // CNS % - always display
+        if let cns = dive.cnsPercentage {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(cnsColor(for: cns).opacity(0.15))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(cnsColor(for: cns))
+                        .font(.system(size: 18))
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("CNS O₂ Toxicity")
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                    HStack(spacing: 8) {
+                        Text(verbatim: cns.localizedString(decimals: 1) + "%")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(cnsColor(for: cns))
+
+                        // Status indicator
+                        Text(cnsStatus(for: cns))
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(cnsColor(for: cns).opacity(0.3))
+                            )
+                    }
+
+                    // Progress bar — clamped to 0–100 %
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.primary.opacity(0.1))
+                                .frame(height: 6)
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(cnsColor(for: cns))
+                                .frame(
+                                    width: geo.size.width * min(cns / 100.0, 1.0),
+                                    height: 6
+                                )
+                        }
+                    }
+                    .frame(height: 6)
+                }
+
+                Spacer()
+            }
+        } else {
+            ConditionRow(icon: "exclamationmark.triangle", color: .yellow, label: "CNS O₂ Toxicity", value: "—")
+        }
+
+        Divider()
+            .background(.primary.opacity(0.2))
+
+        // Decompression dive indicator - always display
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill((dive.isDecompressionDive ? Color.orange : Color.green).opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: dive.isDecompressionDive ? "arrow.up.arrow.down" : "checkmark.circle")
+                    .foregroundStyle(dive.isDecompressionDive ? .orange : .green)
+                    .font(.system(size: 18))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dive Type")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.isDecompressionDive ? "With mandatory deco stops" : "No-deco (NDL)")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.isDecompressionDive ? .orange : .green)
+            }
+
+            Spacer()
+        }
+    }
+
+    private var decoStopsList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Deco Stops")
+                .font(.caption)
+                .foregroundStyle(.gray)
+
+            // A table writes the Depth / Duration / Type headers once instead of on every
+            // stop. When it does not fit on one line per stop (narrow iPhone with a large
+            // Dynamic Type size), fall back to one labelled row per stop.
+            ViewThatFits(in: .horizontal) {
+                decoStopsTable
+                decoStopsRows
+            }
+        }
+    }
+
+    /// Deco stops as a table: icon, Depth, Duration and Type columns under one header row.
+    private var decoStopsTable: some View {
+        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+            GridRow {
+                Color.clear
+                    .gridCellUnsizedAxes([.horizontal, .vertical])
+                Text("Depth")
+                Text("Duration")
+                Text("Type")
+            }
+            .font(.caption2)
+            .foregroundStyle(.gray)
+            // Each stop below is read as one labelled element, so the headers are skipped.
+            .accessibilityHidden(true)
+
+            Divider()
+                .background(.primary.opacity(0.2))
+
+            ForEach(dive.decoStops) { stop in
+                GridRow {
+                    ZStack {
+                        Circle()
+                            .fill(Color.orange.opacity(0.15))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "arrow.down.to.line")
+                            .foregroundStyle(.orange)
+                            .font(.system(size: 15))
+                    }
+                    // A GridRow cannot combine its cells into one accessibility element,
+                    // so the icon cell carries the whole stop ("Depth 6 m, duration
+                    // 3m 00s, Mandatory") and the value cells are hidden from VoiceOver.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: String(
+                        format: NSLocalizedString("Depth %1$@, duration %2$@, %3$@", bundle: Bundle.forAppLanguage(), value: "Depth %1$@, duration %2$@, %3$@", comment: "VoiceOver label for one deco stop in the deco stops table: %1$@ = depth with unit, %2$@ = stop duration, %3$@ = stop type (e.g. Mandatory)"),
+                        decoStopDepthLabel(stop.depth), decoStopTimeLabel(stop.time), decoStopTypeLabel(stop.type)
+                    )))
+
+                    Text(decoStopDepthLabel(stop.depth))
+                        .foregroundStyle(.primary)
+                        .accessibilityHidden(true)
+                    Text(decoStopTimeLabel(stop.time))
+                        .foregroundStyle(.primary)
+                        .accessibilityHidden(true)
+                    Text(verbatim: decoStopTypeLabel(stop.type))
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            }
+        }
+    }
+
+    /// Deco stops as one labelled row per stop — the fallback when the table does not fit.
+    private var decoStopsRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(dive.decoStops) { stop in
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.orange.opacity(0.15))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "arrow.down.to.line")
+                            .foregroundStyle(.orange)
+                            .font(.system(size: 15))
+                    }
+
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Depth")
+                                .font(.caption2)
+                                .foregroundStyle(.gray)
+                            Text(decoStopDepthLabel(stop.depth))
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.primary)
+                        }
+
+                        Divider().frame(height: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Duration")
+                                .font(.caption2)
+                                .foregroundStyle(.gray)
+                            Text(decoStopTimeLabel(stop.time))
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.primary)
+                        }
+
+                        Divider().frame(height: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Type")
+                                .font(.caption2)
+                                .foregroundStyle(.gray)
+                            Text(verbatim: decoStopTypeLabel(stop.type))
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+            }
+        }
     }
 
     // MARK: - Usage Time Formatting
@@ -572,5 +691,32 @@ extension DiveDetailView {
         default:
             return .red // Dangerous (hyperoxic)
         }
+    }
+}
+
+private extension View {
+    /// macOS: lets a Gas tab card stretch to the height of its neighbour in the
+    /// side-by-side layout. iOS: returns the view unchanged.
+    @ViewBuilder
+    func fillsAvailableHeightOnMac() -> some View {
+        #if os(macOS)
+        frame(maxHeight: .infinity, alignment: .topLeading)
+        #else
+        self
+        #endif
+    }
+
+    /// Horizontal card padding. iOS: the standard `.padding(.horizontal)`. macOS: the
+    /// standard padding on the outer edge (`side`) and half the 20 pt vertical card
+    /// spacing on the inner edge, so the gap between the side-by-side Tank and Pressure
+    /// cards matches the gap between the cards above and below them.
+    @ViewBuilder
+    func sideBySideCardPadding(_ side: HorizontalEdge) -> some View {
+        #if os(macOS)
+        padding(side == .leading ? .leading : .trailing)
+            .padding(side == .leading ? .trailing : .leading, 10)
+        #else
+        padding(.horizontal)
+        #endif
     }
 }
