@@ -398,7 +398,45 @@ func parseFlexibleDouble(_ text: String) -> Double? {
         .replacingOccurrences(of: "\u{202F}", with: "")
         .replacingOccurrences(of: "\u{00A0}", with: "")
         .replacingOccurrences(of: ",", with: ".")
-    return Double(normalized)
+    // Double(String) also accepts "inf", "nan" and overflowing input such as "1e400". No field
+    // takes those, and a non-finite value cannot be JSON-encoded (tanks would be lost) or shown.
+    guard let value = Double(normalized), value.isFinite else { return nil }
+    return value
+}
+
+/// The value to save from a string-backed Double field that was pre-filled from a stored value.
+/// Pre-fill text is rounded for display (e.g. 2 decimals, or "%.6f" for coordinates), so parsing
+/// it back would silently alter the stored value on every save. When the (trimmed) text still
+/// equals the text the field was pre-filled with, the stored `original` is returned unchanged,
+/// at full precision; otherwise the edited text is parsed (empty text → nil).
+func preservedDouble(_ text: String, original: Double?, originalText: String) -> Double? {
+    let trimmed = text.trimmingCharacters(in: .whitespaces)
+    if trimmed == originalText.trimmingCharacters(in: .whitespaces) { return original }
+    return parseFlexibleDouble(trimmed)
+}
+
+/// A stored Double and the rounded text its string-backed field was pre-filled with.
+/// `resolve` returns the stored value unchanged while the text is untouched, so saving a form
+/// never rounds data the user did not edit (see preservedDouble). Code that rewrites the text
+/// with an exact value (e.g. copying another dive's site) replaces the whole PrefilledDouble.
+struct PrefilledDouble {
+    var value: Double?
+    var text: String
+
+    func resolve(_ current: String) -> Double? {
+        preservedDouble(current, original: value, originalText: text)
+    }
+
+    /// Pre-filled with `editableString(decimals:)` (no grouping separator).
+    static func decimals(_ value: Double?, _ decimals: Int, minDecimals: Int = 0) -> PrefilledDouble {
+        PrefilledDouble(value: value,
+                        text: value.map { $0.editableString(decimals: decimals, minDecimals: minDecimals) } ?? "")
+    }
+
+    /// GPS coordinates: "%.6f" is coordinate notation, not locale number formatting.
+    static func coordinate(_ value: Double?) -> PrefilledDouble {
+        PrefilledDouble(value: value, text: value.map { String(format: "%.6f", $0) } ?? "")
+    }
 }
 
 // MARK: - NDL Sentinel

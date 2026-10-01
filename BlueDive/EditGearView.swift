@@ -27,6 +27,9 @@ struct EditGearView: View {
     @State private var modelText: String
     @State private var serialNumber: String
     @State private var purchasePrice: String
+    /// Stored price behind the 2-decimal pre-fill text, so an untouched field saves the stored
+    /// value unchanged (see PrefilledDouble).
+    @State private var prefilledPurchasePrice: PrefilledDouble
     @State private var currency: String
     @State private var purchasedFrom: String
 
@@ -64,7 +67,9 @@ struct EditGearView: View {
         _manufacturerText = State(initialValue: gear.manufacturer ?? "")
         _modelText = State(initialValue: gear.model ?? "")
         _serialNumber = State(initialValue: gear.serialNumber ?? "")
-        _purchasePrice = State(initialValue: gear.purchasePrice.map { $0.editableString(decimals: 2) } ?? "")
+        let price = PrefilledDouble.decimals(gear.purchasePrice, 2)
+        _prefilledPurchasePrice = State(initialValue: price)
+        _purchasePrice = State(initialValue: price.text)
         _currency = State(initialValue: gear.currency ?? "CAD")
         _purchasedFrom = State(initialValue: gear.purchasedFrom ?? "")
         _isInactive = State(initialValue: gear.isInactive)
@@ -599,7 +604,8 @@ struct EditGearView: View {
             return
         }
 
-        let priceValue = parseFlexibleDouble(purchasePrice)
+        // An untouched price keeps the stored value at full precision.
+        let priceValue = prefilledPurchasePrice.resolve(purchasePrice)
 
         gear.name = trimmedName
         gear.category = selectedCategory.rawValue

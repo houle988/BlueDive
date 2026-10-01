@@ -35,7 +35,15 @@ struct EditMenuStatsView: View {
     @State private var newType: String = ""
     @State private var workingMaxDepthText: String
     @State private var workingAvgDepthText: String
+    /// Stored depths behind the 2-decimal pre-fill text, so an untouched field saves the stored
+    /// value unchanged (see PrefilledDouble). @State: captured once when the sheet opens, like
+    /// the text, so a parent re-render (e.g. an iCloud sync) cannot unpair them.
+    @State private var prefilledMaxDepth: PrefilledDouble
+    @State private var prefilledAvgDepth: PrefilledDouble
     @State private var workingDurationText: String
+    /// The duration's pre-fill text (empty when the stored duration is 0 or less), so an
+    /// untouched field keeps the stored duration exactly.
+    @State private var initialDurationText: String
     @State private var workingComputerName: String
     @State private var workingSerialNumber: String
     @State private var workingTimestamp: Date
@@ -59,9 +67,18 @@ struct EditMenuStatsView: View {
         _workingBoat       = State(initialValue: dive.boat ?? "")
         _workingDiveCenter = State(initialValue: dive.diveOperator ?? "")
         _workingEntryType  = State(initialValue: dive.entryType ?? "")
-        _workingMaxDepthText  = State(initialValue: dive.maxDepth > 0 ? dive.maxDepth.editableString(decimals: 2) : "")
-        _workingAvgDepthText  = State(initialValue: dive.averageDepth > 0 ? dive.averageDepth.editableString(decimals: 2) : "")
-        _workingDurationText  = State(initialValue: dive.duration > 0 ? String(dive.duration) : "")
+        // A depth of 0 means "not recorded" and is shown as an empty field.
+        let maxDepth = PrefilledDouble(value: dive.maxDepth,
+                                       text: dive.maxDepth > 0 ? dive.maxDepth.editableString(decimals: 2) : "")
+        let avgDepth = PrefilledDouble(value: dive.averageDepth,
+                                       text: dive.averageDepth > 0 ? dive.averageDepth.editableString(decimals: 2) : "")
+        _prefilledMaxDepth    = State(initialValue: maxDepth)
+        _prefilledAvgDepth    = State(initialValue: avgDepth)
+        _workingMaxDepthText  = State(initialValue: maxDepth.text)
+        _workingAvgDepthText  = State(initialValue: avgDepth.text)
+        let durationText = dive.duration > 0 ? String(dive.duration) : ""
+        _workingDurationText  = State(initialValue: durationText)
+        _initialDurationText  = State(initialValue: durationText)
         _workingComputerName  = State(initialValue: dive.computerName)
         _workingSerialNumber  = State(initialValue: dive.computerSerialNumber ?? "")
         _workingTimestamp     = State(initialValue: dive.timestamp)
@@ -254,7 +271,7 @@ struct EditMenuStatsView: View {
                     .platformKeyboardType(.numberPad)
                     .foregroundStyle(.primary)
                     .onChange(of: workingDurationText) {
-                        workingDuration = parseFlexibleDouble(workingDurationText).map(Int.init) ?? 0
+                        workingDuration = Self.durationMinutes(workingDurationText) ?? 0
                     }
                 if !workingDurationText.isEmpty {
                     Button {
@@ -676,10 +693,29 @@ struct EditMenuStatsView: View {
         }
     }
 
+    /// Accepted duration range in minutes (about 69 days). Rejecting values outside it keeps
+    /// later Int arithmetic safe (e.g. `duration * 60` in DiveSummary and surface intervals).
+    private static let durationMinutesRange = 0...100_000
+
+    /// Whole minutes from the duration text, rounded to the nearest minute (45.9 → 46), or nil
+    /// when empty, unreadable or outside durationMinutesRange (Int(exactly:) never traps).
+    private static func durationMinutes(_ text: String) -> Int? {
+        guard let minutes = parseFlexibleDouble(text).flatMap({ Int(exactly: $0.rounded()) }),
+              durationMinutesRange.contains(minutes) else { return nil }
+        return minutes
+    }
+
     private func save() {
-        dive.maxDepth     = parseFlexibleDouble(workingMaxDepthText) ?? workingMaxDepth
-        dive.averageDepth = parseFlexibleDouble(workingAvgDepthText) ?? workingAvgDepth
-        dive.duration     = parseFlexibleDouble(workingDurationText).map(Int.init) ?? workingDuration
+        // An untouched field keeps the stored value at full precision (the text is rounded).
+        dive.maxDepth     = prefilledMaxDepth.resolve(workingMaxDepthText) ?? workingMaxDepth
+        dive.averageDepth = prefilledAvgDepth.resolve(workingAvgDepthText) ?? workingAvgDepth
+        // Duration is stored in whole minutes: a decimal entry is rounded to the nearest minute.
+        // An untouched field keeps the stored duration exactly; an emptied one clears it (0, as
+        // before); an entry that cannot be read, or is out of range, keeps the stored duration.
+        let trimmedDuration = workingDurationText.trimmingCharacters(in: .whitespaces)
+        if trimmedDuration != initialDurationText {
+            dive.duration = trimmedDuration.isEmpty ? 0 : (Self.durationMinutes(trimmedDuration) ?? dive.duration)
+        }
         dive.weights      = workingWeights
         let originalDiverName = dive.diverName
         dive.diverName    = workingDiverName.trimmingCharacters(in: .whitespaces)
@@ -765,6 +801,14 @@ struct EditSiteDetailsView: View {
     @State private var workingDifficulty: String
     @State private var workingExitLatitude: String
     @State private var workingExitLongitude: String
+    /// Stored values behind the rounded pre-fill text ("%.6f" coordinates, whole-metre
+    /// altitude), so untouched fields save the stored value unchanged (see preservedDouble).
+    /// Updated by applySite, so copying a site keeps the source's full precision.
+    @State private var prefilledLatitude: PrefilledDouble
+    @State private var prefilledLongitude: PrefilledDouble
+    @State private var prefilledAltitude: PrefilledDouble
+    @State private var prefilledExitLatitude: PrefilledDouble
+    @State private var prefilledExitLongitude: PrefilledDouble
 
     @State private var showEntryCoordinatePicker = false
     @State private var showExitCoordinatePicker = false
@@ -788,6 +832,10 @@ struct EditSiteDetailsView: View {
     }
 
     private func copyEntryToExit() {
+        // Copy the entry's exact values, not just its rounded text, so an untouched entry and
+        // its copy stay identical (the Site Details map shows one "Entry & exit" pin then).
+        prefilledExitLatitude  = PrefilledDouble(value: prefilledLatitude.resolve(workingLatitude), text: workingLatitude)
+        prefilledExitLongitude = PrefilledDouble(value: prefilledLongitude.resolve(workingLongitude), text: workingLongitude)
         workingExitLatitude = workingLatitude
         workingExitLongitude = workingLongitude
     }
@@ -890,11 +938,16 @@ struct EditSiteDetailsView: View {
         workingBodyOfWater = source.siteBodyOfWater ?? ""
         workingDifficulty  = source.siteDifficulty ?? ""
         if copyGPSCoordinates {
-            workingLatitude      = source.siteLatitude.map { String(format: "%.6f", $0) } ?? ""
-            workingLongitude     = source.siteLongitude.map { String(format: "%.6f", $0) } ?? ""
-            workingAltitude      = source.siteAltitude.map { $0.editableString(decimals: 0) } ?? ""
-            workingExitLatitude  = source.exitLatitude.map { String(format: "%.6f", $0) } ?? ""
-            workingExitLongitude = source.exitLongitude.map { String(format: "%.6f", $0) } ?? ""
+            prefilledLatitude      = .coordinate(source.siteLatitude)
+            prefilledLongitude     = .coordinate(source.siteLongitude)
+            prefilledAltitude      = .decimals(source.siteAltitude, 0)
+            prefilledExitLatitude  = .coordinate(source.exitLatitude)
+            prefilledExitLongitude = .coordinate(source.exitLongitude)
+            workingLatitude      = prefilledLatitude.text
+            workingLongitude     = prefilledLongitude.text
+            workingAltitude      = prefilledAltitude.text
+            workingExitLatitude  = prefilledExitLatitude.text
+            workingExitLongitude = prefilledExitLongitude.text
         }
     }
 
@@ -905,12 +958,22 @@ struct EditSiteDetailsView: View {
         _workingSiteName    = State(initialValue: dive.siteName)
         _workingWaterType   = State(initialValue: dive.siteWaterType ?? "")
         _workingBodyOfWater = State(initialValue: dive.siteBodyOfWater ?? "")
-        _workingLatitude     = State(initialValue: dive.siteLatitude.map { String(format: "%.6f", $0) } ?? "")
-        _workingLongitude    = State(initialValue: dive.siteLongitude.map { String(format: "%.6f", $0) } ?? "")
-        _workingAltitude     = State(initialValue: dive.siteAltitude.map { $0.editableString(decimals: 0) } ?? "")
+        let latitude      = PrefilledDouble.coordinate(dive.siteLatitude)
+        let longitude     = PrefilledDouble.coordinate(dive.siteLongitude)
+        let altitude      = PrefilledDouble.decimals(dive.siteAltitude, 0)
+        let exitLatitude  = PrefilledDouble.coordinate(dive.exitLatitude)
+        let exitLongitude = PrefilledDouble.coordinate(dive.exitLongitude)
+        _prefilledLatitude      = State(initialValue: latitude)
+        _prefilledLongitude     = State(initialValue: longitude)
+        _prefilledAltitude      = State(initialValue: altitude)
+        _prefilledExitLatitude  = State(initialValue: exitLatitude)
+        _prefilledExitLongitude = State(initialValue: exitLongitude)
+        _workingLatitude     = State(initialValue: latitude.text)
+        _workingLongitude    = State(initialValue: longitude.text)
+        _workingAltitude     = State(initialValue: altitude.text)
         _workingDifficulty   = State(initialValue: dive.siteDifficulty ?? "")
-        _workingExitLatitude  = State(initialValue: dive.exitLatitude.map { String(format: "%.6f", $0) } ?? "")
-        _workingExitLongitude = State(initialValue: dive.exitLongitude.map { String(format: "%.6f", $0) } ?? "")
+        _workingExitLatitude  = State(initialValue: exitLatitude.text)
+        _workingExitLongitude = State(initialValue: exitLongitude.text)
     }
 
     var body: some View {
@@ -1060,7 +1123,7 @@ struct EditSiteDetailsView: View {
                             formTextField("Latitude", text: $workingLatitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                            gpsSignToggleButton(for: $workingLatitude)
+                            gpsSignToggleButton(for: $workingLatitude, prefilled: $prefilledLatitude)
                             if !workingLatitude.isEmpty {
                                 Button {
                                     workingLatitude = ""
@@ -1079,7 +1142,7 @@ struct EditSiteDetailsView: View {
                             formTextField("Longitude", text: $workingLongitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                            gpsSignToggleButton(for: $workingLongitude)
+                            gpsSignToggleButton(for: $workingLongitude, prefilled: $prefilledLongitude)
                             if !workingLongitude.isEmpty {
                                 Button {
                                     workingLongitude = ""
@@ -1145,7 +1208,7 @@ struct EditSiteDetailsView: View {
                             formTextField("Latitude", text: $workingExitLatitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                            gpsSignToggleButton(for: $workingExitLatitude)
+                            gpsSignToggleButton(for: $workingExitLatitude, prefilled: $prefilledExitLatitude)
                             if !workingExitLatitude.isEmpty {
                                 Button {
                                     workingExitLatitude = ""
@@ -1164,7 +1227,7 @@ struct EditSiteDetailsView: View {
                             formTextField("Longitude", text: $workingExitLongitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                            gpsSignToggleButton(for: $workingExitLongitude)
+                            gpsSignToggleButton(for: $workingExitLongitude, prefilled: $prefilledExitLongitude)
                             if !workingExitLongitude.isEmpty {
                                 Button {
                                     workingExitLongitude = ""
@@ -1212,18 +1275,24 @@ struct EditSiteDetailsView: View {
     }
 
     /// A "+/−" button that toggles the sign of a GPS coordinate string, keeping the decimal pad usable.
+    /// It also negates the exact value behind the text, so flipping an untouched coordinate keeps
+    /// its full precision instead of saving the 6-decimal text.
     @ViewBuilder
-    private func gpsSignToggleButton(for value: Binding<String>) -> some View {
+    private func gpsSignToggleButton(for value: Binding<String>, prefilled: Binding<PrefilledDouble>) -> some View {
         #if os(iOS)
         Button {
             let trimmed = value.wrappedValue.trimmingCharacters(in: .whitespaces)
+            let exact = prefilled.wrappedValue.resolve(trimmed)
+            let newText: String
             if trimmed.hasPrefix("-") {
-                value.wrappedValue = String(trimmed.dropFirst())
+                newText = String(trimmed.dropFirst())
             } else if !trimmed.isEmpty {
-                value.wrappedValue = "-" + trimmed
+                newText = "-" + trimmed
             } else {
-                value.wrappedValue = "-"
+                newText = "-"
             }
+            prefilled.wrappedValue = PrefilledDouble(value: exact.map { -$0 }, text: newText)
+            value.wrappedValue = newText
         } label: {
             Text("+/−")
                 .font(.system(.body, design: .rounded, weight: .medium))
@@ -1258,15 +1327,20 @@ struct EditSiteDetailsView: View {
     private func resetEntryGPS() {
         guard let rawData = dive.rawDiveComputerData,
               let gps = ShearwaterPNFGPS.extractEntryGPS(from: rawData) else { return }
-        workingLatitude  = String(format: "%.6f", gps.latitude)
-        workingLongitude = String(format: "%.6f", gps.longitude)
+        // Restore the dive computer's exact values, not just their "%.6f" text.
+        prefilledLatitude  = .coordinate(gps.latitude)
+        prefilledLongitude = .coordinate(gps.longitude)
+        workingLatitude  = prefilledLatitude.text
+        workingLongitude = prefilledLongitude.text
     }
 
     private func resetExitGPS() {
         guard let rawData = dive.rawDiveComputerData,
               let gps = ShearwaterPNFGPS.extractExitGPS(from: rawData) else { return }
-        workingExitLatitude  = String(format: "%.6f", gps.latitude)
-        workingExitLongitude = String(format: "%.6f", gps.longitude)
+        prefilledExitLatitude  = .coordinate(gps.latitude)
+        prefilledExitLongitude = .coordinate(gps.longitude)
+        workingExitLatitude  = prefilledExitLatitude.text
+        workingExitLongitude = prefilledExitLongitude.text
     }
 
     private func save() {
@@ -1278,13 +1352,14 @@ struct EditSiteDetailsView: View {
         dive.siteWaterType  = trimmedWaterType.isEmpty ? nil : trimmedWaterType
         let trimmedBodyOfWater = workingBodyOfWater.trimmingCharacters(in: .whitespaces)
         dive.siteBodyOfWater = trimmedBodyOfWater.isEmpty ? nil : trimmedBodyOfWater
-        dive.siteLatitude   = parseFlexibleDouble(workingLatitude)
-        dive.siteLongitude  = parseFlexibleDouble(workingLongitude)
-        dive.siteAltitude   = parseFlexibleDouble(workingAltitude)
+        // Untouched fields keep the stored (or copied) value at full precision.
+        dive.siteLatitude   = prefilledLatitude.resolve(workingLatitude)
+        dive.siteLongitude  = prefilledLongitude.resolve(workingLongitude)
+        dive.siteAltitude   = prefilledAltitude.resolve(workingAltitude)
         let trimmedDifficulty  = workingDifficulty.trimmingCharacters(in: .whitespaces)
         dive.siteDifficulty = trimmedDifficulty.isEmpty ? nil : trimmedDifficulty
-        dive.exitLatitude   = parseFlexibleDouble(workingExitLatitude)
-        dive.exitLongitude  = parseFlexibleDouble(workingExitLongitude)
+        dive.exitLatitude   = prefilledExitLatitude.resolve(workingExitLatitude)
+        dive.exitLongitude  = prefilledExitLongitude.resolve(workingExitLongitude)
         // Site fields do not affect sort order, list grouping, or widget fingerprint.
         // cachedAvailableCountries refreshes lazily when the filter sheet opens.
         store.commit(dive, affects: .rowFields)
@@ -1302,6 +1377,11 @@ struct EditConditionsView: View {
     @State private var workingMinTemp: String
     @State private var workingAirTemp: String
     @State private var workingMaxTemp: String
+    /// Stored temperatures behind the 1-decimal pre-fill text (see PrefilledDouble); @State so
+    /// they stay paired with the text across parent re-renders.
+    @State private var prefilledMinTemp: PrefilledDouble
+    @State private var prefilledAirTemp: PrefilledDouble
+    @State private var prefilledMaxTemp: PrefilledDouble
     @State private var workingWeather: String
     @State private var workingSurface: String
     @State private var workingCurrent: String
@@ -1325,9 +1405,15 @@ struct EditConditionsView: View {
     init(dive: Dive) {
         self.dive = dive
         _workingWaterTemp  = State(initialValue: dive.waterTemperature)
-        _workingMinTemp    = State(initialValue: dive.minTemperature.map { $0.editableString(decimals: 1) } ?? "")
-        _workingAirTemp    = State(initialValue: dive.airTemperature.map { $0.editableString(decimals: 1) } ?? "")
-        _workingMaxTemp    = State(initialValue: dive.maxTemperature.map { $0.editableString(decimals: 1) } ?? "")
+        let minTemp = PrefilledDouble.decimals(dive.minTemperature, 1)
+        let airTemp = PrefilledDouble.decimals(dive.airTemperature, 1)
+        let maxTemp = PrefilledDouble.decimals(dive.maxTemperature, 1)
+        _prefilledMinTemp  = State(initialValue: minTemp)
+        _prefilledAirTemp  = State(initialValue: airTemp)
+        _prefilledMaxTemp  = State(initialValue: maxTemp)
+        _workingMinTemp    = State(initialValue: minTemp.text)
+        _workingAirTemp    = State(initialValue: airTemp.text)
+        _workingMaxTemp    = State(initialValue: maxTemp.text)
         _workingWeather    = State(initialValue: dive.weather ?? "")
         _workingSurface    = State(initialValue: dive.surfaceConditions ?? "")
         _workingCurrent    = State(initialValue: dive.current ?? "")
@@ -1470,9 +1556,10 @@ struct EditConditionsView: View {
 
     private func save() {
         dive.waterTemperature  = workingWaterTemp
-        dive.minTemperature    = parseFlexibleDouble(workingMinTemp)
-        dive.airTemperature    = parseFlexibleDouble(workingAirTemp)
-        dive.maxTemperature    = parseFlexibleDouble(workingMaxTemp)
+        // Untouched fields keep the stored temperature at full precision.
+        dive.minTemperature    = prefilledMinTemp.resolve(workingMinTemp)
+        dive.airTemperature    = prefilledAirTemp.resolve(workingAirTemp)
+        dive.maxTemperature    = prefilledMaxTemp.resolve(workingMaxTemp)
         let trimmedWeather     = workingWeather.trimmingCharacters(in: .whitespaces)
         dive.weather           = trimmedWeather.isEmpty    ? nil : trimmedWeather
         let trimmedSurface     = workingSurface.trimmingCharacters(in: .whitespaces)
@@ -1509,10 +1596,19 @@ struct EditGazView: View {
     @State private var cylinderSizeText: String
     @State private var workingCylinderMaterial: String
     @State private var workingCylinderType: String
-    @State private var workingStartPressure: Int?
-    @State private var workingEndPressure: Int?
     @State private var workingStartPressureText: String
     @State private var workingEndPressureText: String
+    /// Stored pressures behind the 1-decimal pre-fill text, so an untouched field saves the
+    /// stored value unchanged (e.g. 206.84 bar stays 206.84, not 206.8); see PrefilledDouble.
+    @State private var prefilledStartPressure: PrefilledDouble
+    @State private var prefilledEndPressure: PrefilledDouble
+    /// Text the code itself just wrote from an exact value (template apply, usage-time unit
+    /// switch). Its onChange must not re-parse it, which would round the value to its text; any
+    /// other change — every user keystroke — is parsed. See skipsProgrammaticText.
+    @State private var programmaticCylinderSizeText: String?
+    @State private var programmaticWorkingPressureText: String?
+    @State private var programmaticUsageStartText: String?
+    @State private var programmaticUsageEndText: String?
     /// Working pressure of the tank, in the import unit (`storedPressureUnit`).
     /// Used for conversion from gas-capacity → water volume (cu ft → L) in RMV/SAC calculation.
     /// `nil` = not provided (calculation falls back to 3000 PSI default).
@@ -1576,6 +1672,30 @@ struct EditGazView: View {
         }
     }
 
+    /// A usage time (stored in seconds) as text in the selected unit.
+    private func usageTimeText(_ seconds: Double?) -> String {
+        seconds.map { Self.formatDouble(usageTimeUnit.fromSeconds($0)) } ?? ""
+    }
+
+    /// Writes text computed from an exact value, marking it so the field's onChange does not
+    /// re-parse it (see skipsProgrammaticText). Unchanged text fires no onChange: no marker then.
+    private func setProgrammaticText(_ text: String, into field: inout String, marker: inout String?) {
+        guard field != text else { return }
+        marker = text
+        field = text
+    }
+
+    /// True when `text` is the programmatic text just written (the marker is then consumed).
+    /// Any other change clears the marker and must be parsed, so what the field shows is always
+    /// what is saved.
+    private static func skipsProgrammaticText(_ text: String, marker: inout String?) -> Bool {
+        // Callers check `marker != nil` first: an inout @State argument is written back even
+        // when unchanged, which would cost a state write (and re-render) per keystroke.
+        guard let programmatic = marker else { return false }
+        marker = nil
+        return text == programmatic
+    }
+
     /// Formats a Double? into an editable string for TextField pre-fill (no grouping separators).
     private static func formatDouble(_ value: Double?) -> String {
         guard let value else { return "" }
@@ -1601,10 +1721,14 @@ struct EditGazView: View {
         _cylinderSizeText        = State(initialValue: Self.formatDouble(tank?.volume))
         _workingCylinderMaterial = State(initialValue: tank?.tankMaterial ?? "")
         _workingCylinderType     = State(initialValue: tank?.tankType ?? "")
-        _workingStartPressure    = State(initialValue: tank?.startPressure.map { Int($0.rounded()) })
-        _workingEndPressure      = State(initialValue: tank?.endPressure.map { Int($0.rounded()) })
-        _workingStartPressureText = State(initialValue: tank?.startPressure.map { String(Int($0.rounded())) } ?? "")
-        _workingEndPressureText   = State(initialValue: tank?.endPressure.map { String(Int($0.rounded())) } ?? "")
+        // Shown with up to 1 decimal (whole values stay whole), so a decimal pressure the user
+        // entered is shown again; editableString never traps, unlike Int(_:) on a huge value.
+        let startPressure = PrefilledDouble.decimals(tank?.startPressure, 1)
+        let endPressure   = PrefilledDouble.decimals(tank?.endPressure, 1)
+        _prefilledStartPressure   = State(initialValue: startPressure)
+        _prefilledEndPressure     = State(initialValue: endPressure)
+        _workingStartPressureText = State(initialValue: startPressure.text)
+        _workingEndPressureText   = State(initialValue: endPressure.text)
         _workingWorkingPressure  = State(initialValue: tank?.workingPressure)
         _workingPressureText     = State(initialValue: Self.formatDouble(tank?.workingPressure))
         _workingUsageStartTime   = State(initialValue: tank?.usageStartTime)
@@ -1624,14 +1748,16 @@ struct EditGazView: View {
         if let wp = template.workingPressure {
             let converted = dive.storedPressureUnit.convert(wp, from: template.storedPressureUnit)
             workingWorkingPressure = converted
-            workingPressureText = Self.formatDouble(converted)
+            setProgrammaticText(Self.formatDouble(converted), into: &workingPressureText,
+                                marker: &programmaticWorkingPressureText)
         }
 
         if let vol = template.volume, let wp = template.workingPressure {
             if template.storedVolumeUnit == dive.storedVolumeUnit {
                 // Same unit system — copy directly
                 workingCylinderSize = vol
-                cylinderSizeText = Self.formatDouble(vol)
+                setProgrammaticText(Self.formatDouble(vol), into: &cylinderSizeText,
+                                    marker: &programmaticCylinderSizeText)
             } else {
                 // Cross-unit conversion using working pressure.
                 // First get working pressure in bar for the formula.
@@ -1641,12 +1767,14 @@ struct EditGazView: View {
                     // L → cu ft:  cuft = (L × wp_bar) / 28.3168
                     let converted = (vol * wpBar) / 28.3168
                     workingCylinderSize = converted
-                    cylinderSizeText = Self.formatDouble(converted)
+                    setProgrammaticText(Self.formatDouble(converted), into: &cylinderSizeText,
+                                        marker: &programmaticCylinderSizeText)
                 } else if template.storedVolumeUnit == .cubicFeet && dive.storedVolumeUnit == .liters {
                     // cu ft → L:  L = (cuft × 28.3168) / wp_bar
                     let converted = (vol * 28.3168) / wpBar
                     workingCylinderSize = converted
-                    cylinderSizeText = Self.formatDouble(converted)
+                    setProgrammaticText(Self.formatDouble(converted), into: &cylinderSizeText,
+                                        marker: &programmaticCylinderSizeText)
                 }
             }
         }
@@ -1805,6 +1933,7 @@ struct EditGazView: View {
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(cylinderSizeIsValid ? Color.primary : Color.orange)
                                 .onChange(of: cylinderSizeText) {
+                                    if programmaticCylinderSizeText != nil, Self.skipsProgrammaticText(cylinderSizeText, marker: &programmaticCylinderSizeText) { return }
                                     workingCylinderSize = parseFlexibleDouble(cylinderSizeText)
                                 }
                             if workingCylinderSize != nil {
@@ -1830,6 +1959,7 @@ struct EditGazView: View {
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(workingPressureIsValid ? Color.primary : Color.orange)
                                 .onChange(of: workingPressureText) {
+                                    if programmaticWorkingPressureText != nil, Self.skipsProgrammaticText(workingPressureText, marker: &programmaticWorkingPressureText) { return }
                                     workingWorkingPressure = parseFlexibleDouble(workingPressureText)
                                 }
                             if workingWorkingPressure != nil {
@@ -1873,16 +2003,13 @@ struct EditGazView: View {
                             Text("Start pressure (\(dive.storedPressureUnit.symbol))")
                                 .foregroundStyle(.primary)
                                 .fixedSize()
+                            // Decimal input: an edited pressure keeps its decimals ('.' or ',').
                             formTextField("Start pressure (\(dive.storedPressureUnit.symbol))", text: $workingStartPressureText)
-                                .platformKeyboardType(.numberPad)
+                                .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                                .onChange(of: workingStartPressureText) {
-                                    workingStartPressure = Int(workingStartPressureText.trimmingCharacters(in: .whitespaces))
-                                }
                             if !workingStartPressureText.isEmpty {
                                 Button {
                                     workingStartPressureText = ""
-                                    workingStartPressure = nil
                                 } label: {
                                     ClearButtonGlyph()
                                 }
@@ -1897,15 +2024,11 @@ struct EditGazView: View {
                                 .foregroundStyle(.primary)
                                 .fixedSize()
                             formTextField("End pressure (\(dive.storedPressureUnit.symbol))", text: $workingEndPressureText)
-                                .platformKeyboardType(.numberPad)
+                                .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                                .onChange(of: workingEndPressureText) {
-                                    workingEndPressure = Int(workingEndPressureText.trimmingCharacters(in: .whitespaces))
-                                }
                             if !workingEndPressureText.isEmpty {
                                 Button {
                                     workingEndPressureText = ""
-                                    workingEndPressure = nil
                                 } label: {
                                     ClearButtonGlyph()
                                 }
@@ -1926,12 +2049,11 @@ struct EditGazView: View {
                         }
                         .fullWidthSegmentedPicker()
                         .onChange(of: usageTimeUnit) {
-                            usageStartTimeText = workingUsageStartTime.map {
-                                Self.formatDouble(usageTimeUnit.fromSeconds($0))
-                            } ?? ""
-                            usageEndTimeText = workingUsageEndTime.map {
-                                Self.formatDouble(usageTimeUnit.fromSeconds($0))
-                            } ?? ""
+                            // Rewritten from the exact seconds: marked so it is not re-parsed.
+                            setProgrammaticText(usageTimeText(workingUsageStartTime), into: &usageStartTimeText,
+                                                marker: &programmaticUsageStartText)
+                            setProgrammaticText(usageTimeText(workingUsageEndTime), into: &usageEndTimeText,
+                                                marker: &programmaticUsageEndText)
                         }
 
                         HStack(spacing: 12) {
@@ -1944,6 +2066,7 @@ struct EditGazView: View {
                             formTextField("Usage Start", text: $usageStartTimeText)
                                 .platformKeyboardType(.decimalPad)
                                 .onChange(of: usageStartTimeText) {
+                                    if programmaticUsageStartText != nil, Self.skipsProgrammaticText(usageStartTimeText, marker: &programmaticUsageStartText) { return }
                                     if let parsed = parseFlexibleDouble(usageStartTimeText) {
                                         workingUsageStartTime = usageTimeUnit.toSeconds(parsed)
                                     } else {
@@ -1970,6 +2093,7 @@ struct EditGazView: View {
                             formTextField("Usage End", text: $usageEndTimeText)
                                 .platformKeyboardType(.decimalPad)
                                 .onChange(of: usageEndTimeText) {
+                                    if programmaticUsageEndText != nil, Self.skipsProgrammaticText(usageEndTimeText, marker: &programmaticUsageEndText) { return }
                                     if let parsed = parseFlexibleDouble(usageEndTimeText) {
                                         workingUsageEndTime = usageTimeUnit.toSeconds(parsed)
                                     } else {
@@ -2061,8 +2185,10 @@ struct EditGazView: View {
     private func save() {
         let o2Fraction = Double(workingO2) / 100.0
         let heFraction = Double(workingHe) / 100.0
-        let startP = workingStartPressure.map { Double($0) }
-        let endP   = workingEndPressure.map { Double($0) }
+        // Untouched pressure fields keep the stored value at full precision; edited ones are
+        // parsed as entered ('.' or ',' decimals), an emptied one is cleared.
+        let startP = prefilledStartPressure.resolve(workingStartPressureText)
+        let endP   = prefilledEndPressure.resolve(workingEndPressureText)
         let trimmedMaterial = workingCylinderMaterial.trimmingCharacters(in: .whitespaces)
         let material = trimmedMaterial.isEmpty ? nil : trimmedMaterial
         let trimmedType = workingCylinderType.trimmingCharacters(in: .whitespaces)

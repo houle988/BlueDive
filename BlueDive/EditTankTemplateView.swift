@@ -13,6 +13,10 @@ struct EditTankTemplateView: View {
     @State private var name: String
     @State private var volumeText: String
     @State private var workingPressureText: String
+    /// Stored values behind the rounded pre-fill text (1-decimal volume, whole-number pressure),
+    /// so an untouched field saves the stored value unchanged (see PrefilledDouble).
+    @State private var prefilledVolume: PrefilledDouble
+    @State private var prefilledWorkingPressure: PrefilledDouble
     @State private var material: String
     @State private var format: String
     @State private var manufacturerText: String
@@ -31,8 +35,12 @@ struct EditTankTemplateView: View {
         self.template = template
 
         _name = State(initialValue: template.name)
-        _volumeText = State(initialValue: template.volume.map { $0.editableString(decimals: 1) } ?? "")
-        _workingPressureText = State(initialValue: template.workingPressure.map { $0.editableString(decimals: 0) } ?? "")
+        let volume = PrefilledDouble.decimals(template.volume, 1)
+        let workingPressure = PrefilledDouble.decimals(template.workingPressure, 0)
+        _prefilledVolume = State(initialValue: volume)
+        _prefilledWorkingPressure = State(initialValue: workingPressure)
+        _volumeText = State(initialValue: volume.text)
+        _workingPressureText = State(initialValue: workingPressure.text)
         _material = State(initialValue: template.material ?? "")
         _format = State(initialValue: template.format ?? "")
         _manufacturerText = State(initialValue: template.manufacturer ?? "")
@@ -360,8 +368,9 @@ struct EditTankTemplateView: View {
         }
 
         template.name = trimmedName
-        template.volume = parseFlexibleDouble(volumeText)
-        template.workingPressure = parseFlexibleDouble(workingPressureText)
+        // Untouched fields keep the stored value at full precision.
+        template.volume = prefilledVolume.resolve(volumeText)
+        template.workingPressure = prefilledWorkingPressure.resolve(workingPressureText)
         template.material = material.isEmpty ? nil : material
         template.format = format.isEmpty ? nil : format
         template.manufacturer = manufacturerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

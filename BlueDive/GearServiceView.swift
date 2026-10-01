@@ -30,6 +30,9 @@ struct GearServiceView: View {
     @State private var showEditGear = false
     @State private var serviceDescription = ""
     @State private var serviceCost = ""
+    /// The edited record's stored cost behind its 2-decimal pre-fill text, so an untouched cost
+    /// is saved unchanged instead of rounded (see PrefilledDouble). Empty when adding.
+    @State private var prefilledServiceCost = PrefilledDouble(value: nil, text: "")
     @State private var showDeleteConfirmation = false
     @State private var showClearAllConfirmation = false
 
@@ -39,7 +42,8 @@ struct GearServiceView: View {
 
     private var costIsInvalid: Bool {
         guard !serviceCost.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
-        return parseFlexibleDouble(serviceCost).flatMap { $0.isFinite ? $0 : nil } == nil
+        // parseFlexibleDouble rejects non-finite input ("inf", "nan") itself.
+        return parseFlexibleDouble(serviceCost) == nil
     }
 
     // MARK: - Computed Properties
@@ -247,11 +251,9 @@ struct GearServiceView: View {
                             Button(mode.isEdit ? "Save" : "Confirm") {
                                 let desc = serviceDescription.trimmingCharacters(in: .whitespacesAndNewlines)
                                 let isBlank = serviceCost.trimmingCharacters(in: .whitespaces).isEmpty
-                                // Reject non-finite values (e.g. "inf", "nan") — JSONEncoder throws on them,
-                                // which would cause saveServiceRecords to silently drop the entire record.
-                                let parsedCost: Double? = isBlank
-                                    ? nil
-                                    : parseFlexibleDouble(serviceCost).flatMap { $0.isFinite ? $0 : nil }
+                                // parseFlexibleDouble rejects non-finite values (e.g. "inf", "nan") —
+                                // JSONEncoder throws on them, which would drop the entire record.
+                                let parsedCost: Double? = isBlank ? nil : parseFlexibleDouble(serviceCost)
                                 switch mode {
                                 case .edit(let record):
                                     var updated = record
@@ -259,9 +261,10 @@ struct GearServiceView: View {
                                     updated.description = desc
                                     // Blank or whitespace-only → remove cost. Parseable → use it.
                                     // Non-empty but unparseable → preserve original to avoid silent data loss.
+                                    // An untouched cost keeps the stored value (not its rounded text).
                                     if isBlank {
                                         updated.cost = nil
-                                    } else if let c = parsedCost {
+                                    } else if let c = prefilledServiceCost.resolve(serviceCost) {
                                         updated.cost = c
                                     }
                                     // Saving always promotes the record: clear isLegacy so the
@@ -292,7 +295,8 @@ struct GearServiceView: View {
                     if case .edit(let record) = mode {
                         serviceDate = (record.isLegacy && record.date == .distantPast) ? Date() : record.date
                         serviceDescription = record.description
-                        serviceCost = record.cost.map { $0.editableString(decimals: 2, minDecimals: 2) } ?? ""
+                        prefilledServiceCost = .decimals(record.cost, 2, minDecimals: 2)
+                        serviceCost = prefilledServiceCost.text
                     }
                 }
                 .onDisappear { showDeleteConfirmation = false }
@@ -863,7 +867,8 @@ struct GearServiceView: View {
                             // today so the user doesn't have to scroll from year 0001.
                             serviceDate = (record.isLegacy && record.date == .distantPast) ? Date() : record.date
                             serviceDescription = record.description
-                            serviceCost = record.cost.map { $0.editableString(decimals: 2, minDecimals: 2) } ?? ""
+                            prefilledServiceCost = .decimals(record.cost, 2, minDecimals: 2)
+                            serviceCost = prefilledServiceCost.text
                             scheduleNextService = false
                             showDeleteConfirmation = false
                             serviceSheetMode = .edit(record)
@@ -1097,6 +1102,7 @@ struct GearServiceView: View {
         nextServiceDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
         serviceDescription = ""
         serviceCost = ""
+        prefilledServiceCost = PrefilledDouble(value: nil, text: "")
         showDeleteConfirmation = false
         serviceSheetMode = .add
     }
