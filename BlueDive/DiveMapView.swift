@@ -849,6 +849,7 @@ struct DiveMapView: View {
                             selectedDive = nil
                         }
                     })
+                    .mapPopupCardWidthOnMac()
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if let list = clusterDives {
                     DiveClusterListCard(dives: list, onSelect: { dive in
@@ -861,6 +862,7 @@ struct DiveMapView: View {
                             clusterDives = nil
                         }
                     })
+                    .mapPopupCardWidthOnMac()
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
@@ -1104,6 +1106,24 @@ struct DiveMapClusterPin: View {
     }
 }
 
+// MARK: - Map Pop-up Card Width
+
+private extension View {
+    /// macOS: caps a map pop-up card (selected dive, dive cluster) at a readable width.
+    /// The map's bottom-aligned ZStack keeps it centred, clear of the Apple Maps legal
+    /// link (bottom leading) and the compass (bottom trailing), instead of a banner
+    /// stretched across the whole window. iOS: returns the card unchanged.
+    @ViewBuilder
+    func mapPopupCardWidthOnMac() -> some View {
+        #if os(macOS)
+        // 592 pt including the card's own 16 pt outer padding → a 560 pt card.
+        frame(maxWidth: 592)
+        #else
+        self
+        #endif
+    }
+}
+
 // MARK: - Dive Cluster List Card
 
 struct DiveClusterListCard: View {
@@ -1133,11 +1153,17 @@ struct DiveClusterListCard: View {
         }
     }
 
-    /// Height that fits up to 3 rows exactly; beyond 3 dives the list scrolls.
+    /// Height that fits up to 3 rows exactly (5 on macOS, where the window is taller);
+    /// beyond that the list scrolls.
     private var listScrollHeight: CGFloat {
         let rowHeight: CGFloat = 56
         let rowSpacing: CGFloat = 8
-        let visibleRows = min(dives.count, 3)
+        #if os(macOS)
+        let maxVisibleRows = 5
+        #else
+        let maxVisibleRows = 3
+        #endif
+        let visibleRows = min(dives.count, maxVisibleRows)
         return CGFloat(visibleRows) * rowHeight + CGFloat(max(visibleRows - 1, 0)) * rowSpacing
     }
 
