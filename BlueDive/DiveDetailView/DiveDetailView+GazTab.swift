@@ -693,30 +693,3 @@ extension DiveDetailView {
         }
     }
 }
-
-private extension View {
-    /// macOS: lets a Gas tab card stretch to the height of its neighbour in the
-    /// side-by-side layout. iOS: returns the view unchanged.
-    @ViewBuilder
-    func fillsAvailableHeightOnMac() -> some View {
-        #if os(macOS)
-        frame(maxHeight: .infinity, alignment: .topLeading)
-        #else
-        self
-        #endif
-    }
-
-    /// Horizontal card padding. iOS: the standard `.padding(.horizontal)`. macOS: the
-    /// standard padding on the outer edge (`side`) and half the 20 pt vertical card
-    /// spacing on the inner edge, so the gap between the side-by-side Tank and Pressure
-    /// cards matches the gap between the cards above and below them.
-    @ViewBuilder
-    func sideBySideCardPadding(_ side: HorizontalEdge) -> some View {
-        #if os(macOS)
-        padding(side == .leading ? .leading : .trailing)
-            .padding(side == .leading ? .trailing : .leading, 10)
-        #else
-        padding(.horizontal)
-        #endif
-    }
-}

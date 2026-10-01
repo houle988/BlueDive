@@ -410,3 +410,34 @@ private struct AppLanguageSheetLocale: ViewModifier {
     }
 }
 #endif
+
+
+// MARK: - Side-by-Side Cards (macOS wide-window layouts)
+
+extension View {
+    /// macOS: lets a card stretch to the height of its neighbour in a side-by-side
+    /// layout (the pair's HStack uses `.fixedSize(horizontal: false, vertical: true)`).
+    /// Apply before the card's inner `.padding()`. iOS: returns the view unchanged.
+    @ViewBuilder
+    func fillsAvailableHeightOnMac() -> some View {
+        #if os(macOS)
+        frame(maxHeight: .infinity, alignment: .topLeading)
+        #else
+        self
+        #endif
+    }
+
+    /// Horizontal card padding. iOS: the standard `.padding(.horizontal)`. macOS: the
+    /// standard padding on the outer edge (`side`) and half the 20 pt vertical card
+    /// spacing on the inner edge, so the gap between two side-by-side cards matches the
+    /// gap between the cards above and below them (Gas tab, Statistics).
+    @ViewBuilder
+    func sideBySideCardPadding(_ side: HorizontalEdge) -> some View {
+        #if os(macOS)
+        padding(side == .leading ? .leading : .trailing)
+            .padding(side == .leading ? .trailing : .leading, 10)
+        #else
+        padding(.horizontal)
+        #endif
+    }
+}

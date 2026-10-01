@@ -402,6 +402,27 @@ struct StatisticsView: View {
                                 .opacity(appeared ? 1.0 : 0.0)
                                 .offset(y: appeared ? 0 : 20)
 
+                            #if os(macOS)
+                            // The Mac sheet is wide enough for the six highlight tiles in two
+                            // rows of three, in the same reading order as the iOS pairs.
+                            HStack(spacing: 12) {
+                                bottomTimeTile
+                                surfaceIntervalTile
+                                depthTile
+                            }
+                            .padding(.horizontal)
+                            .opacity(appeared ? 1.0 : 0.0)
+                            .offset(y: appeared ? 0 : 20)
+
+                            HStack(spacing: 12) {
+                                temperatureTile
+                                rmvTile
+                                sacTile
+                            }
+                            .padding(.horizontal)
+                            .opacity(appeared ? 1.0 : 0.0)
+                            .offset(y: appeared ? 0 : 20)
+                            #else
                             // Bottom time & surface interval
                             timingSection
                                 .opacity(appeared ? 1.0 : 0.0)
@@ -416,7 +437,21 @@ struct StatisticsView: View {
                             rmvSacSection
                                 .opacity(appeared ? 1.0 : 0.0)
                                 .offset(y: appeared ? 0 : 20)
+                            #endif
 
+                            #if os(macOS)
+                            // The Mac sheet is wide enough to show Favourite Sites (⅔) beside
+                            // At a Glance (⅓); fixedSize gives both the height of the taller one.
+                            HStack(alignment: .top, spacing: 0) {
+                                topSitesSection
+                                    .containerRelativeFrame(.horizontal, count: 3, span: 2, spacing: 0)
+                                moreStatsGrid
+                                    .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                            .opacity(appeared ? 1.0 : 0.0)
+                            .offset(y: appeared ? 0 : 20)
+                            #else
                             // Favourite sites
                             topSitesSection
                                 .opacity(appeared ? 1.0 : 0.0)
@@ -426,6 +461,7 @@ struct StatisticsView: View {
                             moreStatsGrid
                                 .opacity(appeared ? 1.0 : 0.0)
                                 .offset(y: appeared ? 0 : 20)
+                            #endif
                         }
                         .padding(.bottom, 30)
                     }
@@ -522,214 +558,222 @@ struct StatisticsView: View {
     // MARK: - Bottom Time & Surface Interval Section
 
     private var timingSection: some View {
-        let avgMin = cachedAvgDuration
-        let avgFormatted = avgMin >= 60 ? "\(avgMin / 60)h \(avgMin % 60)m" : "\(avgMin) min"
-        return HStack(spacing: 12) {
-            // Bottom Time tile
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "clock.fill")
-                        .font(.title3)
-                        .foregroundStyle(.green)
-                        .accessibilityHidden(true)
-                    Spacer()
-                    Text("Bottom Time")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 4) {
-                    Text(verbatim: avgFormatted)
-                        .font(.system(.title, design: .rounded))
-                        .fontWeight(.black)
-                        .foregroundStyle(.primary)
-                        .minimumScaleFactor(0.7)
-                        .lineLimit(1)
-                    Text("Average")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.green.opacity(0.7))
-                }
-
-                Divider()
-                    .background(Color.green.opacity(0.3))
-                    .padding(.horizontal, 8)
-
-                HStack {
-                    Button { selectedDive = cachedLongestDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedLongestDive?.formattedDuration ?? "—")
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Longest")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.green.opacity(0.8))
-                                if cachedLongestDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.green.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedLongestDive == nil)
-
-                    Spacer()
-
-                    Button { selectedDive = cachedShortestDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedShortestDive?.formattedDuration ?? "—")
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Shortest")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.green.opacity(0.8))
-                                if cachedShortestDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.green.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedShortestDive == nil)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.platformSecondaryBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.green.opacity(0.5), .green.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
-
-            // Surface Interval tile
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "hourglass")
-                        .font(.title3)
-                        .foregroundStyle(.indigo)
-                        .accessibilityHidden(true)
-                    Spacer()
-                    Text("Surface Interval")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 4) {
-                    Text(verbatim: cachedAvgSurfaceInterval)
-                        .font(.system(.title, design: .rounded))
-                        .fontWeight(.black)
-                        .foregroundStyle(.primary)
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                    Text("Average")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.indigo.opacity(0.7))
-                }
-
-                Divider()
-                    .background(Color.indigo.opacity(0.3))
-                    .padding(.horizontal, 8)
-
-                HStack {
-                    Button { selectedDive = cachedLongestSIDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedLongestSIFormatted)
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Longest")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.indigo.opacity(0.8))
-                                if cachedLongestSIDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.indigo.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedLongestSIDive == nil)
-
-                    Spacer()
-
-                    Button { selectedDive = cachedShortestSIDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedShortestSIFormatted)
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Shortest")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.indigo.opacity(0.8))
-                                if cachedShortestSIDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.indigo.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedShortestSIDive == nil)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.platformSecondaryBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.indigo.opacity(0.5), .indigo.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
+        HStack(spacing: 12) {
+            bottomTimeTile
+            surfaceIntervalTile
         }
         .padding(.horizontal)
+    }
+
+    /// Bottom Time tile (paired with Surface Interval on iOS; one of three per row on macOS).
+    @ViewBuilder
+    private var bottomTimeTile: some View {
+        let avgMin = cachedAvgDuration
+        let avgFormatted = avgMin >= 60 ? "\(avgMin / 60)h \(avgMin % 60)m" : "\(avgMin) min"
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "clock.fill")
+                    .font(.title3)
+                    .foregroundStyle(.green)
+                    .accessibilityHidden(true)
+                Spacer()
+                Text("Bottom Time")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 4) {
+                Text(verbatim: avgFormatted)
+                    .font(.system(.title, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                Text("Average")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.green.opacity(0.7))
+            }
+
+            Divider()
+                .background(Color.green.opacity(0.3))
+                .padding(.horizontal, 8)
+
+            HStack {
+                Button { selectedDive = cachedLongestDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedLongestDive?.formattedDuration ?? "—")
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Longest")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.green.opacity(0.8))
+                            if cachedLongestDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.green.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedLongestDive == nil)
+
+                Spacer()
+
+                Button { selectedDive = cachedShortestDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedShortestDive?.formattedDuration ?? "—")
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Shortest")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.green.opacity(0.8))
+                            if cachedShortestDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.green.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedShortestDive == nil)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.platformSecondaryBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.green.opacity(0.5), .green.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+    }
+
+    /// Surface Interval tile.
+    private var surfaceIntervalTile: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "hourglass")
+                    .font(.title3)
+                    .foregroundStyle(.indigo)
+                    .accessibilityHidden(true)
+                Spacer()
+                Text("Surface Interval")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 4) {
+                Text(verbatim: cachedAvgSurfaceInterval)
+                    .font(.system(.title, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                Text("Average")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.indigo.opacity(0.7))
+            }
+
+            Divider()
+                .background(Color.indigo.opacity(0.3))
+                .padding(.horizontal, 8)
+
+            HStack {
+                Button { selectedDive = cachedLongestSIDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedLongestSIFormatted)
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Longest")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.indigo.opacity(0.8))
+                            if cachedLongestSIDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.indigo.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedLongestSIDive == nil)
+
+                Spacer()
+
+                Button { selectedDive = cachedShortestSIDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedShortestSIFormatted)
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Shortest")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.indigo.opacity(0.8))
+                            if cachedShortestSIDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.indigo.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedShortestSIDive == nil)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.platformSecondaryBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.indigo.opacity(0.5), .indigo.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
     }
 
     // MARK: - Career Overview
@@ -832,7 +876,15 @@ struct StatisticsView: View {
                             .foregroundStyle(.cyan)
                     }
                 }
+                #if os(macOS)
+                // The Mac sheet is tall: grow the chart with the sheet's visible height
+                // (35 %), never below the iOS height or above 360 pt.
+                .containerRelativeFrame(.vertical) { height, _ in
+                    min(max(height * 0.35, 180), 360)
+                }
+                #else
                 .frame(height: 180)
+                #endif
                 .chartYAxis {
                     AxisMarks(position: .leading) { value in
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
@@ -877,418 +929,432 @@ struct StatisticsView: View {
 
     private var depthTemperatureSection: some View {
         HStack(spacing: 12) {
-            // Depth card
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "arrow.down.to.line")
-                        .font(.title3)
-                        .foregroundStyle(.blue)
-                        .accessibilityHidden(true)
-                    Spacer()
-                    Text("Depth")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 4) {
-                    Text(verbatim: cachedAvgDepth.localizedString(decimals: 1, minDecimals: 1) + " \(prefs.depthUnit.symbol)")
-                        .font(.system(.title, design: .rounded))
-                        .fontWeight(.black)
-                        .foregroundStyle(.primary)
-                        .minimumScaleFactor(0.7)
-                        .lineLimit(1)
-                    Text("Average")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.blue.opacity(0.7))
-                }
-
-                Divider()
-                    .background(Color.blue.opacity(0.3))
-                    .padding(.horizontal, 8)
-
-                HStack {
-                    Button { selectedDive = cachedDeepestDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedMaxDepthEver.localizedString(decimals: 1) + " \(prefs.depthUnit.symbol)")
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Max")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.blue.opacity(0.8))
-                                if cachedDeepestDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.blue.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedDeepestDive == nil)
-
-                    Spacer()
-
-                    Button { selectedDive = cachedShallowestDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedMinDepth.localizedString(decimals: 1) + " \(prefs.depthUnit.symbol)")
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Min")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.blue.opacity(0.8))
-                                if cachedShallowestDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.blue.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedShallowestDive == nil)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.platformSecondaryBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.blue.opacity(0.5), .blue.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
-
-            // Temperature card
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "thermometer.medium")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
-                        .accessibilityHidden(true)
-                    Spacer()
-                    Text("Temperature")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 4) {
-                    Text(verbatim: cachedAvgTemp)
-                        .font(.system(.title, design: .rounded))
-                        .fontWeight(.black)
-                        .foregroundStyle(.primary)
-                        .minimumScaleFactor(0.7)
-                        .lineLimit(1)
-                    Text("Average")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.orange.opacity(0.7))
-                }
-
-                Divider()
-                    .background(Color.orange.opacity(0.3))
-                    .padding(.horizontal, 8)
-
-                HStack {
-                    Button { selectedDive = cachedWarmestDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedMaxTemp)
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Warmest")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.orange.opacity(0.8))
-                                if cachedWarmestDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.orange.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedWarmestDive == nil)
-
-                    Spacer()
-
-                    Button { selectedDive = cachedColdestDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedMinTemp)
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.6)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Coldest")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.cyan.opacity(0.8))
-                                if cachedColdestDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.cyan.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedColdestDive == nil)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.platformSecondaryBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.orange.opacity(0.5), .orange.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
+            depthTile
+            temperatureTile
         }
         .padding(.horizontal)
+    }
+
+    /// Depth tile (paired with Temperature on iOS; one of three per row on macOS).
+    private var depthTile: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "arrow.down.to.line")
+                    .font(.title3)
+                    .foregroundStyle(.blue)
+                    .accessibilityHidden(true)
+                Spacer()
+                Text("Depth")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 4) {
+                Text(verbatim: cachedAvgDepth.localizedString(decimals: 1, minDecimals: 1) + " \(prefs.depthUnit.symbol)")
+                    .font(.system(.title, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                Text("Average")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.blue.opacity(0.7))
+            }
+
+            Divider()
+                .background(Color.blue.opacity(0.3))
+                .padding(.horizontal, 8)
+
+            HStack {
+                Button { selectedDive = cachedDeepestDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedMaxDepthEver.localizedString(decimals: 1) + " \(prefs.depthUnit.symbol)")
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Max")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.blue.opacity(0.8))
+                            if cachedDeepestDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.blue.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedDeepestDive == nil)
+
+                Spacer()
+
+                Button { selectedDive = cachedShallowestDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedMinDepth.localizedString(decimals: 1) + " \(prefs.depthUnit.symbol)")
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Min")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.blue.opacity(0.8))
+                            if cachedShallowestDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.blue.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedShallowestDive == nil)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.platformSecondaryBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.blue.opacity(0.5), .blue.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+    }
+
+    /// Temperature tile.
+    private var temperatureTile: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "thermometer.medium")
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                Spacer()
+                Text("Temperature")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 4) {
+                Text(verbatim: cachedAvgTemp)
+                    .font(.system(.title, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                Text("Average")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.orange.opacity(0.7))
+            }
+
+            Divider()
+                .background(Color.orange.opacity(0.3))
+                .padding(.horizontal, 8)
+
+            HStack {
+                Button { selectedDive = cachedWarmestDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedMaxTemp)
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Warmest")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.orange.opacity(0.8))
+                            if cachedWarmestDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.orange.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedWarmestDive == nil)
+
+                Spacer()
+
+                Button { selectedDive = cachedColdestDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedMinTemp)
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Coldest")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.cyan.opacity(0.8))
+                            if cachedColdestDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.cyan.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedColdestDive == nil)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.platformSecondaryBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.orange.opacity(0.5), .orange.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
     }
 
     // MARK: - RMV & SAC Section
 
     private var rmvSacSection: some View {
         HStack(spacing: 12) {
-            // RMV card
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "lungs.fill")
-                        .font(.title3)
-                        .foregroundStyle(.teal)
-                        .accessibilityHidden(true)
-                    Spacer()
-                    Text("RMV")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 4) {
-                    Text(verbatim: cachedAvgRMV)
-                        .font(.system(.title3, design: .rounded))
-                        .fontWeight(.black)
-                        .foregroundStyle(.primary)
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
-                    Text("Average")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.teal.opacity(0.7))
-                }
-
-                Divider()
-                    .background(Color.teal.opacity(0.3))
-                    .padding(.horizontal, 8)
-
-                HStack {
-                    Button { selectedDive = cachedBestRMVDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedBestRMVDive?.formattedRMV ?? "—")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.5)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Best")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.teal.opacity(0.8))
-                                if cachedBestRMVDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.teal.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedBestRMVDive == nil)
-
-                    Spacer()
-
-                    Button { selectedDive = cachedWorstRMVDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedWorstRMVDive?.formattedRMV ?? "—")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.5)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Worst")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.teal.opacity(0.8))
-                                if cachedWorstRMVDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.teal.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedWorstRMVDive == nil)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.platformSecondaryBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.teal.opacity(0.5), .teal.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
-
-            // SAC card
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "gauge.with.dots.needle.bottom.50percent")
-                        .font(.title3)
-                        .foregroundStyle(.mint)
-                        .accessibilityHidden(true)
-                    Spacer()
-                    Text("SAC")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 4) {
-                    Text(verbatim: cachedAvgSAC)
-                        .font(.system(.title3, design: .rounded))
-                        .fontWeight(.black)
-                        .foregroundStyle(.primary)
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
-                    Text("Average")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.mint.opacity(0.7))
-                }
-
-                Divider()
-                    .background(Color.mint.opacity(0.3))
-                    .padding(.horizontal, 8)
-
-                HStack {
-                    Button { selectedDive = cachedBestSACDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedBestSACDive?.formattedSAC ?? "—")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.5)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Best")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.mint.opacity(0.8))
-                                if cachedBestSACDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.mint.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedBestSACDive == nil)
-
-                    Spacer()
-
-                    Button { selectedDive = cachedWorstSACDive } label: {
-                        VStack(spacing: 2) {
-                            Text(verbatim: cachedWorstSACDive?.formattedSAC ?? "—")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .minimumScaleFactor(0.5)
-                                .lineLimit(1)
-                            HStack(spacing: 3) {
-                                Text("Worst")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.mint.opacity(0.8))
-                                if cachedWorstSACDive != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.mint.opacity(0.6))
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cachedWorstSACDive == nil)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.platformSecondaryBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.mint.opacity(0.5), .mint.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
+            rmvTile
+            sacTile
         }
         .padding(.horizontal)
+    }
+
+    /// RMV tile (paired with SAC on iOS; one of three per row on macOS).
+    private var rmvTile: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "lungs.fill")
+                    .font(.title3)
+                    .foregroundStyle(.teal)
+                    .accessibilityHidden(true)
+                Spacer()
+                Text("RMV")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 4) {
+                Text(verbatim: cachedAvgRMV)
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                Text("Average")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.teal.opacity(0.7))
+            }
+
+            Divider()
+                .background(Color.teal.opacity(0.3))
+                .padding(.horizontal, 8)
+
+            HStack {
+                Button { selectedDive = cachedBestRMVDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedBestRMVDive?.formattedRMV ?? "—")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Best")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.teal.opacity(0.8))
+                            if cachedBestRMVDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.teal.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedBestRMVDive == nil)
+
+                Spacer()
+
+                Button { selectedDive = cachedWorstRMVDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedWorstRMVDive?.formattedRMV ?? "—")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Worst")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.teal.opacity(0.8))
+                            if cachedWorstRMVDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.teal.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedWorstRMVDive == nil)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.platformSecondaryBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.teal.opacity(0.5), .teal.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+    }
+
+    /// SAC tile.
+    private var sacTile: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "gauge.with.dots.needle.bottom.50percent")
+                    .font(.title3)
+                    .foregroundStyle(.mint)
+                    .accessibilityHidden(true)
+                Spacer()
+                Text("SAC")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 4) {
+                Text(verbatim: cachedAvgSAC)
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                Text("Average")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.mint.opacity(0.7))
+            }
+
+            Divider()
+                .background(Color.mint.opacity(0.3))
+                .padding(.horizontal, 8)
+
+            HStack {
+                Button { selectedDive = cachedBestSACDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedBestSACDive?.formattedSAC ?? "—")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Best")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.mint.opacity(0.8))
+                            if cachedBestSACDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.mint.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedBestSACDive == nil)
+
+                Spacer()
+
+                Button { selectedDive = cachedWorstSACDive } label: {
+                    VStack(spacing: 2) {
+                        Text(verbatim: cachedWorstSACDive?.formattedSAC ?? "—")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text("Worst")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.mint.opacity(0.8))
+                            if cachedWorstSACDive != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.mint.opacity(0.6))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(cachedWorstSACDive == nil)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.platformSecondaryBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.mint.opacity(0.5), .mint.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
     }
 
     // MARK: - Top Sites
@@ -1382,15 +1448,26 @@ struct StatisticsView: View {
                 }
             }
         }
+        .fillsAvailableHeightOnMac()
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color.platformSecondaryBackground)
         )
-        .padding(.horizontal)
+        .sideBySideCardPadding(.leading)
     }
 
     // MARK: - More Stats Grid
+
+    /// At a Glance grid: 2 columns, or 1 on macOS, where the card is the narrow
+    /// right-hand column beside Favourite Sites.
+    private var moreStatsColumns: [GridItem] {
+        #if os(macOS)
+        [GridItem(.flexible())]
+        #else
+        [GridItem(.flexible()), GridItem(.flexible())]
+        #endif
+    }
 
     private var moreStatsGrid: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1403,7 +1480,7 @@ struct StatisticsView: View {
             }
             .padding(.horizontal, 4)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            LazyVGrid(columns: moreStatsColumns, spacing: 12) {
                 StatisticsCard(
                     title: "Species Seen",
                     value: Double(cachedTotalSpeciesSeen).localizedString(decimals: 0),
@@ -1412,12 +1489,13 @@ struct StatisticsView: View {
                 )
             }
         }
+        .fillsAvailableHeightOnMac()
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color.platformSecondaryBackground)
         )
-        .padding(.horizontal)
+        .sideBySideCardPadding(.trailing)
     }
 }
 
