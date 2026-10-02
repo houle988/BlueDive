@@ -89,6 +89,31 @@ struct GearServiceView: View {
                         serviceAlertSection
                     }
                     
+                    #if os(macOS)
+                    // The Mac sheet is wide: the service gauge beside the usage statistics, and
+                    // the recent dives beside Maintenance & Notes. A section shown alone (no
+                    // service date, no dives yet) keeps the full width; fixedSize gives each pair
+                    // the height of its taller section.
+                    HStack(alignment: .top, spacing: 0) {
+                        if gear.nextServiceDue != nil {
+                            serviceGaugesSection
+                                .frame(maxWidth: .infinity)
+                        }
+                        statisticsGrid
+                            .frame(maxWidth: .infinity)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(alignment: .top, spacing: 0) {
+                        if !recentDives.isEmpty {
+                            recentDivesSection
+                                .frame(maxWidth: .infinity)
+                        }
+                        serviceHistorySection
+                            .frame(maxWidth: .infinity)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    #else
                     serviceGaugesSection
                     
                     // Grille de statistiques
@@ -99,6 +124,7 @@ struct GearServiceView: View {
                     }
                     
                     serviceHistorySection
+                    #endif
                 }
                 .padding(.vertical, 20)
                 .padding(.bottom, 20) // Espace supplémentaire en bas pour éviter le débordement
@@ -540,6 +566,7 @@ struct GearServiceView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .fillsAvailableHeightOnMac()
                 .padding(.vertical, 32)
                 .background(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -554,6 +581,17 @@ struct GearServiceView: View {
         }
     }
     
+    /// Usage statistics: two cards side by side, or stacked on macOS when the section is the
+    /// narrow half beside the service gauge (gear with a next-service date).
+    private var statisticsColumns: [GridItem] {
+        #if os(macOS)
+        if gear.nextServiceDue != nil {
+            return [GridItem(.flexible())]
+        }
+        #endif
+        return [GridItem(.flexible()), GridItem(.flexible())]
+    }
+
     private var statisticsGrid: some View {
         VStack(spacing: 16) {
             HStack {
@@ -564,7 +602,7 @@ struct GearServiceView: View {
             }
             .padding(.horizontal)
             
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+            LazyVGrid(columns: statisticsColumns, spacing: 16) {
                 StatCard(
                     icon: "clock.fill",
                     iconColor: .cyan,
@@ -581,6 +619,7 @@ struct GearServiceView: View {
             }
             .padding(.horizontal)
         }
+        .usageStatisticsBoxOnMac()
     }
     
     /// Resolves alert colour: red if due/past-due, orange if within 30 days.
@@ -743,6 +782,7 @@ struct GearServiceView: View {
             serviceHistoryNotesView
             gearNotesView
         }
+        .fillsAvailableHeightOnMac()
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -1037,6 +1077,7 @@ struct GearServiceView: View {
                     }
                 }
             }
+            .fillsAvailableHeightOnMac()
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -1196,41 +1237,74 @@ struct StatCard: View {
     let title: LocalizedStringKey
     let value: String
     
-    var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.15))
-                    .frame(width: 50, height: 50)
-                
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(iconColor)
-                    .accessibilityHidden(true)
+    private var iconBadge: some View {
+        ZStack {
+            Circle()
+                .fill(iconColor.opacity(0.15))
+                .frame(width: 50, height: 50)
+
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(iconColor)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var valueText: some View {
+        Text(value)
+            .font(.title3)
+            .fontWeight(.bold)
+            .foregroundStyle(.primary)
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    /// Icon above the value and title (iOS), or a compact row with the icon on the left (macOS).
+    @ViewBuilder
+    private var content: some View {
+        #if os(macOS)
+        // The Mac card is a compact row (icon left of the value), so the two cards stack
+        // in the Usage Statistics box without outgrowing the Next Maintenance card.
+        HStack(spacing: 14) {
+            iconBadge
+
+            VStack(alignment: .leading, spacing: 4) {
+                valueText
+                titleText
             }
 
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        #else
+        VStack(spacing: 12) {
+            iconBadge
+
             VStack(spacing: 4) {
-                Text(value)
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.primary)
-                
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                valueText
+                titleText
                     .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                )
-        )
+        #endif
+    }
+
+    var body: some View {
+        content
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
+            )
     }
 }
 
@@ -1406,3 +1480,28 @@ struct ServiceGauge: View {
     }
 }
 
+private extension View {
+    /// macOS: frames Usage Statistics as a box matching the Next Maintenance card beside it
+    /// (title inside, same padding, corner radius and outline), stretched to the pair's
+    /// height. iOS: returns the section unchanged.
+    @ViewBuilder
+    func usageStatisticsBoxOnMac() -> some View {
+        #if os(macOS)
+        self
+            .frame(maxWidth: .infinity)
+            .fillsAvailableHeightOnMac()
+            .padding(.vertical, 32)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.primary.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(Color.cyan.opacity(0.2), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal)
+        #else
+        self
+        #endif
+    }
+}

@@ -509,39 +509,54 @@ struct GearListView: View {
         }
     }
     
+    /// "All" plus one chip per category that has gear for the selected diver.
+    @ViewBuilder
+    private var categoryChips: some View {
+        // Filter by category
+        CategoryFilterChip(
+            title: "All",
+            icon: "square.grid.2x2",
+            isSelected: filterCategory == nil
+        ) {
+            filterCategory = nil
+        }
+
+        // Catégories
+        let diverBase = selectedDiver.isEmpty
+            ? allGear
+            : allGear.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
+        ForEach(sortedCategories) { category in
+            let count = diverBase.filter { $0.category == category.rawValue }.count
+            if count > 0 {
+                CategoryFilterChip(
+                    title: "gear.category." + category.rawValue,
+                    icon: category.icon,
+                    count: count,
+                    isSelected: filterCategory == category
+                ) {
+                    filterCategory = category
+                }
+            }
+        }
+    }
+
     private var categoryFilterSection: some View {
         Section {
+            #if os(macOS)
+            // Scrolling a chip row sideways needs a trackpad swipe or Shift-scroll on a
+            // Mac, and the window has room: wrap the chips onto as many lines as needed.
+            WrappingChipLayout(spacing: 12) {
+                categoryChips
+            }
+            .padding(.horizontal, 4)
+            #else
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    // Filter by category
-                    CategoryFilterChip(
-                        title: "All",
-                        icon: "square.grid.2x2",
-                        isSelected: filterCategory == nil
-                    ) {
-                        filterCategory = nil
-                    }
-                    
-                    // Catégories
-                    let diverBase = selectedDiver.isEmpty
-                        ? allGear
-                        : allGear.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
-                    ForEach(sortedCategories) { category in
-                        let count = diverBase.filter { $0.category == category.rawValue }.count
-                        if count > 0 {
-                            CategoryFilterChip(
-                                title: "gear.category." + category.rawValue,
-                                icon: category.icon,
-                                count: count,
-                                isSelected: filterCategory == category
-                            ) {
-                                filterCategory = category
-                            }
-                        }
-                    }
+                    categoryChips
                 }
                 .padding(.horizontal, 4)
             }
+            #endif
         }
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
@@ -1074,60 +1089,119 @@ struct GearRow: View {
     let gear: Gear
     
     var body: some View {
+        #if os(macOS)
+        // The Mac window is wide: one compact line (name, weight, dives, diver, service),
+        // falling back to the stacked iOS row when the window is too narrow.
+        ViewThatFits(in: .horizontal) {
+            wideRow
+            stackedRow
+        }
+        #else
+        stackedRow
+        #endif
+    }
+
+    /// Icon, then name / weight + dives / diver on three lines, service indicator trailing.
+    private var stackedRow: some View {
         HStack(spacing: 15) {
             GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory)
             
             // Informations
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(gear.isInactive ? .red : .green)
-                        .frame(width: 8, height: 8)
-                        .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
-
-                    Text(gear.name)
-                        .font(.headline)
-                        .foregroundStyle(gear.isInactive ? .secondary : .primary)
-                }
+                nameLine
                 
                 gearDetails
 
                 if !gear.diverName.isEmpty {
-                    Text(gear.diverName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    diverText
                 }
             }
 
             Spacer()
 
-            // Indicateur d'entretien — orange within 30 days, red when due/past
-            if let indicatorColor = serviceIndicatorColor {
-                Image(systemName: "exclamationmark.circle")
-                    .foregroundStyle(indicatorColor)
-                    .font(.title3)
-                    .accessibilityLabel(indicatorColor == .red ? Text("Service Overdue") : Text("Service Due Soon"))
-            }
+            serviceIndicator
         }
         .padding(.vertical, 8)
+    }
+
+    #if os(macOS)
+    /// One line (macOS): icon, then name, weight, dives, diver and service indicator next to
+    /// each other, left-aligned, so every detail stays close to the name it belongs to.
+    private var wideRow: some View {
+        HStack(spacing: 15) {
+            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory)
+
+            HStack(spacing: 16) {
+                nameLine
+                weightText
+                divesLabel
+                if !gear.diverName.isEmpty {
+                    diverText
+                }
+                serviceIndicator
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+    }
+    #endif
+
+    /// Active/inactive dot and the gear name.
+    private var nameLine: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(gear.isInactive ? .red : .green)
+                .frame(width: 8, height: 8)
+                .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
+
+            Text(gear.name)
+                .font(.headline)
+                .foregroundStyle(gear.isInactive ? .secondary : .primary)
+        }
+    }
+
+    private var diverText: some View {
+        Text(gear.diverName)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+    }
+
+    /// Indicateur d'entretien — orange within 30 days, red when due/past
+    @ViewBuilder
+    private var serviceIndicator: some View {
+        if let indicatorColor = serviceIndicatorColor {
+            Image(systemName: "exclamationmark.circle")
+                .foregroundStyle(indicatorColor)
+                .font(.title3)
+                .accessibilityLabel(indicatorColor == .red ? Text("Service Overdue") : Text("Service Due Soon"))
+        }
     }
     
     @ViewBuilder
     private var gearDetails: some View {
         HStack(spacing: 8) {
-            // Poids
-            if gear.weightContribution > 0 {
-                Text("• \(UserPreferences.shared.weightUnit.formatted(gear.weightContribution, from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            // Nombre de plongées
-            Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
-                .font(.caption)
-                .foregroundStyle(.cyan)
+            weightText
+            divesLabel
         }
+    }
+
+    // Poids
+    @ViewBuilder
+    private var weightText: some View {
+        if gear.weightContribution > 0 {
+            Text("• \(UserPreferences.shared.weightUnit.formatted(gear.weightContribution, from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // Nombre de plongées
+    private var divesLabel: some View {
+        Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
+            .font(.caption)
+            .foregroundStyle(.cyan)
     }
     
     /// Returns red if service is due/past, orange if within 30 days, nil otherwise.
