@@ -8,7 +8,7 @@ struct DiveRowView: View {
     private let prefs = UserPreferences.shared
     @Environment(\.locale) private var locale
     #if os(macOS)
-    @Environment(DiveListLayout.self) private var diveListLayout: DiveListLayout?
+    @Environment(OneLineRowsLayout.self) private var oneLineLayout: OneLineRowsLayout?
     #endif
     
     var body: some View {
@@ -16,12 +16,12 @@ struct DiveRowView: View {
         // The Mac window is wide: one line with every value in a fixed-width column so the
         // rows line up, falling back to the stacked iOS row when the window is too narrow.
         // Each version tells the main dive list which one is shown, so its column header row is
-        // only there with one-line rows (`DiveListLayout`; nil in other lists).
+        // only there with one-line rows (`OneLineRowsLayout`; nil in other lists).
         ViewThatFits(in: .horizontal) {
             wideRow
-                .onAppear { reportOneLine(true) }
+                .reportsOneLine(true, to: oneLineLayout)
             stackedRow
-                .onAppear { reportOneLine(false) }
+                .reportsOneLine(false, to: oneLineLayout)
         }
         .accessibilityElement(children: .combine)
         #else
@@ -29,15 +29,6 @@ struct DiveRowView: View {
             .accessibilityElement(children: .combine)
         #endif
     }
-
-    #if os(macOS)
-    /// Tells the main dive list whether this row shows its one-line version. Only writes (never
-    /// read in `body`), so a change does not redraw the rows, only the list's header row.
-    private func reportOneLine(_ isOneLine: Bool) {
-        guard let diveListLayout, diveListLayout.isOneLine != isOneLine else { return }
-        diveListLayout.isOneLine = isOneLine
-    }
-    #endif
 
     /// Number, flag and badges (centred), then site / duration + surface interval / location /
     /// date / gas stacked, depth trailing.
@@ -105,6 +96,7 @@ struct DiveRowView: View {
         }
         // Breathing room between the dense one-line rows.
         .padding(.vertical, 8)
+        .oneLineRowWidth(columnsWidth: DiveListColumns.rowWidth)
     }
     #endif
 
@@ -290,32 +282,17 @@ enum DiveListColumns {
     static let surfaceInterval: CGFloat = 120
     static let gas: CGFloat = 120
     static let depth: CGFloat = 100
-}
 
-/// Whether the main dive list's rows show their one-line version (macOS). Owned by
-/// `ContentView` and put in the environment of its Lists; each `DiveRowView` writes it, so the
-/// list shows its column header row only with one-line rows. Absent (nil) in other lists.
-/// A stable reference rather than a Binding, which would change on every `ContentView` redraw
-/// and redraw every visible row with it.
-@Observable final class DiveListLayout {
-    var isOneLine = true
+    /// Width of the one-line row: every column plus the spacing between them (1 012 pt).
+    static let rowWidth: CGFloat = number + flag + site + date + duration + surfaceInterval
+        + gas + depth + media + spacing * 8
 }
 
 /// Column labels over the one-line dive rows (macOS). Only added to the list while its rows
-/// are one-line (`DiveListLayout`), so it leaves no empty row in the stacked layout.
+/// are one-line (`OneLineRowsLayout`), so it leaves no empty row in the stacked layout.
 struct DiveListColumnHeader: View {
     var body: some View {
-        // The empty fallback keeps the labels from overflowing during the moment between the
-        // rows switching to stacked and this row being removed.
-        ViewThatFits(in: .horizontal) {
-            labels
-                // One header element: "Dive #, Country, Site, …".
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isHeader)
-            Color.clear
-                .frame(height: 0)
-                .accessibilityHidden(true)
-        }
+        ColumnHeaderRowContent { labels }
     }
 
     private var labels: some View {
@@ -346,23 +323,8 @@ struct DiveListColumnHeader: View {
 
     private func label(_ text: Text, alignment: TextAlignment) -> some View {
         text
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .textCase(nil)
-            .lineLimit(1)
+            .columnHeaderLabel()
             .multilineTextAlignment(alignment)
-    }
-}
-
-extension View {
-    /// Shows `DiveListColumnHeader` as a plain List row (macOS): no row background or
-    /// separator. A row, not a section header, so it has exactly the dive rows' width and
-    /// insets (a sidebar section header is wider and shrinks on hover for its disclosure
-    /// chevron, which shifted the labels).
-    func diveListHeaderRow() -> some View {
-        self
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
     }
 }
 #endif

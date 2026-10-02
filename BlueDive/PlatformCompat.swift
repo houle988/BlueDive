@@ -542,3 +542,83 @@ struct WidthAdaptiveLayout<Wide: View, Narrow: View>: View {
     }
 }
 #endif
+
+// MARK: - One-Line List Rows (macOS wide-window layouts)
+
+#if os(macOS)
+/// Whether a list's rows show their one-line (column) version (macOS wide-window layouts:
+/// Dives, Equipment, Documents). Owned by the list's view in `@State` and put in the List's
+/// environment; each row writes it from the version `ViewThatFits` shows, so the list shows its
+/// column header row only with one-line rows (no empty row in the stacked layout). Rows only
+/// write it, never read it in `body`, so a change redraws the header, not the rows. A stable
+/// reference rather than a Binding, which would change on every parent redraw.
+@Observable final class OneLineRowsLayout {
+    var isOneLine = true
+
+    /// Natural width of every one-line row and column header (Dives, Equipment, Documents):
+    /// the widest one-line row, the Dives row (`DiveListColumns`: 1 012 pt). `ViewThatFits`
+    /// switches a row to its stacked version when the List gives it less than its natural width,
+    /// so the same value makes all three lists switch at the same window width (their List row
+    /// insets are the same, 16 pt each side). Raise it if a one-line row gets wider than this.
+    static let rowWidth: CGFloat = 1012
+}
+
+/// Content of a column header row: `labels` (one VoiceOver header element) with an invisible
+/// fallback, so the labels never overflow during the moment between the rows switching to
+/// stacked and the header row being removed.
+struct ColumnHeaderRowContent<Labels: View>: View {
+    @ViewBuilder let labels: Labels
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            labels
+                .oneLineRowWidth()
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+            Color.clear
+                .frame(height: 0)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+extension View {
+    /// Shows a column header as a plain List row: no row background or separator. A row, not a
+    /// section header, so it has exactly the rows' width and insets (a sidebar section header is
+    /// wider and shrinks on hover for its disclosure chevron, which shifts the labels).
+    func columnHeaderRow() -> some View {
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
+    /// Gives a one-line row (or its column header) the shared natural width
+    /// `OneLineRowsLayout.rowWidth`, so every list switches to stacked rows at the same window
+    /// width; the row still fills the width the List gives it. `columnsWidth` (a row's columns
+    /// plus spacing) is checked in debug builds: a row wider than `rowWidth` would switch later
+    /// than the other lists.
+    func oneLineRowWidth(columnsWidth: CGFloat = 0) -> some View {
+        assert(columnsWidth <= OneLineRowsLayout.rowWidth,
+               "One-line row is \(columnsWidth) pt wide: raise OneLineRowsLayout.rowWidth so all lists switch together")
+        return frame(idealWidth: OneLineRowsLayout.rowWidth, maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Style of one column label in a header row.
+    func columnHeaderLabel() -> some View {
+        self
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(nil)
+            .lineLimit(1)
+    }
+
+    /// Reports to the list's `OneLineRowsLayout` (nil outside such a list) which version of a
+    /// row appeared. Writes only when the value changes.
+    func reportsOneLine(_ isOneLine: Bool, to layout: OneLineRowsLayout?) -> some View {
+        onAppear {
+            guard let layout, layout.isOneLine != isOneLine else { return }
+            layout.isOneLine = isOneLine
+        }
+    }
+}
+#endif

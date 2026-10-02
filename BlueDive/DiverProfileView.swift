@@ -1017,7 +1017,9 @@ enum GoalType {
 
 // MARK: - Insurance Card
 
-fileprivate extension DivingInsurance {
+/// Status colour of a policy (red expired, orange expiring soon, blue active), shared by
+/// `InsuranceCard` and the one-line insurance row in Documents (macOS).
+extension DivingInsurance {
     var statusColor: Color {
         if isExpired      { return .red    }
         if isExpiringSoon { return .orange }

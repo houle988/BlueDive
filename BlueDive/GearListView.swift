@@ -25,6 +25,11 @@ struct GearListView: View {
     @State private var filterCategory: GearCategory?
     @State private var showInactive = false
     @State private var collapsedSections: Set<String> = []
+    #if os(macOS)
+    /// Whether the rows show their one-line version (wide window), reported by the rows; the
+    /// column header row is shown only then. Starts one-line: the main window opens maximized.
+    @State private var gearListLayout = OneLineRowsLayout()
+    #endif
     @State private var showTankTemplates = false
     @State private var showGearGroups = false
     @State private var showImportPicker = false
@@ -488,6 +493,13 @@ struct GearListView: View {
                         }
                     }
                 )) {
+                    #if os(macOS)
+                    // Column labels as a row, so they share the gear rows' width.
+                    if gearListLayout.isOneLine {
+                        GearListColumnHeader()
+                            .columnHeaderRow()
+                    }
+                    #endif
                     ForEach(items) { item in
                         Button {
                             selectedGear = item
@@ -547,6 +559,9 @@ struct GearListView: View {
         // .sidebar is required for Section(isExpanded:) collapse/expand to function
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
+        #if os(macOS)
+        .environment(gearListLayout)
+        #endif
         .refreshable {
             try? modelContext.save()
             NSUbiquitousKeyValueStore.default.synchronize()
@@ -1142,14 +1157,22 @@ struct GearListView: View {
 
 struct GearRow: View {
     let gear: Gear
+    #if os(macOS)
+    @Environment(\.locale) private var locale
+    @Environment(OneLineRowsLayout.self) private var oneLineLayout: OneLineRowsLayout?
+    #endif
     
     var body: some View {
         #if os(macOS)
-        // The Mac window is wide: one compact line (name, weight, dives, diver, service),
-        // falling back to the stacked iOS row when the window is too narrow.
+        // The Mac window is wide: one line with every value in a fixed-width column so the
+        // rows line up, falling back to the stacked iOS row when the window is too narrow.
+        // Each version tells the list which one is shown, so its column header row is only
+        // there with one-line rows (`OneLineRowsLayout`).
         ViewThatFits(in: .horizontal) {
             wideRow
+                .reportsOneLine(true, to: oneLineLayout)
             stackedRow
+                .reportsOneLine(false, to: oneLineLayout)
         }
         #else
         stackedRow
@@ -1180,25 +1203,79 @@ struct GearRow: View {
     }
 
     #if os(macOS)
-    /// One line (macOS): icon, then name, weight, dives, diver and service indicator next to
-    /// each other, left-aligned, so every detail stays close to the name it belongs to.
+    /// One line (macOS): icon, name, manufacturer + model, weight, dives, diver, next service
+    /// date and service indicator, each in its own fixed-width column (`GearListColumns`, shared
+    /// with `GearListColumnHeader` so the labels stay over their values).
     private var wideRow: some View {
-        HStack(spacing: 15) {
-            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory)
+        HStack(spacing: GearListColumns.spacing) {
+            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory,
+                         size: GearListColumns.icon)
 
-            HStack(spacing: 16) {
-                nameLine
-                weightText
-                divesLabel
-                if !gear.diverName.isEmpty {
-                    diverText
+            nameLine
+                .lineLimit(1)
+                .frame(minWidth: GearListColumns.name, idealWidth: GearListColumns.name,
+                       maxWidth: .infinity, alignment: .leading)
+
+            Text(verbatim: modelText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: GearListColumns.model, alignment: .leading)
+
+            // ZStack, not Group: a Group's frame applies to its children, so an empty value would
+            // drop the column and shift the ones before it.
+            ZStack {
+                if let weight = weightValue {
+                    Text(verbatim: weight)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
-                serviceIndicator
             }
+            .frame(width: GearListColumns.weight, alignment: .trailing)
 
-            Spacer(minLength: 0)
+            divesLabel
+                .monospacedDigit()
+                .frame(width: GearListColumns.dives, alignment: .trailing)
+
+            diverText
+                .frame(width: GearListColumns.diver, alignment: .leading)
+
+            ZStack {
+                if let due = gear.nextServiceDue {
+                    Text(due, format: .dateTime.day().month().year().locale(locale))
+                        .font(.caption)
+                        .foregroundStyle(serviceIndicatorColor ?? .secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: GearListColumns.nextService, alignment: .leading)
+
+            ZStack { serviceIndicator }
+                .frame(width: GearListColumns.indicator, alignment: .leading)
         }
         .padding(.vertical, 8)
+        // Same natural width as the Dives and Documents rows: all lists switch together.
+        .oneLineRowWidth(columnsWidth: GearListColumns.rowWidth)
+        // The whole row opens the item, including the gaps between columns (a plain Button
+        // only responds where something is drawn).
+        .contentShape(Rectangle())
+    }
+
+    /// Manufacturer and model, e.g. "Shearwater Perdix 2" (empty when neither is set).
+    private var modelText: String {
+        [gear.manufacturer, gear.model]
+            .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// Formatted weight contribution, without the "•" separator of the stacked row; nil when 0.
+    private var weightValue: String? {
+        guard gear.weightContribution > 0 else { return nil }
+        let prefs = UserPreferences.shared
+        return prefs.weightUnit.formatted(gear.weightContribution,
+                                          from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? prefs.weightUnit.symbol))
     }
     #endif
 
@@ -1278,6 +1355,55 @@ struct GearRow: View {
     }
     
 }
+
+#if os(macOS)
+// MARK: - Equipment List Columns (macOS)
+
+/// Column widths of the one-line Equipment row on macOS, shared by `GearRow` and
+/// `GearListColumnHeader` so the header labels stay aligned with the values.
+enum GearListColumns {
+    static let spacing: CGFloat = 12
+    static let icon: CGFloat = 32
+    /// Minimum (and ideal) width of the flexible name column.
+    static let name: CGFloat = 160
+    static let model: CGFloat = 180
+    static let weight: CGFloat = 80
+    static let dives: CGFloat = 70
+    static let diver: CGFloat = 120
+    static let nextService: CGFloat = 120
+    static let indicator: CGFloat = 24
+
+    /// Width of the one-line row: every column plus the spacing between them (870 pt).
+    static let rowWidth: CGFloat = icon + name + model + weight + dives + diver + nextService
+        + indicator + spacing * 7
+}
+
+/// Column labels over the one-line Equipment rows (macOS). Only added to the list while its
+/// rows are one-line (`OneLineRowsLayout`), so it leaves no empty row in the stacked layout.
+struct GearListColumnHeader: View {
+    var body: some View {
+        ColumnHeaderRowContent {
+            HStack(spacing: GearListColumns.spacing) {
+                Color.clear.frame(width: GearListColumns.icon, height: 0)
+                Text("Name").columnHeaderLabel()
+                    .frame(minWidth: GearListColumns.name, idealWidth: GearListColumns.name,
+                           maxWidth: .infinity, alignment: .leading)
+                Text("Model").columnHeaderLabel()
+                    .frame(width: GearListColumns.model, alignment: .leading)
+                Text("Weight").columnHeaderLabel()
+                    .frame(width: GearListColumns.weight, alignment: .trailing)
+                Text("Dives").columnHeaderLabel()
+                    .frame(width: GearListColumns.dives, alignment: .trailing)
+                Text("Diver").columnHeaderLabel()
+                    .frame(width: GearListColumns.diver, alignment: .leading)
+                Text("Next Service").columnHeaderLabel()
+                    .frame(width: GearListColumns.nextService, alignment: .leading)
+                Color.clear.frame(width: GearListColumns.indicator, height: 0)
+            }
+        }
+    }
+}
+#endif
 
 // MARK: - Category Filter Chip
 

@@ -103,7 +103,7 @@ struct ContentView: View {
     #if os(macOS)
     /// Whether the dive rows show their one-line version (wide window), reported by the rows;
     /// the column header row is shown only then. Starts one-line: the main window opens maximized.
-    @State private var diveListLayout = DiveListLayout()
+    @State private var diveListLayout = OneLineRowsLayout()
     #endif
 
     @ViewBuilder
@@ -687,7 +687,7 @@ struct ContentView: View {
                                 // Column labels as a row, so they share the dive rows' width.
                                 if diveListLayout.isOneLine {
                                     DiveListColumnHeader()
-                                        .diveListHeaderRow()
+                                        .columnHeaderRow()
                                 }
                                 #endif
                                 ForEach(sectionSummaries) { summary in
@@ -751,7 +751,7 @@ struct ContentView: View {
                         // Column labels as a row, so they share the dive rows' width.
                         if diveListLayout.isOneLine {
                             DiveListColumnHeader()
-                                .diveListHeaderRow()
+                                .columnHeaderRow()
                         }
                         #endif
                         ForEach(displayedSummaries) { summary in

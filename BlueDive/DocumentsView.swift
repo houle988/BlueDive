@@ -40,6 +40,12 @@ struct DocumentsView: View {
 
     // MARK: - Collapse State (namespaced: "cert:" prefix for orgs, "ins:" prefix for insurers)
     @State private var collapsedSections: Set<String> = []
+    #if os(macOS)
+    /// Whether the document rows show their one-line version (wide window), reported by the
+    /// rows; the column header rows are shown only then. Starts one-line: the main window opens
+    /// maximized.
+    @State private var documentsLayout = OneLineRowsLayout()
+    #endif
 
     // MARK: - Certification State
     @State private var showAddCertification = false
@@ -225,8 +231,16 @@ struct DocumentsView: View {
                             } else if !groupedCertifications.isEmpty {
                                 ForEach(groupedCertifications, id: \.key) { agency, certs in
                                     Section(isExpanded: sectionBinding("cert:" + agency)) {
+                                        #if os(macOS)
+                                        // Column labels as a row, so they share the rows' width.
+                                        if documentsLayout.isOneLine {
+                                            CertificationColumnHeader()
+                                                .columnHeaderRow()
+                                                .listRowInsets(documentRowInsets)
+                                        }
+                                        #endif
                                         ForEach(certs) { cert in
-                                            certRow(cert)
+                                            certRow(cert, isLast: cert.id == certs.last?.id)
                                         }
                                     } header: {
                                         Text(agency)
@@ -280,8 +294,16 @@ struct DocumentsView: View {
                                         ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Fallback insurer group header when insurer name is blank.")
                                         : insurer
                                     Section(isExpanded: sectionBinding("ins:" + insurer)) {
+                                        #if os(macOS)
+                                        // Column labels as a row, so they share the rows' width.
+                                        if documentsLayout.isOneLine {
+                                            InsuranceColumnHeader()
+                                                .columnHeaderRow()
+                                                .listRowInsets(documentRowInsets)
+                                        }
+                                        #endif
                                         ForEach(policies) { insurance in
-                                            insuranceRow(insurance)
+                                            insuranceRow(insurance, isLast: insurance.id == policies.last?.id)
                                         }
                                     } header: {
                                         Text(displayName)
@@ -601,10 +623,40 @@ struct DocumentsView: View {
 
     // MARK: - Row Helpers
 
+    /// Insets of the document rows and their column header rows. One-line rows (macOS) get no
+    /// horizontal inset: the List already insets them 16 pt each side, as it does the Dives and
+    /// Equipment rows, so all three lists give their rows the same width and switch to stacked
+    /// rows at the same window width. The cards keep 16 pt (unchanged on iOS).
+    private var documentRowInsets: EdgeInsets {
+        documentsOneLine
+            ? EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0)
+            : EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16)
+    }
+
+    /// Whether the rows show their one-line version (macOS wide window); always false on iOS.
+    private var documentsOneLine: Bool {
+        #if os(macOS)
+        documentsLayout.isOneLine
+        #else
+        false
+        #endif
+    }
+
     @ViewBuilder
-    private func certRow(_ cert: Certification) -> some View {
+    private func certRow(_ cert: Certification, isLast: Bool) -> some View {
         Button { selectedCertification = cert } label: {
+            #if os(macOS)
+            // One line in a wide window, the card otherwise (as on iOS); each version reports
+            // which one is shown, so the column header row comes and goes with them.
+            ViewThatFits(in: .horizontal) {
+                CertificationOneLineRow(certification: cert, showExpired: cert.isExpired)
+                    .reportsOneLine(true, to: documentsLayout)
+                CertificationCard(certification: cert, showExpired: cert.isExpired)
+                    .reportsOneLine(false, to: documentsLayout)
+            }
+            #else
             CertificationCard(certification: cert, showExpired: cert.isExpired)
+            #endif
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -629,15 +681,25 @@ struct DocumentsView: View {
                 showDeleteCertConfirmation = true
             } label: { Label("Delete", systemImage: "trash") }
         }
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .documentRowBackground(oneLine: documentsOneLine, separator: !isLast)
+        .listRowInsets(documentRowInsets)
         .listRowSeparator(.hidden)
     }
 
     @ViewBuilder
-    private func insuranceRow(_ insurance: DivingInsurance) -> some View {
+    private func insuranceRow(_ insurance: DivingInsurance, isLast: Bool) -> some View {
         Button { selectedInsurance = insurance } label: {
+            #if os(macOS)
+            // One line in a wide window, the card otherwise (as on iOS); see certRow.
+            ViewThatFits(in: .horizontal) {
+                InsuranceOneLineRow(insurance: insurance, showExpired: insurance.isExpired)
+                    .reportsOneLine(true, to: documentsLayout)
+                InsuranceCard(insurance: insurance, showExpired: insurance.isExpired)
+                    .reportsOneLine(false, to: documentsLayout)
+            }
+            #else
             InsuranceCard(insurance: insurance, showExpired: insurance.isExpired)
+            #endif
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -662,8 +724,8 @@ struct DocumentsView: View {
                 showDeleteInsuranceConfirmation = true
             } label: { Label("Delete", systemImage: "trash") }
         }
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .documentRowBackground(oneLine: documentsOneLine, separator: !isLast)
+        .listRowInsets(documentRowInsets)
         .listRowSeparator(.hidden)
     }
 
@@ -1252,7 +1314,11 @@ struct CertificationCard: View {
 
     private var orgColor: Color { certification.organizationColor }
 
-    private var displayName: String {
+    private var displayName: String { Self.displayName(of: certification) }
+
+    /// The certification name without a leading "<organization> - " (shared with the one-line
+    /// row on macOS).
+    static func displayName(of certification: Certification) -> String {
         let prefix = certification.organization + " - "
         if certification.name.hasPrefix(prefix) {
             return String(certification.name.dropFirst(prefix.count))
@@ -1873,3 +1939,238 @@ struct AddCertificationView: View {
     DocumentsView()
         .modelContainer(for: [Certification.self, DivingInsurance.self], inMemory: true)
 }
+
+// MARK: - Document Row Background
+
+extension View {
+    /// Row background of a certification / insurance row: on macOS with one-line rows, the dive
+    /// list's plain row (background + separator, `separator` false for a section's last row);
+    /// otherwise clear, so the card draws its own background (iOS: always clear, unchanged).
+    @ViewBuilder
+    func documentRowBackground(oneLine: Bool, separator: Bool) -> some View {
+        #if os(macOS)
+        if oneLine {
+            listRowBackground(Color.primary.opacity(0.07), macSeparator: separator)
+        } else {
+            listRowBackground(Color.clear)
+        }
+        #else
+        listRowBackground(Color.clear)
+        #endif
+    }
+}
+
+#if os(macOS)
+// MARK: - Document One-Line Rows (macOS)
+
+/// Column widths of the one-line certification and insurance rows on macOS, shared by the rows
+/// and their column headers so the labels stay aligned with the values.
+enum DocumentListColumns {
+    static let spacing: CGFloat = 12
+    static let icon: CGFloat = 32
+    /// Minimum (and ideal) width of the flexible name / insurer column.
+    static let name: CGFloat = 180
+    static let diver: CGFloat = 120
+    static let detail: CGFloat = 140
+    static let number: CGFloat = 150
+    static let date: CGFloat = 120
+    static let status: CGFloat = 16
+
+    /// Width of the one-line rows: every column plus the spacing between them (962 pt).
+    static let rowWidth: CGFloat = icon + name + diver + detail + number + date * 2 + status
+        + spacing * 7
+}
+
+/// Medium date in the in-app language (as on the cards).
+private func documentDate(_ date: Date, locale: Locale) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = locale
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .none
+    return formatter.string(from: date)
+}
+
+/// One line (macOS): icon, name, diver, level, number, issue and expiration dates, status dot,
+/// in `DocumentListColumns`. Same information and colours as `CertificationCard`.
+struct CertificationOneLineRow: View {
+    let certification: Certification
+    let showExpired: Bool
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        HStack(spacing: DocumentListColumns.spacing) {
+            CertificationIconView(organization: certification.organization,
+                                  size: DocumentListColumns.icon, fillOpacity: 0.2)
+
+            Text(CertificationCard.displayName(of: certification))
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(minWidth: DocumentListColumns.name, idealWidth: DocumentListColumns.name,
+                       maxWidth: .infinity, alignment: .leading)
+
+            Text(certification.diverName)
+                .font(.subheadline)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.diver, alignment: .leading)
+
+            Group {
+                if certification.level == "Other" {
+                    Text("Other")
+                } else {
+                    Text(certification.level)
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(width: DocumentListColumns.detail, alignment: .leading)
+
+            Text(certification.certificationNumber)
+                .font(.caption)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.number, alignment: .leading)
+
+            Text(documentDate(certification.issueDate, locale: locale))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.date, alignment: .leading)
+
+            // ZStack, not Group: a Group's frame applies to its children, so with no expiration
+            // date the column would vanish and shift the columns before it.
+            ZStack {
+                if let expiration = certification.expirationDate {
+                    Text(documentDate(expiration, locale: locale))
+                        .font(.caption)
+                        .foregroundStyle(showExpired ? .red : (certification.isExpiringSoon ? .orange : .secondary))
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: DocumentListColumns.date, alignment: .leading)
+
+            Circle()
+                .fill(showExpired ? Color.red : (certification.isExpiringSoon ? Color.orange : Color.green))
+                .frame(width: 12, height: 12)
+                .frame(width: DocumentListColumns.status)
+                .accessibilityLabel(showExpired ? Text("Expired") : (certification.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
+        }
+        .padding(.vertical, 8)
+        // Same natural width as the Dives and Equipment rows: all lists switch together.
+        .oneLineRowWidth(columnsWidth: DocumentListColumns.rowWidth)
+        .contentShape(Rectangle())
+    }
+}
+
+/// One line (macOS): icon, insurer, diver, coverage, policy number, start and end dates, status
+/// dot, in `DocumentListColumns`. Same information and colours as `InsuranceCard`.
+struct InsuranceOneLineRow: View {
+    let insurance: DivingInsurance
+    let showExpired: Bool
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        HStack(spacing: DocumentListColumns.spacing) {
+            InsuranceIconView(insurerName: insurance.insurerName, size: DocumentListColumns.icon,
+                              fallbackColor: insurance.statusColor, fillOpacity: 0.2)
+
+            Text(insurance.insurerName)
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(minWidth: DocumentListColumns.name, idealWidth: DocumentListColumns.name,
+                       maxWidth: .infinity, alignment: .leading)
+
+            Text(insurance.diverName)
+                .font(.subheadline)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.diver, alignment: .leading)
+
+            Text(insurance.coverageType)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.detail, alignment: .leading)
+
+            Text(insurance.policyNumber)
+                .font(.caption)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.number, alignment: .leading)
+
+            Text(documentDate(insurance.startDate, locale: locale))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.date, alignment: .leading)
+
+            Text(documentDate(insurance.endDate, locale: locale))
+                .font(.caption)
+                .foregroundStyle(showExpired ? .red : (insurance.isExpiringSoon ? .orange : .secondary))
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.date, alignment: .leading)
+
+            Circle()
+                .fill(showExpired ? Color.red : (insurance.isExpiringSoon ? Color.orange : Color.blue))
+                .frame(width: 12, height: 12)
+                .frame(width: DocumentListColumns.status)
+                .accessibilityLabel(showExpired ? Text("Expired") : (insurance.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
+        }
+        .padding(.vertical, 8)
+        // Same natural width as the Dives and Equipment rows: all lists switch together.
+        .oneLineRowWidth(columnsWidth: DocumentListColumns.rowWidth)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Column labels over the one-line certification rows (macOS); only in the list while its rows
+/// are one-line (`OneLineRowsLayout`).
+struct CertificationColumnHeader: View {
+    var body: some View {
+        ColumnHeaderRowContent {
+            HStack(spacing: DocumentListColumns.spacing) {
+                Color.clear.frame(width: DocumentListColumns.icon, height: 0)
+                Text("Name").columnHeaderLabel()
+                    .frame(minWidth: DocumentListColumns.name, idealWidth: DocumentListColumns.name,
+                           maxWidth: .infinity, alignment: .leading)
+                Text("Diver").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.diver, alignment: .leading)
+                Text("Level").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.detail, alignment: .leading)
+                Text("Certification Number").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.number, alignment: .leading)
+                Text("Issue Date").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.date, alignment: .leading)
+                Text("Expiration Date").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.date, alignment: .leading)
+                Color.clear.frame(width: DocumentListColumns.status, height: 0)
+            }
+        }
+    }
+}
+
+/// Column labels over the one-line insurance rows (macOS); only in the list while its rows are
+/// one-line (`OneLineRowsLayout`).
+struct InsuranceColumnHeader: View {
+    var body: some View {
+        ColumnHeaderRowContent {
+            HStack(spacing: DocumentListColumns.spacing) {
+                Color.clear.frame(width: DocumentListColumns.icon, height: 0)
+                Text("Insurer").columnHeaderLabel()
+                    .frame(minWidth: DocumentListColumns.name, idealWidth: DocumentListColumns.name,
+                           maxWidth: .infinity, alignment: .leading)
+                Text("Diver").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.diver, alignment: .leading)
+                Text("Coverage Type").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.detail, alignment: .leading)
+                Text("Policy Number").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.number, alignment: .leading)
+                Text("Start Date").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.date, alignment: .leading)
+                Text("End Date").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.date, alignment: .leading)
+                Color.clear.frame(width: DocumentListColumns.status, height: 0)
+            }
+        }
+    }
+}
+#endif
