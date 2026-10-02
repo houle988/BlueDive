@@ -182,6 +182,10 @@ struct BlueDiveApp: App {
     private func mainWindowGroup<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some Scene {
         #if os(macOS)
         return WindowGroup(id: MainWindowPlacement.windowGroupID) { content() }
+            // Toolbar controls are icon-only (no titles), so AppKit's "Icon and Text"
+            // display mode would only add empty label space. A fixed style removes that
+            // choice from the toolbar's context menu.
+            .windowToolbarLabelStyle(fixed: .iconOnly)
         #else
         return WindowGroup { content() }
         #endif
