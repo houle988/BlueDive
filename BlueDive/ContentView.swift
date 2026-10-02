@@ -100,6 +100,11 @@ struct ContentView: View {
     @Environment(FileImportCoordinator.self) var importCoordinator
     @State private var showSyncStatusPopover = false
     @State private var collapsedDiverSections: Set<String> = []
+    #if os(macOS)
+    /// Whether the dive rows show their one-line version (wide window), reported by the rows;
+    /// the column header row is shown only then. Starts one-line: the main window opens maximized.
+    @State private var diveListLayout = DiveListLayout()
+    #endif
 
     @ViewBuilder
     private func moveButton(for summaryID: UUID) -> some View {
@@ -678,6 +683,13 @@ struct ContentView: View {
                                     }
                                 }
                             )) {
+                                #if os(macOS)
+                                // Column labels as a row, so they share the dive rows' width.
+                                if diveListLayout.isOneLine {
+                                    DiveListColumnHeader()
+                                        .diveListHeaderRow()
+                                }
+                                #endif
                                 ForEach(sectionSummaries) { summary in
                                     let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
                                     NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: true)) {
@@ -730,8 +742,18 @@ struct ContentView: View {
                         await forceiCloudSync()
                     }
                     .contentMargins(.top, 0, for: .scrollContent)
+                    #if os(macOS)
+                    .environment(diveListLayout)
+                    #endif
                 } else {
                     List {
+                        #if os(macOS)
+                        // Column labels as a row, so they share the dive rows' width.
+                        if diveListLayout.isOneLine {
+                            DiveListColumnHeader()
+                                .diveListHeaderRow()
+                        }
+                        #endif
                         ForEach(displayedSummaries) { summary in
                             let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
                             NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: false)) {
@@ -766,6 +788,9 @@ struct ContentView: View {
                     }
                     .listStyle(.plain)
                     .contentMargins(.top, 0, for: .scrollContent)
+                    #if os(macOS)
+                    .environment(diveListLayout)
+                    #endif
                 }
             }
         }

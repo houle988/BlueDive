@@ -28,6 +28,7 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
     let tags: [String]             // split + trimmed from dive.tags
     let year: Int                  // Calendar.component(.year, from: timestamp)
     let gasType: String            // dive.gasType
+    let gasNames: [String]         // distinct TankData.gasName per tank, in tank order
 
     // MARK: - Relationship-derived (patched after membership sweep)
     var hasFish: Bool
@@ -85,6 +86,28 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
         }
     }
 
+    /// Every gas used on the dive, one per distinct gas in tank order and localized, e.g.
+    /// "Trimix + Nitrox". Empty when the dive has no tanks.
+    var displayGasNames: String {
+        gasNames.map { name in
+            switch name {
+            case "Air":
+                return NSLocalizedString("Air", bundle: .forAppLanguage(), value: "Air", comment: "Gas type label: 21% oxygen")
+            case "Nitrox":
+                return NSLocalizedString("Nitrox", bundle: .forAppLanguage(), value: "Nitrox", comment: "Gas type label: oxygen above 21%")
+            case "Trimix":
+                return NSLocalizedString("Trimix", bundle: .forAppLanguage(), value: "Trimix", comment: "Gas type label: helium present")
+            case "Heliox":
+                return NSLocalizedString("Heliox", bundle: .forAppLanguage(), value: "Heliox", comment: "Gas type label: oxygen and helium only, no nitrogen")
+            case "Hypoxic":
+                return NSLocalizedString("Hypoxic", bundle: .forAppLanguage(), value: "Hypoxic", comment: "Gas type label: oxygen below 21%")
+            default:
+                return name
+            }
+        }
+        .joined(separator: " + ")
+    }
+
     // MARK: - Init
     init(from dive: Dive) {
         id = dive.id
@@ -114,6 +137,8 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
             .filter { !$0.isEmpty }
         year = Calendar.current.component(.year, from: dive.timestamp)
         gasType = dive.gasType
+        var seenGases = Set<String>()
+        gasNames = dive.tanks.map(\.gasName).filter { seenGases.insert($0).inserted }
         hasFish = false      // patched by store after membership sweep
         hasPhotos = false    // patched by store after membership sweep
         seenFishNames = []   // patched by store after membership sweep

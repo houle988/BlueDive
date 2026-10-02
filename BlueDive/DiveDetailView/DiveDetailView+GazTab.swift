@@ -590,6 +590,8 @@ extension DiveDetailView {
         var tanks = dive.tanks
         tanks.append(TankData())
         dive.tanks = tanks
+        // Gas column of the dive list (kept even if the tank editor is then cancelled).
+        store.commit(dive, affects: .rowFields)
         selectedTankIndex = tanks.count - 1
         // Open edit sheet for the new tank
         showEditSheet = true
@@ -601,6 +603,7 @@ extension DiveDetailView {
         let indexToRemove = min(selectedTankIndex, tanks.count - 1)
         tanks.remove(at: indexToRemove)
         dive.tanks = tanks
+        store.commit(dive, affects: .rowFields)
         selectedTankIndex = max(0, indexToRemove - 1)
     }
 
