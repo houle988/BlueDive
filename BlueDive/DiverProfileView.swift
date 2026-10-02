@@ -93,10 +93,7 @@ struct DiverProfileView: View {
     private var totalDives: Int { filteredDives.count }
 
     private var totalBottomTime: String {
-        let total = filteredDives.reduce(0) { $0 + $1.duration }
-        let h = total / 60
-        let m = total % 60
-        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
+        formattedMinutes(filteredDives.reduce(0) { $0 + $1.duration }, locale: locale)
     }
 
     private var maxDepth: Double {
@@ -178,28 +175,43 @@ struct DiverProfileView: View {
                         // Most Observed Creatures (either one alone keeps the full width), and
                         // Certifications beside Insurance. fixedSize gives each pair the height
                         // of its taller card.
+                        // A narrower sheet falls back to the iOS order, one section under the other.
                         if !goals.isEmpty || !topCreatures.isEmpty {
-                            HStack(alignment: .top, spacing: 22) {
-                                if !goals.isEmpty {
-                                    goalsSection
-                                        .frame(maxWidth: .infinity)
+                            WidthAdaptiveLayout(minWidth: 600) {
+                                HStack(alignment: .top, spacing: 22) {
+                                    if !goals.isEmpty {
+                                        goalsSection
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    if !topCreatures.isEmpty {
+                                        topCreaturesSection
+                                            .frame(maxWidth: .infinity)
+                                    }
                                 }
-                                if !topCreatures.isEmpty {
-                                    topCreaturesSection
-                                        .frame(maxWidth: .infinity)
+                                .fixedSize(horizontal: false, vertical: true)
+                            } narrow: {
+                                VStack(spacing: 22) {
+                                    if !goals.isEmpty        { goalsSection }
+                                    if !topCreatures.isEmpty { topCreaturesSection }
                                 }
                             }
-                            .fixedSize(horizontal: false, vertical: true)
                             .opacity(profileAppeared ? 1.0 : 0.0)
                             .offset(y: profileAppeared ? 0 : 15)
                         }
-                        HStack(alignment: .top, spacing: 22) {
-                            certificationsSection
-                                .frame(maxWidth: .infinity)
-                            insuranceSection
-                                .frame(maxWidth: .infinity)
+                        WidthAdaptiveLayout(minWidth: 600) {
+                            HStack(alignment: .top, spacing: 22) {
+                                certificationsSection
+                                    .frame(maxWidth: .infinity)
+                                insuranceSection
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                        } narrow: {
+                            VStack(spacing: 22) {
+                                certificationsSection
+                                insuranceSection
+                            }
                         }
-                        .fixedSize(horizontal: false, vertical: true)
                         .opacity(profileAppeared ? 1.0 : 0.0)
                         .offset(y: profileAppeared ? 0 : 15)
                         #else

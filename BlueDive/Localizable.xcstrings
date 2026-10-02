@@ -270,7 +270,7 @@
       }
     },
     "%@ days" : {
-      "comment" : "Plural days since last maintenance service, pre-formatted with locale grouping separator",
+      "comment" : "Plural day count (days since the last maintenance service, current dive streak), pre-formatted with locale grouping separator",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -852,6 +852,116 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%dh %02dm" : {
+      "comment" : "Compact dive duration: hours and zero-padded minutes, e.g. 0h 42m",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%dh %02dm"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$dh %2$02dm"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%dh %02dm"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%du %02dm"
+          }
+        }
+      }
+    },
+    "%dh %02dm %02ds" : {
+      "comment" : "Dive duration: hours, zero-padded minutes and seconds, e.g. 1h 05m 30s",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%dh %02dm %02ds"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$dh %2$02dm %3$02ds"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%dh %02dm %02ds"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%du %02dm %02ds"
+          }
+        }
+      }
+    },
+    "%dm %02ds" : {
+      "comment" : "Dive duration under an hour: minutes and zero-padded seconds, e.g. 42m 05s",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%dm %02ds"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$dm %2$02ds"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%dm %02ds"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%dm %02ds"
+          }
+        }
+      }
+    },
+    "%ds" : {
+      "comment" : "Dive duration under a minute: seconds, e.g. 45s",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%ds"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%ds"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%ds"
           }
         }
       }
@@ -2157,7 +2267,7 @@
       }
     },
     "1 day" : {
-      "comment" : "Singular days since last maintenance service",
+      "comment" : "Singular day count (days since the last maintenance service, current dive streak)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -4859,7 +4969,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Möchtest du \"%@\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden."
+            "value" : "Möchtest du „%@“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden."
           }
         },
         "en" : {
@@ -4871,13 +4981,13 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Êtes-vous sûr de vouloir supprimer \"%@\" ? Cette action ne peut pas être annulée."
+            "value" : "Êtes-vous sûr de vouloir supprimer « %@ » ? Cette action ne peut pas être annulée."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weet je zeker dat je \"%@\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+            "value" : "Weet je zeker dat je “%@” wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
           }
         }
       }
@@ -10047,7 +10157,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Ausrüstung löschen?"
           }
         },
@@ -10059,7 +10169,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Duikuitrusting verwijderen?"
           }
         }
@@ -10382,7 +10492,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Tiefe %1$@, Dauer %2$@, %3$@"
           }
         },
@@ -10394,7 +10504,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Diepte %1$@, duur %2$@, %3$@"
           }
         }
@@ -30848,7 +30958,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Nach links scrollen"
           }
         },
@@ -30860,7 +30970,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Naar links scrollen"
           }
         }
@@ -30872,7 +30982,7 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Nach rechts scrollen"
           }
         },
@@ -30884,7 +30994,7 @@
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Naar rechts scrollen"
           }
         }

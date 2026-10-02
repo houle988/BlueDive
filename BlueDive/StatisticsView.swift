@@ -131,13 +131,7 @@ struct StatisticsView: View {
     private func computeStats(_ dives: [Dive], locale: Locale) async {
         // --- Lightweight scalars (always cheap) ---
         let totalMin = dives.reduce(0) { $0 + $1.duration }
-        let timeFormatter = DateComponentsFormatter()
-        timeFormatter.allowedUnits = totalMin >= 60 ? [.hour, .minute] : [.minute]
-        timeFormatter.unitsStyle = .abbreviated
-        var timeFormatterCal = Calendar(identifier: .gregorian)
-        timeFormatterCal.locale = locale
-        timeFormatter.calendar = timeFormatterCal
-        let totalTimeFormatted = timeFormatter.string(from: TimeInterval(totalMin * 60)) ?? "\(totalMin)m"
+        let totalTimeFormatted = formattedMinutes(totalMin, locale: locale)
         let maxDepthEver = dives.map(\.displayMaxDepth).max() ?? 0
         let depthDives = dives.filter { $0.averageDepth > 0 }
         let avgDepth = depthDives.isEmpty ? 0 : depthDives.map(\.displayAverageDepth).reduce(0, +) / Double(depthDives.count)
@@ -247,17 +241,19 @@ struct StatisticsView: View {
         }
         let isFrench = locale.language.languageCode?.identifier == "fr"
         let daySuffix = isFrench ? "j" : "d"
+        // Dutch "u" (uur), as in the dive list's surface interval and duration badges.
+        let hourSuffix = locale.language.languageCode?.identifier == "nl" ? "u" : "h"
         func formatIntervalMinutes(_ minutes: Int) -> String {
             if minutes < 60 { return "\(minutes)m" }
             if minutes < 1440 {
                 let h = minutes / 60; let m = minutes % 60
-                return m == 0 ? "\(h)h" : "\(h)h \(String(format: "%02d", m))m"
+                return m == 0 ? "\(h)\(hourSuffix)" : "\(h)\(hourSuffix) \(String(format: "%02d", m))m"
             }
             let d = minutes / 1440; let rem = minutes % 1440
             let h = rem / 60; let m = rem % 60
             if h == 0 && m == 0 { return "\(d)\(daySuffix)" }
-            if m == 0 { return "\(d)\(daySuffix) \(h)h" }
-            return "\(d)\(daySuffix) \(h)h \(String(format: "%02d", m))m"
+            if m == 0 { return "\(d)\(daySuffix) \(h)\(hourSuffix)" }
+            return "\(d)\(daySuffix) \(h)\(hourSuffix) \(String(format: "%02d", m))m"
         }
         let siDives = dives.filter { parseIntervalMinutes($0.surfaceInterval) > 0 }
         let avgSIStr: String
@@ -405,24 +401,33 @@ struct StatisticsView: View {
                             #if os(macOS)
                             // The Mac sheet is wide enough for the six highlight tiles in two
                             // rows of three, in the same reading order as the iOS pairs; fixedSize
-                            // gives the tiles of a row the height of the tallest one.
-                            HStack(spacing: 12) {
-                                bottomTimeTile
-                                surfaceIntervalTile
-                                depthTile
-                            }
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal)
-                            .opacity(appeared ? 1.0 : 0.0)
-                            .offset(y: appeared ? 0 : 20)
+                            // gives the tiles of a row the height of the tallest one. A narrower
+                            // sheet falls back to the iOS pairs.
+                            WidthAdaptiveLayout(minWidth: 600) {
+                                VStack(spacing: 24) {
+                                    HStack(spacing: 12) {
+                                        bottomTimeTile
+                                        surfaceIntervalTile
+                                        depthTile
+                                    }
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.horizontal)
 
-                            HStack(spacing: 12) {
-                                temperatureTile
-                                rmvTile
-                                sacTile
+                                    HStack(spacing: 12) {
+                                        temperatureTile
+                                        rmvTile
+                                        sacTile
+                                    }
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.horizontal)
+                                }
+                            } narrow: {
+                                VStack(spacing: 24) {
+                                    timingSection
+                                    depthTemperatureSection
+                                    rmvSacSection
+                                }
                             }
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal)
                             .opacity(appeared ? 1.0 : 0.0)
                             .offset(y: appeared ? 0 : 20)
                             #else
@@ -446,13 +451,21 @@ struct StatisticsView: View {
                             // The Mac sheet is wide enough to show Favourite Sites (⅗) beside
                             // At a Glance (⅖, wide enough for long labels such as the German
                             // "Gesichtete Arten"); fixedSize gives both the height of the taller one.
-                            HStack(alignment: .top, spacing: 0) {
-                                topSitesSection
-                                    .containerRelativeFrame(.horizontal, count: 5, span: 3, spacing: 0)
-                                moreStatsGrid
-                                    .containerRelativeFrame(.horizontal, count: 5, span: 2, spacing: 0)
+                            // A narrower sheet falls back to the iOS order, one under the other.
+                            WidthAdaptiveLayout(minWidth: 600) {
+                                HStack(alignment: .top, spacing: 0) {
+                                    topSitesSection
+                                        .containerRelativeFrame(.horizontal, count: 5, span: 3, spacing: 0)
+                                    moreStatsGrid
+                                        .containerRelativeFrame(.horizontal, count: 5, span: 2, spacing: 0)
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
+                            } narrow: {
+                                VStack(spacing: 24) {
+                                    topSitesSection(sideBySide: false)
+                                    moreStatsGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], sideBySide: false)
+                                }
                             }
-                            .fixedSize(horizontal: false, vertical: true)
                             .opacity(appeared ? 1.0 : 0.0)
                             .offset(y: appeared ? 0 : 20)
                             #else
@@ -573,7 +586,7 @@ struct StatisticsView: View {
     @ViewBuilder
     private var bottomTimeTile: some View {
         let avgMin = cachedAvgDuration
-        let avgFormatted = avgMin >= 60 ? "\(avgMin / 60)h \(avgMin % 60)m" : "\(avgMin) min"
+        let avgFormatted = formattedMinutes(avgMin, locale: locale)
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "clock.fill")
@@ -1376,6 +1389,12 @@ struct StatisticsView: View {
     // MARK: - Top Sites
 
     private var topSitesSection: some View {
+        topSitesSection(sideBySide: true)
+    }
+
+    /// Favourite Sites; `sideBySide: false` gives the macOS narrow-sheet fallback the
+    /// standard side padding of a full-width card.
+    private func topSitesSection(sideBySide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: "mappin.and.ellipse")
@@ -1470,7 +1489,7 @@ struct StatisticsView: View {
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color.platformSecondaryBackground)
         )
-        .sideBySideCardPadding(.leading, inner: 12)
+        .sideBySideCardPadding(.leading, inner: 12, sideBySide: sideBySide)
     }
 
     // MARK: - More Stats Grid
@@ -1486,6 +1505,12 @@ struct StatisticsView: View {
     }
 
     private var moreStatsGrid: some View {
+        moreStatsGrid(columns: moreStatsColumns, sideBySide: true)
+    }
+
+    /// At a Glance with explicit columns and padding: the macOS narrow-sheet fallback uses
+    /// the iOS two columns and the standard side padding of a full-width card.
+    private func moreStatsGrid(columns: [GridItem], sideBySide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: "square.grid.2x2")
@@ -1496,7 +1521,7 @@ struct StatisticsView: View {
             }
             .padding(.horizontal, 4)
 
-            LazyVGrid(columns: moreStatsColumns, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 12) {
                 StatisticsCard(
                     title: "Species Seen",
                     value: Double(cachedTotalSpeciesSeen).localizedString(decimals: 0),
@@ -1511,7 +1536,7 @@ struct StatisticsView: View {
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color.platformSecondaryBackground)
         )
-        .sideBySideCardPadding(.trailing, inner: 12)
+        .sideBySideCardPadding(.trailing, inner: 12, sideBySide: sideBySide)
     }
 }
 

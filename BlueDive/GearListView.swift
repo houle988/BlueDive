@@ -255,11 +255,14 @@ struct GearListView: View {
         ) { gear in
             Button("Cancel", role: .cancel) { gearToDelete = nil }
             Button("Delete", role: .destructive) {
-                deleteGear(gear)
+                // The gear may have been deleted on another device (iCloud) while the alert
+                // was open: marked deleted, or already detached from its context once that
+                // deletion was saved. Deleting or reading a deleted model can crash.
+                if !gear.isDeleted, gear.modelContext != nil { deleteGear(gear) }
                 gearToDelete = nil
             }
         } message: { gear in
-            Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), value: "Are you sure you want to delete \"%@\"? This action cannot be undone.", comment: "Delete confirmation alert message."), gear.name))
+            Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), value: "Are you sure you want to delete \"%@\"? This action cannot be undone.", comment: "Delete confirmation alert message."), gear.isDeleted || gear.modelContext == nil ? "" : gear.name))
         }
         .sheet(isPresented: $showTankTemplates) {
             TankTemplateListView()

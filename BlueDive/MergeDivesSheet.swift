@@ -316,7 +316,8 @@ struct MergeDivesSheet: View {
                     Text("•")
                     Text(dive.timestamp.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)))
                     Text("•")
-                    Text("\(dive.duration) min")
+                    // Same "0h 42m" format as the dive list rows.
+                    Text(verbatim: dive.shortFormattedDuration)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

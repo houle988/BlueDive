@@ -46,11 +46,7 @@ final class Gear {
     }
     
     /// Temps total formaté (heures et minutes)
-    var formattedTotalTime: String {
-        let hours = totalBottomTime / 60
-        let minutes = totalBottomTime % 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
-    }
+    var formattedTotalTime: String { formattedMinutes(totalBottomTime) }
     
     /// Temps moyen par plongée (en minutes)
     var averageTimePerDive: Int {

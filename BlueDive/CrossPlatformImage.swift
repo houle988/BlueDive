@@ -386,6 +386,35 @@ extension Double {
     }
 }
 
+// MARK: - Duration Formatting
+
+/// A duration in minutes as hours and minutes, abbreviated in the app language
+/// (e.g. "42min" / "1h 36min" in English and German, "1h 36m" in French, "1 u, 36 m" in Dutch);
+/// minutes only below one hour. `locale` defaults to the in-app language override
+/// (or the system language when "System" is chosen), like the dates on screen.
+func formattedMinutes(_ totalMinutes: Int, locale: Locale? = nil) -> String {
+    let formatter = DateComponentsFormatter()
+    formatter.allowedUnits = totalMinutes >= 60 ? [.hour, .minute] : [.minute]
+    formatter.unitsStyle = .abbreviated
+    let languageLocale = locale ?? UserPreferences.shared.languageMode.locale ?? .current
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.locale = languageLocale
+    formatter.calendar = calendar
+    guard let text = formatter.string(from: TimeInterval(totalMinutes) * 60) else {
+        return Double(totalMinutes).localizedString(decimals: 0) + " min"
+    }
+    // The formatter groups the hour count by the app language ("1,234h" in English), but
+    // numbers follow the OS region (Number Formatting): swap in the region's grouping.
+    let hours = totalMinutes / 60
+    guard hours >= 1000 else { return text }
+    let languageNumber = NumberFormatter()
+    languageNumber.numberStyle = .decimal
+    languageNumber.locale = languageLocale
+    guard let languageHours = languageNumber.string(from: NSNumber(value: hours)),
+          let range = text.range(of: languageHours) else { return text }
+    return text.replacingCharacters(in: range, with: Double(hours).localizedString(decimals: 0))
+}
+
 // MARK: - Flexible Double Parsing
 
 /// Parses a string to Double, accepting '.' or ',' as decimal separator.

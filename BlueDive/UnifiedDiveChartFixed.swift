@@ -465,7 +465,9 @@ private struct StaticChartLayer: View, Equatable {
                     .foregroundStyle(Color.primary.opacity(0.2))
                 AxisValueLabel {
                     if let time = value.as(Double.self) {
-                        Text("\(Int(time)) min")
+                        // "min" is the same in every app language (the "%lld min" key is
+                        // not translated); the number follows the region's formatting.
+                        Text(verbatim: time.localizedString(decimals: 0) + " min")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

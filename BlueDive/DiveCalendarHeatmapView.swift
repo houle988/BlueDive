@@ -247,7 +247,9 @@ struct DiveCalendarHeatmapView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "flame.fill")
                         .foregroundStyle(.orange)
-                    Text(verbatim: Double(cachedCurrentStreak).localizedString(decimals: 0) + " days")
+                    Text(verbatim: cachedCurrentStreak == 1
+                        ? NSLocalizedString("1 day", bundle: .forAppLanguage(), value: "1 day", comment: "Singular day count (days since the last maintenance service, current dive streak)")
+                        : String(format: NSLocalizedString("%@ days", bundle: .forAppLanguage(), value: "%@ days", comment: "Plural day count (days since the last maintenance service, current dive streak), pre-formatted with locale grouping separator"), Double(cachedCurrentStreak).localizedString(decimals: 0)))
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.orange)
                 }
@@ -270,7 +272,7 @@ struct DiveCalendarHeatmapView: View {
             )
             Divider().frame(height: 36).background(Color.primary.opacity(0.1))
             CalHeatStat(
-                value: cachedYearDiveMinutes >= 60 ? "\(cachedYearDiveMinutes / 60)h \(cachedYearDiveMinutes % 60)m" : "\(cachedYearDiveMinutes)m",
+                value: formattedMinutes(cachedYearDiveMinutes, locale: locale),
                 label: "Time",
                 icon: "clock.fill",
                 color: .green

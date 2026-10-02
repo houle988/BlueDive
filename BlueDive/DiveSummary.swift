@@ -59,19 +59,30 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
         let totalSeconds = (duration >= 3600) ? duration : (duration * 60)
         let h = totalSeconds / 3600
         let m = (totalSeconds % 3600) / 60
-        return String(format: "%dh %02dm", h, m)
+        // Translatable so Dutch gets "u" (uur); same letters as displaySurfaceInterval.
+        return String(format: NSLocalizedString("%dh %02dm", bundle: .forAppLanguage(), value: "%dh %02dm", comment: "Compact dive duration: hours and zero-padded minutes, e.g. 0h 42m"), h, m)
     }
 
     var displaySurfaceInterval: String {
         let locale = UserPreferences.shared.languageMode.locale ?? Locale.current
-        guard locale.language.languageCode?.identifier == "fr" else {
+        // Display only: the stored string keeps the "2d 3h 05m" form it was imported with.
+        switch locale.language.languageCode?.identifier {
+        case "fr":
+            return surfaceInterval.replacingOccurrences(
+                of: #"(\d+)d "#,
+                with: "$1j ",
+                options: .regularExpression
+            )
+        case "nl":
+            // Dutch "u" (uur) for hours, matching shortFormattedDuration; "d" (dag) stays.
+            return surfaceInterval.replacingOccurrences(
+                of: #"(\d+)h\b"#,
+                with: "$1u",
+                options: .regularExpression
+            )
+        default:
             return surfaceInterval
         }
-        return surfaceInterval.replacingOccurrences(
-            of: #"(\d+)d "#,
-            with: "$1j ",
-            options: .regularExpression
-        )
     }
 
     // MARK: - Init

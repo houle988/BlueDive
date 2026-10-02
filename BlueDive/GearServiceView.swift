@@ -626,7 +626,7 @@ struct GearServiceView: View {
             }
             .padding(.horizontal)
         }
-        .usageStatisticsBoxOnMac()
+        .usageStatisticsBoxOnMac(gear.nextServiceDue != nil)
     }
     
     /// Resolves alert colour: red if due/past-due, orange if within 30 days.
@@ -821,8 +821,8 @@ struct GearServiceView: View {
                         let days = gear.daysSinceLastService
                         let n = Double(days).localizedString(decimals: 0)
                         return days == 1
-                            ? NSLocalizedString("1 day", bundle: .forAppLanguage(), comment: "Singular days since last maintenance service")
-                            : String(format: NSLocalizedString("%@ days", bundle: .forAppLanguage(), comment: "Plural days since last maintenance service, pre-formatted with locale grouping separator"), n)
+                            ? NSLocalizedString("1 day", bundle: .forAppLanguage(), comment: "Singular day count (days since the last maintenance service, current dive streak)")
+                            : String(format: NSLocalizedString("%@ days", bundle: .forAppLanguage(), comment: "Plural day count (days since the last maintenance service, current dive streak), pre-formatted with locale grouping separator"), n)
                     }()
                 )
             }
@@ -1005,7 +1005,7 @@ struct GearServiceView: View {
                     .fontWeight(.bold)
                 Spacer()
                 
-                Text("\(recentDives.count)")
+                Text(verbatim: Double(recentDives.count).localizedString(decimals: 0))
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundStyle(.cyan)
@@ -1066,7 +1066,8 @@ struct GearServiceView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.orange)
                                     .accessibilityHidden(true)
-                                Text("\(dive.duration) min")
+                                // Same "0h 42m" format as the dive list rows.
+                                Text(verbatim: dive.shortFormattedDuration)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -1488,12 +1489,14 @@ struct ServiceGauge: View {
 }
 
 private extension View {
-    /// macOS: frames Usage Statistics as a box matching the Next Maintenance gauge card
-    /// beside it (title inside, same padding, corner radius and outline), stretched to the
-    /// pair's height. iOS: returns the section unchanged.
+    /// macOS, when `boxed` (Usage Statistics sits beside the Next Maintenance gauge card):
+    /// frames the section as a box matching that card (title inside, same padding, corner
+    /// radius and outline), stretched to the pair's height. Full width (no service date) and
+    /// on iOS: returns the section unchanged.
     @ViewBuilder
-    func usageStatisticsBoxOnMac() -> some View {
+    func usageStatisticsBoxOnMac(_ boxed: Bool) -> some View {
         #if os(macOS)
+        if boxed {
         self
             .frame(maxWidth: .infinity)
             .fillsAvailableHeightOnMac()
@@ -1507,6 +1510,9 @@ private extension View {
                     )
             )
             .padding(.horizontal)
+        } else {
+            self
+        }
         #else
         self
         #endif

@@ -40,11 +40,7 @@ struct DiveTrip: Identifiable {
         }
         return count > 0 ? sum / Double(count) : 0
     }
-    var formattedTotalTime: String {
-        let h = totalMinutes / 60
-        let m = totalMinutes % 60
-        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
-    }
+    var formattedTotalTime: String { formattedMinutes(totalMinutes) }
     var durationDays: Int {
         Calendar.current.dateComponents([.day], from: startDate, to: endDate).day.map { $0 + 1 } ?? 1
     }

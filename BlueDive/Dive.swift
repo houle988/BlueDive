@@ -1310,18 +1310,28 @@ final class Dive {
     
     /// Localized surface interval for display.
     /// The database stores English abbreviations (e.g. "1d 2h 30m").
-    /// This property replaces the day abbreviation for the current app language
-    /// (e.g. "d" → "j" in French). Hours and minutes abbreviations are unchanged.
+    /// This property adapts the abbreviations for the current app language: the day in
+    /// French ("d" → "j"), the hour in Dutch ("h" → "u"). Minutes are unchanged.
     var displaySurfaceInterval: String {
         let locale = UserPreferences.shared.languageMode.locale ?? Locale.current
-        guard locale.language.languageCode?.identifier == "fr" else {
+        // Display only: the stored string keeps the "2d 3h 05m" form it was imported with.
+        switch locale.language.languageCode?.identifier {
+        case "fr":
+            return surfaceInterval.replacingOccurrences(
+                of: #"(\d+)d "#,
+                with: "$1j ",
+                options: .regularExpression
+            )
+        case "nl":
+            // Dutch "u" (uur) for hours, matching shortFormattedDuration; "d" (dag) stays.
+            return surfaceInterval.replacingOccurrences(
+                of: #"(\d+)h\b"#,
+                with: "$1u",
+                options: .regularExpression
+            )
+        default:
             return surfaceInterval
         }
-        return surfaceInterval.replacingOccurrences(
-            of: #"(\d+)d "#,
-            with: "$1j ",
-            options: .regularExpression
-        )
     }
 
     // MARK: Initialization
@@ -1460,12 +1470,13 @@ extension Dive {
         let h = totalSeconds / 3600
         let m = (totalSeconds % 3600) / 60
         let s = totalSeconds % 60
+        // Translatable so Dutch gets "u" (uur), like shortFormattedDuration.
         if h > 0 {
-            return String(format: "%dh %02dm %02ds", h, m, s)
+            return String(format: NSLocalizedString("%dh %02dm %02ds", bundle: .forAppLanguage(), value: "%dh %02dm %02ds", comment: "Dive duration: hours, zero-padded minutes and seconds, e.g. 1h 05m 30s"), h, m, s)
         } else if m > 0 {
-            return String(format: "%dm %02ds", m, s)
+            return String(format: NSLocalizedString("%dm %02ds", bundle: .forAppLanguage(), value: "%dm %02ds", comment: "Dive duration under an hour: minutes and zero-padded seconds, e.g. 42m 05s"), m, s)
         } else {
-            return String(format: "%ds", s)
+            return String(format: NSLocalizedString("%ds", bundle: .forAppLanguage(), value: "%ds", comment: "Dive duration under a minute: seconds, e.g. 45s"), s)
         }
     }
 
@@ -1478,7 +1489,8 @@ extension Dive {
         let totalSeconds = (duration >= 3600) ? duration : (duration * 60)
         let h = totalSeconds / 3600
         let m = (totalSeconds % 3600) / 60
-        return String(format: "%dh %02dm", h, m)
+        // Translatable so Dutch gets "u" (uur); same letters as displaySurfaceInterval.
+        return String(format: NSLocalizedString("%dh %02dm", bundle: .forAppLanguage(), value: "%dh %02dm", comment: "Compact dive duration: hours and zero-padded minutes, e.g. 0h 42m"), h, m)
     }
 
     /// Consommation d'air totale en litres

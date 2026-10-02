@@ -431,12 +431,17 @@ extension View {
     /// standard padding on the outer edge (`side`) and `inner` on the inner edge. Pass half
     /// the screen's vertical card spacing as `inner` (10 for the Gas tab's 20 pt stack, 12
     /// for Statistics' 24 pt stack) so the gap between two side-by-side cards matches the
-    /// gap between the cards above and below them.
+    /// gap between the cards above and below them. `sideBySide: false` (a macOS fallback that
+    /// stacks the same card full width) gives the standard padding on both sides.
     @ViewBuilder
-    func sideBySideCardPadding(_ side: HorizontalEdge, inner: CGFloat = 10) -> some View {
+    func sideBySideCardPadding(_ side: HorizontalEdge, inner: CGFloat = 10, sideBySide: Bool = true) -> some View {
         #if os(macOS)
-        padding(side == .leading ? .leading : .trailing)
-            .padding(side == .leading ? .trailing : .leading, inner)
+        if sideBySide {
+            padding(side == .leading ? .leading : .trailing)
+                .padding(side == .leading ? .trailing : .leading, inner)
+        } else {
+            padding(.horizontal)
+        }
         #else
         padding(.horizontal)
         #endif
@@ -507,6 +512,33 @@ struct WrappingChipLayout: Layout {
         }
         if !current.indices.isEmpty { rows.append(current) }
         return rows
+    }
+}
+#endif
+
+#if os(macOS)
+/// macOS wide-window density layouts: shows `wide` when the available width is at least
+/// `minWidth`, otherwise `narrow` (the iOS arrangement of the same content). It switches on
+/// the proposed width rather than with `ViewThatFits`, which measures each text on one line,
+/// so a long site name would flip a layout that actually fits. Used only inside
+/// `#if os(macOS)` branches; iOS keeps its own layout untouched.
+struct WidthAdaptiveLayout<Wide: View, Narrow: View>: View {
+    let minWidth: CGFloat
+    @ViewBuilder let wide: Wide
+    @ViewBuilder let narrow: Narrow
+    /// nil until first measured: assume wide, the usual Mac sheet width (~700 pt).
+    @State private var width: CGFloat?
+
+    var body: some View {
+        Group {
+            if (width ?? .infinity) >= minWidth {
+                wide
+            } else {
+                narrow
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
 #endif
