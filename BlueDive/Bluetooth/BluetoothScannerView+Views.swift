@@ -154,6 +154,9 @@ extension BluetoothScannerView {
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
+                            // Explicit swipe buttons are coloured by the ambient tint on both
+                            // platforms; without this the root .tint(.cyan) turns Delete cyan.
+                            .tint(.red)
                         }
                         .contextMenu {
                             Button(role: .destructive) {

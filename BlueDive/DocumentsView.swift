@@ -612,6 +612,9 @@ struct DocumentsView: View {
                 certificationToDelete = cert
                 showDeleteCertConfirmation = true
             } label: { Label("Delete", systemImage: "trash") }
+            // Explicit swipe buttons are coloured by the ambient tint on both platforms, so the
+            // root .tint(.cyan) would turn Delete cyan instead of the destructive red.
+            .tint(.red)
         }
         .contextMenu {
             Button { selectedCertification = cert } label: {
@@ -642,6 +645,9 @@ struct DocumentsView: View {
                 insuranceToDelete = insurance
                 showDeleteInsuranceConfirmation = true
             } label: { Label("Delete", systemImage: "trash") }
+            // Explicit swipe buttons are coloured by the ambient tint on both platforms, so the
+            // root .tint(.cyan) would turn Delete cyan instead of the destructive red.
+            .tint(.red)
         }
         .contextMenu {
             Button { selectedInsurance = insurance } label: {
