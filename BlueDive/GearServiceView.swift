@@ -91,18 +91,22 @@ struct GearServiceView: View {
                     
                     #if os(macOS)
                     // The Mac sheet is wide: the service gauge beside the usage statistics, and
-                    // the recent dives beside Maintenance & Notes. A section shown alone (no
-                    // service date, no dives yet) keeps the full width; fixedSize gives each pair
-                    // the height of its taller section.
-                    HStack(alignment: .top, spacing: 0) {
-                        if gear.nextServiceDue != nil {
+                    // the recent dives beside Maintenance & Notes; fixedSize gives each pair the
+                    // height of its taller section. Gear without a service date shows the
+                    // "No Maintenance Scheduled" card full width, as on iOS, then the statistics
+                    // full width; gear without dives shows Maintenance & Notes full width.
+                    if gear.nextServiceDue != nil {
+                        HStack(alignment: .top, spacing: 0) {
                             serviceGaugesSection
                                 .frame(maxWidth: .infinity)
+                            statisticsGrid
+                                .frame(maxWidth: .infinity)
                         }
+                        .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        serviceGaugesSection
                         statisticsGrid
-                            .frame(maxWidth: .infinity)
                     }
-                    .fixedSize(horizontal: false, vertical: true)
 
                     HStack(alignment: .top, spacing: 0) {
                         if !recentDives.isEmpty {
@@ -528,6 +532,8 @@ struct GearServiceView: View {
                         daysRemaining: daysRemaining
                     )
                 }
+                // macOS: stretch to the Usage Statistics box beside it; iOS: unchanged.
+                .fillsAvailableHeightOnMac()
                 .padding(.vertical)
                 .background(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -566,7 +572,6 @@ struct GearServiceView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .fillsAvailableHeightOnMac()
                 .padding(.vertical, 32)
                 .background(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -1481,22 +1486,22 @@ struct ServiceGauge: View {
 }
 
 private extension View {
-    /// macOS: frames Usage Statistics as a box matching the Next Maintenance card beside it
-    /// (title inside, same padding, corner radius and outline), stretched to the pair's
-    /// height. iOS: returns the section unchanged.
+    /// macOS: frames Usage Statistics as a box matching the Next Maintenance gauge card
+    /// beside it (title inside, same padding, corner radius and outline), stretched to the
+    /// pair's height. iOS: returns the section unchanged.
     @ViewBuilder
     func usageStatisticsBoxOnMac() -> some View {
         #if os(macOS)
         self
             .frame(maxWidth: .infinity)
             .fillsAvailableHeightOnMac()
-            .padding(.vertical, 32)
+            .padding(.vertical)
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(Color.primary.opacity(0.03))
                     .overlay(
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(Color.cyan.opacity(0.2), lineWidth: 1)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                     )
             )
             .padding(.horizontal)

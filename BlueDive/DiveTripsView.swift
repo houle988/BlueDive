@@ -173,7 +173,6 @@ struct DiveTripsView: View {
                             #else
                             ForEach(Array(cachedTrips.enumerated()), id: \.element.id) { index, trip in
                                 tripCard(trip)
-                                    .padding(.horizontal)
                             }
                             #endif
 
@@ -227,13 +226,16 @@ struct DiveTripsView: View {
             .offset(y: tripsAppeared ? 0 : 20)
     }
 
-    /// macOS: cards of a grid row share the tallest card's height; iOS: the plain card.
+    /// macOS: cards of a grid row share the tallest card's height (the grid adds the side
+    /// margins); iOS: the card with its side margins, as before, so the tap and VoiceOver
+    /// modifiers wrap the padded card exactly as they did.
     @ViewBuilder
     private func tripCardContent(_ trip: DiveTrip) -> some View {
         #if os(macOS)
         TripCard(trip: trip, prefs: prefs, fillsRowHeight: true)
         #else
         TripCard(trip: trip, prefs: prefs)
+            .padding(.horizontal)
         #endif
     }
 }

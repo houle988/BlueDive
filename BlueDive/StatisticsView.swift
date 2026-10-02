@@ -404,12 +404,14 @@ struct StatisticsView: View {
 
                             #if os(macOS)
                             // The Mac sheet is wide enough for the six highlight tiles in two
-                            // rows of three, in the same reading order as the iOS pairs.
+                            // rows of three, in the same reading order as the iOS pairs; fixedSize
+                            // gives the tiles of a row the height of the tallest one.
                             HStack(spacing: 12) {
                                 bottomTimeTile
                                 surfaceIntervalTile
                                 depthTile
                             }
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal)
                             .opacity(appeared ? 1.0 : 0.0)
                             .offset(y: appeared ? 0 : 20)
@@ -419,6 +421,7 @@ struct StatisticsView: View {
                                 rmvTile
                                 sacTile
                             }
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal)
                             .opacity(appeared ? 1.0 : 0.0)
                             .offset(y: appeared ? 0 : 20)
@@ -653,6 +656,8 @@ struct StatisticsView: View {
                 .disabled(cachedShortestDive == nil)
             }
         }
+        // macOS: stretch to the tallest tile of its row of three; iOS: unchanged.
+        .fillsAvailableHeightOnMac()
         .padding()
         .frame(maxWidth: .infinity)
         .background(
@@ -757,6 +762,8 @@ struct StatisticsView: View {
                 .disabled(cachedShortestSIDive == nil)
             }
         }
+        // macOS: stretch to the tallest tile of its row of three; iOS: unchanged.
+        .fillsAvailableHeightOnMac()
         .padding()
         .frame(maxWidth: .infinity)
         .background(
@@ -1020,6 +1027,8 @@ struct StatisticsView: View {
                 .disabled(cachedShallowestDive == nil)
             }
         }
+        // macOS: stretch to the tallest tile of its row of three; iOS: unchanged.
+        .fillsAvailableHeightOnMac()
         .padding()
         .frame(maxWidth: .infinity)
         .background(
@@ -1124,6 +1133,8 @@ struct StatisticsView: View {
                 .disabled(cachedColdestDive == nil)
             }
         }
+        // macOS: stretch to the tallest tile of its row of three; iOS: unchanged.
+        .fillsAvailableHeightOnMac()
         .padding()
         .frame(maxWidth: .infinity)
         .background(
@@ -1236,6 +1247,8 @@ struct StatisticsView: View {
                 .disabled(cachedWorstRMVDive == nil)
             }
         }
+        // macOS: stretch to the tallest tile of its row of three; iOS: unchanged.
+        .fillsAvailableHeightOnMac()
         .padding()
         .frame(maxWidth: .infinity)
         .background(
@@ -1338,6 +1351,8 @@ struct StatisticsView: View {
                 .disabled(cachedWorstSACDive == nil)
             }
         }
+        // macOS: stretch to the tallest tile of its row of three; iOS: unchanged.
+        .fillsAvailableHeightOnMac()
         .padding()
         .frame(maxWidth: .infinity)
         .background(

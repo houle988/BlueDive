@@ -21,11 +21,6 @@ struct GearListView: View {
     @State private var gearToEdit: Gear?
     /// Gear awaiting confirmation after Delete was chosen in a row's context menu.
     @State private var gearToDelete: Gear?
-    #if os(macOS)
-    /// Category chip row scrolling (macOS ‹ › buttons): position and measured geometry.
-    @State private var chipScrollPosition = ScrollPosition()
-    @State private var chipScrollMetrics = ChipScrollMetrics()
-    #endif
     @State private var searchText = ""
     @State private var filterCategory: GearCategory?
     @State private var showInactive = false
@@ -264,7 +259,7 @@ struct GearListView: View {
                 gearToDelete = nil
             }
         } message: { gear in
-            Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), comment: "Delete confirmation alert message."), gear.name))
+            Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), value: "Are you sure you want to delete \"%@\"? This action cannot be undone.", comment: "Delete confirmation alert message."), gear.name))
         }
         .sheet(isPresented: $showTankTemplates) {
             TankTemplateListView()
@@ -596,60 +591,15 @@ struct GearListView: View {
         }
     }
 
-    #if os(macOS)
-    /// ‹ or › button: scrolls the chip row by most of its visible width, disabled at the
-    /// start / end of the row.
-    private func chipScrollButton(forward: Bool) -> some View {
-        Button {
-            let metrics = chipScrollMetrics
-            let step = metrics.visibleWidth * 0.8
-            let maxOffset = max(0, metrics.contentWidth - metrics.visibleWidth)
-            let target = forward
-                ? min(maxOffset, metrics.offset + step)
-                : max(0, metrics.offset - step)
-            withAnimation(.easeInOut(duration: 0.25)) {
-                chipScrollPosition.scrollTo(x: target)
-            }
-        } label: {
-            Image(systemName: forward ? "chevron.right" : "chevron.left")
-                .font(.body.weight(.semibold))
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(Color.primary.opacity(0.08)))
-                .contentShape(Circle())
-        }
-        .borderlessButton()
-        .disabled(forward ? chipScrollMetrics.atEnd : chipScrollMetrics.atStart)
-        .accessibilityLabel(forward ? Text("Scroll Right") : Text("Scroll Left"))
-    }
-    #endif
 
     private var categoryFilterSection: some View {
         Section {
-            // One sideways-scrolling row on both platforms. (A wrapping layout was tried on
-            // macOS: inside this List the row is measured as a single line, so the extra
-            // chip lines overlapped the search field.)
+            // One sideways-scrolling row on both platforms (a wrapping layout would not get
+            // its full height inside this List row).
             #if os(macOS)
             // A mouse without horizontal scrolling can't swipe the row: ‹ › buttons page
             // through it, shown only when the chips don't all fit.
-            HStack(spacing: 6) {
-                if chipScrollMetrics.overflows {
-                    chipScrollButton(forward: false)
-                }
-                categoryChipScrollView
-                    .scrollPosition($chipScrollPosition)
-                    .onScrollGeometryChange(for: ChipScrollMetrics.self) { geometry in
-                        ChipScrollMetrics(
-                            offset: geometry.contentOffset.x,
-                            visibleWidth: geometry.containerSize.width,
-                            contentWidth: geometry.contentSize.width
-                        )
-                    } action: { _, metrics in
-                        chipScrollMetrics = metrics
-                    }
-                if chipScrollMetrics.overflows {
-                    chipScrollButton(forward: true)
-                }
-            }
+            ChipRowScrollButtons(row: categoryChipScrollView)
             #else
             categoryChipScrollView
             #endif
@@ -1385,8 +1335,64 @@ struct CategoryFilterChip: View {
 }
 
 #if os(macOS)
-/// Scroll geometry of the Equipment category chip row (macOS ‹ › buttons).
-struct ChipScrollMetrics: Equatable {
+/// ‹ › buttons around a horizontally scrolling chip row (macOS), shown only when the chips
+/// don't all fit; each click scrolls most of the visible width. A separate view so the
+/// per-frame scroll geometry it tracks redraws only this row, not the whole Equipment list.
+private struct ChipRowScrollButtons<Row: View>: View {
+    /// The row's horizontal ScrollView.
+    let row: Row
+
+    @State private var position = ScrollPosition()
+    @State private var metrics = ChipScrollMetrics()
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if metrics.overflows {
+                scrollButton(forward: false)
+            }
+            row
+                .scrollPosition($position)
+                .onScrollGeometryChange(for: ChipScrollMetrics.self) { geometry in
+                    ChipScrollMetrics(
+                        offset: geometry.contentOffset.x,
+                        visibleWidth: geometry.containerSize.width,
+                        contentWidth: geometry.contentSize.width
+                    )
+                } action: { _, newMetrics in
+                    metrics = newMetrics
+                }
+            if metrics.overflows {
+                scrollButton(forward: true)
+            }
+        }
+    }
+
+    /// ‹ or › button, disabled at the start / end of the row.
+    private func scrollButton(forward: Bool) -> some View {
+        Button {
+            let step = metrics.visibleWidth * 0.8
+            let maxOffset = max(0, metrics.contentWidth - metrics.visibleWidth)
+            let target = forward
+                ? min(maxOffset, metrics.offset + step)
+                : max(0, metrics.offset - step)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                position.scrollTo(x: target)
+            }
+        } label: {
+            Image(systemName: forward ? "chevron.right" : "chevron.left")
+                .font(.body.weight(.semibold))
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.primary.opacity(0.08)))
+                .contentShape(Circle())
+        }
+        .borderlessButton()
+        .disabled(forward ? metrics.atEnd : metrics.atStart)
+        .accessibilityLabel(forward ? Text("Scroll Right") : Text("Scroll Left"))
+    }
+}
+
+/// Scroll geometry of a chip row (macOS ‹ › buttons).
+private struct ChipScrollMetrics: Equatable {
     var offset: CGFloat = 0
     var visibleWidth: CGFloat = 0
     var contentWidth: CGFloat = 0
