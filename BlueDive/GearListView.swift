@@ -17,6 +17,15 @@ struct GearListView: View {
 
     @State private var showAddGear = false
     @State private var selectedGear: Gear?
+    /// Gear opened in the edit sheet from a row's context menu.
+    @State private var gearToEdit: Gear?
+    /// Gear awaiting confirmation after Delete was chosen in a row's context menu.
+    @State private var gearToDelete: Gear?
+    #if os(macOS)
+    /// Category chip row scrolling (macOS ‹ › buttons): position and measured geometry.
+    @State private var chipScrollPosition = ScrollPosition()
+    @State private var chipScrollMetrics = ChipScrollMetrics()
+    #endif
     @State private var searchText = ""
     @State private var filterCategory: GearCategory?
     @State private var showInactive = false
@@ -234,6 +243,28 @@ struct GearListView: View {
         .sheet(item: $selectedGear) { gear in
             GearServiceView(gear: gear)
                 .standardSheetPresentation()
+        }
+        .sheet(item: $gearToEdit) { gear in
+            EditGearView(gear: gear)
+                .standardSheetPresentation()
+        }
+        // Right-click / long-press Delete asks first: a menu item is easier to hit by
+        // accident than a deliberate swipe (which deletes at once, as before).
+        .alert(
+            "Delete equipment?",
+            isPresented: Binding(
+                get: { gearToDelete != nil },
+                set: { if !$0 { gearToDelete = nil } }
+            ),
+            presenting: gearToDelete
+        ) { gear in
+            Button("Cancel", role: .cancel) { gearToDelete = nil }
+            Button("Delete", role: .destructive) {
+                deleteGear(gear)
+                gearToDelete = nil
+            }
+        } message: { gear in
+            Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), comment: "Delete confirmation alert message."), gear.name))
         }
         .sheet(isPresented: $showTankTemplates) {
             TankTemplateListView()
@@ -466,6 +497,22 @@ struct GearListView: View {
                             GearRow(gear: item)
                         }
                         .buttonStyle(.plain)
+                        // Right-click (macOS) / long-press (iOS): the way to delete with a mouse
+                        // that cannot swipe; also opens or edits the item.
+                        .contextMenu {
+                            Button { selectedGear = item } label: {
+                                Label("View Details", systemImage: "eye")
+                            }
+                            Button { gearToEdit = item } label: {
+                                Label("Edit Equipment", systemImage: "pencil")
+                            }
+                            Divider()
+                            Button(role: .destructive) {
+                                gearToDelete = item
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                         #if os(macOS)
                         // macOS does not synthesize swipe-to-delete from .onDelete (iOS does): add it
                         // explicitly, routed through the same handler as .onDelete.
@@ -540,22 +587,71 @@ struct GearListView: View {
         }
     }
 
-    private var categoryFilterSection: some View {
-        Section {
-            #if os(macOS)
-            // Scrolling a chip row sideways needs a trackpad swipe or Shift-scroll on a
-            // Mac, and the window has room: wrap the chips onto as many lines as needed.
-            WrappingChipLayout(spacing: 12) {
+    private var categoryChipScrollView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
                 categoryChips
             }
             .padding(.horizontal, 4)
-            #else
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    categoryChips
-                }
-                .padding(.horizontal, 4)
+        }
+    }
+
+    #if os(macOS)
+    /// ‹ or › button: scrolls the chip row by most of its visible width, disabled at the
+    /// start / end of the row.
+    private func chipScrollButton(forward: Bool) -> some View {
+        Button {
+            let metrics = chipScrollMetrics
+            let step = metrics.visibleWidth * 0.8
+            let maxOffset = max(0, metrics.contentWidth - metrics.visibleWidth)
+            let target = forward
+                ? min(maxOffset, metrics.offset + step)
+                : max(0, metrics.offset - step)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                chipScrollPosition.scrollTo(x: target)
             }
+        } label: {
+            Image(systemName: forward ? "chevron.right" : "chevron.left")
+                .font(.body.weight(.semibold))
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.primary.opacity(0.08)))
+                .contentShape(Circle())
+        }
+        .borderlessButton()
+        .disabled(forward ? chipScrollMetrics.atEnd : chipScrollMetrics.atStart)
+        .accessibilityLabel(forward ? Text("Scroll Right") : Text("Scroll Left"))
+    }
+    #endif
+
+    private var categoryFilterSection: some View {
+        Section {
+            // One sideways-scrolling row on both platforms. (A wrapping layout was tried on
+            // macOS: inside this List the row is measured as a single line, so the extra
+            // chip lines overlapped the search field.)
+            #if os(macOS)
+            // A mouse without horizontal scrolling can't swipe the row: ‹ › buttons page
+            // through it, shown only when the chips don't all fit.
+            HStack(spacing: 6) {
+                if chipScrollMetrics.overflows {
+                    chipScrollButton(forward: false)
+                }
+                categoryChipScrollView
+                    .scrollPosition($chipScrollPosition)
+                    .onScrollGeometryChange(for: ChipScrollMetrics.self) { geometry in
+                        ChipScrollMetrics(
+                            offset: geometry.contentOffset.x,
+                            visibleWidth: geometry.containerSize.width,
+                            contentWidth: geometry.contentSize.width
+                        )
+                    } action: { _, metrics in
+                        chipScrollMetrics = metrics
+                    }
+                if chipScrollMetrics.overflows {
+                    chipScrollButton(forward: true)
+                }
+            }
+            #else
+            categoryChipScrollView
             #endif
         }
         .listRowInsets(EdgeInsets())
@@ -654,6 +750,16 @@ struct GearListView: View {
 
     // MARK: - Actions
     
+    /// Deletes one gear item (context-menu Delete, after confirmation), with the same steps
+    /// as swipe-to-delete.
+    private func deleteGear(_ gear: Gear) {
+        withAnimation {
+            NotificationManager.shared.cancelGearReminder(id: gear.id)
+            modelContext.delete(gear)
+            try? modelContext.save()
+        }
+    }
+
     private func deleteGear(items: [Gear], at offsets: IndexSet) {
         withAnimation {
             for index in offsets {
@@ -1277,3 +1383,17 @@ struct CategoryFilterChip: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
+
+#if os(macOS)
+/// Scroll geometry of the Equipment category chip row (macOS ‹ › buttons).
+struct ChipScrollMetrics: Equatable {
+    var offset: CGFloat = 0
+    var visibleWidth: CGFloat = 0
+    var contentWidth: CGFloat = 0
+
+    /// The chips are wider than the row, so the buttons are shown.
+    var overflows: Bool { contentWidth > visibleWidth + 1 }
+    var atStart: Bool { offset <= 1 }
+    var atEnd: Bool { offset + visibleWidth >= contentWidth - 1 }
+}
+#endif

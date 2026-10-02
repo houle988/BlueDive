@@ -446,7 +446,7 @@ extension View {
 
 #if os(macOS)
 /// Lays out chips left to right and wraps onto a new line when the next chip would not
-/// fit the proposed width (macOS filter sheet, Equipment category filter). Lines are separated by `spacing`, like
+/// fit the proposed width (macOS filter sheet). Lines are separated by `spacing`, like
 /// the chips within a line.
 struct WrappingChipLayout: Layout {
     var spacing: CGFloat
