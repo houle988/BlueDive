@@ -138,18 +138,8 @@ struct GearServiceView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color.platformBackground,
-                        Color.blue.opacity(0.05),
-                        Color.platformBackground
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
+            // Same background as the dive detail and the tabs.
+            .background(AppBackground().ignoresSafeArea())
 
             .toolbar { toolbarContent }
             .sheet(isPresented: $showEditGear) {

@@ -240,7 +240,7 @@ struct DiverProfileView: View {
                     profileAppeared = true
                 }
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -1015,10 +1015,10 @@ enum GoalType {
 }
 
 
-// MARK: - Insurance Card
+// MARK: - Insurance Row
 
 /// Status colour of a policy (red expired, orange expiring soon, blue active), shared by
-/// `InsuranceCard` and the one-line insurance row in Documents (macOS).
+/// `InsuranceRow` and the one-line insurance row in Documents (macOS).
 extension DivingInsurance {
     var statusColor: Color {
         if isExpired      { return .red    }
@@ -1027,7 +1027,10 @@ extension DivingInsurance {
     }
 }
 
-struct InsuranceCard: View {
+/// Stacked insurance row (iOS, and macOS when the window is too narrow for the one-line row):
+/// icon, insurer / diver / coverage / policy number / dates, status dot. Plain list row like the
+/// Dives and Equipment tabs; the List draws the row background and separator.
+struct InsuranceRow: View {
     let insurance: DivingInsurance
     let showExpired: Bool
     @Environment(\.locale) private var locale
@@ -1044,7 +1047,7 @@ struct InsuranceCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            InsuranceIconView(insurerName: insurance.insurerName, size: 60,
+            InsuranceIconView(insurerName: insurance.insurerName, size: 44,
                              fallbackColor: statusColor, fillOpacity: 0.2)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -1091,9 +1094,9 @@ struct InsuranceCard: View {
                 .frame(width: 12, height: 12)
                 .accessibilityLabel(showExpired ? Text("Expired") : (insurance.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
         }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 15).stroke(statusColor.opacity(0.3), lineWidth: 1))
+        .padding(.vertical, 8)
+        // The whole row opens the policy (a plain Button only responds where something is drawn).
+        .contentShape(Rectangle())
     }
 }
 
@@ -1213,7 +1216,8 @@ struct InsuranceDetailView: View {
                     .padding(.bottom, 16)
                 }
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            // Same background as the dive and equipment details and the tabs.
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle(insurance.insurerName.isEmpty
                 ? NSLocalizedString("Insurance", bundle: Bundle.forAppLanguage(), comment: "Fallback navigation title for an insurance record with no insurer name.")
                 : insurance.insurerName)
@@ -1388,7 +1392,8 @@ struct AddInsuranceView: View {
                     .padding(.bottom, 16)
                 }
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            // Same background as the detail screens and the tabs.
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle(isEditing ? LocalizedStringKey("Edit Insurance") : LocalizedStringKey("New Insurance"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

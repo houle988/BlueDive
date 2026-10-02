@@ -511,7 +511,7 @@ struct StatisticsView: View {
                     )
                 }
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .task(id: filterTaskId) {
                 statsReady = false
                 appeared = false
@@ -1713,7 +1713,7 @@ struct SiteDivesSheet: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             #if os(iOS)
             .listStyle(.plain)
             #endif

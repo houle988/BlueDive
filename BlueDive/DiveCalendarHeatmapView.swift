@@ -166,7 +166,7 @@ struct DiveCalendarHeatmapView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
@@ -521,7 +521,7 @@ struct DayDivesSheetView: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             #if os(iOS)
             .listStyle(.plain)
             #endif

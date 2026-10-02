@@ -689,7 +689,7 @@ struct DiveDetailView: View {
                     .multilineTextAlignment(.center).padding(.horizontal, 30)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle(Text(title))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

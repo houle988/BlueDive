@@ -83,7 +83,7 @@ struct MergeDivesSheet: View {
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle("Merge Dives")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)

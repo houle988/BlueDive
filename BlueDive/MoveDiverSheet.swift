@@ -30,7 +30,7 @@ struct MoveDiverSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 Form {
                     diveSummarySection

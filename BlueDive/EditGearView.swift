@@ -130,7 +130,8 @@ struct EditGearView: View {
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            // Same background as the detail screens and the tabs.
+            .background(AppBackground().ignoresSafeArea())
             .toolbar { toolbarContent }
             .alert("Error", isPresented: $showValidationError) {
                 Button("OK", role: .cancel) { }

@@ -102,7 +102,7 @@ struct EditGearGroupView: View {
                 .padding()
                 .background(Color.platformSecondaryBackground)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle("Edit Gear Group")
             .navigationBarTitleDisplayMode(.inline)
 

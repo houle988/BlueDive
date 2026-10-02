@@ -300,7 +300,7 @@ struct EditMenuStatsView: View {
     private var iOSBody: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 Form {
                     Section {
@@ -1060,7 +1060,7 @@ struct EditSiteDetailsView: View {
     private var iOSBody: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 Form {
                     copyFromSiteSection
@@ -1423,7 +1423,7 @@ struct EditConditionsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 Form {
                     Section {
@@ -1809,7 +1809,7 @@ struct EditGazView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 Form {
                     // Tank Slot — reorder tanks when multiple tanks exist

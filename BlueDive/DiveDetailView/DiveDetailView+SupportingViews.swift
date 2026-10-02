@@ -362,7 +362,7 @@ struct AddFishView: View {
                 }
                 .padding()
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle("New Marine Life")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -615,7 +615,7 @@ struct EditFishView: View {
                 }
                 .padding()
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle("Edit Marine Life")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -789,7 +789,7 @@ struct AddGearToDiveView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 if availableGear.isEmpty {
                     emptyStateView
@@ -1328,7 +1328,7 @@ struct PhotoPreviewSheet: View {
         NavigationStack {
             Group {
                 if photos.isEmpty {
-                    Color.platformBackground.ignoresSafeArea()
+                    AppBackground().ignoresSafeArea()
                 } else {
                     #if os(iOS)
                     TabView(selection: $currentIndex) {
@@ -1350,7 +1350,7 @@ struct PhotoPreviewSheet: View {
                     #endif
                 }
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .toolbar {
                 if photos.count > 1 {
                     ToolbarItem(placement: .bottomBar) {
@@ -1603,7 +1603,7 @@ private struct PhotoPageView: View {
                     .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %lld of %lld", bundle: .forAppLanguage(), comment: "Announces the current photo's position while paging through a dive's photos"), index + 1, total)))
             } else {
                 ZStack {
-                    Color.platformBackground.ignoresSafeArea()
+                    AppBackground().ignoresSafeArea()
                     ProgressView()
                 }
             }

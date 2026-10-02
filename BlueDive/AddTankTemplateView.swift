@@ -59,7 +59,7 @@ struct AddTankTemplateView: View {
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle("New Template")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)

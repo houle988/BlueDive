@@ -18,7 +18,7 @@ struct GearGroupListView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 if gearGroups.isEmpty {
                     ContentUnavailableView(

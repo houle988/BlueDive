@@ -52,7 +52,7 @@ struct AddGearGroupView: View {
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle("New Group")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)

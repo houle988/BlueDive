@@ -120,7 +120,7 @@ struct EditTankTemplateView: View {
                 .padding()
                 .background(Color.platformSecondaryBackground)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle("Edit Tank Template")
             .navigationBarTitleDisplayMode(.inline)
 

@@ -182,7 +182,7 @@ struct DiveTripsView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
@@ -497,7 +497,7 @@ struct TripDetailSheet: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }

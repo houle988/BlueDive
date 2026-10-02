@@ -184,7 +184,8 @@ struct GearListView: View {
 
     var body: some View {
         ZStack {
-            Color.platformBackground.ignoresSafeArea()
+            // Same gradient as the Dives tab (MainTabView draws the opaque background beneath).
+            AppBackground(opaque: false).ignoresSafeArea()
             
             VStack(spacing: 0) {
                 if !gearNeedingService.isEmpty {
@@ -507,6 +508,9 @@ struct GearListView: View {
                             GearRow(gear: item)
                         }
                         .buttonStyle(.plain)
+                        // Same row background as the Dives tab; no separator under a section's last row.
+                        .listRowBackground(Color.primary.opacity(0.07),
+                                           macSeparator: item.id != items.last?.id)
                         // Right-click (macOS) / long-press (iOS): the way to delete with a mouse
                         // that cannot swipe; also opens or edits the item.
                         .contextMenu {
@@ -1200,6 +1204,9 @@ struct GearRow: View {
             serviceIndicator
         }
         .padding(.vertical, 8)
+        // The whole row opens the item, including the empty space (a plain Button only responds
+        // where something is drawn).
+        .contentShape(Rectangle())
     }
 
     #if os(macOS)

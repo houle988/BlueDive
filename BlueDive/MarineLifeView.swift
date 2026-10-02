@@ -163,7 +163,7 @@ struct MarineLifeView: View {
                 }
                 DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .task(id: "\(store.dives.count):\(totalSightingsCount):\(sightingCountsHash):\(selectedDiver)") {
                 statsReady = false
                 appeared = false
@@ -438,7 +438,7 @@ struct SpeciesDivesSheet: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }

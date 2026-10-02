@@ -34,7 +34,6 @@ struct DocumentsView: View {
     var onClose: (() -> Void)? = nil
 
     // MARK: - Appearance
-    @State private var appeared = false
     @State private var emptyAppeared = false
     @State private var selectedSection: DocumentSection
 
@@ -236,7 +235,6 @@ struct DocumentsView: View {
                                         if documentsLayout.isOneLine {
                                             CertificationColumnHeader()
                                                 .columnHeaderRow()
-                                                .listRowInsets(documentRowInsets)
                                         }
                                         #endif
                                         ForEach(certs) { cert in
@@ -299,7 +297,6 @@ struct DocumentsView: View {
                                         if documentsLayout.isOneLine {
                                             InsuranceColumnHeader()
                                                 .columnHeaderRow()
-                                                .listRowInsets(documentRowInsets)
                                         }
                                         #endif
                                         ForEach(policies) { insurance in
@@ -367,18 +364,15 @@ struct DocumentsView: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
                     .padding(.bottom, 2)
-                    .background(Color.platformBackground)
+                    // No background of its own: the tab's gradient shows behind it, as behind the
+                    // Dives and Equipment search fields.
                 }
-            }
-            .opacity(appeared ? 1.0 : 0.0)
-            .offset(y: appeared ? 0 : 15)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.4)) { appeared = true }
             }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .background(Color.platformBackground.ignoresSafeArea())
+            // The tab's gradient, as on the Dives and Equipment tabs.
+            .background(AppBackground().ignoresSafeArea())
             .scrollContentBackground(.hidden)
             .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             .refreshable {
@@ -623,39 +617,20 @@ struct DocumentsView: View {
 
     // MARK: - Row Helpers
 
-    /// Insets of the document rows and their column header rows. One-line rows (macOS) get no
-    /// horizontal inset: the List already insets them 16 pt each side, as it does the Dives and
-    /// Equipment rows, so all three lists give their rows the same width and switch to stacked
-    /// rows at the same window width. The cards keep 16 pt (unchanged on iOS).
-    private var documentRowInsets: EdgeInsets {
-        documentsOneLine
-            ? EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0)
-            : EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16)
-    }
-
-    /// Whether the rows show their one-line version (macOS wide window); always false on iOS.
-    private var documentsOneLine: Bool {
-        #if os(macOS)
-        documentsLayout.isOneLine
-        #else
-        false
-        #endif
-    }
-
     @ViewBuilder
     private func certRow(_ cert: Certification, isLast: Bool) -> some View {
         Button { selectedCertification = cert } label: {
             #if os(macOS)
-            // One line in a wide window, the card otherwise (as on iOS); each version reports
-            // which one is shown, so the column header row comes and goes with them.
+            // One line in a wide window, the stacked row otherwise (as on iOS); each version
+            // reports which one is shown, so the column header row comes and goes with them.
             ViewThatFits(in: .horizontal) {
                 CertificationOneLineRow(certification: cert, showExpired: cert.isExpired)
                     .reportsOneLine(true, to: documentsLayout)
-                CertificationCard(certification: cert, showExpired: cert.isExpired)
+                CertificationRow(certification: cert, showExpired: cert.isExpired)
                     .reportsOneLine(false, to: documentsLayout)
             }
             #else
-            CertificationCard(certification: cert, showExpired: cert.isExpired)
+            CertificationRow(certification: cert, showExpired: cert.isExpired)
             #endif
         }
         .buttonStyle(.plain)
@@ -681,24 +656,24 @@ struct DocumentsView: View {
                 showDeleteCertConfirmation = true
             } label: { Label("Delete", systemImage: "trash") }
         }
-        .documentRowBackground(oneLine: documentsOneLine, separator: !isLast)
-        .listRowInsets(documentRowInsets)
-        .listRowSeparator(.hidden)
+        // Same row background as the Dives and Equipment tabs; no separator under a section's
+        // last row.
+        .listRowBackground(Color.primary.opacity(0.07), macSeparator: !isLast)
     }
 
     @ViewBuilder
     private func insuranceRow(_ insurance: DivingInsurance, isLast: Bool) -> some View {
         Button { selectedInsurance = insurance } label: {
             #if os(macOS)
-            // One line in a wide window, the card otherwise (as on iOS); see certRow.
+            // One line in a wide window, the stacked row otherwise (as on iOS); see certRow.
             ViewThatFits(in: .horizontal) {
                 InsuranceOneLineRow(insurance: insurance, showExpired: insurance.isExpired)
                     .reportsOneLine(true, to: documentsLayout)
-                InsuranceCard(insurance: insurance, showExpired: insurance.isExpired)
+                InsuranceRow(insurance: insurance, showExpired: insurance.isExpired)
                     .reportsOneLine(false, to: documentsLayout)
             }
             #else
-            InsuranceCard(insurance: insurance, showExpired: insurance.isExpired)
+            InsuranceRow(insurance: insurance, showExpired: insurance.isExpired)
             #endif
         }
         .buttonStyle(.plain)
@@ -724,9 +699,9 @@ struct DocumentsView: View {
                 showDeleteInsuranceConfirmation = true
             } label: { Label("Delete", systemImage: "trash") }
         }
-        .documentRowBackground(oneLine: documentsOneLine, separator: !isLast)
-        .listRowInsets(documentRowInsets)
-        .listRowSeparator(.hidden)
+        // Same row background as the Dives and Equipment tabs; no separator under a section's
+        // last row.
+        .listRowBackground(Color.primary.opacity(0.07), macSeparator: !isLast)
     }
 
     // MARK: - Section Binding Helper
@@ -1297,9 +1272,12 @@ struct InlineDomainEmptyRow: View {
     }
 }
 
-// MARK: - Certification Card
+// MARK: - Certification Row
 
-struct CertificationCard: View {
+/// Stacked certification row (iOS, and macOS when the window is too narrow for the one-line
+/// row): icon, name / diver / level / number / dates, status dot. Plain list row like the Dives
+/// and Equipment tabs; the List draws the row background and separator.
+struct CertificationRow: View {
     let certification: Certification
     let showExpired: Bool
     @Environment(\.locale) private var locale
@@ -1311,8 +1289,6 @@ struct CertificationCard: View {
         formatter.timeStyle = .none
         return formatter.string(from: date)
     }
-
-    private var orgColor: Color { certification.organizationColor }
 
     private var displayName: String { Self.displayName(of: certification) }
 
@@ -1328,7 +1304,7 @@ struct CertificationCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            CertificationIconView(organization: certification.organization, size: 60, fillOpacity: 0.2)
+            CertificationIconView(organization: certification.organization, size: 44, fillOpacity: 0.2)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayName)
@@ -1379,9 +1355,10 @@ struct CertificationCard: View {
                 .frame(width: 12, height: 12)
                 .accessibilityLabel(showExpired ? Text("Expired") : (certification.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
         }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 15).fill(Color.primary.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 15).stroke(orgColor.opacity(0.3), lineWidth: 1))
+        .padding(.vertical, 8)
+        // The whole row opens the certification (a plain Button only responds where something
+        // is drawn).
+        .contentShape(Rectangle())
     }
 }
 
@@ -1489,7 +1466,8 @@ struct CertificationDetailView: View {
                     .padding(.bottom, 16)
                 }
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            // Same background as the dive detail and the tabs.
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle(certification.name)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1789,7 +1767,8 @@ struct AddCertificationView: View {
                     .padding(.bottom, 16)
                 }
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            // Same background as the detail screens and the tabs.
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle(isEditing ? LocalizedStringKey("Edit Certification") : LocalizedStringKey("New Certification"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1940,26 +1919,6 @@ struct AddCertificationView: View {
         .modelContainer(for: [Certification.self, DivingInsurance.self], inMemory: true)
 }
 
-// MARK: - Document Row Background
-
-extension View {
-    /// Row background of a certification / insurance row: on macOS with one-line rows, the dive
-    /// list's plain row (background + separator, `separator` false for a section's last row);
-    /// otherwise clear, so the card draws its own background (iOS: always clear, unchanged).
-    @ViewBuilder
-    func documentRowBackground(oneLine: Bool, separator: Bool) -> some View {
-        #if os(macOS)
-        if oneLine {
-            listRowBackground(Color.primary.opacity(0.07), macSeparator: separator)
-        } else {
-            listRowBackground(Color.clear)
-        }
-        #else
-        listRowBackground(Color.clear)
-        #endif
-    }
-}
-
 #if os(macOS)
 // MARK: - Document One-Line Rows (macOS)
 
@@ -1981,7 +1940,7 @@ enum DocumentListColumns {
         + spacing * 7
 }
 
-/// Medium date in the in-app language (as on the cards).
+/// Medium date in the in-app language (as on the stacked rows).
 private func documentDate(_ date: Date, locale: Locale) -> String {
     let formatter = DateFormatter()
     formatter.locale = locale
@@ -1991,7 +1950,7 @@ private func documentDate(_ date: Date, locale: Locale) -> String {
 }
 
 /// One line (macOS): icon, name, diver, level, number, issue and expiration dates, status dot,
-/// in `DocumentListColumns`. Same information and colours as `CertificationCard`.
+/// in `DocumentListColumns`. Same information and colours as `CertificationRow`.
 struct CertificationOneLineRow: View {
     let certification: Certification
     let showExpired: Bool
@@ -2002,7 +1961,7 @@ struct CertificationOneLineRow: View {
             CertificationIconView(organization: certification.organization,
                                   size: DocumentListColumns.icon, fillOpacity: 0.2)
 
-            Text(CertificationCard.displayName(of: certification))
+            Text(CertificationRow.displayName(of: certification))
                 .font(.headline)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -2063,7 +2022,7 @@ struct CertificationOneLineRow: View {
 }
 
 /// One line (macOS): icon, insurer, diver, coverage, policy number, start and end dates, status
-/// dot, in `DocumentListColumns`. Same information and colours as `InsuranceCard`.
+/// dot, in `DocumentListColumns`. Same information and colours as `InsuranceRow`.
 struct InsuranceOneLineRow: View {
     let insurance: DivingInsurance
     let showExpired: Bool

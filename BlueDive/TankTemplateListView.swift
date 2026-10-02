@@ -18,7 +18,7 @@ struct TankTemplateListView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 if templates.isEmpty {
                     ContentUnavailableView(

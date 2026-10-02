@@ -45,7 +45,7 @@ struct ImportPreviewSheet: View {
 
     private var sheetContent: some View {
         ZStack {
-            Color.platformBackground.ignoresSafeArea()
+            AppBackground().ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 20) {
                     headerCard
