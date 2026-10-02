@@ -649,7 +649,7 @@ final class DiveStore {
         var marineLifeSet = Set<String>()
         for summary in cachedSummaries {
             yearSet.insert(summary.year)
-            if !summary.gasType.isEmpty { gasTypeSet.insert(summary.gasType) }
+            summary.gasNames.forEach   { gasTypeSet.insert($0) }
             if let c = summary.siteCountry, !c.isEmpty { countrySet.insert(c) }
             summary.diveTypes.forEach     { diveTypeSet.insert($0) }
             summary.tags.forEach          { tagSet.insert($0) }
@@ -1536,14 +1536,9 @@ final class DiveStore {
                 }
             }
             // Gas filter
-            if let gas = filterGasType {
-                if gas.isEmpty {
-                    if !dive.gasType.isEmpty { return false }
-                } else if filterGasTypeNegate {
-                    if dive.gasType == gas { return false }
-                } else {
-                    if dive.gasType != gas { return false }
-                }
+            if let gas = filterGasType,
+               !DiverFilter.matchesGas(DiveSummary.gasNames(of: dive), gas: gas, negate: filterGasTypeNegate) {
+                return false
             }
             // Depth range filter — compare in display units
             if filterMinDepth > 0 || filterMaxDepth > 0 {
@@ -1721,7 +1716,7 @@ final class DiveStore {
             for name in dive.seenFishNames where !name.isEmpty { marineLifeSet.insert(name) }
 
             yearSet.insert(dive.year)
-            if !dive.gasType.isEmpty { gasTypeSet.insert(dive.gasType) }
+            dive.gasNames.forEach { gasTypeSet.insert($0) }
             if let country = dive.siteCountry, !country.isEmpty { countrySet.insert(country) }
             dive.diveTypes.forEach { diveTypeSet.insert($0) }
             dive.tags.forEach { tagSet.insert($0) }

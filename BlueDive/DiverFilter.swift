@@ -70,6 +70,14 @@ enum DiverFilter {
         selected.isEmpty ? insurances : insurances.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selected }
     }
 
+    /// Gas filter rule shared by the Dives list, Map and Statistics: "None" (empty `gas`) keeps
+    /// dives with no tanks; otherwise a dive matches when any of its tanks uses `gas`, and
+    /// `negate` keeps the dives where none does.
+    nonisolated static func matchesGas(_ gasNames: [String], gas: String, negate: Bool) -> Bool {
+        if gas.isEmpty { return gasNames.isEmpty }
+        return gasNames.contains(gas) != negate
+    }
+
     /// Applies the 15-parameter dive filter shared by the Map and Statistics views.
     static func applyDiveFilters(
         to dives: [Dive],
@@ -88,10 +96,9 @@ enum DiverFilter {
                 if yearNegate { if diveYear == year { return false } }
                 else { if diveYear != year { return false } }
             }
-            if let gas = gasType {
-                if gas.isEmpty { if !dive.gasType.isEmpty { return false } }
-                else if gasTypeNegate { if dive.gasType == gas { return false } }
-                else { if dive.gasType != gas { return false } }
+            if let gas = gasType,
+               !matchesGas(DiveSummary.gasNames(of: dive), gas: gas, negate: gasTypeNegate) {
+                return false
             }
             if minDepth > 0 || maxDepth > 0 {
                 let depth = dive.displayMaxDepth

@@ -217,7 +217,7 @@ struct DiveMapView: View {
                   CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: lat, longitude: lon))
             else { continue }
             years.insert(snap.year)
-            gasTypes.insert(snap.gasType)
+            snap.gasNames.forEach { gasTypes.insert($0) }
             if let c = snap.siteCountry, !c.isEmpty { countries.insert(c) }
             snap.diveTypes.forEach    { diveTypes.insert($0) }
             snap.tags.forEach         { tags.insert($0) }
@@ -395,10 +395,9 @@ struct DiveMapView: View {
                 if filterYearNegate { if snap.year == year { return nil } }
                 else                { if snap.year != year { return nil } }
             }
-            if let gas = filterGasType {
-                if gas.isEmpty          { if !snap.gasType.isEmpty { return nil } }
-                else if filterGasTypeNegate { if snap.gasType == gas { return nil } }
-                else                    { if snap.gasType != gas { return nil } }
+            if let gas = filterGasType,
+               !DiverFilter.matchesGas(snap.gasNames, gas: gas, negate: filterGasTypeNegate) {
+                return nil
             }
             if filterMinDepth > 0 || filterMaxDepth > 0 {
                 let storedInFeet = snap.importDistanceUnit == "feet"

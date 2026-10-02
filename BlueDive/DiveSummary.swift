@@ -89,23 +89,34 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
     /// Every gas used on the dive, one per distinct gas in tank order and localized, e.g.
     /// "Trimix + Nitrox". Empty when the dive has no tanks.
     var displayGasNames: String {
-        gasNames.map { name in
-            switch name {
-            case "Air":
-                return NSLocalizedString("Air", bundle: .forAppLanguage(), value: "Air", comment: "Gas type label: 21% oxygen")
-            case "Nitrox":
-                return NSLocalizedString("Nitrox", bundle: .forAppLanguage(), value: "Nitrox", comment: "Gas type label: oxygen above 21%")
-            case "Trimix":
-                return NSLocalizedString("Trimix", bundle: .forAppLanguage(), value: "Trimix", comment: "Gas type label: helium present")
-            case "Heliox":
-                return NSLocalizedString("Heliox", bundle: .forAppLanguage(), value: "Heliox", comment: "Gas type label: oxygen and helium only, no nitrogen")
-            case "Hypoxic":
-                return NSLocalizedString("Hypoxic", bundle: .forAppLanguage(), value: "Hypoxic", comment: "Gas type label: oxygen below 21%")
-            default:
-                return name
-            }
+        gasNames.map { Self.localizedGasName($0) }.joined(separator: " + ")
+    }
+
+    /// Every gas used on a dive, one per distinct gas in tank order (`TankData.gasName`:
+    /// "Air", "Nitrox", "Trimix", "Heliox", "Hypoxic"). Empty when the dive has no tanks.
+    /// Shared by the summary and the gas filters that work on `Dive`.
+    static func gasNames(of dive: Dive) -> [String] {
+        var seen = Set<String>()
+        return dive.tanks.map(\.gasName).filter { seen.insert($0).inserted }
+    }
+
+    /// Localized label for a stored gas name (list and filter chips); the stored English name
+    /// stays the value that is compared and filtered on.
+    static func localizedGasName(_ name: String) -> String {
+        switch name {
+        case "Air":
+            return NSLocalizedString("Air", bundle: .forAppLanguage(), value: "Air", comment: "Gas type label: 21% oxygen")
+        case "Nitrox":
+            return NSLocalizedString("Nitrox", bundle: .forAppLanguage(), value: "Nitrox", comment: "Gas type label: oxygen above 21%")
+        case "Trimix":
+            return NSLocalizedString("Trimix", bundle: .forAppLanguage(), value: "Trimix", comment: "Gas type label: helium present")
+        case "Heliox":
+            return NSLocalizedString("Heliox", bundle: .forAppLanguage(), value: "Heliox", comment: "Gas type label: oxygen and helium only, no nitrogen")
+        case "Hypoxic":
+            return NSLocalizedString("Hypoxic", bundle: .forAppLanguage(), value: "Hypoxic", comment: "Gas type label: oxygen below 21%")
+        default:
+            return name
         }
-        .joined(separator: " + ")
     }
 
     // MARK: - Init
@@ -137,8 +148,7 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
             .filter { !$0.isEmpty }
         year = Calendar.current.component(.year, from: dive.timestamp)
         gasType = dive.gasType
-        var seenGases = Set<String>()
-        gasNames = dive.tanks.map(\.gasName).filter { seenGases.insert($0).inserted }
+        gasNames = Self.gasNames(of: dive)
         hasFish = false      // patched by store after membership sweep
         hasPhotos = false    // patched by store after membership sweep
         seenFishNames = []   // patched by store after membership sweep

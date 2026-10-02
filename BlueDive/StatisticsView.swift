@@ -88,7 +88,7 @@ struct StatisticsView: View {
     private var availableYears: [Int] {
         Array(Set(diverDives.compactMap { Calendar.current.dateComponents([.year], from: $0.timestamp).year })).sorted(by: >)
     }
-    private var availableGasTypes: [String] { Array(Set(diverDives.map { $0.gasType })).sorted() }
+    private var availableGasTypes: [String] { Array(Set(diverDives.flatMap { DiveSummary.gasNames(of: $0) })).sorted() }
     private var availableCountries: [String] { Array(Set(diverDives.compactMap { $0.siteCountry }.filter { !$0.isEmpty })).sorted() }
     private var availableDiveTypes: [String] {
         var types = Set<String>()

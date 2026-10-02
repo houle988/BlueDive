@@ -565,7 +565,7 @@ struct DiveFilterSheet: View {
 
                 ForEach(availableGasTypes, id: \.self) { gas in
                     ModernFilterChip(
-                        label: gas,
+                        label: DiveSummary.localizedGasName(gas),
                         isSelected: filterGasType == gas,
                         color: filterGasTypeNegate ? .orange : .green
                     ) {
