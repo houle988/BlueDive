@@ -118,21 +118,16 @@ struct DiveFilterSheet: View {
         }
         .padding(.horizontal, 4)
         #else
+        let row = ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: spacing) {
+                content()
+            }
+            .padding(.horizontal, 4)
+        }
         if fade {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: spacing) {
-                    content()
-                }
-                .padding(.horizontal, 4)
-            }
-            .chipRowFade()
+            row.chipRowFade()
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: spacing) {
-                    content()
-                }
-                .padding(.horizontal, 4)
-            }
+            row
         }
         #endif
     }

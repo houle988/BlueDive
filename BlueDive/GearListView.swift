@@ -703,11 +703,7 @@ struct GearListView: View {
     /// Deletes one gear item (context-menu Delete, after confirmation), with the same steps
     /// as swipe-to-delete.
     private func deleteGear(_ gear: Gear) {
-        withAnimation {
-            NotificationManager.shared.cancelGearReminder(id: gear.id)
-            modelContext.delete(gear)
-            try? modelContext.save()
-        }
+        deleteGear(items: [gear], at: IndexSet(integer: 0))
     }
 
     private func deleteGear(items: [Gear], at offsets: IndexSet) {

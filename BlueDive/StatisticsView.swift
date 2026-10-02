@@ -443,13 +443,14 @@ struct StatisticsView: View {
                             #endif
 
                             #if os(macOS)
-                            // The Mac sheet is wide enough to show Favourite Sites (⅔) beside
-                            // At a Glance (⅓); fixedSize gives both the height of the taller one.
+                            // The Mac sheet is wide enough to show Favourite Sites (⅗) beside
+                            // At a Glance (⅖, wide enough for long labels such as the German
+                            // "Gesichtete Arten"); fixedSize gives both the height of the taller one.
                             HStack(alignment: .top, spacing: 0) {
                                 topSitesSection
-                                    .containerRelativeFrame(.horizontal, count: 3, span: 2, spacing: 0)
+                                    .containerRelativeFrame(.horizontal, count: 5, span: 3, spacing: 0)
                                 moreStatsGrid
-                                    .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
+                                    .containerRelativeFrame(.horizontal, count: 5, span: 2, spacing: 0)
                             }
                             .fixedSize(horizontal: false, vertical: true)
                             .opacity(appeared ? 1.0 : 0.0)
@@ -1469,7 +1470,7 @@ struct StatisticsView: View {
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color.platformSecondaryBackground)
         )
-        .sideBySideCardPadding(.leading)
+        .sideBySideCardPadding(.leading, inner: 12)
     }
 
     // MARK: - More Stats Grid
@@ -1510,7 +1511,7 @@ struct StatisticsView: View {
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color.platformSecondaryBackground)
         )
-        .sideBySideCardPadding(.trailing)
+        .sideBySideCardPadding(.trailing, inner: 12)
     }
 }
 

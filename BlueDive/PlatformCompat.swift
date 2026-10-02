@@ -428,14 +428,15 @@ extension View {
     }
 
     /// Horizontal card padding. iOS: the standard `.padding(.horizontal)`. macOS: the
-    /// standard padding on the outer edge (`side`) and half the 20 pt vertical card
-    /// spacing on the inner edge, so the gap between two side-by-side cards matches the
-    /// gap between the cards above and below them (Gas tab, Statistics).
+    /// standard padding on the outer edge (`side`) and `inner` on the inner edge. Pass half
+    /// the screen's vertical card spacing as `inner` (10 for the Gas tab's 20 pt stack, 12
+    /// for Statistics' 24 pt stack) so the gap between two side-by-side cards matches the
+    /// gap between the cards above and below them.
     @ViewBuilder
-    func sideBySideCardPadding(_ side: HorizontalEdge) -> some View {
+    func sideBySideCardPadding(_ side: HorizontalEdge, inner: CGFloat = 10) -> some View {
         #if os(macOS)
         padding(side == .leading ? .leading : .trailing)
-            .padding(side == .leading ? .trailing : .leading, 10)
+            .padding(side == .leading ? .trailing : .leading, inner)
         #else
         padding(.horizontal)
         #endif
@@ -456,7 +457,10 @@ struct WrappingChipLayout: Layout {
         let rows = arrangeRows(maxWidth: maxWidth, subviews: subviews)
         let width = rows.map(\.width).max() ?? 0
         let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
-        return CGSize(width: proposal.width ?? width, height: height)
+        // Fill a finite proposed width; with no width limit (nil or infinite proposal),
+        // report the widest line instead of an infinite size.
+        let proposedWidth = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+        return CGSize(width: proposedWidth ?? width, height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -479,13 +483,18 @@ struct WrappingChipLayout: Layout {
         var height: CGFloat = 0
     }
 
-    /// Greedy line breaking: each chip at its ideal size (capped at the line width).
+    /// Greedy line breaking: each chip at its ideal size. A chip wider than the whole line
+    /// is measured again at the line width, so its label wraps inside the chip (and the line
+    /// gets that taller height) instead of overlapping the next line.
     private func arrangeRows(maxWidth: CGFloat, subviews: Subviews) -> [Row] {
         var rows: [Row] = []
         var current = Row()
         for index in subviews.indices {
             var size = subviews[index].sizeThatFits(.unspecified)
-            size.width = min(size.width, maxWidth)
+            if size.width > maxWidth {
+                size = subviews[index].sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+                size.width = min(size.width, maxWidth)
+            }
             let neededWidth = current.indices.isEmpty ? size.width : current.width + spacing + size.width
             if !current.indices.isEmpty && neededWidth > maxWidth {
                 rows.append(current)

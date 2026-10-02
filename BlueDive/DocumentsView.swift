@@ -1337,27 +1337,27 @@ struct CertificationDetailView: View {
     private var detailItems: [DetailRowItem] {
         var items: [DetailRowItem] = []
         if !certification.diverName.isEmpty {
-            items.append(DetailRowItem(icon: "person.fill", title: "Diver Name", value: certification.diverName))
+            items.append(DetailRowItem(id: "Diver Name", icon: "person.fill", title: "Diver Name", value: certification.diverName))
         }
-        items.append(DetailRowItem(icon: "building.2.fill", title: "Organization", value: certification.localizedOrganization))
-        items.append(DetailRowItem(icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : certification.level))
-        items.append(DetailRowItem(icon: "number", title: "Number", value: certification.certificationNumber))
-        items.append(DetailRowItem(icon: "calendar", title: "Issue Date", value: formattedDate(certification.issueDate, style: .long)))
+        items.append(DetailRowItem(id: "Organization", icon: "building.2.fill", title: "Organization", value: certification.localizedOrganization))
+        items.append(DetailRowItem(id: "Level", icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : certification.level))
+        items.append(DetailRowItem(id: "Number", icon: "number", title: "Number", value: certification.certificationNumber))
+        items.append(DetailRowItem(id: "Issue Date", icon: "calendar", title: "Issue Date", value: formattedDate(certification.issueDate, style: .long)))
 
         if let expiration = certification.expirationDate {
-            items.append(DetailRowItem(icon: "clock", title: "Expiration", value: formattedDate(expiration, style: .long)))
+            items.append(DetailRowItem(id: "Expiration", icon: "clock", title: "Expiration", value: formattedDate(expiration, style: .long)))
         }
 
         if let instructor = certification.instructorName, !instructor.isEmpty {
-            items.append(DetailRowItem(icon: "person.fill", title: "Instructor", value: instructor))
+            items.append(DetailRowItem(id: "Instructor", icon: "person.fill", title: "Instructor", value: instructor))
         }
 
         if let instructorCertNum = certification.instructorNumber, !instructorCertNum.isEmpty {
-            items.append(DetailRowItem(icon: "number", title: "Instructor Number", value: instructorCertNum))
+            items.append(DetailRowItem(id: "Instructor Number", icon: "number", title: "Instructor Number", value: instructorCertNum))
         }
 
         if let center = certification.divingCentre, !center.isEmpty {
-            items.append(DetailRowItem(icon: "building.2.fill", title: "Diving Centre", value: center))
+            items.append(DetailRowItem(id: "Diving Centre", icon: "building.2.fill", title: "Diving Centre", value: center))
         }
         return items
     }
@@ -1493,7 +1493,9 @@ struct DetailRow: View {
 }
 
 /// One label/value row of a certification or insurance detail sheet.
-struct DetailRowItem {
+struct DetailRowItem: Identifiable {
+    /// Stable identity within a sheet (the row's English title, which is unique per sheet).
+    let id: String
     let icon: String
     let title: LocalizedStringKey
     let value: String
@@ -1519,7 +1521,7 @@ func detailRowList(_ items: [DetailRowItem]) -> some View {
         }
     }
     #else
-    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+    ForEach(items) { item in
         DetailRow(icon: item.icon, title: item.title, value: item.value)
     }
     #endif

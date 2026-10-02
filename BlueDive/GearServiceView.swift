@@ -96,7 +96,9 @@ struct GearServiceView: View {
                     // "No Maintenance Scheduled" card full width, as on iOS, then the statistics
                     // full width; gear without dives shows Maintenance & Notes full width.
                     if gear.nextServiceDue != nil {
-                        HStack(alignment: .top, spacing: 0) {
+                        // Each section keeps its own 16 pt side padding (header and card), so the
+                        // two meet 32 pt apart; spacing -8 makes the gap 24 pt, like the rows.
+                        HStack(alignment: .top, spacing: -8) {
                             serviceGaugesSection
                                 .frame(maxWidth: .infinity)
                             statisticsGrid
@@ -108,7 +110,7 @@ struct GearServiceView: View {
                         statisticsGrid
                     }
 
-                    HStack(alignment: .top, spacing: 0) {
+                    HStack(alignment: .top, spacing: -8) {
                         if !recentDives.isEmpty {
                             recentDivesSection
                                 .frame(maxWidth: .infinity)

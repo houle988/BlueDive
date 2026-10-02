@@ -1108,26 +1108,26 @@ struct InsuranceDetailView: View {
     private var detailItems: [DetailRowItem] {
         var items: [DetailRowItem] = []
         if !insurance.diverName.isEmpty {
-            items.append(DetailRowItem(icon: "person.fill", title: "Diver Name", value: insurance.diverName))
+            items.append(DetailRowItem(id: "Diver Name", icon: "person.fill", title: "Diver Name", value: insurance.diverName))
         }
-        items.append(DetailRowItem(icon: "building.2.fill", title: "Insurer", value: insurance.insurerName))
+        items.append(DetailRowItem(id: "Insurer", icon: "building.2.fill", title: "Insurer", value: insurance.insurerName))
         if !insurance.policyNumber.isEmpty {
-            items.append(DetailRowItem(icon: "number", title: "Policy Number", value: insurance.policyNumber))
+            items.append(DetailRowItem(id: "Policy Number", icon: "number", title: "Policy Number", value: insurance.policyNumber))
         }
 
         if !insurance.coverageType.isEmpty {
-            items.append(DetailRowItem(icon: "shield.fill", title: "Coverage Type", value: insurance.coverageType))
+            items.append(DetailRowItem(id: "Coverage Type", icon: "shield.fill", title: "Coverage Type", value: insurance.coverageType))
         }
 
-        items.append(DetailRowItem(icon: "calendar", title: "Start Date", value: formattedDate(insurance.startDate)))
-        items.append(DetailRowItem(icon: "clock", title: "End Date", value: formattedDate(insurance.endDate)))
+        items.append(DetailRowItem(id: "Start Date", icon: "calendar", title: "Start Date", value: formattedDate(insurance.startDate)))
+        items.append(DetailRowItem(id: "End Date", icon: "clock", title: "End Date", value: formattedDate(insurance.endDate)))
 
         if let phone = insurance.contactPhone, !phone.isEmpty {
-            items.append(DetailRowItem(icon: "phone.fill", title: "Emergency Phone", value: phone))
+            items.append(DetailRowItem(id: "Emergency Phone", icon: "phone.fill", title: "Emergency Phone", value: phone))
         }
 
         if let email = insurance.contactEmail, !email.isEmpty {
-            items.append(DetailRowItem(icon: "envelope.fill", title: "Email", value: email))
+            items.append(DetailRowItem(id: "Email", icon: "envelope.fill", title: "Email", value: email))
         }
         return items
     }
