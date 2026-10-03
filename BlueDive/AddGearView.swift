@@ -770,6 +770,9 @@ struct GearAutocompleteField: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
+                            // The whole suggestion responds, not only its text (a plain Button
+                            // only responds where something is drawn).
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 

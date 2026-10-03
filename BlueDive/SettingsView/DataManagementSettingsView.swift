@@ -36,10 +36,13 @@ struct DataManagementSettingsView: View {
                                 Label("Backup database", systemImage: "externaldrive.fill.badge.timemachine")
                                 Spacer()
                             }
+                            // The padding sits inside the button so the whole card responds, not only the
+                            // drawn label (a borderless Button only responds where something is drawn).
+                            .padding()
+                            .contentShape(Rectangle())
                         }
                         .borderlessButton()
                     }
-                    .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     Text("Export a compressed backup of your database.")
@@ -67,11 +70,14 @@ struct DataManagementSettingsView: View {
                                 Label("Reset preferences", systemImage: "arrow.counterclockwise")
                                 Spacer()
                             }
+                            // The padding sits inside the button so the whole card responds, not only the
+                            // drawn label (a borderless Button only responds where something is drawn).
+                            .padding()
+                            .contentShape(Rectangle())
                         }
                         .foregroundStyle(.red)
                         .borderlessButton()
                     }
-                    .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     Text("Return all preferences to their default values.")
@@ -102,6 +108,10 @@ struct DataManagementSettingsView: View {
                                     ProgressView().scaleEffect(0.8)
                                 }
                             }
+                            // The padding sits inside the button so the whole card responds. While the
+                            // status text is shown, it carries the bottom padding instead.
+                            .padding(erasePhase == nil ? .all : [.horizontal, .top])
+                            .contentShape(Rectangle())
                         }
                         .foregroundStyle(.red)
                         .disabled(isErasingData || erasePhase != nil)
@@ -122,9 +132,9 @@ struct DataManagementSettingsView: View {
                             }
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .padding([.horizontal, .bottom])
                         }
                     }
-                    .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     Text("Permanently deletes all data from this device and iCloud. This action cannot be undone. Wait for iCloud sync to finish uploading before closing the app.")

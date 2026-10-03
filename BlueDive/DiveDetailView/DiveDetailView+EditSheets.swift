@@ -428,6 +428,9 @@ struct EditMenuStatsView: View {
                                                 .frame(maxWidth: .infinity, alignment: .leading)
                                                 .padding(.vertical, 6)
                                                 .padding(.horizontal, 8)
+                                                // The whole suggestion responds, not only its text
+                                                // (a plain Button only responds where something is drawn).
+                                                .contentShape(Rectangle())
                                         }
                                         .buttonStyle(.plain)
                                         .background(Color.primary.opacity(0.05))
@@ -555,6 +558,9 @@ struct EditMenuStatsView: View {
                                                 .frame(maxWidth: .infinity, alignment: .leading)
                                                 .padding(.vertical, 6)
                                                 .padding(.horizontal, 8)
+                                                // The whole suggestion responds, not only its text
+                                                // (a plain Button only responds where something is drawn).
+                                                .contentShape(Rectangle())
                                         }
                                         .buttonStyle(.plain)
                                         .background(Color.primary.opacity(0.05))
@@ -1319,6 +1325,9 @@ struct EditSiteDetailsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            // The whole row responds, including the space before the chevron (a plain Button
+            // only responds where something is drawn).
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)

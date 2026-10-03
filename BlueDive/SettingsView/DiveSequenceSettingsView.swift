@@ -25,10 +25,13 @@ struct DiveSequenceSettingsView: View {
                                 Label("Recalculate surface intervals", systemImage: "arrow.clockwise.circle.fill")
                                 Spacer()
                             }
+                            // The padding sits inside the button so the whole card responds, not only the
+                            // drawn label (a borderless Button only responds where something is drawn).
+                            .padding()
+                            .contentShape(Rectangle())
                         }
                         .borderlessButton()
                     }
-                    .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -39,10 +42,13 @@ struct DiveSequenceSettingsView: View {
                                 Label("Renumber dives", systemImage: "number.circle.fill")
                                 Spacer()
                             }
+                            // The padding sits inside the button so the whole card responds, not only the
+                            // drawn label (a borderless Button only responds where something is drawn).
+                            .padding()
+                            .contentShape(Rectangle())
                         }
                         .borderlessButton()
                     }
-                    .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     Text("Dives without a diver name are not affected.")
@@ -97,10 +103,13 @@ struct DiveSequenceSettingsView: View {
                                 Label("Show database in Finder", systemImage: "folder.fill")
                                 Spacer()
                             }
+                            // The padding sits inside the button so the whole card responds, not only the
+                            // drawn label (a borderless Button only responds where something is drawn).
+                            .padding()
+                            .contentShape(Rectangle())
                         }
                         .borderlessButton()
                     }
-                    .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     Text("Open the folder containing your database files.")

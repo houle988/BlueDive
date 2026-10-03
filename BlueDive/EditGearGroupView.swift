@@ -247,6 +247,9 @@ struct EditGearGroupView: View {
                     .font(.title3)
             }
             .padding(.vertical, 4)
+            // The whole row toggles the item, including the space before the checkmark (a plain
+            // Button only responds where something is drawn).
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

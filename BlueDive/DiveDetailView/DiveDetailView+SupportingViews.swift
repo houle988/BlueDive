@@ -257,6 +257,9 @@ struct AddFishView: View {
                                                 .frame(maxWidth: .infinity, alignment: .leading)
                                                 .padding(.vertical, 6)
                                                 .padding(.horizontal, 10)
+                                                // The whole suggestion responds, not only its text (a plain Button only responds
+                                                // where something is drawn).
+                                                .contentShape(Rectangle())
                                             }
                                             .buttonStyle(.plain)
                                         }
@@ -510,6 +513,9 @@ struct EditFishView: View {
                                                 .frame(maxWidth: .infinity, alignment: .leading)
                                                 .padding(.vertical, 6)
                                                 .padding(.horizontal, 10)
+                                                // The whole suggestion responds, not only its text (a plain Button only responds
+                                                // where something is drawn).
+                                                .contentShape(Rectangle())
                                             }
                                             .buttonStyle(.plain)
                                         }
@@ -1063,6 +1069,9 @@ struct AutocompleteMenuTextField: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 3)
                         .padding(.leading, 36)
+                        // The whole suggestion responds, not only its text (a plain Button only responds
+                        // where something is drawn).
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -1192,6 +1201,9 @@ struct SiteSearchField: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
             .padding(.horizontal, 10)
+            // The whole suggestion responds, not only its text (a plain Button only responds
+            // where something is drawn).
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

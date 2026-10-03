@@ -147,6 +147,8 @@ struct WelcomeWizardView: View {
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 24)
                                     .padding(.vertical, 12)
+                                    // The padding responds too, not only the text.
+                                    .contentShape(Rectangle())
                             }
                             .transition(.opacity)
                             .borderlessButton()

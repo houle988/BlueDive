@@ -555,6 +555,9 @@ struct DiverProfileView: View {
                                     .accessibilityHidden(true)
                             }
                             .padding(.vertical, 10)
+                            // The whole row opens the document, including the empty space (a plain
+                            // Button only responds where something is drawn).
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 
@@ -715,6 +718,9 @@ struct DiverProfileView: View {
                                     .accessibilityHidden(true)
                             }
                             .padding(.vertical, 10)
+                            // The whole row opens the document, including the empty space (a plain
+                            // Button only responds where something is drawn).
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 

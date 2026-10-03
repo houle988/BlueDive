@@ -391,6 +391,9 @@ struct DiverAutocompleteField: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 3)
                         .padding(.leading, 8)
+                        // The whole suggestion responds, not only its text (a plain Button only
+                        // responds where something is drawn).
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

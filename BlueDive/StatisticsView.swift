@@ -1472,6 +1472,9 @@ struct StatisticsView: View {
                             }
                             .padding(.vertical, 10)
                             .padding(.horizontal, 4)
+                            // The whole row opens the site, including the empty space (a plain
+                            // Button only responds where something is drawn).
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 

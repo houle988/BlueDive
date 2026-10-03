@@ -570,11 +570,14 @@ struct TripDetailSheet: View {
                         summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
                         diveNumber: numberMap[dive.persistentModelID] ?? 0
                     )
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(Color.primary.opacity(0.07))
+                    // The whole card opens the dive, including its padding and the gaps between
+                    // columns (a plain link only responds where something is drawn).
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.vertical, 4)
-                .padding(.horizontal, 8)
-                .background(Color.primary.opacity(0.07))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
         }

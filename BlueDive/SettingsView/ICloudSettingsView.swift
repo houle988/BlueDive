@@ -85,10 +85,13 @@ struct ICloudSettingsView: View {
                                         ProgressView().scaleEffect(0.7)
                                     }
                                 }
+                                // The padding sits inside the button so the whole card responds, not only the
+                                // drawn label (a borderless Button only responds where something is drawn).
+                                .padding()
+                                .contentShape(Rectangle())
                             }
                             .borderlessButton()
                         }
-                        .padding()
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                         Text("Last 15 minutes of sync activity.")
