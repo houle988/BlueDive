@@ -162,9 +162,9 @@ struct DiveIntroView: View {
                 .scaleEffect(surge)
                 .frame(width: proxy.size.width, height: proxy.size.height)
                 .allowsHitTesting(false)
-                .overlay(alignment: .topTrailing) {
+                .overlay(alignment: Self.skipAlignment) {
                     skipButton(e: e)
-                        .padding(.top, 60)
+                        .padding(Self.skipEdge, Self.skipEdgePadding)
                         .padding(.trailing, 20)
                 }
             }
@@ -218,9 +218,9 @@ struct DiveIntroView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: Self.skipAlignment) {
                 skipButton(e: 1.0)
-                    .padding(.top, 60)
+                    .padding(Self.skipEdge, Self.skipEdgePadding)
                     .padding(.trailing, 20)
             }
         }
@@ -254,6 +254,18 @@ struct DiveIntroView: View {
         finished = true
         onFinish()
     }
+
+    // On macOS the window toolbar and search bar are drawn over the top of the intro and
+    // take the clicks there, so the Skip button sits in the bottom corner instead.
+    #if os(macOS)
+    private static let skipAlignment: Alignment = .bottomTrailing
+    private static let skipEdge: Edge.Set = .bottom
+    private static let skipEdgePadding: CGFloat = 20
+    #else
+    private static let skipAlignment: Alignment = .topTrailing
+    private static let skipEdge: Edge.Set = .top
+    private static let skipEdgePadding: CGFloat = 60
+    #endif
 
     private func skipButton(e: Double) -> some View {
         Button {
