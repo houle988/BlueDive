@@ -431,6 +431,15 @@ class UserPreferences {
     var showSamplesTab: Bool {
         didSet { UserDefaults.standard.set(showSamplesTab, forKey: "showSamplesTab") }
     }
+    #if os(macOS)
+    /// When true, the main dive list shows the profile chart of the selected dive above the
+    /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
+    /// list has no chart and a click opens the dive. On by default.
+    /// No App Group write: the widget does not show the dive list.
+    var showDiveListProfilePreview: Bool {
+        didSet { UserDefaults.standard.set(showDiveListProfilePreview, forKey: "showDiveListProfilePreview") }
+    }
+    #endif
 
     init() {
         self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "meters") ?? .meters
@@ -444,6 +453,10 @@ class UserPreferences {
         // OFF default — no registerDefaults entry needed.
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
+        #if os(macOS)
+        // On by default: an absent key reads as true.
+        self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
+        #endif
         // Seed shared container after self is fully initialised (required by @Observable)
         let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
         shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
@@ -461,6 +474,10 @@ class UserPreferences {
         languageMode    = .system
         hideClearedDecoStops = false
         showSamplesTab = false
+        #if os(macOS)
+        showDiveListProfilePreview = true
+        #endif
+        SharedChartLineVisibility.shared.value = ChartLineVisibility()
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
         UserDefaults.standard.set(false, forKey: "filterUnusedTanks")

@@ -1334,11 +1334,21 @@ struct DiveMapCard: View {
                 .borderlessButton()
             }
 
-            HStack(spacing: 16) {
+            // 12 pt apart, and each stat shrinks slightly rather than truncating, so the three
+            // badges still fit the card on a narrow iPhone (SE) with a long date format.
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(dive.displayMaxDepth.localizedString(decimals: 1) + prefs.depthUnit.symbol, systemImage: "arrow.down.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(.cyan)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        // Deeper shade in light mode, readable on its tint; badge style of the
+                        // dive list rows.
+                        .foregroundStyle(Color.readableCyan)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.cyan.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                     Text("Max Depth")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -1350,7 +1360,13 @@ struct DiveMapCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(dive.shortFormattedDuration, systemImage: "clock.fill")
                         .font(.caption)
-                        .foregroundStyle(.green)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .foregroundStyle(Color.readableGreen)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                     Text("Duration")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -1362,7 +1378,13 @@ struct DiveMapCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(formattedDate(dive.timestamp), systemImage: "calendar")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .foregroundStyle(Color.readableOrange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                     Text("Date")
                         .font(.caption2)
                         .foregroundStyle(.secondary)

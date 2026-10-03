@@ -395,7 +395,7 @@ struct DuplicateImportSheet: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.cyan.opacity(0.18))
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(Color.readableCyan)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
             }

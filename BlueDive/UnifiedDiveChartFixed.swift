@@ -73,6 +73,15 @@ struct ChartLineVisibility {
     }
 }
 
+/// The chart's line selection, shared by every dive chart (dive detail, its Samples tab and,
+/// on macOS, the dive list's profile preview): a chip toggled in one chart updates the others
+/// at once. Loaded once from UserDefaults; each change is persisted with `save()`.
+@Observable
+final class SharedChartLineVisibility {
+    static let shared = SharedChartLineVisibility()
+    var value = ChartLineVisibility.restored()
+}
+
 // MARK: - PPO₂ computation helpers (shared by chart layer and tooltip cache)
 
 /// Per-dive constants used for Dalton's-Law PPO₂ computation.
@@ -209,6 +218,9 @@ struct ToggleButton: View {
     let label: LocalizedStringKey
     var shortLabel: LocalizedStringKey? = nil
     let color: Color
+    /// Label colour when on; `color` if nil. A deeper shade keeps the label readable on the
+    /// chip's light tint in light mode (see `Color.readableOnTint`).
+    var textColor: Color? = nil
     var isAvailable: Bool = true
 
     @ViewBuilder
@@ -245,7 +257,7 @@ struct ToggleButton: View {
                 RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(isOn && isAvailable ? color : Color.secondary.opacity(0.5), lineWidth: 1.5)
             )
-            .foregroundStyle(isAvailable ? (isOn ? color : .secondary) : .gray)
+            .foregroundStyle(isAvailable ? (isOn ? (textColor ?? color) : .secondary) : .gray)
             .opacity(isAvailable ? 1.0 : 0.5)
         }
         .disabled(!isAvailable)
@@ -274,9 +286,17 @@ private struct StaticChartLayer: View, Equatable {
     /// newly-flipped Bool on it could never make two `StaticChartLayer` values compare
     /// unequal on its own.
     let hideClearedDecoStops: Bool
+    #if os(macOS)
+    /// How the plot height follows the window: the dive detail view's rule by default, a
+    /// lower one for the dive list's profile preview.
+    var heightRule: ChartHeightRule = .detail
+    #endif
 
     static func == (lhs: StaticChartLayer, rhs: StaticChartLayer) -> Bool {
-        lhs.dive.id == rhs.dive.id &&
+        #if os(macOS)
+        guard lhs.heightRule == rhs.heightRule else { return false }
+        #endif
+        return lhs.dive.id == rhs.dive.id &&
         lhs.tanksO2Hash == rhs.tanksO2Hash &&
         lhs.unitsHash == rhs.unitsHash &&
         lhs.hideClearedDecoStops == rhs.hideClearedDecoStops &&
@@ -516,11 +536,7 @@ private struct StaticChartLayer: View, Equatable {
             }
         }
         #if os(macOS)
-        // Mac windows are tall and resizable: grow the chart with the visible height of
-        // the enclosing scroll view (45 %), never below the iOS height or above 600 pt.
-        .containerRelativeFrame(.vertical) { height, _ in
-            min(max(height * 0.45, 300), 600)
-        }
+        .macChartHeight(heightRule)
         #else
         .frame(height: 300)
         #endif
@@ -1167,12 +1183,53 @@ struct MetricLegendRow: View {
     }
 }
 
+#if os(macOS)
+// MARK: - Chart Height (macOS)
+
+/// Mac windows are tall and resizable: the plot grows with the visible height of its container
+/// (the enclosing scroll view, or the window), as a fraction of it clamped to a range.
+struct ChartHeightRule: Equatable {
+    let fraction: CGFloat
+    let minHeight: CGFloat
+    let maxHeight: CGFloat
+
+    /// Dive detail view: 45 % of the visible height, never below the iOS height (300 pt)
+    /// or above 600 pt.
+    static let detail = ChartHeightRule(fraction: 0.45, minHeight: 300, maxHeight: 600)
+    /// Profile preview above the dive list: lower, because the panel shares the window with
+    /// the list and cannot scroll out of its way.
+    static let listPreview = ChartHeightRule(fraction: 0.30, minHeight: 160, maxHeight: 400)
+
+    func height(for containerHeight: CGFloat) -> CGFloat {
+        min(max(containerHeight * fraction, minHeight), maxHeight)
+    }
+}
+
+private extension View {
+    func macChartHeight(_ rule: ChartHeightRule) -> some View {
+        containerRelativeFrame(.vertical) { height, _ in
+            rule.height(for: height)
+        }
+    }
+}
+#endif
+
 // MARK: - UnifiedDiveChartOptimized
 
 /// Graphique unifié interactif pour le profil de plongée - VERSION OPTIMISÉE
 struct UnifiedDiveChartOptimized: View {
     let dive: Dive
-    @State private var visibility = ChartLineVisibility.restored()
+    #if os(macOS)
+    /// How the plot height follows the window (`.listPreview` in the dive list's preview).
+    var chartHeightRule: ChartHeightRule = .detail
+    #endif
+    @State private var sharedVisibility = SharedChartLineVisibility.shared
+    /// The shared line selection (see `SharedChartLineVisibility`), so every chart on screen
+    /// shows the same chips and lines.
+    private var visibility: ChartLineVisibility {
+        get { sharedVisibility.value }
+        nonmutating set { sharedVisibility.value = newValue }
+    }
 
     // MARK: - User Preferences (Observable)
     @State private var prefs = UserPreferences.shared
@@ -1245,6 +1302,7 @@ struct UnifiedDiveChartOptimized: View {
             label: "Depth",
             shortLabel: "Prof.",
             color: .cyan,
+            textColor: Color.readableCyan,
             isAvailable: true
         )
 
@@ -1254,6 +1312,7 @@ struct UnifiedDiveChartOptimized: View {
             label: "Temperature",
             shortLabel: "Temp.",
             color: .green,
+            textColor: Color.readableGreen,
             isAvailable: hasTemperatureData
         )
 
@@ -1262,6 +1321,7 @@ struct UnifiedDiveChartOptimized: View {
             icon: "timer",
             label: "NDL",
             color: .ndlYellow,
+            textColor: Color.readableAmber,
             isAvailable: hasNDLData
         )
     }
@@ -1275,6 +1335,7 @@ struct UnifiedDiveChartOptimized: View {
             label: "Pressure",
             shortLabel: "Press.",
             color: .red,
+            textColor: Color.readableRed,
             isAvailable: hasPressureData
         )
 
@@ -1283,6 +1344,7 @@ struct UnifiedDiveChartOptimized: View {
             icon: "lungs.fill",
             label: "PPO₂",
             color: .indigo,
+            textColor: Color.readableIndigo,
             isAvailable: ppo2Available
         )
 
@@ -1296,6 +1358,7 @@ struct UnifiedDiveChartOptimized: View {
             icon: "exclamationmark.triangle.fill",
             label: "Deco",
             color: .orange,
+            textColor: Color.readableOrange,
             isAvailable: hasDecoData
         )
     }
@@ -1338,7 +1401,12 @@ struct UnifiedDiveChartOptimized: View {
             : Double(dive.duration)
         let xMax = max(lastSampleTime, storedDurationMinutes)
 
-        return StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops)
+        #if os(macOS)
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, heightRule: chartHeightRule)
+        #else
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops)
+        #endif
+        return layer
             .equatable()
             // chartOverlay gives us a ChartProxy so we can read the exact plot-area
             // frame — the rectangle inside both Y-axis label gutters.  Everything

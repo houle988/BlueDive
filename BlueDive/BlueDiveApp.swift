@@ -291,6 +291,9 @@ struct BlueDiveApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            CommandGroup(after: .sidebar) {
+                ProfilePreviewCommand()
+            }
         }
         #endif
     }
@@ -524,3 +527,17 @@ struct BlueDiveApp: App {
 }
 
 
+
+#if os(macOS)
+/// View → Show Profile Preview (⇧⌘P): shows or hides the profile chart above the main dive
+/// list — the same preference as Settings → Dive Profile. A view, so the menu's checkmark
+/// follows the preference when it is changed in Settings.
+private struct ProfilePreviewCommand: View {
+    @State private var prefs = UserPreferences.shared
+
+    var body: some View {
+        Toggle("Show Profile Preview", isOn: $prefs.showDiveListProfilePreview)
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+    }
+}
+#endif

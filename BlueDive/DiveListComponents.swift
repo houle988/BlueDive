@@ -115,7 +115,7 @@ struct DiveRowView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Color.cyan.opacity(0.2))
-            .foregroundStyle(.cyan)
+            .foregroundStyle(Color.readableCyan)
             .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
@@ -203,7 +203,7 @@ struct DiveRowView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Color.green.opacity(0.2))
-            .foregroundStyle(.green)
+            .foregroundStyle(Color.readableGreen)
             .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
@@ -214,7 +214,7 @@ struct DiveRowView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Color.orange.opacity(0.2))
-            .foregroundStyle(.orange)
+            .foregroundStyle(Color.readableOrange)
             .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 

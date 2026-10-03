@@ -104,6 +104,14 @@ struct ContentView: View {
     /// Whether the dive rows show their one-line version (wide window), reported by the rows;
     /// the column header row is shown only then. Starts one-line: the main window opens maximized.
     @State private var diveListLayout = OneLineRowsLayout()
+    /// Selected dive (click or arrow keys); the profile preview above the list shows it.
+    /// An observable object rather than a `UUID?` `@State` so a selection change redraws only
+    /// the panel and the row highlights, not this body (the list reads it only in actions).
+    @State private var listSelection = DiveListSelection()
+    /// Dive opened by double-click or Return, pushed through `navigationDestination(item:)`.
+    @State private var openedDiveTarget: DiveNavTarget?
+    /// Keyboard focus of the dive list, for the arrow keys and Return.
+    @FocusState private var isDiveListFocused: Bool
     #endif
 
     @ViewBuilder
@@ -133,7 +141,129 @@ struct ContentView: View {
         // accent instead of the destructive red iOS applies automatically.
         .tint(.red)
     }
+
+    /// Opens the dive detail view (double-click, or Return on the selected row).
+    private func openDive(_ summaryID: UUID) {
+        guard store.diveByID[summaryID] != nil else { return }
+        openedDiveTarget = DiveNavTarget(summaryID: summaryID, isGrouped: store.cachedShowGrouped)
+    }
+
+    /// Dives in the order the list shows them (collapsed diver sections skipped), for the
+    /// arrow-key navigation.
+    private var visibleDiveIDs: [UUID] {
+        if store.cachedShowGrouped {
+            return store.cachedGroupedSummaries
+                .filter { !collapsedDiverSections.contains($0.key) }
+                .flatMap { $0.value.map(\.id) }
+        }
+        return store.cachedFilteredSummaries.map(\.id)
+    }
+
+    /// Moves the selection one row up (-1) or down (+1) and scrolls it into view. With no
+    /// selection (or one no longer shown), selects the first row.
+    private func moveSelection(by offset: Int, proxy: ScrollViewProxy) {
+        let ids = visibleDiveIDs
+        guard !ids.isEmpty else { return }
+        let target: UUID
+        if let current = listSelection.diveID, let index = ids.firstIndex(of: current) {
+            target = ids[min(max(index + offset, 0), ids.count - 1)]
+        } else {
+            target = ids[0]
+        }
+        listSelection.diveID = target
+        proxy.scrollTo(target)
+    }
     #endif
+
+    /// The dive list. On macOS a row is selected with a click or the arrow keys — the profile
+    /// preview above the list shows it, highlighted in cyan — and opened with a double-click or
+    /// Return, the standard Mac list behaviour. The selection is kept by the app rather than
+    /// `List(selection:)`, whose highlight fills the row with the accent colour and washes out
+    /// its coloured chips. With the preview turned off (Settings → Dive Profile, or View →
+    /// Show Profile Preview) the list is plain and a click opens the dive, as on iOS.
+    /// On iOS this is exactly `List { … }`; a tap opens the dive.
+    @ViewBuilder
+    private func diveListContainer<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        #if os(macOS)
+        let list = List(content: content)
+        if !prefs.showDiveListProfilePreview {
+            list
+        } else {
+            ScrollViewReader { proxy in
+                list
+                    .focusable()
+                    .focusEffectDisabled()
+                    .focused($isDiveListFocused)
+                    .onKeyPress(.upArrow) {
+                        moveSelection(by: -1, proxy: proxy)
+                        return .handled
+                    }
+                    .onKeyPress(.downArrow) {
+                        moveSelection(by: 1, proxy: proxy)
+                        return .handled
+                    }
+                    .onKeyPress(.return) {
+                        guard let summaryID = listSelection.diveID else { return .ignored }
+                        openDive(summaryID)
+                        return .handled
+                    }
+            }
+        }
+        #else
+        List(content: content)
+        #endif
+    }
+
+    /// A dive row: a link that opens the dive, except on macOS with the profile preview on,
+    /// where a click selects it and a double-click opens it.
+    @ViewBuilder
+    private func diveRow(_ summary: DiveSummary, rowNumber: Int, isGrouped: Bool) -> some View {
+        #if os(macOS)
+        if !prefs.showDiveListProfilePreview {
+            NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: isGrouped)) {
+                DiveRowView(summary: summary, diveNumber: rowNumber)
+            }
+        } else {
+            DiveRowView(summary: summary, diveNumber: rowNumber)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    openDive(summary.id)
+                }
+                // Simultaneous, so the selection follows the first click at once instead of
+                // waiting for the double-click interval to expire.
+                .simultaneousGesture(TapGesture().onEnded {
+                    listSelection.diveID = summary.id
+                    isDiveListFocused = true
+                })
+                // The row is no longer a link: expose it to VoiceOver as a button that opens
+                // the dive, and mark the selected one.
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction {
+                    openDive(summary.id)
+                }
+                .modifier(DiveRowSelectionAccessibility(selection: listSelection, summaryID: summary.id))
+        }
+        #else
+        NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: isGrouped)) {
+            DiveRowView(summary: summary, diveNumber: rowNumber)
+        }
+        #endif
+    }
+
+    /// Dive detail view for a list row.
+    @ViewBuilder
+    private func diveDetailDestination(_ target: DiveNavTarget) -> some View {
+        if let dive = store.diveByID[target.summaryID] {
+            let rowNumber = dives.count - (store.diveIndexLookup[target.summaryID] ?? 0)
+            let sortedDives: [Dive] = target.isGrouped
+                ? (store.cachedGroupedDives.first {
+                       $0.key == dive.diverName.trimmingCharacters(in: .whitespaces)
+                   }?.value ?? [])
+                : store.cachedFilteredDives
+            DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: rowNumber)
+        }
+    }
 
     // MARK: - Body
     
@@ -144,6 +274,11 @@ struct ContentView: View {
                 AppBackground(opaque: false).ignoresSafeArea()
 
                 VStack(spacing: 0) {
+                    #if os(macOS)
+                    if !dives.isEmpty && prefs.showDiveListProfilePreview {
+                        DiveProfilePreviewPanel(selection: listSelection)
+                    }
+                    #endif
                     contentSection
                 }
             }
@@ -374,16 +509,13 @@ struct ContentView: View {
                 Text("\"\(dive.siteName)\" will be permanently deleted. All associated data (fish sightings, equipment) will also be deleted.")
             }
             .navigationDestination(for: DiveNavTarget.self) { target in
-                if let dive = store.diveByID[target.summaryID] {
-                    let rowNumber = dives.count - (store.diveIndexLookup[target.summaryID] ?? 0)
-                    let sortedDives: [Dive] = target.isGrouped
-                        ? (store.cachedGroupedDives.first {
-                               $0.key == dive.diverName.trimmingCharacters(in: .whitespaces)
-                           }?.value ?? [])
-                        : store.cachedFilteredDives
-                    DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: rowNumber)
-                }
+                diveDetailDestination(target)
             }
+            #if os(macOS)
+            .navigationDestination(item: $openedDiveTarget) { target in
+                diveDetailDestination(target)
+            }
+            #endif
         }
 
         .overlay {
@@ -669,7 +801,7 @@ struct ContentView: View {
                 let showGrouped = store.cachedShowGrouped
                 if showGrouped {
                     let grouped = store.cachedGroupedSummaries
-                    List {
+                    diveListContainer {
                         ForEach(grouped, id: \.key) { group in
                             let diver = group.key
                             let sectionSummaries = group.value
@@ -692,11 +824,15 @@ struct ContentView: View {
                                 #endif
                                 ForEach(sectionSummaries) { summary in
                                     let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
-                                    NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: true)) {
-                                        DiveRowView(summary: summary, diveNumber: rowNumber)
-                                    }
+                                    diveRow(summary, rowNumber: rowNumber, isGrouped: true)
+                                    #if os(macOS)
+                                    .listRowBackground(Color.primary.opacity(0.07)
+                                                           .overlay { DiveRowSelectionHighlight(selection: listSelection, summaryID: summary.id) },
+                                                       macSeparator: summary.id != sectionSummaries.last?.id)
+                                    #else
                                     .listRowBackground(Color.primary.opacity(0.07),
                                                        macSeparator: summary.id != sectionSummaries.last?.id)
+                                    #endif
                                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                         moveButton(for: summary.id)
                                     }
@@ -746,7 +882,7 @@ struct ContentView: View {
                     .environment(diveListLayout)
                     #endif
                 } else {
-                    List {
+                    diveListContainer {
                         #if os(macOS)
                         // Column labels as a row, so they share the dive rows' width.
                         if diveListLayout.isOneLine {
@@ -756,11 +892,15 @@ struct ContentView: View {
                         #endif
                         ForEach(displayedSummaries) { summary in
                             let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
-                            NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: false)) {
-                                DiveRowView(summary: summary, diveNumber: rowNumber)
-                            }
+                            diveRow(summary, rowNumber: rowNumber, isGrouped: false)
+                            #if os(macOS)
+                            .listRowBackground(Color.primary.opacity(0.07)
+                                                   .overlay { DiveRowSelectionHighlight(selection: listSelection, summaryID: summary.id) },
+                                               macSeparator: summary.id != displayedSummaries.last?.id)
+                            #else
                             .listRowBackground(Color.primary.opacity(0.07),
                                                macSeparator: summary.id != displayedSummaries.last?.id)
+                            #endif
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 moveButton(for: summary.id)
                             }
@@ -1068,6 +1208,14 @@ struct ContentView: View {
                 .map { displayed[$0].diverName }
                 .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         )
+        #if os(macOS)
+        // Drop the preview's selection before its dive is deleted: the store's dive map is only
+        // rebuilt on the next @Query delivery, and reading a deleted Dive in between crashes.
+        if let selectedID = listSelection.diveID,
+           offsets.contains(where: { $0 < displayed.count && displayed[$0].id == selectedID }) {
+            listSelection.diveID = nil
+        }
+        #endif
         withAnimation {
             for index in offsets where index < displayed.count {
                 modelContext.delete(displayed[index])
@@ -1093,6 +1241,12 @@ struct ContentView: View {
         // Capture the diver name before deletion so the remaining dives in that
         // group can be re-sequenced afterward.
         let affectedDiver = dive.diverName
+        #if os(macOS)
+        // Drop the preview's selection before its dive is deleted (see confirmDeleteItems).
+        if listSelection.diveID == dive.id {
+            listSelection.diveID = nil
+        }
+        #endif
         withAnimation {
             modelContext.delete(dive)
             try? modelContext.save()
@@ -1188,3 +1342,88 @@ struct ContentView: View {
         }
     }
 }
+
+#if os(macOS)
+// MARK: - Dive Selection & Profile Preview (macOS)
+
+/// Selected dive of the main dive list.
+@MainActor @Observable
+final class DiveListSelection {
+    var diveID: UUID?
+}
+
+/// Profile chart of the selected dive, shown above the main dive list. Empty until a dive
+/// is selected.
+private struct DiveProfilePreviewPanel: View {
+    let selection: DiveListSelection
+    @Environment(DiveStore.self) private var store
+
+    /// Space the placeholder reserves before the first selection: the plot (which follows the
+    /// window height) plus roughly one row of chips and one legend line, so the list moves
+    /// little when the first chart appears.
+    private static let chipsAndLegendHeight: CGFloat = 100
+
+    var body: some View {
+        Group {
+            // A dive deleted on another device stays in the store's map until the next @Query
+            // delivery; reading it would crash, so it shows as "no selection" until then.
+            if let id = selection.diveID, let dive = store.diveByID[id],
+               !dive.isDeleted, dive.modelContext != nil {
+                if dive.profileSamples.isEmpty {
+                    Text("No profile data available")
+                        .foregroundStyle(.secondary)
+                        .containerRelativeFrame(.vertical) { height, _ in
+                            ChartHeightRule.listPreview.height(for: height) + Self.chipsAndLegendHeight
+                        }
+                } else {
+                    // Same chart as the dive detail view: chips, every line and the legend.
+                    UnifiedDiveChartOptimized(dive: dive, chartHeightRule: .listPreview)
+                }
+            } else {
+                Text("Select a dive to preview its profile")
+                    .foregroundStyle(.secondary)
+                    .containerRelativeFrame(.vertical) { height, _ in
+                        ChartHeightRule.listPreview.height(for: height) + Self.chipsAndLegendHeight
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+}
+
+/// Adds the selected trait to the selected dive row for VoiceOver. A modifier reading the
+/// selection itself, so only the rows (not the list body) update when it changes.
+private struct DiveRowSelectionAccessibility: ViewModifier {
+    let selection: DiveListSelection
+    let summaryID: UUID
+
+    func body(content: Content) -> some View {
+        content.accessibilityAddTraits(selection.diveID == summaryID ? .isSelected : [])
+    }
+}
+
+/// Light cyan fill behind the selected dive row (the one the profile preview shows), as Finder
+/// marks a selection. A fill rather than an outline: macOS draws its own accent ring around a
+/// right-clicked row, and an outline doubled it. Drawn in the row background so it spans the
+/// whole row and the coloured chips stay readable; its own view so only the highlights redraw
+/// when the selection changes.
+private struct DiveRowSelectionHighlight: View {
+    let selection: DiveListSelection
+    let summaryID: UUID
+    @State private var prefs = UserPreferences.shared
+
+    var body: some View {
+        if prefs.showDiveListProfilePreview && selection.diveID == summaryID {
+            // Inset and radius match the ring macOS draws around a right-clicked row (measured
+            // on screen: about 9 pt from the row's sides, 1 pt from its top and bottom, 8 pt
+            // radius), so the ring sits exactly on the fill's edge.
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.cyan.opacity(0.22))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 1)
+        }
+    }
+}
+#endif

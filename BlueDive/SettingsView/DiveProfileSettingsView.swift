@@ -73,6 +73,41 @@ struct DiveProfileSettingsView: View {
                         )
                 )
                 .padding(.horizontal)
+
+                #if os(macOS)
+                // The dive list's profile preview exists only on macOS (also toggled from
+                // View → Show Profile Preview).
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $prefs.showDiveListProfilePreview) {
+                            Label {
+                                Text("Show profile preview in dive list")
+                            } icon: {
+                                Image(systemName: "chart.xyaxis.line")
+                                    .foregroundStyle(.cyan)
+                            }
+                        }
+                        .fullWidthSwitch()
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    Text("When on, the profile chart of the selected dive is shown above the dive list. Click a dive to select it; double-click it or press Return to open it. When off, a click opens the dive.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
+                #endif
             }
             .padding(.vertical)
         }

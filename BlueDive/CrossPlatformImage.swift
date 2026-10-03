@@ -63,6 +63,66 @@ extension Color {
         Color(red: 0.75, green: 0.55, blue: 0.0)
     }
 
+    // MARK: Text readable on a light tint of its own colour
+    //
+    // Labels drawn in a colour on a light tint of that same colour (the "#123" dive number,
+    // dive time and surface interval badges, the dive chart's chips, the map popup's stats).
+    // Each keeps the original colour in dark mode; in light mode, where the original on its
+    // own tint reads at only about 2 : 1, it uses a deeper shade (about 5–6 : 1 on the tint,
+    // and at least 4.5 : 1 on the selected row of the macOS dive list).
+
+    /// Cyan: dive numbers, depth.
+    static var readableCyan: Color {
+        readableOnTint(darkMode: .cyan, lightMode: (red: 0.0, green: 0.38, blue: 0.50))
+    }
+
+    /// Green: dive time, temperature chip.
+    static var readableGreen: Color {
+        readableOnTint(darkMode: .green, lightMode: (red: 0.0, green: 0.40, blue: 0.12))
+    }
+
+    /// Orange: surface interval, dates on the map, deco chip.
+    static var readableOrange: Color {
+        readableOnTint(darkMode: .orange, lightMode: (red: 0.55, green: 0.27, blue: 0.0))
+    }
+
+    /// Amber (`ndlYellow`): NDL chip.
+    static var readableAmber: Color {
+        readableOnTint(darkMode: .ndlYellow, lightMode: (red: 0.50, green: 0.36, blue: 0.0))
+    }
+
+    /// Red: pressure chip.
+    static var readableRed: Color {
+        readableOnTint(darkMode: .red, lightMode: (red: 0.62, green: 0.10, blue: 0.08))
+    }
+
+    /// Indigo: PPO₂ chip.
+    static var readableIndigo: Color {
+        readableOnTint(darkMode: .indigo, lightMode: (red: 0.27, green: 0.25, blue: 0.65))
+    }
+
+    /// Text colour for a label drawn on a light tint of its own colour (badges, chart chips):
+    /// keeps `darkMode` unchanged in dark mode and uses the deeper sRGB `lightMode` colour in
+    /// light mode, where the original colour on its own light tint is hard to read.
+    static func readableOnTint(darkMode: Color,
+                               lightMode: (red: Double, green: Double, blue: Double)) -> Color {
+        #if os(iOS)
+        let dark = UIColor(darkMode)
+        return Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? dark
+                : UIColor(red: lightMode.red, green: lightMode.green, blue: lightMode.blue, alpha: 1)
+        })
+        #else
+        let dark = NSColor(darkMode)
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                ? dark
+                : NSColor(srgbRed: lightMode.red, green: lightMode.green, blue: lightMode.blue, alpha: 1)
+        })
+        #endif
+    }
+
     /// Equivalent of `UIColor.secondarySystemBackground` / `NSColor.windowBackgroundColor`.
     static var platformSecondaryBackground: Color {
         #if os(iOS)
