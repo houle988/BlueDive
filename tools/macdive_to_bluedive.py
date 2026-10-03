@@ -5,10 +5,11 @@ Convert a MacDive SQLite database to BlueDive XML files.
 
 Usage:
     python3 macdive_to_bluedive.py <input.sqlite> <output.xml> --export <type> [options]
+    python3 macdive_to_bluedive.py <input.sqlite> --schema
 
 Export types:
-    dives           Dive log with associated gear  (default)
-    gears           All gear items and service history
+    dives           Dive log with associated gear and profile samples  (default)
+    gears           All gear items, gear groups, and service history
     certifications  All certifications
 
 Required flags by export type:
@@ -17,36 +18,82 @@ Required flags by export type:
     certifications  (none)
 
 Flags:
+    --schema
+        Print every table and column in the SQLite database (plus service-record and
+        certification table diagnostics) and exit.  No output file is written.
+
+    --weight-unit {kg,lbs}
+        Default weight unit.  The SQLite database stores whatever unit the user entered,
+        so it cannot be detected automatically.  When an individual weight field embeds
+        its own unit token (e.g. "9 kg", "48 lbs"), that embedded unit takes priority
+        for that record only.  The value is never converted — only the unit label
+        follows the embedded token.
+
     --macdive-xml PATH
-        Path to a MacDive XML export file (.xml).  Required for --export dives.
+        Path to a MacDive XML export (MacDive → File → Export → XML).  Required for
+        --export dives.  The SQLite database and the XML export must come from the same
+        MacDive library.
 
-        MacDive XML exports are created from MacDive → File → Export → XML.
-        The SQLite database and the XML export must come from the same MacDive library.
-
-        Distance, temperature, pressure, and volume units are auto-detected from
-        the XML's <units> tag:
+        Distance, temperature, pressure, and volume units are auto-detected from the
+        XML's <units> tag:
             Metric   → metres, °C, bar, litres
-            Canadian → metres, °C, bar, litres
-            Imperial → feet, °F, PSI, cubic feet
+            Canadian → feet,   °C, PSI, cubic feet
+            Imperial → feet,   °F, PSI, cubic feet
 
-        Weight unit must be specified with --weight-unit because the SQLite database
-        stores whatever unit the user entered and this cannot be detected automatically.
-        --weight-unit sets the default unit for every dive and gear item.  When an
-        individual weight field embeds its own unit token (e.g. "9 kg", "48 lbs"),
-        that embedded unit takes priority over the --weight-unit default for that
-        record only.  The value is never converted — only the unit label follows the
-        embedded token.
+        The XML supplies profile samples, tank start/end pressures (from <gases>), and
+        air/high/low temperatures, all already in the display unit.  XML gases are paired
+        with SQLite tanks by O₂/He mix; pairing falls back to position when the mix is
+        absent or shared by several tanks.
 
-        Timezone handling is automatic: the script converts both the SQLite CoreData
-        timestamps (UTC) and the XML <date> strings (local time of the exporting Mac)
-        to UTC before matching, so the script can be run on any machine regardless of
-        its timezone.  Dives are matched by UTC timestamp, then narrowed by diver name
-        (to separate family members who dive together) and by duration (±60 s, to resolve
-        any remaining same-diver same-minute collisions).
+        The SQLite fallback is applied per field, whenever the XML value is missing
+        (dive not matched, no paired gas, or empty element):
+            - Start pressure: magnitude heuristic (> 400 = PSI, ≤ 400 = bar).
+            - End pressure: assumed to share the start pressure's unit (the XML start
+              when present, otherwise the SQLite start).
+            - Temperature: assumed °C; omitted for Imperial exports when the dive has no
+              XML match, because the unit cannot be verified.
 
-        Note: run this script on the same Mac where you will import into BlueDive so
-        that all date strings in the output are written in your local timezone, which is
-        what the BlueDive XML parser expects.
+        Tank working pressure and volume always come from SQLite (MacDive does not
+        convert them when the unit setting changes):
+            - Working pressure: magnitude heuristic (> 400 = PSI, ≤ 400 = bar).
+            - Volume: unit inferred from working pressure (PSI → cuft, bar → L);
+              omitted when working pressure is unknown.
+
+Profile-to-dive matching:
+    SQLite CoreData timestamps (UTC) are matched to the XML <date> strings (local time
+    of the exporting Mac), so the script can run on any machine regardless of timezone.
+
+    1. Consensus offset — the single UTC hour offset that gives the most unambiguous
+       matches is detected and tried ±1 h (DST / travel), with a ±2 s clock tolerance.
+       With fewer than 2 unambiguous hits, the full -12..+12 h sweep is used instead.
+       If the window finds no candidates, a UTC+0 fallback (XML local time == UTC)
+       covers devices left in UTC.
+    2. Diver filter — names are compared case-, accent-, and whitespace-insensitively,
+       with a fallback that accepts a SQLite name containing the XML name (separates
+       family members who dive together).  If neither matches, all candidates are
+       kept and a warning is printed.
+    3. Tiebreaks — max depth (±2 m), then duration (±30 s; the closest wins when it is
+       more than 15 s better than the runner-up).
+    4. Plausibility gate — a match is rejected when profile max depth differs by more
+       than 5 m or the sample span by more than 2 min from the SQLite dive.
+    5. Best-match assignment — when several XML dives claim the same SQLite dive, the
+       one with the smallest duration/depth delta wins.
+    6. Retry — dives skipped as no_match are retried against the full -12..+12 h
+       sweep (multi-timezone trips), with the same guards and best-match assignment.
+       Skipped when step 1 already used the full sweep.
+
+    A match summary and skip breakdown (bad_date, no_match, ambiguous, depth_mismatch,
+    span_mismatch, outscored) are printed at the end.
+
+Output:
+    dives  → <output.xml> plus <output.log>, a per-dive log of tank pressures,
+             working pressure, volume, depths, and temperatures (source, original
+             unit, and output unit), plus notes on gas-to-tank pairing.  Useful
+             for auditing unit conversions.
+
+    Note: run this script on the same Mac where you will import into BlueDive.  All
+    date strings in the output are written in the local timezone of the machine
+    running the script, which is what the BlueDive XML parser expects.
 
 Examples:
     python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
