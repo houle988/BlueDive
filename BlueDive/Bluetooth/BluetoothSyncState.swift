@@ -24,7 +24,7 @@ enum BluetoothSyncState: Equatable {
 
 // MARK: - Weather Fetch After Import
 
-/// Dives awaiting the "more than 50 dives" confirmation, by persistent ID (not @Model
+/// Dives awaiting the weather question after a download, by persistent ID (not @Model
 /// references, which must not be held in @State). One value so the two sets cannot drift apart.
 struct PendingWeatherFetch: Equatable {
     var ids: [PersistentIdentifier]
@@ -35,8 +35,8 @@ struct PendingWeatherFetch: Equatable {
     var measuredAirTemperatureIDs: Set<PersistentIdentifier>
 }
 
-/// Progress of the automatic Open-Meteo weather fetch that runs after a Bluetooth import
-/// (Settings → Bluetooth Import). Kept apart from `BluetoothSyncState`: the import itself is
+/// Progress of the Open-Meteo weather fetch the user starts after a Bluetooth import
+/// (see PendingWeatherFetch). Kept apart from `BluetoothSyncState`: the import itself is
 /// complete, so closing the sheet stays allowed while it runs.
 enum BluetoothWeatherFetchStatus: Equatable {
     case running(done: Int, total: Int)

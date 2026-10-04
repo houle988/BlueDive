@@ -22,7 +22,7 @@ struct OnlineServicesSettingsView: View {
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    (Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent when you choose Fetch Weather, and for dives downloaded over Bluetooth that have GPS coordinates."))
+                    (Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent only when you choose Fetch Weather."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)

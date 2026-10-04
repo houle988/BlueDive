@@ -54,10 +54,10 @@ struct BluetoothScannerView: View {
     @State var importProgress: Double = 0
     @State var showingImportConfirmation = false
     @State var importSaveErrorMessage: String? = nil
-    /// Automatic weather fetch after the import (see BluetoothWeatherFetchStatus).
+    /// Weather fetch after the import (see BluetoothWeatherFetchStatus).
     @State var weatherFetchStatus: BluetoothWeatherFetchStatus?
     @State var weatherFetchTask: Task<Void, Never>?
-    /// The "more than 50 dives" confirmation, asked inline on the completed screen, not in an
+    /// The weather question after a download, asked inline on the completed screen, not in an
     /// alert: it would follow the Import alert while that one is still closing and could be
     /// dropped.
     @State var pendingWeatherFetch: PendingWeatherFetch?

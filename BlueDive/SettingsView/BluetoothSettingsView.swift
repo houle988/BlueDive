@@ -136,22 +136,11 @@ struct BluetoothSettingsView: View {
 
     // MARK: - Weather After Import
 
-    /// Automatic Open-Meteo weather fetch for downloaded dives. Both switches depend on
+    /// Open-Meteo weather fetch offered after a download. The switch depends on
     /// Settings → Online Services, the single consent for sending data to Open-Meteo.
     private var weatherCard: some View {
         VStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
-                Toggle(isOn: $prefs.fetchWeatherOnBluetoothImport) {
-                    Label {
-                        Text("Fetch weather after download")
-                    } icon: {
-                        Image(systemName: "cloud.sun")
-                            .foregroundStyle(.yellow)
-                    }
-                }
-                .fullWidthSwitch()
-                .disabled(!prefs.fetchWeatherOnline)
-
                 Toggle(isOn: $prefs.replaceWeatherOnBluetoothImport) {
                     Label {
                         Text("Replace existing values")
@@ -161,16 +150,16 @@ struct BluetoothSettingsView: View {
                     }
                 }
                 .fullWidthSwitch()
-                .disabled(!prefs.fetchWeatherOnline || !prefs.fetchWeatherOnBluetoothImport)
+                .disabled(!prefs.fetchWeatherOnline)
             }
             .padding()
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
             Group {
                 if prefs.fetchWeatherOnline {
-                    Text("Replace existing values applies to newly downloaded dives; dives already in your logbook only get their empty fields filled. Most dive computers do not record GPS; for those, use Fetch Weather in Edit Conditions.")
+                    Text("After a download, BlueDive offers to fetch the weather for dives with GPS coordinates. Replace existing values applies to newly downloaded dives; dives already in your logbook only get their empty fields filled. Most dive computers do not record GPS; for those, use Fetch Weather in Edit Conditions.")
                 } else {
-                    Text("Turn on Fetch weather from Open-Meteo in Settings → Online Services to use these options.")
+                    Text("Turn on Fetch weather from Open-Meteo in Settings → Online Services to use this option.")
                 }
             }
             .font(.caption)

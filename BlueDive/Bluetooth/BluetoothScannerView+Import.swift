@@ -73,7 +73,7 @@ extension BluetoothScannerView {
             var importedCount = 0
             var mergedCount = 0
             var skippedCount = 0
-            // New and re-downloaded dives, for the automatic weather fetch after the save.
+            // New and re-downloaded dives, for the weather fetch offered after the save.
             var weatherCandidates: [(dive: Dive, isNew: Bool)] = []
 
             // Sort dives chronologically so we can calculate surface intervals
@@ -232,17 +232,15 @@ extension BluetoothScannerView {
             connectedDeviceName = nil
             syncState = .completed(imported: importedCount, merged: mergedCount, skipped: skippedCount)
             // After the save, so the dives have their permanent persistent IDs.
-            startWeatherFetchIfEnabled(for: weatherCandidates)
+            offerWeatherFetch(for: weatherCandidates)
         }
     }
 
     // MARK: - Weather Fetch After Import
 
-    /// Above this many dives, ask before fetching (one Open-Meteo request per dive).
-    static let weatherFetchConfirmationThreshold = 50
-
-    /// Fetches the weather for the just-imported dives that have GPS coordinates, when
-    /// Settings → Online Services and Settings → Bluetooth Import allow it.
+    /// Offers, on the completed screen, to fetch the weather for the just-imported dives that
+    /// have GPS coordinates, when Settings → Online Services allows it. Nothing is sent until
+    /// the user chooses Fetch Weather (see pendingWeatherFetch).
     ///
     /// Replace existing values applies to newly imported dives only. A dive downloaded again
     /// is already in the logbook and may hold weather the user entered, so it is only ever
@@ -253,26 +251,49 @@ extension BluetoothScannerView {
     /// computer reports (`DiveData.measuredSurfaceTemperature`), so it is usually empty and
     /// filled here; when the computer did measure it, it is kept even with Replace on
     /// (CLAUDE.md: preserve original values).
-    func startWeatherFetchIfEnabled(for candidates: [(dive: Dive, isNew: Bool)]) {
+    func offerWeatherFetch(for candidates: [(dive: Dive, isNew: Bool)]) {
         let prefs = UserPreferences.shared
-        guard prefs.fetchWeatherOnline, prefs.fetchWeatherOnBluetoothImport else { return }
-        let replace = prefs.replaceWeatherOnBluetoothImport
-        let eligible = candidates.filter {
-            OpenMeteoWeatherService.coordinate(for: $0.dive) != nil
-                && ((replace && $0.isNew) || $0.dive.hasEmptyWeatherField)
+        guard prefs.fetchWeatherOnline else {
+            Self.logger.info("Weather fetch not offered — Fetch weather from Open-Meteo is off (\(candidates.count) dives)")
+            return
         }
-        guard !eligible.isEmpty else { return }
+        let replace = prefs.replaceWeatherOnBluetoothImport
+        // One debug line per dive with the reason (Xcode console only; no coordinates or values).
+        var eligible: [(dive: Dive, isNew: Bool)] = []
+        var noGPSCount = 0
+        var completeCount = 0
+        for candidate in candidates {
+            let emptyFields = candidate.dive.emptyWeatherFieldNames
+            let reason: String
+            if OpenMeteoWeatherService.coordinate(for: candidate.dive) == nil {
+                noGPSCount += 1
+                reason = "not offered — no GPS coordinates"
+            } else if replace && candidate.isNew {
+                eligible.append(candidate)
+                reason = "offered (new dive, Replace existing values on)"
+            } else if !emptyFields.isEmpty {
+                eligible.append(candidate)
+                reason = "offered (empty: \(emptyFields.joined(separator: ", ")))"
+            } else {
+                completeCount += 1
+                reason = candidate.isNew
+                    ? "not offered — weather complete (Replace existing values off)"
+                    : "not offered — weather complete (re-downloaded dives are fill-only)"
+            }
+            Self.logger.info("Dive from \(candidate.dive.timestamp) weather: \(reason, privacy: .public)")
+        }
+        guard !eligible.isEmpty else {
+            Self.logger.info("Weather fetch not offered — no eligible dive (no GPS \(noGPSCount), complete \(completeCount))")
+            return
+        }
+        let newCount = eligible.filter(\.isNew).count
+        Self.logger.info("Weather fetch offered for \(eligible.count) of \(candidates.count) dives (new \(newCount), re-downloaded \(eligible.count - newCount); no GPS \(noGPSCount), complete \(completeCount))")
         let ids = eligible.map(\.dive.persistentModelID)
         let newIDs = Set(eligible.filter(\.isNew).map(\.dive.persistentModelID))
         // A new dive's air temperature is set at import only from a surface temperature the
         // computer measured (measuredSurfaceTemperature), so a non-nil one is a real reading.
         let measuredIDs = Set(eligible.filter { $0.isNew && $0.dive.airTemperature != nil }.map(\.dive.persistentModelID))
-        if ids.count > Self.weatherFetchConfirmationThreshold {
-            // Asked inline on the completed screen (see pendingWeatherFetch).
-            pendingWeatherFetch = PendingWeatherFetch(ids: ids, newDiveIDs: newIDs, measuredAirTemperatureIDs: measuredIDs)
-        } else {
-            runWeatherFetch(for: ids, newDiveIDs: newIDs, measuredAirTemperatureIDs: measuredIDs)
-        }
+        pendingWeatherFetch = PendingWeatherFetch(ids: ids, newDiveIDs: newIDs, measuredAirTemperatureIDs: measuredIDs)
     }
 
     /// One request per dive, in order. Stops at the first network or service error instead of
@@ -293,6 +314,7 @@ extension BluetoothScannerView {
         context.autosaveEnabled = false
         weatherFetchTask?.cancel()
         weatherFetchStatus = .running(done: 0, total: ids.count)
+        Self.logger.info("Weather fetch started for \(ids.count) dives (Replace existing values \(replace ? "on" : "off", privacy: .public))")
         weatherFetchTask = Task { @MainActor in
             var filled = 0          // dives whose values changed and were saved
             var withData = 0        // dives Open-Meteo returned values for
@@ -301,6 +323,7 @@ extension BluetoothScannerView {
             var saveFailed = false
             enum Stop { case offline, unavailable, cancelled }
             var stop: Stop?
+            var done = 0            // dives processed, for the debug log of an early stop
 
             /// Saves pending changes; on failure discards them (this context only).
             @MainActor func flush() {
@@ -332,25 +355,43 @@ extension BluetoothScannerView {
                         // Counted only once the dive is confirmed still there.
                         if let target = dive(id) {
                             withData += 1
-                            if fetched.apply(to: target, replaceExisting: replace && newDiveIDs.contains(id),
-                                             keepAirTemperature: measuredAirTemperatureIDs.contains(id)) {
+                            let replacesExisting = replace && newDiveIDs.contains(id)
+                            let keepsAirTemperature = measuredAirTemperatureIDs.contains(id)
+                            var result: String
+                            if fetched.apply(to: target, replaceExisting: replacesExisting,
+                                             keepAirTemperature: keepsAirTemperature) {
                                 unsaved += 1
+                                result = "updated (\(replacesExisting ? "replace" : "fill-only")"
+                                    + (replacesExisting && keepsAirTemperature ? ", measured air temperature kept)" : ")")
+                            } else {
+                                result = "unchanged (values already stored)"
                             }
-                            if target.hasEmptyWeatherField { stillEmpty += 1 }
+                            let emptyFields = target.emptyWeatherFieldNames
+                            if !emptyFields.isEmpty {
+                                stillEmpty += 1
+                                result += "; still empty: \(emptyFields.joined(separator: ", ")) (Open-Meteo had no value)"
+                            }
+                            Self.logger.info("Dive from \(target.timestamp) weather: \(result, privacy: .public)")
+                        } else {
+                            Self.logger.info("Weather fetch: dive deleted during its request — skipped")
                         }
                     } catch is CancellationError {
                         stop = .cancelled; break loop
                     } catch OpenMeteoWeatherError.noData {
                         // No data for this dive (e.g. too recent or in the future): go on.
+                        Self.logger.info("Dive from \(current.timestamp) weather: no data from Open-Meteo")
                     } catch OpenMeteoWeatherError.serviceUnavailable {
                         stop = .unavailable; break loop
                     } catch {
                         stop = Task.isCancelled ? .cancelled : .offline; break loop
                     }
+                } else {
+                    Self.logger.info("Weather fetch: dive deleted before its request — skipped")
                 }
+                done = index + 1
                 if unsaved >= 10 { flush() }
                 if saveFailed { break loop }
-                weatherFetchStatus = .running(done: index + 1, total: ids.count)
+                weatherFetchStatus = .running(done: done, total: ids.count)
                 // A short pause between requests, to stay well within Open-Meteo's limits.
                 if index + 1 < ids.count, (try? await Task.sleep(for: .milliseconds(150))) == nil {
                     stop = .cancelled; break loop
@@ -360,12 +401,23 @@ extension BluetoothScannerView {
             flush()
             if saveFailed {
                 weatherFetchStatus = .saveFailed(filled: filled)
+                Self.logger.info("Weather fetch ended after \(done) of \(ids.count) dives: save failed (saved \(filled))")
             } else {
                 switch stop {
                 case .offline:     weatherFetchStatus = .stoppedOffline(filled: filled)
                 case .unavailable: weatherFetchStatus = .stoppedUnavailable(filled: filled)
                 case .cancelled:   weatherFetchStatus = .interrupted(filled: filled)
                 case nil:          weatherFetchStatus = .finished(filled: filled, withData: withData, stillEmpty: stillEmpty, total: ids.count)
+                }
+                if let stop {
+                    let reason = switch stop {
+                    case .offline:     "offline"
+                    case .unavailable: "service unavailable"
+                    case .cancelled:   "cancelled"
+                    }
+                    Self.logger.info("Weather fetch stopped after \(done) of \(ids.count) dives: \(reason, privacy: .public) (saved \(filled))")
+                } else {
+                    Self.logger.info("Weather fetch finished: updated \(filled), with data \(withData), still empty \(stillEmpty), of \(ids.count)")
                 }
             }
         }

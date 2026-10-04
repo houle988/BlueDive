@@ -526,14 +526,20 @@ extension BluetoothScannerView {
         .padding()
     }
 
-    /// The "more than 50 dives" question, asked inline rather than in an alert (see
+    /// The weather question after a download, asked inline rather than in an alert (see
     /// pendingWeatherFetch). Ignoring it and closing the sheet fetches nothing.
     private func weatherFetchConfirmationView(_ pending: PendingWeatherFetch) -> some View {
         VStack(spacing: 8) {
-            Text(verbatim: String(format: NSLocalizedString("Fetch the weather from Open-Meteo for %@ downloaded dives with GPS coordinates?", bundle: .forAppLanguage(), value: "Fetch the weather from Open-Meteo for %@ downloaded dives with GPS coordinates?", comment: "Question on the Bluetooth sync results after a large import. %@ is the locale-formatted number of dives."), Double(pending.ids.count).localizedString(decimals: 0)))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            Group {
+                if pending.ids.count == 1 {
+                    Text("Fetch the weather from Open-Meteo for the downloaded dive with GPS coordinates?", comment: "Question on the Bluetooth sync results when exactly one downloaded dive has GPS coordinates.")
+                } else {
+                    Text(verbatim: String(format: NSLocalizedString("Fetch the weather from Open-Meteo for %@ downloaded dives with GPS coordinates?", bundle: .forAppLanguage(), value: "Fetch the weather from Open-Meteo for %@ downloaded dives with GPS coordinates?", comment: "Question on the Bluetooth sync results after an import. %@ is the locale-formatted number of dives (2 or more)."), Double(pending.ids.count).localizedString(decimals: 0)))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
             Button {
                 pendingWeatherFetch = nil
                 runWeatherFetch(for: pending.ids, newDiveIDs: pending.newDiveIDs,
@@ -545,7 +551,7 @@ extension BluetoothScannerView {
         }
     }
 
-    /// Progress, then result, of the automatic weather fetch after the import. Text is
+    /// Progress, then result, of the weather fetch after the import. Text is
     /// localized when drawn, so it follows an in-app language change. Closing the sheet is
     /// always allowed and cancels the remaining requests.
     @ViewBuilder
@@ -555,18 +561,18 @@ extension BluetoothScannerView {
             case .running(let done, let total):
                 ProgressView(value: Double(done), total: Double(max(total, 1)))
                     .frame(maxWidth: 240)
-                Text(verbatim: String(format: NSLocalizedString("Fetching weather… %@ of %@", bundle: .forAppLanguage(), value: "Fetching weather… %@ of %@", comment: "Progress of the automatic weather fetch after a Bluetooth import. First %@ is the number of dives done, second the total, both locale-formatted."), Double(done).localizedString(decimals: 0), Double(total).localizedString(decimals: 0)))
+                Text(verbatim: String(format: NSLocalizedString("Fetching weather… %@ of %@", bundle: .forAppLanguage(), value: "Fetching weather… %@ of %@", comment: "Progress of the weather fetch after a Bluetooth import. First %@ is the number of dives done, second the total, both locale-formatted."), Double(done).localizedString(decimals: 0), Double(total).localizedString(decimals: 0)))
             case .finished(let filled, let withData, let stillEmpty, let total):
                 if withData == 0 {
-                    Text("No weather data was available for the downloaded dives.", comment: "Result of the automatic weather fetch after a Bluetooth import when Open-Meteo had no data for any dive.")
+                    Text("No weather data was available for the downloaded dives.", comment: "Result of the weather fetch after a Bluetooth import when Open-Meteo had no data for any dive.")
                 } else if filled == 0 && stillEmpty > 0 {
                     Text("Nothing was changed. Open-Meteo had no value for the empty fields.")
                 } else if filled == 0 {
-                    Text("The weather of the downloaded dives was already up to date.", comment: "Result of the automatic weather fetch after a Bluetooth import when Open-Meteo returned the values already stored.")
+                    Text("The weather of the downloaded dives was already up to date.", comment: "Result of the weather fetch after a Bluetooth import when Open-Meteo returned the values already stored.")
                 } else if total == 1 {
-                    Text("Weather added to the downloaded dive.", comment: "Result of the automatic weather fetch after a Bluetooth import when the only dive requested was updated.")
+                    Text("Weather added to the downloaded dive.", comment: "Result of the weather fetch after a Bluetooth import when the only dive requested was updated.")
                 } else {
-                    Text(verbatim: String(format: NSLocalizedString("Weather added to %@ of %@ dives.", bundle: .forAppLanguage(), value: "Weather added to %@ of %@ dives.", comment: "Result of the automatic weather fetch after a Bluetooth import. First %@ is the number of dives updated, second the number of dives requested, both locale-formatted."), Double(filled).localizedString(decimals: 0), Double(total).localizedString(decimals: 0)))
+                    Text(verbatim: String(format: NSLocalizedString("Weather added to %@ of %@ dives.", bundle: .forAppLanguage(), value: "Weather added to %@ of %@ dives.", comment: "Result of the weather fetch after a Bluetooth import. First %@ is the number of dives updated, second the number of dives requested, both locale-formatted."), Double(filled).localizedString(decimals: 0), Double(total).localizedString(decimals: 0)))
                 }
             case .stoppedOffline(let filled):
                 // The same messages as Edit Conditions' error alert, plus one shared hint.
@@ -580,12 +586,12 @@ extension BluetoothScannerView {
                 useFetchWeatherLaterHint
                 weatherAddedBeforeStopping(filled)
             case .interrupted(let filled):
-                Text("Weather fetch stopped when BlueDive was moved to the background.", comment: "Result of the automatic weather fetch after a Bluetooth import when the app went to the background mid-run.")
+                Text("Weather fetch stopped when BlueDive was moved to the background.", comment: "Result of the weather fetch after a Bluetooth import when the app went to the background mid-run.")
                     .foregroundStyle(.orange)
                 useFetchWeatherLaterHint
                 weatherAddedBeforeStopping(filled)
             case .saveFailed(let filled):
-                Text("The fetched weather could not be saved.", comment: "Result of the automatic weather fetch after a Bluetooth import when saving the fetched values failed.")
+                Text("The fetched weather could not be saved.", comment: "Result of the weather fetch after a Bluetooth import when saving the fetched values failed.")
                     .foregroundStyle(.orange)
                 weatherAddedBeforeStopping(filled)
             }
@@ -599,16 +605,16 @@ extension BluetoothScannerView {
 
     /// Shared hint under every stopped-run message.
     private var useFetchWeatherLaterHint: some View {
-        Text("Use Fetch Weather in Edit Conditions later.", comment: "Hint after the automatic weather fetch stopped early: the user can fetch the remaining dives manually.")
+        Text("Use Fetch Weather in Edit Conditions later.", comment: "Hint after the weather fetch stopped early: the user can fetch the remaining dives manually.")
     }
 
     /// What a stopped run had already saved, so it is not mistaken for nothing at all.
     @ViewBuilder
     private func weatherAddedBeforeStopping(_ filled: Int) -> some View {
         if filled == 1 {
-            Text("Weather added to 1 dive before stopping.", comment: "After the automatic weather fetch stopped early: exactly one dive had already been updated.")
+            Text("Weather added to 1 dive before stopping.", comment: "After the weather fetch stopped early: exactly one dive had already been updated.")
         } else if filled > 1 {
-            Text(verbatim: String(format: NSLocalizedString("Weather added to %@ dives before stopping.", bundle: .forAppLanguage(), value: "Weather added to %@ dives before stopping.", comment: "After the automatic weather fetch stopped early: number of dives already updated. %@ is the locale-formatted count."), Double(filled).localizedString(decimals: 0)))
+            Text(verbatim: String(format: NSLocalizedString("Weather added to %@ dives before stopping.", bundle: .forAppLanguage(), value: "Weather added to %@ dives before stopping.", comment: "After the weather fetch stopped early: number of dives already updated. %@ is the locale-formatted count."), Double(filled).localizedString(decimals: 0)))
         }
     }
 

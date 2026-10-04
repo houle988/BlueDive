@@ -46,12 +46,18 @@ struct FetchedWeather: Sendable {
 }
 
 extension Dive {
-    /// Whether any field Fetch Weather can fill is still empty. A Calm wind has no direction
-    /// (Open-Meteo returns none), so its empty direction does not count — otherwise such a dive
-    /// would be requested again on every re-download for nothing.
-    var hasEmptyWeatherField: Bool {
-        (weather ?? "").isEmpty || airTemperature == nil || (wind ?? "").isEmpty
-            || ((windDirection ?? "").isEmpty && wind != "Calm")
+    /// The fields Fetch Weather can fill that are still empty; an empty list means the weather
+    /// is complete. A Calm wind has no direction (Open-Meteo returns none), so its empty
+    /// direction does not count — otherwise such a dive would be requested again on every
+    /// re-download for nothing. The names are for debug logs only (not user-facing, so not
+    /// localized).
+    var emptyWeatherFieldNames: [String] {
+        var names: [String] = []
+        if (weather ?? "").isEmpty { names.append("weather") }
+        if airTemperature == nil { names.append("air temperature") }
+        if (wind ?? "").isEmpty { names.append("wind") }
+        if (windDirection ?? "").isEmpty && wind != "Calm" { names.append("wind direction") }
+        return names
     }
 }
 
