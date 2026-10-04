@@ -249,11 +249,10 @@ extension BluetoothScannerView {
     /// filled where empty — as mergeComputerData preserves user-modified fields (CLAUDE.md:
     /// preserve values the user did not change through the app).
     ///
-    /// The air temperature a new Bluetooth dive arrives with is usually not an air reading:
-    /// LibDC-Swift's `surfaceTemperature` falls back to the first profile sample's (water)
-    /// temperature unless the computer reports DC_FIELD_TEMPERATURE_SURFACE (GenericParser
-    /// .swift ~158-166 / ~480), and the two cannot be told apart. So Replace treats it like any
-    /// other value and replaces it with Open-Meteo's air temperature.
+    /// A new Bluetooth dive's air temperature is set only from a surface temperature the
+    /// computer reports (`DiveData.measuredSurfaceTemperature`), so it is usually empty and
+    /// filled here; when the computer did measure it, it is kept even with Replace on
+    /// (CLAUDE.md: preserve original values).
     func startWeatherFetchIfEnabled(for candidates: [(dive: Dive, isNew: Bool)]) {
         let prefs = UserPreferences.shared
         guard prefs.fetchWeatherOnline, prefs.fetchWeatherOnBluetoothImport else { return }
@@ -265,11 +264,14 @@ extension BluetoothScannerView {
         guard !eligible.isEmpty else { return }
         let ids = eligible.map(\.dive.persistentModelID)
         let newIDs = Set(eligible.filter(\.isNew).map(\.dive.persistentModelID))
+        // A new dive's air temperature is set at import only from a surface temperature the
+        // computer measured (measuredSurfaceTemperature), so a non-nil one is a real reading.
+        let measuredIDs = Set(eligible.filter { $0.isNew && $0.dive.airTemperature != nil }.map(\.dive.persistentModelID))
         if ids.count > Self.weatherFetchConfirmationThreshold {
             // Asked inline on the completed screen (see pendingWeatherFetch).
-            pendingWeatherFetch = PendingWeatherFetch(ids: ids, newDiveIDs: newIDs)
+            pendingWeatherFetch = PendingWeatherFetch(ids: ids, newDiveIDs: newIDs, measuredAirTemperatureIDs: measuredIDs)
         } else {
-            runWeatherFetch(for: ids, newDiveIDs: newIDs)
+            runWeatherFetch(for: ids, newDiveIDs: newIDs, measuredAirTemperatureIDs: measuredIDs)
         }
     }
 
@@ -283,7 +285,8 @@ extension BluetoothScannerView {
     /// discards only this run's changes, never other unsaved work in the main context. The
     /// main context picks up the saved values; RemoteChangeFeeder skips "BlueDive." authors.
     /// Weather fields are not in DiveSummary, so no DiveStore commit is needed.
-    func runWeatherFetch(for ids: [PersistentIdentifier], newDiveIDs: Set<PersistentIdentifier>) {
+    func runWeatherFetch(for ids: [PersistentIdentifier], newDiveIDs: Set<PersistentIdentifier>,
+                         measuredAirTemperatureIDs: Set<PersistentIdentifier>) {
         let replace = UserPreferences.shared.replaceWeatherOnBluetoothImport
         let context = ModelContext(modelContext.container)
         context.author = "BlueDive.weather"
@@ -329,7 +332,8 @@ extension BluetoothScannerView {
                         // Counted only once the dive is confirmed still there.
                         if let target = dive(id) {
                             withData += 1
-                            if fetched.apply(to: target, replaceExisting: replace && newDiveIDs.contains(id)) {
+                            if fetched.apply(to: target, replaceExisting: replace && newDiveIDs.contains(id),
+                                             keepAirTemperature: measuredAirTemperatureIDs.contains(id)) {
                                 unsaved += 1
                             }
                             if target.hasEmptyWeatherField { stillEmpty += 1 }
@@ -875,11 +879,11 @@ extension BluetoothScannerView {
         dive.waterTemperature = diveData.temperature.isFinite ? diveData.temperature : nil
         dive.minTemperature = diveData.minTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.min() ?? (diveData.temperature.isFinite ? diveData.temperature : nil)
         dive.maxTemperature = diveData.maxTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.max()
-        // Only fills an empty air temperature. LibDC-Swift's surfaceTemperature is usually the
-        // first profile sample's water temperature (its fallback when the computer reports no
-        // DC_FIELD_TEMPERATURE_SURFACE), so it must not overwrite a value fetched from
+        // Only a surface temperature the computer reports (not LibDC-Swift's first-sample
+        // fallback), and only into an empty field: it must not overwrite a value fetched from
         // Open-Meteo or entered by the user on an earlier import or edit.
-        if dive.airTemperature == nil, let surfaceTemp = diveData.surfaceTemperature, surfaceTemp.isFinite {
+        // LibDC-Swift sets measuredSurfaceTemperature only to a finite value.
+        if dive.airTemperature == nil, let surfaceTemp = diveData.measuredSurfaceTemperature {
             dive.airTemperature = surfaceTemp
         }
 

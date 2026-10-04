@@ -30,6 +30,9 @@ struct PendingWeatherFetch: Equatable {
     var ids: [PersistentIdentifier]
     /// Of `ids`, the newly imported dives — the only ones Replace existing values applies to.
     var newDiveIDs: Set<PersistentIdentifier>
+    /// Of `newDiveIDs`, dives whose air temperature the dive computer measured: kept even with
+    /// Replace on.
+    var measuredAirTemperatureIDs: Set<PersistentIdentifier>
 }
 
 /// Progress of the automatic Open-Meteo weather fetch that runs after a Bluetooth import

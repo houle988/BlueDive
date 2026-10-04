@@ -536,7 +536,8 @@ extension BluetoothScannerView {
                 .multilineTextAlignment(.center)
             Button {
                 pendingWeatherFetch = nil
-                runWeatherFetch(for: pending.ids, newDiveIDs: pending.newDiveIDs)
+                runWeatherFetch(for: pending.ids, newDiveIDs: pending.newDiveIDs,
+                                measuredAirTemperatureIDs: pending.measuredAirTemperatureIDs)
             } label: {
                 Label("Fetch Weather", systemImage: "cloud.sun.rain")
             }

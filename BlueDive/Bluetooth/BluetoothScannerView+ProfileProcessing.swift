@@ -778,7 +778,11 @@ extension BluetoothScannerView {
             duration: Int(diveData.divetime / 60), // LibDCSwift uses seconds
             waterTemperature: diveData.temperature.isFinite ? diveData.temperature : nil,
             minTemperature: minTemperature,
-            airTemperature: diveData.surfaceTemperature.flatMap { $0.isFinite ? $0 : nil },
+            // Only a surface temperature the computer reports: LibDC-Swift's surfaceTemperature
+            // falls back to the first profile sample's (water) temperature, which is not an air
+            // reading. Left empty otherwise, for Open-Meteo or the user to fill. (LibDC-Swift sets
+            // measuredSurfaceTemperature only to a finite value.)
+            airTemperature: diveData.measuredSurfaceTemperature,
             maxTemperature: maxTemperature,
             decompressionAlgorithm: decompressionAlgorithm,
             cnsPercentage: cnsValue,
