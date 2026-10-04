@@ -138,7 +138,8 @@ struct AboutView: View {
 
                             AcknowledgementRow(
                                 name: "Open-Meteo",
-                                description: "Free weather API providing the historical weather used by Fetch Weather. Weather data by Open-Meteo.com, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), converted to BlueDive's weather, wind and wind direction options.",
+                                // The same attribution line as Online Services, Edit Conditions and the Bluetooth sync results.
+                                description: "Weather data by [Open-Meteo.com](https://open-meteo.com/) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), converted to BlueDive's weather, wind and wind direction options.",
                                 url: "https://open-meteo.com"
                             )
                         }

@@ -54,6 +54,20 @@ struct BluetoothScannerView: View {
     @State var importProgress: Double = 0
     @State var showingImportConfirmation = false
     @State var importSaveErrorMessage: String? = nil
+    /// Automatic weather fetch after the import (see BluetoothWeatherFetchStatus).
+    @State var weatherFetchStatus: BluetoothWeatherFetchStatus?
+    @State var weatherFetchTask: Task<Void, Never>?
+    /// The "more than 50 dives" confirmation, asked inline on the completed screen, not in an
+    /// alert: it would follow the Import alert while that one is still closing and could be
+    /// dropped.
+    @State var pendingWeatherFetch: PendingWeatherFetch?
+    @Environment(\.scenePhase) var scenePhase
+
+    /// Screen stays awake during a sync, and while the weather fetch runs after the import:
+    /// an auto-lock would suspend the app, fail the request and stop the run as if offline.
+    var preventsScreenLock: Bool {
+        syncState.isActive || (weatherFetchStatus?.isRunning ?? false)
+    }
     @State var connectedDeviceName: String?
     @State var downloadAllDives: Bool = false
     @AppStorage("filterUnusedTanks") var filterUnusedTanks: Bool = false
@@ -248,6 +262,7 @@ struct BluetoothScannerView: View {
                 checkForTargetDevice()
             }
             .onDisappear {
+                weatherFetchTask?.cancel()
                 stopScanning()
                 BLEDiagnosticSession.shared.stop()
                 bleManager.close(clearDevicePtr: true)
@@ -272,12 +287,18 @@ struct BluetoothScannerView: View {
                 #endif
             }
             #if os(iOS)
-            .onChange(of: syncState) { _, newState in
-                let shouldPreventLock = newState.isActive
-                // syncState is reassigned on every download-progress tick, so only write and log on a real change.
+            // iOS suspends a backgrounded app, failing the request in flight: stop the weather
+            // run cleanly instead (what was fetched is saved) rather than report "no connection".
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background, weatherFetchStatus?.isRunning == true {
+                    weatherFetchTask?.cancel()
+                }
+            }
+            // A Bool, so the handler runs only on a real change, not on every download-progress tick.
+            .onChange(of: preventsScreenLock) { _, shouldPreventLock in
                 guard UIApplication.shared.isIdleTimerDisabled != shouldPreventLock else { return }
                 UIApplication.shared.isIdleTimerDisabled = shouldPreventLock
-                Self.logger.debug("Screen lock \(shouldPreventLock ? "disabled" : "re-enabled") (syncState: \(String(describing: newState)))")
+                Self.logger.debug("Screen lock \(shouldPreventLock ? "disabled" : "re-enabled") (syncState: \(String(describing: syncState)))")
             }
             #endif
             // Not inside the #if os(iOS) gate above: dismiss-safety applies on every platform

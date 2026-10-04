@@ -431,7 +431,8 @@ class UserPreferences {
     var showSamplesTab: Bool {
         didSet { UserDefaults.standard.set(showSamplesTab, forKey: "showSamplesTab") }
     }
-    /// When true, Edit Conditions offers a Fetch Weather button that sends the dive's GPS
+    /// When true, Edit Conditions offers a Fetch Weather button, and the automatic fetch after
+    /// a Bluetooth download (`fetchWeatherOnBluetoothImport`) may run; both send the dive's GPS
     /// coordinates and date to Open-Meteo. Off by default: nothing leaves the device unless
     /// the user opts in. No App Group write: the widget shows no weather.
     var fetchWeatherOnline: Bool {
@@ -441,6 +442,17 @@ class UserPreferences {
             // later (or Reset to Defaults) does not bring that question back.
             if fetchWeatherOnline { UserDefaults.standard.set(true, forKey: "onlineServicesPromptShown") }
         }
+    }
+    /// Bluetooth import: fetch the weather for downloaded dives that have GPS coordinates.
+    /// Effective only while `fetchWeatherOnline` is on. On by default.
+    var fetchWeatherOnBluetoothImport: Bool {
+        didSet { UserDefaults.standard.set(fetchWeatherOnBluetoothImport, forKey: "fetchWeatherOnBluetoothImport") }
+    }
+    /// Bluetooth import: for newly downloaded dives, fetched values replace existing ones (on)
+    /// or fill only empty fields (off). Dives downloaded again (merged into the logbook) are
+    /// always fill-only, whatever this is. On by default.
+    var replaceWeatherOnBluetoothImport: Bool {
+        didSet { UserDefaults.standard.set(replaceWeatherOnBluetoothImport, forKey: "replaceWeatherOnBluetoothImport") }
     }
     #if os(macOS)
     /// When true, the main dive list shows the profile chart of the selected dive above the
@@ -465,6 +477,9 @@ class UserPreferences {
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
         self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
+        // On by default: an absent key reads as true.
+        self.fetchWeatherOnBluetoothImport = UserDefaults.standard.object(forKey: "fetchWeatherOnBluetoothImport") as? Bool ?? true
+        self.replaceWeatherOnBluetoothImport = UserDefaults.standard.object(forKey: "replaceWeatherOnBluetoothImport") as? Bool ?? true
         #if os(macOS)
         // On by default: an absent key reads as true.
         self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
@@ -487,6 +502,8 @@ class UserPreferences {
         hideClearedDecoStops = false
         showSamplesTab = false
         fetchWeatherOnline = false
+        fetchWeatherOnBluetoothImport = true
+        replaceWeatherOnBluetoothImport = true
         #if os(macOS)
         showDiveListProfilePreview = true
         #endif

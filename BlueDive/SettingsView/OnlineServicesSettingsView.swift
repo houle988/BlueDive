@@ -22,7 +22,7 @@ struct OnlineServicesSettingsView: View {
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    Text("When on, Edit Conditions shows a Fetch Weather button. It sends the dive site's GPS coordinates and the dive date to Open-Meteo (open-meteo.com) to look up the weather at the time of the dive, and fills the weather fields — replacing existing values unless you turn off Replace Existing Values. Nothing is sent until you choose Fetch Weather.")
+                    (Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent when you choose Fetch Weather, and for dives downloaded over Bluetooth that have GPS coordinates."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)

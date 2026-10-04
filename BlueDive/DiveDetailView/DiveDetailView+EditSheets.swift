@@ -1738,9 +1738,10 @@ struct EditConditionsView: View {
         if filled {
             weatherFetchResult = .filled
         } else if workingWeather.isEmpty || workingAirTemp.trimmingCharacters(in: .whitespaces).isEmpty
-                    || workingWind.isEmpty || workingWindDirection.isEmpty {
-            // Some field is still empty: Open-Meteo had nothing for it (e.g. no direction for
-            // a calm wind), so "every field already has a value" would be wrong.
+                    || workingWind.isEmpty || (workingWindDirection.isEmpty && workingWind != "Calm") {
+            // Some field is still empty: Open-Meteo had nothing for it, so "every field already
+            // has a value" would be wrong. A Calm wind needs no direction (same rule as
+            // Dive.hasEmptyWeatherField, used after Bluetooth downloads).
             weatherFetchResult = .noValueForEmptyFields
         } else {
             weatherFetchResult = .allFieldsSet

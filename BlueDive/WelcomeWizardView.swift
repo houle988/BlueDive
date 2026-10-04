@@ -43,7 +43,7 @@ struct WelcomeWizardView: View {
                 Feature(icon: "line.3.horizontal.decrease.circle", color: .orange, title: "Search & Filters", description: "Search by site, buddy, country, or tag. Filter by year, depth, gas type, rating, and more."),
                 Feature(icon: "arrow.triangle.merge", color: .indigo, title: "Merge Dives", description: "Combine duplicate dive entries into a single, complete record."),
                 Feature(icon: "fish", color: .teal, title: "Marine Sightings", description: "Log fish and marine life spotted during each dive."),
-                Feature(icon: "cloud.sun", color: .yellow, title: "Weather Lookup", description: "Fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo. Turn it on in Settings → Online Services."),
+                Feature(icon: "cloud.sun", color: .yellow, title: "Weather Lookup", description: "BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.", descriptionSuffix: "You can change this anytime in Settings → Online Services."),
             ]
         ),
         // Page 4: Gear & certifications
@@ -280,7 +280,9 @@ struct WelcomeWizardView: View {
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
 
-                Text(feature.description)
+                // A suffix is a separate, shared sentence (translated once), joined here.
+                (feature.descriptionSuffix.map { Text(feature.description) + Text(verbatim: " ") + Text($0) }
+                    ?? Text(feature.description))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -314,5 +316,6 @@ private struct Feature: Identifiable {
     let color: Color
     let title: LocalizedStringKey
     let description: LocalizedStringKey
+    var descriptionSuffix: LocalizedStringKey? = nil
     var url: URL? = nil
 }

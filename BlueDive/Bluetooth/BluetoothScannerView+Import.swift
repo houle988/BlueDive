@@ -73,6 +73,8 @@ extension BluetoothScannerView {
             var importedCount = 0
             var mergedCount = 0
             var skippedCount = 0
+            // New and re-downloaded dives, for the automatic weather fetch after the save.
+            var weatherCandidates: [(dive: Dive, isNew: Bool)] = []
 
             // Sort dives chronologically so we can calculate surface intervals
             let sortedDives = downloadedDives.sorted { $0.datetime < $1.datetime }
@@ -175,6 +177,7 @@ extension BluetoothScannerView {
                         // Re-download mode: merge data from the computer
                         mergeComputerData(from: diveData, into: existingDive, matchReason: "fingerprint + serial")
                         mergedCount += 1
+                        weatherCandidates.append((existingDive, false))
                     } else {
                         Self.logger.info("Dive from \(diveData.datetime) skipped — already in logbook (matched by: fingerprint + serial)")
                         skippedCount += 1
@@ -184,6 +187,7 @@ extension BluetoothScannerView {
                     modelContext.insert(dive)
                     nextDiveNumber += 1
                     importedCount += 1
+                    weatherCandidates.append((dive, true))
                 }
 
                 // Update previous dive end time for the next iteration
@@ -227,6 +231,139 @@ extension BluetoothScannerView {
             selectedDevice = nil
             connectedDeviceName = nil
             syncState = .completed(imported: importedCount, merged: mergedCount, skipped: skippedCount)
+            // After the save, so the dives have their permanent persistent IDs.
+            startWeatherFetchIfEnabled(for: weatherCandidates)
+        }
+    }
+
+    // MARK: - Weather Fetch After Import
+
+    /// Above this many dives, ask before fetching (one Open-Meteo request per dive).
+    static let weatherFetchConfirmationThreshold = 50
+
+    /// Fetches the weather for the just-imported dives that have GPS coordinates, when
+    /// Settings → Online Services and Settings → Bluetooth Import allow it.
+    ///
+    /// Replace existing values applies to newly imported dives only. A dive downloaded again
+    /// is already in the logbook and may hold weather the user entered, so it is only ever
+    /// filled where empty — as mergeComputerData preserves user-modified fields (CLAUDE.md:
+    /// preserve values the user did not change through the app).
+    ///
+    /// The air temperature a new Bluetooth dive arrives with is usually not an air reading:
+    /// LibDC-Swift's `surfaceTemperature` falls back to the first profile sample's (water)
+    /// temperature unless the computer reports DC_FIELD_TEMPERATURE_SURFACE (GenericParser
+    /// .swift ~158-166 / ~480), and the two cannot be told apart. So Replace treats it like any
+    /// other value and replaces it with Open-Meteo's air temperature.
+    func startWeatherFetchIfEnabled(for candidates: [(dive: Dive, isNew: Bool)]) {
+        let prefs = UserPreferences.shared
+        guard prefs.fetchWeatherOnline, prefs.fetchWeatherOnBluetoothImport else { return }
+        let replace = prefs.replaceWeatherOnBluetoothImport
+        let eligible = candidates.filter {
+            OpenMeteoWeatherService.coordinate(for: $0.dive) != nil
+                && ((replace && $0.isNew) || $0.dive.hasEmptyWeatherField)
+        }
+        guard !eligible.isEmpty else { return }
+        let ids = eligible.map(\.dive.persistentModelID)
+        let newIDs = Set(eligible.filter(\.isNew).map(\.dive.persistentModelID))
+        if ids.count > Self.weatherFetchConfirmationThreshold {
+            // Asked inline on the completed screen (see pendingWeatherFetch).
+            pendingWeatherFetch = PendingWeatherFetch(ids: ids, newDiveIDs: newIDs)
+        } else {
+            runWeatherFetch(for: ids, newDiveIDs: newIDs)
+        }
+    }
+
+    /// One request per dive, in order. Stops at the first network or service error instead of
+    /// waiting for every request to time out; Fetch Weather in Edit Conditions covers the rest
+    /// later. Saves every few dives and once more when the run ends — also when the sheet
+    /// closes and cancels it — so closing keeps what was fetched.
+    ///
+    /// Works in its own ModelContext (author "BlueDive.weather", CLAUDE.md): each dive is
+    /// fetched by ID, so a deleted or released dive is simply not found, and a failed save
+    /// discards only this run's changes, never other unsaved work in the main context. The
+    /// main context picks up the saved values; RemoteChangeFeeder skips "BlueDive." authors.
+    /// Weather fields are not in DiveSummary, so no DiveStore commit is needed.
+    func runWeatherFetch(for ids: [PersistentIdentifier], newDiveIDs: Set<PersistentIdentifier>) {
+        let replace = UserPreferences.shared.replaceWeatherOnBluetoothImport
+        let context = ModelContext(modelContext.container)
+        context.author = "BlueDive.weather"
+        context.autosaveEnabled = false
+        weatherFetchTask?.cancel()
+        weatherFetchStatus = .running(done: 0, total: ids.count)
+        weatherFetchTask = Task { @MainActor in
+            var filled = 0          // dives whose values changed and were saved
+            var withData = 0        // dives Open-Meteo returned values for
+            var stillEmpty = 0      // dives left with an empty field Open-Meteo had no value for
+            var unsaved = 0         // changed dives not saved yet
+            var saveFailed = false
+            enum Stop { case offline, unavailable, cancelled }
+            var stop: Stop?
+
+            /// Saves pending changes; on failure discards them (this context only).
+            @MainActor func flush() {
+                guard unsaved > 0 else { return }
+                do {
+                    try context.save()
+                    filled += unsaved
+                } catch {
+                    Self.logger.error("Weather save failed: \(error.localizedDescription)")
+                    context.rollback()
+                    saveFailed = true
+                }
+                unsaved = 0
+            }
+            /// The dive with this ID, or nil if it no longer exists (deleted meanwhile).
+            @MainActor func dive(_ id: PersistentIdentifier) -> Dive? {
+                var descriptor = FetchDescriptor<Dive>(predicate: #Predicate { $0.persistentModelID == id })
+                descriptor.fetchLimit = 1
+                return (try? context.fetch(descriptor))?.first
+            }
+
+            loop: for (index, id) in ids.enumerated() {
+                if Task.isCancelled { stop = .cancelled; break loop }
+                // Looked up before and after each request: the dive may be deleted meanwhile.
+                if let current = dive(id) {
+                    do {
+                        let fetched = try await OpenMeteoWeatherService.fetch(for: current)
+                        if Task.isCancelled { stop = .cancelled; break loop }
+                        // Counted only once the dive is confirmed still there.
+                        if let target = dive(id) {
+                            withData += 1
+                            if fetched.apply(to: target, replaceExisting: replace && newDiveIDs.contains(id)) {
+                                unsaved += 1
+                            }
+                            if target.hasEmptyWeatherField { stillEmpty += 1 }
+                        }
+                    } catch is CancellationError {
+                        stop = .cancelled; break loop
+                    } catch OpenMeteoWeatherError.noData {
+                        // No data for this dive (e.g. too recent or in the future): go on.
+                    } catch OpenMeteoWeatherError.serviceUnavailable {
+                        stop = .unavailable; break loop
+                    } catch {
+                        stop = Task.isCancelled ? .cancelled : .offline; break loop
+                    }
+                }
+                if unsaved >= 10 { flush() }
+                if saveFailed { break loop }
+                weatherFetchStatus = .running(done: index + 1, total: ids.count)
+                // A short pause between requests, to stay well within Open-Meteo's limits.
+                if index + 1 < ids.count, (try? await Task.sleep(for: .milliseconds(150))) == nil {
+                    stop = .cancelled; break loop
+                }
+            }
+            // Also on every early stop, including a cancel (sheet closed or app backgrounded).
+            flush()
+            if saveFailed {
+                weatherFetchStatus = .saveFailed(filled: filled)
+            } else {
+                switch stop {
+                case .offline:     weatherFetchStatus = .stoppedOffline(filled: filled)
+                case .unavailable: weatherFetchStatus = .stoppedUnavailable(filled: filled)
+                case .cancelled:   weatherFetchStatus = .interrupted(filled: filled)
+                case nil:          weatherFetchStatus = .finished(filled: filled, withData: withData, stillEmpty: stillEmpty, total: ids.count)
+                }
+            }
         }
     }
 
@@ -738,7 +875,11 @@ extension BluetoothScannerView {
         dive.waterTemperature = diveData.temperature.isFinite ? diveData.temperature : nil
         dive.minTemperature = diveData.minTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.min() ?? (diveData.temperature.isFinite ? diveData.temperature : nil)
         dive.maxTemperature = diveData.maxTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.max()
-        if let surfaceTemp = diveData.surfaceTemperature, surfaceTemp.isFinite {
+        // Only fills an empty air temperature. LibDC-Swift's surfaceTemperature is usually the
+        // first profile sample's water temperature (its fallback when the computer reports no
+        // DC_FIELD_TEMPERATURE_SURFACE), so it must not overwrite a value fetched from
+        // Open-Meteo or entered by the user on an earlier import or edit.
+        if dive.airTemperature == nil, let surfaceTemp = diveData.surfaceTemperature, surfaceTemp.isFinite {
             dive.airTemperature = surfaceTemp
         }
 

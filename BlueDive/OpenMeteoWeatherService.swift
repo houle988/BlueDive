@@ -13,10 +13,47 @@ struct FetchedWeather: Sendable {
     var isEmpty: Bool {
         weather == nil && airTemperature == nil && wind == nil && windDirection == nil
     }
+
+    /// Writes the fetched values onto `dive`, with the same rules as Edit Conditions' Fetch
+    /// Weather: `replaceExisting` replaces every field Open-Meteo returned a value for;
+    /// otherwise only empty fields are filled. A field with no returned value is never
+    /// touched. Returns whether any value changed. Used where there is no editing sheet
+    /// (Bluetooth import); the sheet applies to its working fields instead.
+    @discardableResult
+    func apply(to dive: Dive, replaceExisting: Bool) -> Bool {
+        var changed = false
+        if let weather, replaceExisting || (dive.weather ?? "").isEmpty, dive.weather != weather {
+            dive.weather = weather
+            changed = true
+        }
+        if let airTemperature, replaceExisting || dive.airTemperature == nil, dive.airTemperature != airTemperature {
+            dive.airTemperature = airTemperature
+            changed = true
+        }
+        if let wind, replaceExisting || (dive.wind ?? "").isEmpty, dive.wind != wind {
+            dive.wind = wind
+            changed = true
+        }
+        if let windDirection, replaceExisting || (dive.windDirection ?? "").isEmpty, dive.windDirection != windDirection {
+            dive.windDirection = windDirection
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension Dive {
+    /// Whether any field Fetch Weather can fill is still empty. A Calm wind has no direction
+    /// (Open-Meteo returns none), so its empty direction does not count — otherwise such a dive
+    /// would be requested again on every re-download for nothing.
+    var hasEmptyWeatherField: Bool {
+        (weather ?? "").isEmpty || airTemperature == nil || (wind ?? "").isEmpty
+            || ((windDirection ?? "").isEmpty && wind != "Calm")
+    }
 }
 
 enum OpenMeteoWeatherError: Error {
-    /// Open-Meteo could not be reached (no connection, timeout).
+    /// The request could not be made or completed (no connection, timeout, no HTTP response).
     case requestFailed
     /// Open-Meteo answered with an error (e.g. rate limit, server error) or a response that
     /// could not be read.
@@ -224,8 +261,9 @@ enum OpenMeteoWeatherService {
         }
     }
 
-    /// Returns nil when Open-Meteo answers with an error (e.g. a date outside the range the
-    /// API covers), so the caller can try the next API; throws on a network failure.
+    /// Returns nil on HTTP 400 (e.g. a date outside the range this API covers), so the caller
+    /// can try the next API. Throws `.serviceUnavailable` on any other non-200 status or an
+    /// unreadable response, and `.requestFailed` (or CancellationError) on a network failure.
     private static func requestHourly(endpoint: String, latitude: Double, longitude: Double,
                                       startDate: String, endDate: String,
                                       fahrenheit: Bool) async throws -> Response? {
