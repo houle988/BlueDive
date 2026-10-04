@@ -50,6 +50,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private var currentWeather: String?
     private var currentCurrent: String?
     private var currentSurfaceConditions: String?
+    private var currentWind: String?
+    private var currentWindDirection: String?
     private var currentEntryType: String?
     private var currentDiveMaster: String?
     private var currentDiveOperator: String?
@@ -647,6 +649,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         case "weather":          currentWeather = text.nilIfEmpty
         case "current":          currentCurrent = text.nilIfEmpty
         case "surfaceConditions": currentSurfaceConditions = text.nilIfEmpty
+        case "wind":             currentWind = text.nilIfEmpty
+        case "windDirection":    currentWindDirection = text.nilIfEmpty
         case "entryType":        currentEntryType = text.nilIfEmpty
         case "diveMaster":       currentDiveMaster = text.nilIfEmpty
         case "diveOperator":     currentDiveOperator = text.nilIfEmpty
@@ -700,6 +704,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
                 weather: currentWeather,
                 current: currentCurrent,
                 surfaceConditions: currentSurfaceConditions,
+                wind: currentWind,
+                windDirection: currentWindDirection,
                 entryType: currentEntryType,
                 diveMaster: currentDiveMaster,
                 diveOperator: currentDiveOperator,
@@ -753,6 +759,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         currentWeather = nil
         currentCurrent = nil
         currentSurfaceConditions = nil
+        currentWind = nil
+        currentWindDirection = nil
         currentEntryType = nil
         currentDiveMaster = nil
         currentDiveOperator = nil

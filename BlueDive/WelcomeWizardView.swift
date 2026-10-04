@@ -43,6 +43,7 @@ struct WelcomeWizardView: View {
                 Feature(icon: "line.3.horizontal.decrease.circle", color: .orange, title: "Search & Filters", description: "Search by site, buddy, country, or tag. Filter by year, depth, gas type, rating, and more."),
                 Feature(icon: "arrow.triangle.merge", color: .indigo, title: "Merge Dives", description: "Combine duplicate dive entries into a single, complete record."),
                 Feature(icon: "fish", color: .teal, title: "Marine Sightings", description: "Log fish and marine life spotted during each dive."),
+                Feature(icon: "cloud.sun", color: .yellow, title: "Weather Lookup", description: "Fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo. Turn it on in Settings → Online Services."),
             ]
         ),
         // Page 4: Gear & certifications

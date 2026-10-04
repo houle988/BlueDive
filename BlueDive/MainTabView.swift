@@ -15,6 +15,10 @@ struct MainTabView: View {
     @AppStorage("languageMode") private var languageMode = "system"
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
+    /// Set once the one-time Online Services question has been answered (per device, like
+    /// the setting it controls).
+    @AppStorage("onlineServicesPromptShown") private var onlineServicesPromptShown = false
+    @State private var showOnlineServicesPrompt = false
     @Environment(\.introVisible) private var introVisible
     @Environment(FileImportCoordinator.self) private var importCoordinator
 
@@ -24,6 +28,23 @@ struct MainTabView: View {
 
     private var shouldShowWelcome: Bool {
         !introVisible && lastAcceptedDisclaimerVersion == DiveIntroConfig.currentVersion && !hasCompletedOnboarding
+    }
+
+    /// Asked once, after the intro, the disclaimer and the Welcome Wizard — so new users see it
+    /// after the tour, and existing users on the first launch after updating. Never asked when
+    /// the service is already on.
+    private var shouldAskOnlineServices: Bool {
+        // Answered first: once it is, nothing else is read, so MainTabView stops observing
+        // the setting and the import coordinator for this.
+        !onlineServicesPromptShown
+            && !introVisible && lastAcceptedDisclaimerVersion == DiveIntroConfig.currentVersion
+            && hasCompletedOnboarding
+            && !UserPreferences.shared.fetchWeatherOnline
+            // An alert cannot appear over another sheet on iOS and would be lost: wait for a
+            // reminder deep-link sheet to close, and skip a session opened with a file or a
+            // widget link.
+            && gearToOpen == nil && certToRenew == nil && insuranceToRenew == nil
+            && !importCoordinator.receivedExternalOpen
     }
 
     private var disclaimerBinding: Binding<Bool> {
@@ -217,6 +238,31 @@ struct MainTabView: View {
                 .standardSheetPresentation()
         }
         #endif
+        .task(id: shouldAskOnlineServices) {
+            guard shouldAskOnlineServices else { return }
+            // Let the wizard's cover or sheet finish closing; an alert presented during that
+            // transition can be dropped.
+            // A change of the conditions cancels this task, and a cancelled sleep throws.
+            guard (try? await Task.sleep(for: .milliseconds(600))) != nil else { return }
+            showOnlineServicesPrompt = true
+        }
+        // Close the alert when asking is no longer right: answered in another window (iPad
+        // scenes, Mac windows), or a file, widget link or reminder arrived while it is up —
+        // left unanswered then, so it is asked again later — so their sheets can appear.
+        .onChange(of: shouldAskOnlineServices) { _, canAsk in
+            if !canAsk { showOnlineServicesPrompt = false }
+        }
+        .alert("Fetch the weather for your dives?", isPresented: $showOnlineServicesPrompt) {
+            Button("Turn On") {
+                // Also records the answer (UserPreferences.fetchWeatherOnline's didSet).
+                UserPreferences.shared.fetchWeatherOnline = true
+            }
+            Button("Not Now", role: .cancel) {
+                onlineServicesPromptShown = true
+            }
+        } message: {
+            Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo. The coordinates and date are sent only when you choose Fetch Weather. You can change this anytime in Settings → Online Services.")
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 // Clear badge and delivered notifications when the user opens the app

@@ -35,43 +35,11 @@ struct PDFDiveLogbook {
     /// chosen language even when it differs from the OS language.
     private static var loc: Bundle { Bundle.forAppLanguage() }
 
-    /// Localizes a stored weather value using literal keys so Xcode can detect them.
-    private static func localizedWeather(_ value: String?) -> String {
-        guard let value = value, !value.isEmpty else { return "—" }
-        switch value {
-        case "Sunny":    return NSLocalizedString("Sunny", bundle: loc, comment: "")
-        case "Cloudy":   return NSLocalizedString("Cloudy", bundle: loc, comment: "")
-        case "Overcast": return NSLocalizedString("Overcast", bundle: loc, comment: "")
-        case "Rain":     return NSLocalizedString("Rain", bundle: loc, comment: "")
-        case "Storm":    return NSLocalizedString("Storm", bundle: loc, comment: "")
-        case "Variable": return NSLocalizedString("Variable", bundle: loc, comment: "")
-        default:         return value
-        }
-    }
-
-    /// Localizes a stored surface conditions value using literal keys.
-    private static func localizedSurfaceConditions(_ value: String?) -> String {
-        guard let value = value, !value.isEmpty else { return "—" }
-        switch value {
-        case "Calm":             return NSLocalizedString("Calm", bundle: loc, comment: "")
-        case "Slightly choppy":  return NSLocalizedString("Slightly choppy", bundle: loc, comment: "")
-        case "Choppy":           return NSLocalizedString("Choppy", bundle: loc, comment: "")
-        case "Heavy swell":      return NSLocalizedString("Heavy swell", bundle: loc, comment: "")
-        default:                 return value
-        }
-    }
-
-    /// Localizes a stored current value using literal keys.
-    private static func localizedCurrent(_ value: String?) -> String {
-        guard let value = value, !value.isEmpty else { return "—" }
-        switch value {
-        case "None":        return NSLocalizedString("None", bundle: loc, comment: "")
-        case "Weak":        return NSLocalizedString("Weak", bundle: loc, comment: "")
-        case "Moderate":    return NSLocalizedString("Moderate", bundle: loc, comment: "")
-        case "Strong":      return NSLocalizedString("Strong", bundle: loc, comment: "")
-        case "Very strong": return NSLocalizedString("Very strong", bundle: loc, comment: "")
-        default:            return value
-        }
+    /// Localizes a stored condition value with a `DiveConditionOptions` localizer (where the
+    /// literal keys live); "—" when the value is missing or empty.
+    private static func localizedCondition(_ value: String?, _ localize: @MainActor (String) -> String) -> String {
+        guard let value, !value.isEmpty else { return "—" }
+        return localize(value)
     }
 
     /// Localizes a stored tank type value using literal keys.
@@ -268,7 +236,7 @@ struct PDFDiveLogbook {
         let siteDetailWidth = contentWidth - infoWidth - infoGap
         let siteDetailX = margin + infoWidth + infoGap
         let topSectionMinH = max(fieldGridHeight(fieldCount: 8, columns: 2),
-                                 fieldGridHeight(fieldCount: 13, columns: 3))
+                                 fieldGridHeight(fieldCount: 15, columns: 3))
         let infoY = drawDiveInfo(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: y, width: infoWidth, tempUnit: tempUnit, minHeight: topSectionMinH)
         let siteDetailY = drawSiteDetails(ctx: ctx, dive: dive, x: siteDetailX, y: y, width: siteDetailWidth, minHeight: topSectionMinH)
         y = min(infoY, siteDetailY)
@@ -544,9 +512,11 @@ struct PDFDiveLogbook {
             (NSLocalizedString("Location", bundle: loc, comment: ""),      locationStr,                                accentOrange),
             (NSLocalizedString("Country", bundle: loc, comment: ""),       countryStr,                                 accentPurple),
             (NSLocalizedString("Visibility", bundle: loc, comment: ""),    visStr,                                     accentCyan),
-            (NSLocalizedString("Weather", bundle: loc, comment: ""),       localizedWeather(dive.weather), accentYellow),
-            (NSLocalizedString("Conditions", bundle: loc, comment: ""),    localizedSurfaceConditions(dive.surfaceConditions), accentBlue),
-            (NSLocalizedString("Current", bundle: loc, comment: ""),       localizedCurrent(dive.current), accentTeal),
+            (NSLocalizedString("Weather", bundle: loc, comment: ""),       localizedCondition(dive.weather, { DiveConditionOptions.localizedWeather($0) }), accentYellow),
+            (NSLocalizedString("Conditions", bundle: loc, comment: ""),    localizedCondition(dive.surfaceConditions, { DiveConditionOptions.localizedSurface($0) }), accentBlue),
+            (NSLocalizedString("Current", bundle: loc, comment: ""),       localizedCondition(dive.current, { DiveConditionOptions.localizedCurrent($0) }), accentTeal),
+            (NSLocalizedString("Wind", bundle: loc, value: "Wind", comment: ""),          localizedCondition(dive.wind, { DiveConditionOptions.localizedWind($0) }), accentTeal),
+            (NSLocalizedString("Wind Direction", bundle: loc, value: "Wind Direction", comment: ""), localizedCondition(dive.windDirection, { DiveConditionOptions.localizedWindDirection($0) }), accentBlue),
             (NSLocalizedString("Environment", bundle: loc, comment: ""),   localizedWaterType(dive.siteWaterType),     accentCyan),
             (NSLocalizedString("Body of Water", bundle: loc, comment: ""), dive.siteBodyOfWater ?? "—",                accentBlue),
             (NSLocalizedString("Difficulty", bundle: loc, comment: ""),     localizedDifficulty(dive.siteDifficulty),   accentPurple),

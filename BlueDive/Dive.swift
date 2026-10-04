@@ -333,6 +333,8 @@ final class Dive {
     var weather: String? // Weather conditions (Sunny, Cloudy, Rainy, etc.)
     var surfaceConditions: String? // Surface state (Calm, Choppy, Waves, etc.)
     var current: String? // Current (None, Weak, Moderate, Strong)
+    var wind: String? // Wind (Calm, Light, Moderate, Fresh, Strong, Gale — Beaufort-based)
+    var windDirection: String? // Wind direction (N, NE, E, SE, S, SW, W, NW)
     var visibility: String? // Visibility (free text or numerical value in meters)
     var entryType: String? // Entry type (Shore, Boat, Zodiac, etc.)
     
@@ -1356,6 +1358,8 @@ final class Dive {
         weather: String? = nil,
         surfaceConditions: String? = nil,
         current: String? = nil,
+        wind: String? = nil,
+        windDirection: String? = nil,
         visibility: String? = nil,
         entryType: String? = nil,
         diveOperator: String? = nil,
@@ -1408,6 +1412,8 @@ final class Dive {
         self.weather = weather
         self.surfaceConditions = surfaceConditions
         self.current = current
+        self.wind = wind
+        self.windDirection = windDirection
         self.visibility = visibility
         self.entryType = entryType
         self.diveOperator = diveOperator

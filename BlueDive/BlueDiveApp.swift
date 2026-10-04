@@ -222,6 +222,7 @@ struct BlueDiveApp: App {
                 #endif
             }
             .onOpenURL { url in
+                importCoordinator.noteExternalOpen()
                 // Widget deep-links: bluedive://add/manual | bluedive://add/bluetooth
                 if let action = AddDiveDeepLink.action(for: url) {
                     switch action {

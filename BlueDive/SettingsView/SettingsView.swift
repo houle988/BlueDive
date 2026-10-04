@@ -431,6 +431,17 @@ class UserPreferences {
     var showSamplesTab: Bool {
         didSet { UserDefaults.standard.set(showSamplesTab, forKey: "showSamplesTab") }
     }
+    /// When true, Edit Conditions offers a Fetch Weather button that sends the dive's GPS
+    /// coordinates and date to Open-Meteo. Off by default: nothing leaves the device unless
+    /// the user opts in. No App Group write: the widget shows no weather.
+    var fetchWeatherOnline: Bool {
+        didSet {
+            UserDefaults.standard.set(fetchWeatherOnline, forKey: "fetchWeatherOnline")
+            // Turning it on anywhere answers the one-time launch question, so turning it off
+            // later (or Reset to Defaults) does not bring that question back.
+            if fetchWeatherOnline { UserDefaults.standard.set(true, forKey: "onlineServicesPromptShown") }
+        }
+    }
     #if os(macOS)
     /// When true, the main dive list shows the profile chart of the selected dive above the
     /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
@@ -453,6 +464,7 @@ class UserPreferences {
         // OFF default — no registerDefaults entry needed.
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
+        self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
         #if os(macOS)
         // On by default: an absent key reads as true.
         self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
@@ -474,6 +486,7 @@ class UserPreferences {
         languageMode    = .system
         hideClearedDecoStops = false
         showSamplesTab = false
+        fetchWeatherOnline = false
         #if os(macOS)
         showDiveListProfilePreview = true
         #endif
@@ -561,6 +574,13 @@ struct SettingsView: View {
                             .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "iCloud", icon: "icloud", color: .cyan)
+                    }
+
+                    NavigationLink {
+                        OnlineServicesSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
+                    } label: {
+                        SettingsListRow(title: "Online Services", icon: "globe", color: .mint)
                     }
 
                     NavigationLink {

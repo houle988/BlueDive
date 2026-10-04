@@ -38,6 +38,9 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
     private var tankSummaries: [TankSummaryMesg] = []
     private var tankUpdates: [TankUpdateMesg] = []
     private var diveSettings: [DiveSettingsMesg] = []
+    /// Watch time-zone offset (local − UTC, seconds) from the Activity message; nil when the
+    /// file has none. Used to store the dive's wall-clock start like every other importer.
+    private var localTimeOffset: Int?
 
     // MARK: - Public API
 
@@ -48,6 +51,15 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
         do { try decoder.read() } catch { return nil }
         assembleDives()
         return dives.isEmpty ? nil : dives
+    }
+
+    /// FIT times are UTC. Other importers store the dive computer's wall-clock time read in
+    /// `TimeZone.current`, so the dive shows the time on the watch at the site. Convert the UTC
+    /// start to that convention using the watch's offset; without one, keep the UTC instant.
+    private func wallClockDate(fromUTC date: Date) -> Date {
+        guard let localTimeOffset else { return date }
+        let wallClock = WallClock.components(of: date, offsetFromUTC: TimeInterval(localTimeOffset))
+        return WallClock.storedDate(from: wallClock) ?? date
     }
 
     // MARK: - MesgListener
@@ -93,6 +105,18 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
 
         case Profile.MesgNum.diveSettings:
             diveSettings.append(DiveSettingsMesg(mesg: mesg))
+
+        case Profile.MesgNum.activity:
+            let m = ActivityMesg(mesg: mesg)
+            if localTimeOffset == nil,
+               let utc = m.getTimestamp()?.timestamp, utc >= DateTime.min, utc != DateTime.invalid,
+               let local = m.getLocalTimestamp(), local >= LocalDateTimeValues.min, local != DateTime.invalid {
+                // Real time-zone offsets are whole quarter hours within ±14 h; anything else
+                // is treated as missing so the UTC start is kept as before.
+                let raw = Int(Int64(local) - Int64(utc))
+                let rounded = Int((Double(raw) / 900).rounded()) * 900
+                if abs(rounded) <= 14 * 3600 { localTimeOffset = rounded }
+            }
 
         default:
             break
@@ -543,7 +567,7 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 weightFormat: "kg",
                 sourceImport: "Garmin FIT",
                 isBlueDiveXMLImport: false,
-                date: startDate,
+                date: wallClockDate(fromUTC: startDate),
                 identifier: identifier,
                 recordID: nil,
                 diveNumber: diveNumber,

@@ -74,37 +74,46 @@ extension DiveDetailView {
             }
 
             #if os(macOS)
-            // The Mac window is wide enough for two columns: the first four rows on the
-            // left, the other three on the right. A Grid keeps each pair of rows aligned,
-            // while each column draws its own dividers and a vertical line separates them.
+            // The Mac window is wide enough for two columns: the air conditions (air
+            // temperature, weather, wind) on the left, the water conditions on the right. A
+            // Grid keeps each pair of rows aligned, while each column draws its own dividers
+            // and a vertical line separates them.
             Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
                 GridRow {
-                    conditionsSurfaceTempRow.detailGridCell(column: 0, row: 0)
-                    conditionsSurfaceRow.detailGridCell(column: 1, row: 0)
+                    conditionsAirTempRow.detailGridCell(column: 0, row: 0)
+                    conditionsMinTempRow.detailGridCell(column: 1, row: 0)
                 }
                 GridRow {
                     detailColumnDivider
                     detailColumnDivider
                 }
                 GridRow {
-                    conditionsMinTempRow.detailGridCell(column: 0, row: 1)
-                    conditionsCurrentRow.detailGridCell(column: 1, row: 1)
+                    conditionsWeatherRow.detailGridCell(column: 0, row: 1)
+                    conditionsMaxTempRow.detailGridCell(column: 1, row: 1)
                 }
                 GridRow {
                     detailColumnDivider
                     detailColumnDivider
                 }
                 GridRow {
-                    conditionsMaxTempRow.detailGridCell(column: 0, row: 2)
-                    conditionsVisibilityRow.detailGridCell(column: 1, row: 2)
+                    conditionsWindRow.detailGridCell(column: 0, row: 2)
+                    conditionsSurfaceRow.detailGridCell(column: 1, row: 2)
                 }
                 GridRow {
                     detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    conditionsWindDirectionRow.detailGridCell(column: 0, row: 3)
+                    conditionsCurrentRow.detailGridCell(column: 1, row: 3)
+                }
+                GridRow {
                     Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    detailColumnDivider
                 }
                 GridRow {
-                    conditionsWeatherRow.detailGridCell(column: 0, row: 3)
                     Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    conditionsVisibilityRow.detailGridCell(column: 1, row: 4)
                 }
             }
             .overlay {
@@ -114,7 +123,20 @@ extension DiveDetailView {
             }
             .accessibilityElement(children: .contain)
             #else
-            conditionsSurfaceTempRow
+            // Same order as the macOS columns: air conditions, then water conditions.
+            conditionsAirTempRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsWeatherRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsWindRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsWindDirectionRow
 
             Divider().background(.primary.opacity(0.2))
 
@@ -123,10 +145,6 @@ extension DiveDetailView {
             Divider().background(.primary.opacity(0.2))
 
             conditionsMaxTempRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsWeatherRow
 
             Divider().background(.primary.opacity(0.2))
 
@@ -146,11 +164,11 @@ extension DiveDetailView {
         .padding(.horizontal)
     }
 
-    private var conditionsSurfaceTempRow: some View {
+    private var conditionsAirTempRow: some View {
         ConditionRow(
             icon: "thermometer.medium",
             color: .orange,
-            label: "Surface Temp.",
+            label: "Air Temp.",
             value: dive.airTemperature.map {
                 UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
             } ?? "—"
@@ -180,19 +198,31 @@ extension DiveDetailView {
     // Weather
     private var conditionsWeatherRow: some View {
         ConditionRow(icon: "cloud.sun", color: .yellow, label: "Weather",
-                    value: dive.weather.map { localizedWeather($0) } ?? "—")
+                    value: dive.weather.map { DiveConditionOptions.localizedWeather($0) } ?? "—")
+    }
+
+    // Wind
+    private var conditionsWindRow: some View {
+        ConditionRow(icon: "wind", color: .mint, label: "Wind",
+                    value: dive.wind.map { DiveConditionOptions.localizedWind($0) } ?? "—")
+    }
+
+    // Wind direction
+    private var conditionsWindDirectionRow: some View {
+        ConditionRow(icon: "location.north", color: .indigo, label: "Wind Direction",
+                    value: dive.windDirection.map { DiveConditionOptions.localizedWindDirection($0) } ?? "—")
     }
 
     // Surface conditions
     private var conditionsSurfaceRow: some View {
         ConditionRow(icon: "water.waves", color: .cyan, label: "Surface",
-                    value: dive.surfaceConditions.map { localizedSurface($0) } ?? "—")
+                    value: dive.surfaceConditions.map { DiveConditionOptions.localizedSurface($0) } ?? "—")
     }
 
     // Current
     private var conditionsCurrentRow: some View {
-        ConditionRow(icon: "wind", color: .teal, label: "Current",
-                    value: dive.current.map { localizedCurrent($0) } ?? "—")
+        ConditionRow(icon: "arrow.right.arrow.left", color: .teal, label: "Current",
+                    value: dive.current.map { DiveConditionOptions.localizedCurrent($0) } ?? "—")
     }
 
     // Visibility
@@ -217,39 +247,6 @@ extension DiveDetailView {
                 label: "Visibility",
                 value: "—"
             )
-        }
-    }
-
-    private func localizedWeather(_ raw: String) -> String {
-        switch raw {
-        case "Sunny":    return NSLocalizedString("Sunny", bundle: .forAppLanguage(), comment: "")
-        case "Cloudy":   return NSLocalizedString("Cloudy", bundle: .forAppLanguage(), comment: "")
-        case "Overcast": return NSLocalizedString("Overcast", bundle: .forAppLanguage(), comment: "")
-        case "Rain":     return NSLocalizedString("Rain", bundle: .forAppLanguage(), comment: "")
-        case "Storm":    return NSLocalizedString("Storm", bundle: .forAppLanguage(), comment: "")
-        case "Variable": return NSLocalizedString("Variable", bundle: .forAppLanguage(), comment: "")
-        default:         return raw
-        }
-    }
-
-    private func localizedSurface(_ raw: String) -> String {
-        switch raw {
-        case "Calm":            return NSLocalizedString("Calm", bundle: .forAppLanguage(), comment: "")
-        case "Slightly choppy": return NSLocalizedString("Slightly choppy", bundle: .forAppLanguage(), comment: "")
-        case "Choppy":          return NSLocalizedString("Choppy", bundle: .forAppLanguage(), comment: "")
-        case "Heavy swell":     return NSLocalizedString("Heavy swell", bundle: .forAppLanguage(), comment: "")
-        default:                return raw
-        }
-    }
-
-    private func localizedCurrent(_ raw: String) -> String {
-        switch raw {
-        case "None":        return NSLocalizedString("None", bundle: .forAppLanguage(), comment: "")
-        case "Weak":        return NSLocalizedString("Weak", bundle: .forAppLanguage(), comment: "")
-        case "Moderate":    return NSLocalizedString("Moderate", bundle: .forAppLanguage(), comment: "")
-        case "Strong":      return NSLocalizedString("Strong", bundle: .forAppLanguage(), comment: "")
-        case "Very strong": return NSLocalizedString("Very strong", bundle: .forAppLanguage(), comment: "")
-        default:            return raw
         }
     }
 

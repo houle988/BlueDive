@@ -32,6 +32,14 @@ struct PendingXMLImport: Equatable {
 @Observable
 final class FileImportCoordinator {
     var pendingURL: URL?
+    /// True once the app has been opened with a URL this session (a file, or a widget
+    /// deep link). The sheets those open are owned by ContentView/GearListView/DocumentsView,
+    /// so MainTabView holds back the one-time Online Services prompt for the session rather
+    /// than present an alert that would collide with them.
+    private(set) var receivedExternalOpen = false
+
+    /// Called by BlueDiveApp for every URL the app is opened with.
+    func noteExternalOpen() { receivedExternalOpen = true }
     var pendingGearXML: PendingXMLImport?
     var pendingCertXML: PendingXMLImport?
     var pendingInsuranceXML: PendingXMLImport?
@@ -950,6 +958,8 @@ extension ContentView {
             weather: diveData.weather,
             surfaceConditions: diveData.surfaceConditions,
             current: diveData.current,
+            wind: diveData.wind,
+            windDirection: diveData.windDirection,
             visibility: diveData.visibility,
             entryType: diveData.entryType,
             diveOperator: diveData.diveOperator,

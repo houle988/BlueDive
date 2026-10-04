@@ -133,6 +133,14 @@ struct AboutView: View {
                                 description: "Swift wrapper around libdivecomputer, enabling native integration with Apple platforms for dive computer communication.",
                                 url: "https://github.com/latishab/LibDC-Swift"
                             )
+
+                            Divider().opacity(0.3)
+
+                            AcknowledgementRow(
+                                name: "Open-Meteo",
+                                description: "Free weather API providing the historical weather used by Fetch Weather. Weather data by Open-Meteo.com, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), converted to BlueDive's weather, wind and wind direction options.",
+                                url: "https://open-meteo.com"
+                            )
                         }
                         .padding()
                         .sectionCardBackground()

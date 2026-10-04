@@ -170,6 +170,8 @@ enum BlueDiveXMLExporter {
         lines.append(xmlTag("weather",           dive.weather ?? "",             indent: 4))
         lines.append(xmlTag("current",           dive.current ?? "",             indent: 4))
         lines.append(xmlTag("surfaceConditions", dive.surfaceConditions ?? "",   indent: 4))
+        lines.append(xmlTag("wind",              dive.wind ?? "",                indent: 4))
+        lines.append(xmlTag("windDirection",     dive.windDirection ?? "",       indent: 4))
         lines.append(xmlTag("entryType",         dive.entryType ?? "",           indent: 4))
 
         // Operator

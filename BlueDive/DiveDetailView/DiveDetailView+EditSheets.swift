@@ -1394,11 +1394,22 @@ struct EditConditionsView: View {
     @State private var workingWeather: String
     @State private var workingSurface: String
     @State private var workingCurrent: String
+    @State private var workingWind: String
+    @State private var workingWindDirection: String
     @State private var workingVisibility: String
+    @State private var prefs = UserPreferences.shared
+    @State private var isFetchingWeather = false
+    /// Outcome of the last Fetch Weather, shown under the button. Kept as a case, not as
+    /// text, so it is localized when drawn and follows an in-app language change.
+    @State private var weatherFetchResult: WeatherFetchResult?
+    /// Set when a fetch fails; presents the error alert.
+    @State private var weatherFetchFailure: WeatherFetchFailure?
+    /// When on, Fetch Weather replaces values already in the fields; when off, it fills only
+    /// empty ones. Per sheet, on by default (like Site Details' "Include GPS Coordinates").
+    @State private var replaceExistingWeather = true
+    /// The running fetch, cancelled when the sheet closes.
+    @State private var weatherFetchTask: Task<Void, Never>?
 
-    private let weatherOptions = ["Sunny", "Cloudy", "Overcast", "Rain", "Storm", "Variable"]
-    private let surfaceOptions  = ["Calm", "Slightly choppy", "Choppy", "Heavy swell"]
-    private let currentOptions  = ["None", "Weak", "Moderate", "Strong", "Very strong"]
 
     private var visibilitySuggestions: [String] {
         var seen = Set<String>()
@@ -1426,6 +1437,8 @@ struct EditConditionsView: View {
         _workingWeather    = State(initialValue: dive.weather ?? "")
         _workingSurface    = State(initialValue: dive.surfaceConditions ?? "")
         _workingCurrent    = State(initialValue: dive.current ?? "")
+        _workingWind       = State(initialValue: dive.wind ?? "")
+        _workingWindDirection = State(initialValue: dive.windDirection ?? "")
         _workingVisibility = State(initialValue: dive.visibility ?? "")
     }
 
@@ -1435,8 +1448,72 @@ struct EditConditionsView: View {
                 AppBackground().ignoresSafeArea()
 
                 Form {
+                    if prefs.fetchWeatherOnline {
+                        // Read the dive's coordinates once for the button and the footer.
+                        let hasCoordinate = OpenMeteoWeatherService.coordinate(for: dive) != nil
+                        let canFetchWeather = hasCoordinate && !isFetchingWeather
+                        Section {
+                            Button {
+                                fetchWeather()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "cloud.sun.rain")
+                                        .frame(width: 24)
+                                    Text("Fetch Weather")
+                                    Spacer()
+                                    if isFetchingWeather {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    }
+                                }
+                                // On the label, not the Button: macOS's list-row button style
+                                // redraws the label and would otherwise show it in the default
+                                // text colour. An explicit colour also overrides iOS's disabled
+                                // dimming, so the disabled state is shown here.
+                                .foregroundStyle(canFetchWeather ? Color.orange : Color.secondary)
+                            }
+                            .listRowButton()
+                            .disabled(!canFetchWeather)
+
+                            Toggle(isOn: $replaceExistingWeather) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .foregroundStyle(.orange)
+                                        .frame(width: 24)
+                                    Text("Replace Existing Values")
+                                }
+                            }
+                            .tint(.orange)
+                            .fullWidthSwitch()
+                            // Read when the response arrives, so locked like the fields it governs.
+                            .disabled(isFetchingWeather)
+                            // The last result described the previous mode; let the footer
+                            // explain what the next fetch will do instead.
+                            .onChange(of: replaceExistingWeather) { weatherFetchResult = nil }
+                        } header: {
+                            ConditionsSectionHeader(title: "Fetch from Open-Meteo", icon: "cloud.sun", color: .orange)
+                        } footer: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                if !hasCoordinate {
+                                    Text("Add the dive site's GPS coordinates in Site Details to fetch the weather.")
+                                } else if let weatherFetchResult {
+                                    weatherFetchResultText(weatherFetchResult)
+                                } else if replaceExistingWeather {
+                                    Text("Fills the fields with the weather at the dive site at the time the dive started, replacing existing values, including the air temperature.")
+                                } else {
+                                    Text("Fills only empty fields with the weather at the dive site at the time the dive started.")
+                                }
+                                Text("Weather data by [Open-Meteo.com](https://open-meteo.com/) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), converted to BlueDive's weather, wind and wind direction options.")
+                            }
+                            .font(.caption2)
+                        }
+                    }
+
                     Section {
-                        ConditionsTemperatureField(label: "Surface Temp.", text: $workingAirTemp, icon: "thermometer.medium", unit: dive.storedTemperatureUnit.symbol)
+                        ConditionsTemperatureField(label: "Air Temp.", text: $workingAirTemp, icon: "thermometer.medium", unit: dive.storedTemperatureUnit.symbol)
+                            // The fields a fetch fills are locked while it runs, so its result
+                            // cannot overwrite a choice made in the meantime.
+                            .disabled(isFetchingWeather)
                         ConditionsTemperatureField(label: "Min Temp.", text: $workingMinTemp, icon: "thermometer.low", unit: dive.storedTemperatureUnit.symbol)
                         ConditionsTemperatureField(label: "Max Temp.", text: $workingMaxTemp, icon: "thermometer.high", unit: dive.storedTemperatureUnit.symbol)
                     } header: {
@@ -1447,9 +1524,14 @@ struct EditConditionsView: View {
                     }
 
                     Section {
-                        ConditionsPickerRow(label: "Weather", selection: $workingWeather, options: weatherOptions, icon: "cloud.sun")
-                        ConditionsPickerRow(label: "Surface", selection: $workingSurface, options: surfaceOptions, icon: "water.waves")
-                        ConditionsPickerRow(label: "Current", selection: $workingCurrent, options: currentOptions, icon: "wind")
+                        ConditionsPickerRow(label: "Weather", selection: $workingWeather, options: DiveConditionOptions.weather, icon: "cloud.sun", optionLabel: { DiveConditionOptions.localizedWeather($0) })
+                            .disabled(isFetchingWeather)
+                        ConditionsPickerRow(label: "Wind", selection: $workingWind, options: DiveConditionOptions.wind, icon: "wind", optionLabel: { DiveConditionOptions.localizedWind($0) })
+                            .disabled(isFetchingWeather)
+                        ConditionsPickerRow(label: "Wind Direction", selection: $workingWindDirection, options: DiveConditionOptions.windDirection, icon: "location.north", optionLabel: { DiveConditionOptions.localizedWindDirection($0) })
+                            .disabled(isFetchingWeather)
+                        ConditionsPickerRow(label: "Surface", selection: $workingSurface, options: DiveConditionOptions.surface, icon: "water.waves", optionLabel: { DiveConditionOptions.localizedSurface($0) })
+                        ConditionsPickerRow(label: "Current", selection: $workingCurrent, options: DiveConditionOptions.current, icon: "arrow.right.arrow.left", optionLabel: { DiveConditionOptions.localizedCurrent($0) })
                     } header: {
                         ConditionsSectionHeader(title: "Weather & Sea", icon: "cloud.sun", color: .blue)
                     }
@@ -1464,6 +1546,22 @@ struct EditConditionsView: View {
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Edit Conditions")
+            .onDisappear { weatherFetchTask?.cancel() }
+            // `presenting:` keeps the failure for the alert's content while it animates out,
+            // after the binding has cleared `weatherFetchFailure`.
+            .alert("Weather could not be fetched", isPresented: Binding(
+                get: { weatherFetchFailure != nil },
+                set: { if !$0 { weatherFetchFailure = nil } }
+            ), presenting: weatherFetchFailure) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { failure in
+                switch failure {
+                case .serviceUnavailable:
+                    Text("Open-Meteo could not provide the weather right now. Try again later.")
+                case .unreachable:
+                    Text("Open-Meteo could not be reached. Check your internet connection or try again later.")
+                }
+            }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -1474,6 +1572,8 @@ struct EditConditionsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
+                        // Saving mid-fetch would close the sheet and drop the fetched values.
+                        .disabled(isFetchingWeather)
                 }
             }
         }
@@ -1548,6 +1648,9 @@ struct EditConditionsView: View {
         @Binding var selection: String
         let options: [String]
         let icon: String
+        /// Localized label for a stored option value (a `DiveConditionOptions` localizer). The
+        /// bare value cannot be the key: some English words are also other keys (e.g. "Light").
+        let optionLabel: @MainActor (String) -> String
 
         var body: some View {
             HStack(spacing: 12) {
@@ -1556,9 +1659,91 @@ struct EditConditionsView: View {
                     .frame(width: 24)
                 Picker(label, selection: $selection) {
                     Text("—").tag("")
-                    ForEach(options, id: \.self) { opt in Text(LocalizedStringKey(opt)).tag(opt) }
+                    ForEach(options, id: \.self) { opt in
+                        Text(verbatim: optionLabel(opt)).tag(opt)
+                    }
                 }
             }
+        }
+    }
+
+    private enum WeatherFetchResult {
+        case filled, allFieldsSet, noValueForEmptyFields, noData
+    }
+
+    private enum WeatherFetchFailure {
+        case unreachable, serviceUnavailable
+    }
+
+    /// Literal keys, resolved through the sheet's locale when drawn.
+    private func weatherFetchResultText(_ result: WeatherFetchResult) -> Text {
+        switch result {
+        case .filled:                return Text("The weather fields were filled. Review them before saving.")
+        case .allFieldsSet:          return Text("Every weather field already has a value. Nothing was changed.")
+        case .noValueForEmptyFields: return Text("Nothing was changed. Open-Meteo had no value for the empty fields.")
+        case .noData:                return Text("No weather data is available for this dive's date and place.")
+        }
+    }
+
+    private func fetchWeather() {
+        isFetchingWeather = true
+        weatherFetchResult = nil
+        weatherFetchTask = Task {
+            defer { isFetchingWeather = false }
+            do {
+                let fetched = try await OpenMeteoWeatherService.fetch(for: dive)
+                guard !Task.isCancelled else { return }
+                applyFetchedWeather(fetched)
+            } catch is CancellationError {
+                // The sheet was closed mid-fetch; nothing to report.
+            } catch OpenMeteoWeatherError.noData {
+                weatherFetchResult = .noData
+            } catch OpenMeteoWeatherError.serviceUnavailable {
+                weatherFetchFailure = .serviceUnavailable
+            } catch {
+                weatherFetchFailure = .unreachable
+            }
+        }
+    }
+
+    /// Fills the working fields from a fetch. With Replace Existing Values on, every field
+    /// Open-Meteo returned a value for is replaced; with it off, only empty fields are filled.
+    /// A field Open-Meteo returned nothing for (e.g. the direction of a calm wind) is never
+    /// touched. Nothing is stored until Save.
+    private func applyFetchedWeather(_ fetched: FetchedWeather) {
+        let replace = replaceExistingWeather
+        var filled = false
+        // `filled` counts only fields whose value actually changes, so a repeat fetch with
+        // Replace on reports "Nothing was changed" rather than "filled".
+        if replace || workingWeather.isEmpty, let weather = fetched.weather, weather != workingWeather {
+            workingWeather = weather
+            filled = true
+        }
+        if replace || workingAirTemp.trimmingCharacters(in: .whitespaces).isEmpty, let temperature = fetched.airTemperature,
+           prefilledAirTemp.resolve(workingAirTemp) != temperature {
+            // Replace the whole PrefilledDouble so an untouched field saves the fetched value
+            // at full precision, not its 1-decimal text.
+            prefilledAirTemp = .decimals(temperature, 1)
+            workingAirTemp = prefilledAirTemp.text
+            filled = true
+        }
+        if replace || workingWind.isEmpty, let wind = fetched.wind, wind != workingWind {
+            workingWind = wind
+            filled = true
+        }
+        if replace || workingWindDirection.isEmpty, let direction = fetched.windDirection, direction != workingWindDirection {
+            workingWindDirection = direction
+            filled = true
+        }
+        if filled {
+            weatherFetchResult = .filled
+        } else if workingWeather.isEmpty || workingAirTemp.trimmingCharacters(in: .whitespaces).isEmpty
+                    || workingWind.isEmpty || workingWindDirection.isEmpty {
+            // Some field is still empty: Open-Meteo had nothing for it (e.g. no direction for
+            // a calm wind), so "every field already has a value" would be wrong.
+            weatherFetchResult = .noValueForEmptyFields
+        } else {
+            weatherFetchResult = .allFieldsSet
         }
     }
 
@@ -1575,6 +1760,8 @@ struct EditConditionsView: View {
         dive.surfaceConditions = trimmedSurface.isEmpty    ? nil : trimmedSurface
         let trimmedCurrent     = workingCurrent.trimmingCharacters(in: .whitespaces)
         dive.current           = trimmedCurrent.isEmpty    ? nil : trimmedCurrent
+        dive.wind              = workingWind.isEmpty       ? nil : workingWind
+        dive.windDirection     = workingWindDirection.isEmpty ? nil : workingWindDirection
         let trimmedVisibility  = workingVisibility.trimmingCharacters(in: .whitespaces)
         dive.visibility        = trimmedVisibility.isEmpty ? nil : trimmedVisibility
         // Conditions fields do not affect sort order, list grouping, or widget fingerprint.

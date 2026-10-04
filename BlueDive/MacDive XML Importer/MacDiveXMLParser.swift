@@ -54,6 +54,9 @@ struct BlueDiveGlobalData: Sendable {
     let weather: String?
     let current: String?
     let surfaceConditions: String?
+    // `var` with a nil default so the memberwise init lets parsers without a wind field omit them.
+    var wind: String? = nil
+    var windDirection: String? = nil
     let entryType: String?
 
     // MARK: Operator
