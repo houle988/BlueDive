@@ -143,10 +143,10 @@ struct BluetoothSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle(isOn: $prefs.replaceWeatherOnBluetoothImport) {
                     Label {
-                        Text("Replace existing values")
+                        Text("Replace existing weather")
                     } icon: {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundStyle(.orange)
+                        Image(systemName: "cloud.sun")
+                            .foregroundStyle(.yellow)
                     }
                 }
                 .fullWidthSwitch()
@@ -157,7 +157,7 @@ struct BluetoothSettingsView: View {
 
             Group {
                 if prefs.fetchWeatherOnline {
-                    Text("After a download, BlueDive offers to fetch the weather for dives with GPS coordinates. Replace existing values applies to newly downloaded dives; dives already in your logbook only get their empty fields filled. Most dive computers do not record GPS; for those, use Fetch Weather in Edit Conditions.")
+                    Text("After a download, BlueDive offers to fetch the weather for dives with GPS coordinates. Replace existing weather applies to newly downloaded dives; dives already in your logbook only get their empty fields filled. Most dive computers do not record GPS; for those, use Fetch Weather in Edit Conditions.")
                 } else {
                     Text("Turn on Fetch weather from Open-Meteo in Settings → Online Services to use this option.")
                 }

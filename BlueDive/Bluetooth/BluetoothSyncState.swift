@@ -28,7 +28,7 @@ enum BluetoothSyncState: Equatable {
 /// references, which must not be held in @State). One value so the two sets cannot drift apart.
 struct PendingWeatherFetch: Equatable {
     var ids: [PersistentIdentifier]
-    /// Of `ids`, the newly imported dives — the only ones Replace existing values applies to.
+    /// Of `ids`, the newly imported dives — the only ones Replace existing weather applies to.
     var newDiveIDs: Set<PersistentIdentifier>
     /// Of `newDiveIDs`, dives whose air temperature the dive computer measured: kept even with
     /// Replace on.

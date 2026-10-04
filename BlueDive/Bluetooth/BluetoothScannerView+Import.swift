@@ -242,7 +242,7 @@ extension BluetoothScannerView {
     /// have GPS coordinates, when Settings → Online Services allows it. Nothing is sent until
     /// the user chooses Fetch Weather (see pendingWeatherFetch).
     ///
-    /// Replace existing values applies to newly imported dives only. A dive downloaded again
+    /// Replace existing weather applies to newly imported dives only. A dive downloaded again
     /// is already in the logbook and may hold weather the user entered, so it is only ever
     /// filled where empty — as mergeComputerData preserves user-modified fields (CLAUDE.md:
     /// preserve values the user did not change through the app).
@@ -270,14 +270,14 @@ extension BluetoothScannerView {
                 reason = "not offered — no GPS coordinates"
             } else if replace && candidate.isNew {
                 eligible.append(candidate)
-                reason = "offered (new dive, Replace existing values on)"
+                reason = "offered (new dive, Replace existing weather on)"
             } else if !emptyFields.isEmpty {
                 eligible.append(candidate)
                 reason = "offered (empty: \(emptyFields.joined(separator: ", ")))"
             } else {
                 completeCount += 1
                 reason = candidate.isNew
-                    ? "not offered — weather complete (Replace existing values off)"
+                    ? "not offered — weather complete (Replace existing weather off)"
                     : "not offered — weather complete (re-downloaded dives are fill-only)"
             }
             Self.logger.info("Dive from \(candidate.dive.timestamp) weather: \(reason, privacy: .public)")
@@ -314,7 +314,7 @@ extension BluetoothScannerView {
         context.autosaveEnabled = false
         weatherFetchTask?.cancel()
         weatherFetchStatus = .running(done: 0, total: ids.count)
-        Self.logger.info("Weather fetch started for \(ids.count) dives (Replace existing values \(replace ? "on" : "off", privacy: .public))")
+        Self.logger.info("Weather fetch started for \(ids.count) dives (Replace existing weather \(replace ? "on" : "off", privacy: .public))")
         weatherFetchTask = Task { @MainActor in
             var filled = 0          // dives whose values changed and were saved
             var withData = 0        // dives Open-Meteo returned values for
