@@ -1480,7 +1480,7 @@ struct EditConditionsView: View {
                                     Image(systemName: "arrow.triangle.2.circlepath")
                                         .foregroundStyle(.orange)
                                         .frame(width: 24)
-                                    Text("Replace Existing Values")
+                                    Text("Replace existing weather")
                                 }
                             }
                             .tint(.orange)
@@ -1491,17 +1491,18 @@ struct EditConditionsView: View {
                             // explain what the next fetch will do instead.
                             .onChange(of: replaceExistingWeather) { weatherFetchResult = nil }
                         } header: {
-                            ConditionsSectionHeader(title: "Fetch from Open-Meteo", icon: "cloud.sun", color: .orange)
+                            // Same key as the Settings → Online Services switch it depends on.
+                            ConditionsSectionHeader(title: "Fetch weather online", icon: "cloud.sun", color: .orange)
                         } footer: {
                             VStack(alignment: .leading, spacing: 4) {
                                 if !hasCoordinate {
-                                    Text("Add the dive site's GPS coordinates in Site Details to fetch the weather.")
+                                    Text("Add the dive site's GPS coordinates in Site Details to fetch the weather online.")
                                 } else if let weatherFetchResult {
                                     weatherFetchResultText(weatherFetchResult)
                                 } else if replaceExistingWeather {
-                                    Text("Fills the fields with the weather at the dive site at the time the dive started, replacing existing values, including the air temperature.")
+                                    Text("Fills the fields with the online weather for the dive site at the time the dive started, replacing existing values, including the air temperature.")
                                 } else {
-                                    Text("Fills only empty fields with the weather at the dive site at the time the dive started.")
+                                    Text("Fills only empty fields with the online weather for the dive site at the time the dive started.")
                                 }
                                 Text("Weather data by [Open-Meteo.com](https://open-meteo.com/) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), converted to BlueDive's weather, wind and wind direction options.")
                             }
@@ -1706,7 +1707,7 @@ struct EditConditionsView: View {
         }
     }
 
-    /// Fills the working fields from a fetch. With Replace Existing Values on, every field
+    /// Fills the working fields from a fetch. With Replace existing weather on, every field
     /// Open-Meteo returned a value for is replaced; with it off, only empty fields are filled.
     /// A field Open-Meteo returned nothing for (e.g. the direction of a calm wind) is never
     /// touched. Nothing is stored until Save.

@@ -54,8 +54,8 @@ struct BluetoothScannerView: View {
     @State var importProgress: Double = 0
     @State var showingImportConfirmation = false
     @State var importSaveErrorMessage: String? = nil
-    /// Weather fetch after the import (see BluetoothWeatherFetchStatus).
-    @State var weatherFetchStatus: BluetoothWeatherFetchStatus?
+    /// Weather fetch after the import (see WeatherBatchFetcher).
+    @State var weatherFetchStatus: WeatherBatchFetchStatus?
     @State var weatherFetchTask: Task<Void, Never>?
     /// The weather question after a download, asked inline on the completed screen, not in an
     /// alert: it would follow the Import alert while that one is still closing and could be

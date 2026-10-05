@@ -34,27 +34,3 @@ struct PendingWeatherFetch: Equatable {
     /// Replace on.
     var measuredAirTemperatureIDs: Set<PersistentIdentifier>
 }
-
-/// Progress of the Open-Meteo weather fetch the user starts after a Bluetooth import
-/// (see PendingWeatherFetch). Kept apart from `BluetoothSyncState`: the import itself is
-/// complete, so closing the sheet stays allowed while it runs.
-enum BluetoothWeatherFetchStatus: Equatable {
-    case running(done: Int, total: Int)
-    /// `withData`: dives Open-Meteo returned values for; `filled`: dives whose values changed;
-    /// `stillEmpty`: dives left with an empty field Open-Meteo had no value for.
-    case finished(filled: Int, withData: Int, stillEmpty: Int, total: Int)
-    /// Stopped at the first network failure (e.g. no connection on the boat). `filled`: dives
-    /// already updated and saved before stopping.
-    case stoppedOffline(filled: Int)
-    /// Stopped because Open-Meteo answered with an error (e.g. rate limit).
-    case stoppedUnavailable(filled: Int)
-    /// Stopped because saving the fetched values failed (they were discarded).
-    case saveFailed(filled: Int)
-    /// Stopped because the app went to the background (iOS would suspend it mid-request).
-    case interrupted(filled: Int)
-
-    var isRunning: Bool {
-        if case .running = self { return true }
-        return false
-    }
-}

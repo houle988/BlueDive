@@ -3,6 +3,9 @@ import SwiftUI
 struct OnlineServicesSettingsView: View {
     // Bound to the shared UserPreferences (see DiveProfileSettingsView for why not @AppStorage).
     @State private var prefs = UserPreferences.shared
+    /// Closes the whole Settings sheet, for the Mac close button of the page pushed from here
+    /// (inside a pushed page, `dismiss` only pops it — see closeSheetButtonOnMac).
+    var closeSettings: () -> Void = {}
 
     var body: some View {
         ScrollView {
@@ -11,7 +14,7 @@ struct OnlineServicesSettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Toggle(isOn: $prefs.fetchWeatherOnline) {
                             Label {
-                                Text("Fetch weather from Open-Meteo")
+                                Text("Fetch weather online")
                             } icon: {
                                 Image(systemName: "cloud.sun")
                                     .foregroundStyle(.yellow)
@@ -22,7 +25,7 @@ struct OnlineServicesSettingsView: View {
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    (Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent only when you choose Fetch Weather."))
+                    (Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent only when you fetch the weather online."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
@@ -44,10 +47,69 @@ struct OnlineServicesSettingsView: View {
                         )
                 )
                 .padding(.horizontal)
+
+                updateAllWeatherCard
             }
             .padding(.vertical)
         }
         .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("Online Services", bundle: .forAppLanguage(), value: "Online Services", comment: "")))
+    }
+
+    /// Opens the page that fetches the weather for all dives with GPS coordinates. Greyed out
+    /// while the service is off: nothing is sent to Open-Meteo without that consent.
+    private var updateAllWeatherCard: some View {
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                NavigationLink {
+                    UpdateAllWeatherView()
+                        .closeSheetButtonOnMac { closeSettings() }
+                } label: {
+                    HStack {
+                        Label {
+                            Text("Update Weather for All Dives")
+                        } icon: {
+                            Image(systemName: "cloud.sun.rain")
+                                .foregroundStyle(.yellow)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
+                    // The padding sits inside the link so the whole card responds, not only the
+                    // drawn label (a borderless button only responds where something is drawn).
+                    .padding()
+                    .contentShape(Rectangle())
+                }
+                .borderlessButton()
+                .disabled(!prefs.fetchWeatherOnline)
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            Group {
+                if prefs.fetchWeatherOnline {
+                    Text("Fetch the weather online for every dive with GPS coordinates, for example after importing your logbook.")
+                } else {
+                    // Shorter than the Bluetooth Import hint: this is already the Online Services page.
+                    Text("Turn on Fetch weather online to use this option.")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
     }
 }

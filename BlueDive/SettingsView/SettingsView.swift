@@ -588,7 +588,7 @@ struct SettingsView: View {
                     }
 
                     NavigationLink {
-                        OnlineServicesSettingsView()
+                        OnlineServicesSettingsView(closeSettings: { dismiss() })
                             .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Online Services", icon: "globe", color: .mint)

@@ -254,7 +254,7 @@ extension BluetoothScannerView {
     func offerWeatherFetch(for candidates: [(dive: Dive, isNew: Bool)]) {
         let prefs = UserPreferences.shared
         guard prefs.fetchWeatherOnline else {
-            Self.logger.info("Weather fetch not offered — Fetch weather from Open-Meteo is off (\(candidates.count) dives)")
+            Self.logger.info("Weather fetch not offered — Fetch weather online is off (\(candidates.count) dives)")
             return
         }
         let replace = prefs.replaceWeatherOnBluetoothImport
@@ -296,130 +296,24 @@ extension BluetoothScannerView {
         pendingWeatherFetch = PendingWeatherFetch(ids: ids, newDiveIDs: newIDs, measuredAirTemperatureIDs: measuredIDs)
     }
 
-    /// One request per dive, in order. Stops at the first network or service error instead of
-    /// waiting for every request to time out; Fetch Weather in Edit Conditions covers the rest
-    /// later. Saves every few dives and once more when the run ends — also when the sheet
-    /// closes and cancels it — so closing keeps what was fetched.
-    ///
-    /// Works in its own ModelContext (author "BlueDive.weather", CLAUDE.md): each dive is
-    /// fetched by ID, so a deleted or released dive is simply not found, and a failed save
-    /// discards only this run's changes, never other unsaved work in the main context. The
-    /// main context picks up the saved values; RemoteChangeFeeder skips "BlueDive." authors.
-    /// Weather fields are not in DiveSummary, so no DiveStore commit is needed.
+    /// Fetches the weather for the chosen dives (see WeatherBatchFetcher). Replace existing
+    /// weather applies to newly imported dives only; closing the sheet cancels the run and
+    /// keeps what was saved.
     func runWeatherFetch(for ids: [PersistentIdentifier], newDiveIDs: Set<PersistentIdentifier>,
                          measuredAirTemperatureIDs: Set<PersistentIdentifier>) {
         let replace = UserPreferences.shared.replaceWeatherOnBluetoothImport
-        let context = ModelContext(modelContext.container)
-        context.author = "BlueDive.weather"
-        context.autosaveEnabled = false
+        let container = modelContext.container
         weatherFetchTask?.cancel()
         weatherFetchStatus = .running(done: 0, total: ids.count)
-        Self.logger.info("Weather fetch started for \(ids.count) dives (Replace existing weather \(replace ? "on" : "off", privacy: .public))")
+        Self.logger.info("Weather fetch after import: Replace existing weather \(replace ? "on" : "off", privacy: .public)")
         weatherFetchTask = Task { @MainActor in
-            var filled = 0          // dives whose values changed and were saved
-            var withData = 0        // dives Open-Meteo returned values for
-            var stillEmpty = 0      // dives left with an empty field Open-Meteo had no value for
-            var unsaved = 0         // changed dives not saved yet
-            var saveFailed = false
-            enum Stop { case offline, unavailable, cancelled }
-            var stop: Stop?
-            var done = 0            // dives processed, for the debug log of an early stop
-
-            /// Saves pending changes; on failure discards them (this context only).
-            @MainActor func flush() {
-                guard unsaved > 0 else { return }
-                do {
-                    try context.save()
-                    filled += unsaved
-                } catch {
-                    Self.logger.error("Weather save failed: \(error.localizedDescription)")
-                    context.rollback()
-                    saveFailed = true
-                }
-                unsaved = 0
-            }
-            /// The dive with this ID, or nil if it no longer exists (deleted meanwhile).
-            @MainActor func dive(_ id: PersistentIdentifier) -> Dive? {
-                var descriptor = FetchDescriptor<Dive>(predicate: #Predicate { $0.persistentModelID == id })
-                descriptor.fetchLimit = 1
-                return (try? context.fetch(descriptor))?.first
-            }
-
-            loop: for (index, id) in ids.enumerated() {
-                if Task.isCancelled { stop = .cancelled; break loop }
-                // Looked up before and after each request: the dive may be deleted meanwhile.
-                if let current = dive(id) {
-                    do {
-                        let fetched = try await OpenMeteoWeatherService.fetch(for: current)
-                        if Task.isCancelled { stop = .cancelled; break loop }
-                        // Counted only once the dive is confirmed still there.
-                        if let target = dive(id) {
-                            withData += 1
-                            let replacesExisting = replace && newDiveIDs.contains(id)
-                            let keepsAirTemperature = measuredAirTemperatureIDs.contains(id)
-                            var result: String
-                            if fetched.apply(to: target, replaceExisting: replacesExisting,
-                                             keepAirTemperature: keepsAirTemperature) {
-                                unsaved += 1
-                                result = "updated (\(replacesExisting ? "replace" : "fill-only")"
-                                    + (replacesExisting && keepsAirTemperature ? ", measured air temperature kept)" : ")")
-                            } else {
-                                result = "unchanged (values already stored)"
-                            }
-                            let emptyFields = target.emptyWeatherFieldNames
-                            if !emptyFields.isEmpty {
-                                stillEmpty += 1
-                                result += "; still empty: \(emptyFields.joined(separator: ", ")) (Open-Meteo had no value)"
-                            }
-                            Self.logger.info("Dive from \(target.timestamp) weather: \(result, privacy: .public)")
-                        } else {
-                            Self.logger.info("Weather fetch: dive deleted during its request — skipped")
-                        }
-                    } catch is CancellationError {
-                        stop = .cancelled; break loop
-                    } catch OpenMeteoWeatherError.noData {
-                        // No data for this dive (e.g. too recent or in the future): go on.
-                        Self.logger.info("Dive from \(current.timestamp) weather: no data from Open-Meteo")
-                    } catch OpenMeteoWeatherError.serviceUnavailable {
-                        stop = .unavailable; break loop
-                    } catch {
-                        stop = Task.isCancelled ? .cancelled : .offline; break loop
-                    }
-                } else {
-                    Self.logger.info("Weather fetch: dive deleted before its request — skipped")
-                }
-                done = index + 1
-                if unsaved >= 10 { flush() }
-                if saveFailed { break loop }
-                weatherFetchStatus = .running(done: done, total: ids.count)
-                // A short pause between requests, to stay well within Open-Meteo's limits.
-                if index + 1 < ids.count, (try? await Task.sleep(for: .milliseconds(150))) == nil {
-                    stop = .cancelled; break loop
-                }
-            }
-            // Also on every early stop, including a cancel (sheet closed or app backgrounded).
-            flush()
-            if saveFailed {
-                weatherFetchStatus = .saveFailed(filled: filled)
-                Self.logger.info("Weather fetch ended after \(done) of \(ids.count) dives: save failed (saved \(filled))")
-            } else {
-                switch stop {
-                case .offline:     weatherFetchStatus = .stoppedOffline(filled: filled)
-                case .unavailable: weatherFetchStatus = .stoppedUnavailable(filled: filled)
-                case .cancelled:   weatherFetchStatus = .interrupted(filled: filled)
-                case nil:          weatherFetchStatus = .finished(filled: filled, withData: withData, stillEmpty: stillEmpty, total: ids.count)
-                }
-                if let stop {
-                    let reason = switch stop {
-                    case .offline:     "offline"
-                    case .unavailable: "service unavailable"
-                    case .cancelled:   "cancelled"
-                    }
-                    Self.logger.info("Weather fetch stopped after \(done) of \(ids.count) dives: \(reason, privacy: .public) (saved \(filled))")
-                } else {
-                    Self.logger.info("Weather fetch finished: updated \(filled), with data \(withData), still empty \(stillEmpty), of \(ids.count)")
-                }
-            }
+            let result = await WeatherBatchFetcher.run(
+                ids: ids,
+                replaceExistingIDs: replace ? newDiveIDs : [],
+                keepAirTemperatureIDs: measuredAirTemperatureIDs,
+                container: container
+            ) { weatherFetchStatus = $0 }
+            weatherFetchStatus = result
         }
     }
 

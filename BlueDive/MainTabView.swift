@@ -252,7 +252,7 @@ struct MainTabView: View {
         .onChange(of: shouldAskOnlineServices) { _, canAsk in
             if !canAsk { showOnlineServicesPrompt = false }
         }
-        .alert("Fetch the weather for your dives?", isPresented: $showOnlineServicesPrompt) {
+        .alert("Fetch the weather online for your dives?", isPresented: $showOnlineServicesPrompt) {
             Button("Turn On") {
                 // Also records the answer (UserPreferences.fetchWeatherOnline's didSet).
                 UserPreferences.shared.fetchWeatherOnline = true
@@ -263,7 +263,7 @@ struct MainTabView: View {
         } message: {
             // Built from sentences shared with Online Services and the Welcome Tour, so each is
             // translated once.
-            Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent only when you choose Fetch Weather.") + Text(verbatim: " ") + Text("You can change this anytime in Settings → Online Services.")
+            Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent only when you fetch the weather online.") + Text(verbatim: " ") + Text("You can change this anytime in Settings → Online Services.")
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {

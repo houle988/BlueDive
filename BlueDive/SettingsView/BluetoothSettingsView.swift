@@ -157,9 +157,9 @@ struct BluetoothSettingsView: View {
 
             Group {
                 if prefs.fetchWeatherOnline {
-                    Text("After a download, BlueDive offers to fetch the weather for dives with GPS coordinates. Replace existing weather applies to newly downloaded dives; dives already in your logbook only get their empty fields filled. Most dive computers do not record GPS; for those, use Fetch Weather in Edit Conditions.")
+                    Text("After a download, BlueDive offers to fetch the weather online for dives with GPS coordinates. Replace existing weather applies to newly downloaded dives; dives already in your logbook only get their empty fields filled. Most dive computers do not record GPS; for those, use Fetch Weather in Edit Conditions.")
                 } else {
-                    Text("Turn on Fetch weather from Open-Meteo in Settings → Online Services to use this option.")
+                    Text("Turn on Fetch weather online in Settings → Online Services to use this option.")
                 }
             }
             .font(.caption)

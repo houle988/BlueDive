@@ -51,7 +51,7 @@ extension Dive {
     /// direction does not count — otherwise such a dive would be requested again on every
     /// re-download for nothing. The names are for debug logs only (not user-facing, so not
     /// localized).
-    var emptyWeatherFieldNames: [String] {
+    nonisolated var emptyWeatherFieldNames: [String] {
         var names: [String] = []
         if (weather ?? "").isEmpty { names.append("weather") }
         if airTemperature == nil { names.append("air temperature") }
@@ -84,7 +84,7 @@ enum OpenMeteoWeatherService {
 
     /// Entry coordinates, or the exit coordinates when the entry is missing or the (0, 0)
     /// "no GPS" sentinel.
-    static func coordinate(for dive: Dive) -> (latitude: Double, longitude: Double)? {
+    nonisolated static func coordinate(for dive: Dive) -> (latitude: Double, longitude: Double)? {
         func valid(_ lat: Double?, _ lon: Double?) -> (latitude: Double, longitude: Double)? {
             guard let lat, let lon, lat.isFinite, lon.isFinite, !(lat == 0 && lon == 0) else { return nil }
             return (lat, lon)
