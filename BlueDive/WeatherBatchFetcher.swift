@@ -51,11 +51,8 @@ enum WeatherBatchFetcher {
     /// - Parameters:
     ///   - replaceExistingIDs: dives whose fetched values replace existing ones; every other
     ///     dive only gets its empty fields filled.
-    ///   - keepAirTemperatureIDs: dives whose existing air temperature is kept even when
-    ///     replacing (one the dive computer measured).
     static func run(ids: [PersistentIdentifier],
                     replaceExistingIDs: Set<PersistentIdentifier>,
-                    keepAirTemperatureIDs: Set<PersistentIdentifier> = [],
                     container: ModelContainer,
                     progress: (WeatherBatchFetchStatus) -> Void) async -> WeatherBatchFetchStatus {
         let context = ModelContext(container)
@@ -104,13 +101,10 @@ enum WeatherBatchFetcher {
                     if let target = dive(id) {
                         withData += 1
                         let replacesExisting = replaceExistingIDs.contains(id)
-                        let keepsAirTemperature = keepAirTemperatureIDs.contains(id)
                         var result: String
-                        if fetched.apply(to: target, replaceExisting: replacesExisting,
-                                         keepAirTemperature: keepsAirTemperature) {
+                        if fetched.apply(to: target, replaceExisting: replacesExisting) {
                             unsaved += 1
-                            result = "updated (\(replacesExisting ? "replace" : "fill-only")"
-                                + (replacesExisting && keepsAirTemperature ? ", measured air temperature kept)" : ")")
+                            result = "updated (\(replacesExisting ? "replace" : "fill-only"))"
                         } else {
                             result = "unchanged (values already stored)"
                         }

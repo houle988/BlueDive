@@ -25,12 +25,7 @@ enum BluetoothSyncState: Equatable {
 // MARK: - Weather Fetch After Import
 
 /// Dives awaiting the weather question after a download, by persistent ID (not @Model
-/// references, which must not be held in @State). One value so the two sets cannot drift apart.
+/// references, which must not be held in @State).
 struct PendingWeatherFetch: Equatable {
     var ids: [PersistentIdentifier]
-    /// Of `ids`, the newly imported dives — the only ones Replace existing weather applies to.
-    var newDiveIDs: Set<PersistentIdentifier>
-    /// Of `newDiveIDs`, dives whose air temperature the dive computer measured: kept even with
-    /// Replace on.
-    var measuredAirTemperatureIDs: Set<PersistentIdentifier>
 }

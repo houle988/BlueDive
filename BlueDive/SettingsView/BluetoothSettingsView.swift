@@ -8,8 +8,6 @@ struct BluetoothSettingsView: View {
     @AppStorage("filterUnusedTanks") private var filterUnusedTanks = false
     @AppStorage("bleDiagnosticLoggingEnabled") private var bleDiagnosticLoggingEnabled = false
     @State private var showFingerprintDebug = false
-    // Bound to the shared UserPreferences (see DiveProfileSettingsView for why not @AppStorage).
-    @State private var prefs = UserPreferences.shared
     @State private var bleLogCount: Int = 0
     #if os(iOS)
     @State private var showLogExporter = false
@@ -45,8 +43,6 @@ struct BluetoothSettingsView: View {
                         )
                 )
                 .padding(.horizontal)
-
-                weatherCard
 
                 VStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -132,51 +128,6 @@ struct BluetoothSettingsView: View {
         logExportFileName = payload.filename
         showLogExporter = true
         #endif
-    }
-
-    // MARK: - Weather After Import
-
-    /// Open-Meteo weather fetch offered after a download. The switch depends on
-    /// Settings → Online Services, the single consent for sending data to Open-Meteo.
-    private var weatherCard: some View {
-        VStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle(isOn: $prefs.replaceWeatherOnBluetoothImport) {
-                    Label {
-                        Text("Replace existing weather")
-                    } icon: {
-                        Image(systemName: "cloud.sun")
-                            .foregroundStyle(.yellow)
-                    }
-                }
-                .fullWidthSwitch()
-                .disabled(!prefs.fetchWeatherOnline)
-            }
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-
-            Group {
-                if prefs.fetchWeatherOnline {
-                    Text("After a download, BlueDive offers to fetch the weather online for dives with GPS coordinates. Replace existing weather applies to newly downloaded dives; dives already in your logbook only get their empty fields filled. Most dive computers do not record GPS; for those, use Fetch Weather in Edit Conditions.")
-                } else {
-                    Text("Turn on Fetch weather online in Settings → Online Services to use this option.")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.primary.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                )
-        )
-        .padding(.horizontal)
     }
 
     // MARK: - BLE Diagnostic Logging

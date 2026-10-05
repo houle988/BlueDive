@@ -239,25 +239,20 @@ extension BluetoothScannerView {
     // MARK: - Weather Fetch After Import
 
     /// Offers, on the completed screen, to fetch the weather for the just-imported dives that
-    /// have GPS coordinates, when Settings → Online Services allows it. Nothing is sent until
-    /// the user chooses Fetch Weather (see pendingWeatherFetch).
+    /// have GPS coordinates and an empty weather field, when Settings → Online Services allows
+    /// it. Nothing is sent until the user chooses Fetch Weather (see pendingWeatherFetch).
     ///
-    /// Replace existing weather applies to newly imported dives only. A dive downloaded again
-    /// is already in the logbook and may hold weather the user entered, so it is only ever
-    /// filled where empty — as mergeComputerData preserves user-modified fields (CLAUDE.md:
-    /// preserve values the user did not change through the app).
-    ///
-    /// A new Bluetooth dive's air temperature is set only from a surface temperature the
-    /// computer reports (`DiveData.measuredSurfaceTemperature`), so it is usually empty and
-    /// filled here; when the computer did measure it, it is kept even with Replace on
-    /// (CLAUDE.md: preserve original values).
+    /// Only empty fields are ever filled. A new dive has no weather yet: its air temperature is
+    /// set only from a surface temperature the computer reports
+    /// (`DiveData.measuredSurfaceTemperature`), and that reading is kept. A dive downloaded
+    /// again is already in the logbook and may hold weather the user entered — as
+    /// mergeComputerData preserves user-modified fields (CLAUDE.md: preserve values the user
+    /// did not change through the app).
     func offerWeatherFetch(for candidates: [(dive: Dive, isNew: Bool)]) {
-        let prefs = UserPreferences.shared
-        guard prefs.fetchWeatherOnline else {
+        guard UserPreferences.shared.fetchWeatherOnline else {
             Self.logger.info("Weather fetch not offered — Fetch weather online is off (\(candidates.count) dives)")
             return
         }
-        let replace = prefs.replaceWeatherOnBluetoothImport
         // One debug line per dive with the reason (Xcode console only; no coordinates or values).
         var eligible: [(dive: Dive, isNew: Bool)] = []
         var noGPSCount = 0
@@ -268,17 +263,12 @@ extension BluetoothScannerView {
             if OpenMeteoWeatherService.coordinate(for: candidate.dive) == nil {
                 noGPSCount += 1
                 reason = "not offered — no GPS coordinates"
-            } else if replace && candidate.isNew {
-                eligible.append(candidate)
-                reason = "offered (new dive, Replace existing weather on)"
             } else if !emptyFields.isEmpty {
                 eligible.append(candidate)
-                reason = "offered (empty: \(emptyFields.joined(separator: ", ")))"
+                reason = "offered (\(candidate.isNew ? "new" : "re-downloaded") dive, empty: \(emptyFields.joined(separator: ", ")))"
             } else {
                 completeCount += 1
-                reason = candidate.isNew
-                    ? "not offered — weather complete (Replace existing weather off)"
-                    : "not offered — weather complete (re-downloaded dives are fill-only)"
+                reason = "not offered — weather complete"
             }
             Self.logger.info("Dive from \(candidate.dive.timestamp) weather: \(reason, privacy: .public)")
         }
@@ -288,31 +278,19 @@ extension BluetoothScannerView {
         }
         let newCount = eligible.filter(\.isNew).count
         Self.logger.info("Weather fetch offered for \(eligible.count) of \(candidates.count) dives (new \(newCount), re-downloaded \(eligible.count - newCount); no GPS \(noGPSCount), complete \(completeCount))")
-        let ids = eligible.map(\.dive.persistentModelID)
-        let newIDs = Set(eligible.filter(\.isNew).map(\.dive.persistentModelID))
-        // A new dive's air temperature is set at import only from a surface temperature the
-        // computer measured (measuredSurfaceTemperature), so a non-nil one is a real reading.
-        let measuredIDs = Set(eligible.filter { $0.isNew && $0.dive.airTemperature != nil }.map(\.dive.persistentModelID))
-        pendingWeatherFetch = PendingWeatherFetch(ids: ids, newDiveIDs: newIDs, measuredAirTemperatureIDs: measuredIDs)
+        pendingWeatherFetch = PendingWeatherFetch(ids: eligible.map(\.dive.persistentModelID))
     }
 
-    /// Fetches the weather for the chosen dives (see WeatherBatchFetcher). Replace existing
-    /// weather applies to newly imported dives only; closing the sheet cancels the run and
-    /// keeps what was saved.
-    func runWeatherFetch(for ids: [PersistentIdentifier], newDiveIDs: Set<PersistentIdentifier>,
-                         measuredAirTemperatureIDs: Set<PersistentIdentifier>) {
-        let replace = UserPreferences.shared.replaceWeatherOnBluetoothImport
+    /// Fetches the weather for the chosen dives, filling empty fields only (see
+    /// WeatherBatchFetcher). Closing the sheet cancels the run and keeps what was saved.
+    func runWeatherFetch(for ids: [PersistentIdentifier]) {
         let container = modelContext.container
         weatherFetchTask?.cancel()
         weatherFetchStatus = .running(done: 0, total: ids.count)
-        Self.logger.info("Weather fetch after import: Replace existing weather \(replace ? "on" : "off", privacy: .public)")
         weatherFetchTask = Task { @MainActor in
-            let result = await WeatherBatchFetcher.run(
-                ids: ids,
-                replaceExistingIDs: replace ? newDiveIDs : [],
-                keepAirTemperatureIDs: measuredAirTemperatureIDs,
-                container: container
-            ) { weatherFetchStatus = $0 }
+            let result = await WeatherBatchFetcher.run(ids: ids, replaceExistingIDs: [], container: container) {
+                weatherFetchStatus = $0
+            }
             weatherFetchStatus = result
         }
     }

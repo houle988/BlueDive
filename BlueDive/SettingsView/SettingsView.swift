@@ -444,12 +444,6 @@ class UserPreferences {
             if fetchWeatherOnline { UserDefaults.standard.set(true, forKey: "onlineServicesPromptShown") }
         }
     }
-    /// Bluetooth import: for newly downloaded dives, fetched values replace existing ones (on)
-    /// or fill only empty fields (off). Dives downloaded again (merged into the logbook) are
-    /// always fill-only, whatever this is. On by default.
-    var replaceWeatherOnBluetoothImport: Bool {
-        didSet { UserDefaults.standard.set(replaceWeatherOnBluetoothImport, forKey: "replaceWeatherOnBluetoothImport") }
-    }
     #if os(macOS)
     /// When true, the main dive list shows the profile chart of the selected dive above the
     /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
@@ -473,8 +467,6 @@ class UserPreferences {
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
         self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
-        // On by default: an absent key reads as true.
-        self.replaceWeatherOnBluetoothImport = UserDefaults.standard.object(forKey: "replaceWeatherOnBluetoothImport") as? Bool ?? true
         #if os(macOS)
         // On by default: an absent key reads as true.
         self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
@@ -497,7 +489,6 @@ class UserPreferences {
         hideClearedDecoStops = false
         showSamplesTab = false
         fetchWeatherOnline = false
-        replaceWeatherOnBluetoothImport = true
         #if os(macOS)
         showDiveListProfilePreview = true
         #endif

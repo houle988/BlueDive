@@ -18,18 +18,16 @@ struct FetchedWeather: Sendable {
     /// Weather: `replaceExisting` replaces every field Open-Meteo returned a value for;
     /// otherwise only empty fields are filled. A field with no returned value is never
     /// touched. Returns whether any value changed. Used where there is no editing sheet
-    /// (Bluetooth import); the sheet applies to its working fields instead.
+    /// (Bluetooth import, Update Weather for All Dives); the sheet applies to its working
+    /// fields instead.
     @discardableResult
-    /// `keepAirTemperature`: never replace an existing air temperature (one the dive computer
-    /// measured), even when `replaceExisting` is on.
-    func apply(to dive: Dive, replaceExisting: Bool, keepAirTemperature: Bool = false) -> Bool {
+    func apply(to dive: Dive, replaceExisting: Bool) -> Bool {
         var changed = false
         if let weather, replaceExisting || (dive.weather ?? "").isEmpty, dive.weather != weather {
             dive.weather = weather
             changed = true
         }
-        if let airTemperature, (replaceExisting && !keepAirTemperature) || dive.airTemperature == nil,
-           dive.airTemperature != airTemperature {
+        if let airTemperature, replaceExisting || dive.airTemperature == nil, dive.airTemperature != airTemperature {
             dive.airTemperature = airTemperature
             changed = true
         }
