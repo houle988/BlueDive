@@ -215,42 +215,112 @@ struct ContentView: View {
         #endif
     }
 
-    /// A dive row: a link that opens the dive, except on macOS with the profile preview on,
-    /// where a click selects it and a double-click opens it.
+    /// The dive rows of one list (or one diver section). Each `ForEach` row has a single shape,
+    /// so `List` takes its fast path: it gets the row identities from the summaries' ids
+    /// without evaluating every row. A row choosing between two shapes (link or selectable)
+    /// would make it evaluate all rows — with their modifiers — on every list update, which
+    /// macOS does each time the Dives tab is shown or hidden (about a second at 2 000 dives).
+    /// So on macOS the profile-preview setting picks the row kind once for the whole list.
+    /// On iOS this is the link-row `ForEach` alone.
     @ViewBuilder
-    private func diveRow(_ summary: DiveSummary, rowNumber: Int, isGrouped: Bool) -> some View {
+    private func diveRows(
+        _ summaries: [DiveSummary],
+        isGrouped: Bool,
+        onDelete: @escaping (IndexSet) -> Void
+    ) -> some View {
+        // Read once, not per row: `dives` is the @Query.
+        let diveCount = dives.count
         #if os(macOS)
-        if !prefs.showDiveListProfilePreview {
-            NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: isGrouped)) {
-                DiveRowView(summary: summary, diveNumber: rowNumber)
+        if prefs.showDiveListProfilePreview {
+            diveRowsForEach(summaries, onDelete: onDelete) { summary in
+                selectableDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0))
             }
         } else {
-            DiveRowView(summary: summary, diveNumber: rowNumber)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
-                    openDive(summary.id)
-                }
-                // Simultaneous, so the selection follows the first click at once instead of
-                // waiting for the double-click interval to expire.
-                .simultaneousGesture(TapGesture().onEnded {
-                    listSelection.diveID = summary.id
-                    isDiveListFocused = true
-                })
-                // The row is no longer a link: expose it to VoiceOver as a button that opens
-                // the dive, and mark the selected one.
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction {
-                    openDive(summary.id)
-                }
-                .modifier(DiveRowSelectionAccessibility(selection: listSelection, summaryID: summary.id))
+            diveRowsForEach(summaries, onDelete: onDelete) { summary in
+                linkDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0),
+                            isGrouped: isGrouped)
+            }
         }
         #else
-        NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: isGrouped)) {
-            DiveRowView(summary: summary, diveNumber: rowNumber)
+        diveRowsForEach(summaries, onDelete: onDelete) { summary in
+            linkDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0),
+                        isGrouped: isGrouped)
         }
         #endif
     }
+
+    /// `ForEach` over dive rows with the row background, swipe actions, context menu and
+    /// delete shared by every row kind. `row` must return one view of a single shape.
+    private func diveRowsForEach<Row: View>(
+        _ summaries: [DiveSummary],
+        onDelete: @escaping (IndexSet) -> Void,
+        @ViewBuilder row: @escaping (DiveSummary) -> Row
+    ) -> some View {
+        let lastID = summaries.last?.id
+        return ForEach(summaries) { summary in
+            row(summary)
+            #if os(macOS)
+            .listRowBackground(Color.primary.opacity(0.07)
+                                   .overlay { DiveRowSelectionHighlight(selection: listSelection, summaryID: summary.id) },
+                               macSeparator: summary.id != lastID)
+            #else
+            .listRowBackground(Color.primary.opacity(0.07),
+                               macSeparator: summary.id != lastID)
+            #endif
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                moveButton(for: summary.id)
+            }
+            #if os(macOS)
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                deleteSwipeButton(for: summary.id)
+            }
+            #endif
+            .contextMenu {
+                Button(role: .destructive) {
+                    if let dive = store.diveByID[summary.id] {
+                        diveToDeleteDirectly = dive
+                        showDeleteSingleConfirmation = true
+                    }
+                } label: {
+                    Label("Delete dive", systemImage: "trash")
+                }
+            }
+        }
+        .onDelete(perform: onDelete)
+    }
+
+    /// A dive row that opens the dive when clicked or tapped.
+    private func linkDiveRow(_ summary: DiveSummary, rowNumber: Int, isGrouped: Bool) -> some View {
+        NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: isGrouped)) {
+            DiveRowView(summary: summary, diveNumber: rowNumber)
+        }
+    }
+
+    #if os(macOS)
+    /// A dive row with the profile preview on (macOS): a click selects it, a double-click
+    /// opens it.
+    private func selectableDiveRow(_ summary: DiveSummary, rowNumber: Int) -> some View {
+        DiveRowView(summary: summary, diveNumber: rowNumber)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                openDive(summary.id)
+            }
+            // Simultaneous, so the selection follows the first click at once instead of
+            // waiting for the double-click interval to expire.
+            .simultaneousGesture(TapGesture().onEnded {
+                listSelection.diveID = summary.id
+                isDiveListFocused = true
+            })
+            // The row is no longer a link: expose it to VoiceOver as a button that opens
+            // the dive, and mark the selected one.
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
+                openDive(summary.id)
+            }
+            .modifier(DiveRowSelectionAccessibility(selection: listSelection, summaryID: summary.id))
+    }
+    #endif
 
     /// Dive detail view for a list row.
     @ViewBuilder
@@ -816,37 +886,7 @@ struct ContentView: View {
                                     }
                                 }
                             )) {
-                                ForEach(sectionSummaries) { summary in
-                                    let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
-                                    diveRow(summary, rowNumber: rowNumber, isGrouped: true)
-                                    #if os(macOS)
-                                    .listRowBackground(Color.primary.opacity(0.07)
-                                                           .overlay { DiveRowSelectionHighlight(selection: listSelection, summaryID: summary.id) },
-                                                       macSeparator: summary.id != sectionSummaries.last?.id)
-                                    #else
-                                    .listRowBackground(Color.primary.opacity(0.07),
-                                                       macSeparator: summary.id != sectionSummaries.last?.id)
-                                    #endif
-                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                        moveButton(for: summary.id)
-                                    }
-                                    #if os(macOS)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        deleteSwipeButton(for: summary.id)
-                                    }
-                                    #endif
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            if let dive = store.diveByID[summary.id] {
-                                                diveToDeleteDirectly = dive
-                                                showDeleteSingleConfirmation = true
-                                            }
-                                        } label: {
-                                            Label("Delete dive", systemImage: "trash")
-                                        }
-                                    }
-                                }
-                                .onDelete { offsets in
+                                diveRows(sectionSummaries, isGrouped: true) { offsets in
                                     if let index = offsets.first {
                                         let summary = sectionSummaries[index]
                                         if let dive = store.diveByID[summary.id] {
@@ -879,37 +919,7 @@ struct ContentView: View {
                     #endif
                 } else {
                     diveListContainer {
-                        ForEach(displayedSummaries) { summary in
-                            let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
-                            diveRow(summary, rowNumber: rowNumber, isGrouped: false)
-                            #if os(macOS)
-                            .listRowBackground(Color.primary.opacity(0.07)
-                                                   .overlay { DiveRowSelectionHighlight(selection: listSelection, summaryID: summary.id) },
-                                               macSeparator: summary.id != displayedSummaries.last?.id)
-                            #else
-                            .listRowBackground(Color.primary.opacity(0.07),
-                                               macSeparator: summary.id != displayedSummaries.last?.id)
-                            #endif
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                moveButton(for: summary.id)
-                            }
-                            #if os(macOS)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                deleteSwipeButton(for: summary.id)
-                            }
-                            #endif
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    if let dive = store.diveByID[summary.id] {
-                                        diveToDeleteDirectly = dive
-                                        showDeleteSingleConfirmation = true
-                                    }
-                                } label: {
-                                    Label("Delete dive", systemImage: "trash")
-                                }
-                            }
-                        }
-                        .onDelete(perform: deleteItems)
+                        diveRows(displayedSummaries, isGrouped: false, onDelete: deleteItems)
                     }
                     .scrollContentBackground(.hidden)
                     .refreshable {
