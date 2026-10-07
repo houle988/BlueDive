@@ -164,7 +164,10 @@ struct DiveSequenceSettingsView: View {
     }
 
     private func recalculateSurfaceIntervals() {
-        Dive.recalculateSurfaceIntervals(in: modelContext)
+        // Saving does not re-deliver the @Query (dive membership is unchanged), so patch the
+        // store's summary caches directly or the list keeps the old intervals until relaunch.
+        let updates = Dive.recalculateSurfaceIntervals(in: modelContext)
+        store.commitSurfaceIntervals(updates)
     }
 
     private func renumberDives() {
