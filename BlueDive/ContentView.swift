@@ -914,7 +914,7 @@ struct ContentView: View {
                     .contentMargins(.top, 0, for: .scrollContent)
                     #if os(macOS)
                     // Column labels pinned above the list, once for all diver sections.
-                    .diveListPinnedColumnHeader(diveListLayout)
+                    .pinnedColumnHeader(diveListLayout) { DiveListColumnHeader() }
                     .environment(diveListLayout)
                     #endif
                 } else {
@@ -929,7 +929,7 @@ struct ContentView: View {
                     .contentMargins(.top, 0, for: .scrollContent)
                     #if os(macOS)
                     // Column labels pinned above the list, so they stay visible while it scrolls.
-                    .diveListPinnedColumnHeader(diveListLayout)
+                    .pinnedColumnHeader(diveListLayout) { DiveListColumnHeader() }
                     .environment(diveListLayout)
                     #endif
                 }

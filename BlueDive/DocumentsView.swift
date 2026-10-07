@@ -231,8 +231,11 @@ struct DocumentsView: View {
                                 ForEach(groupedCertifications, id: \.key) { agency, certs in
                                     Section(isExpanded: sectionBinding("cert:" + agency)) {
                                         #if os(macOS)
-                                        // Column labels as a row, so they share the rows' width.
-                                        if documentsLayout.isOneLine {
+                                        // Column labels as a row, so they share the rows' width,
+                                        // in "All" only: there certifications and insurance
+                                        // (different columns) share the list. A single filter
+                                        // pins them above the list instead (see the List).
+                                        if selectedSection == .all && documentsLayout.isOneLine {
                                             CertificationColumnHeader()
                                                 .columnHeaderRow()
                                         }
@@ -293,8 +296,9 @@ struct DocumentsView: View {
                                         : insurer
                                     Section(isExpanded: sectionBinding("ins:" + insurer)) {
                                         #if os(macOS)
-                                        // Column labels as a row, so they share the rows' width.
-                                        if documentsLayout.isOneLine {
+                                        // Column labels as a row in "All" only; see the
+                                        // certification sections.
+                                        if selectedSection == .all && documentsLayout.isOneLine {
                                             InsuranceColumnHeader()
                                                 .columnHeaderRow()
                                         }
@@ -351,6 +355,21 @@ struct DocumentsView: View {
                     }
                     // .sidebar is required for Section(isExpanded:) collapse/expand to function
                     .listStyle(.sidebar)
+                    #if os(macOS)
+                    // With the Certifications or Insurance filter the list shows one kind of row,
+                    // so its column labels are pinned above the list; not over an empty state.
+                    .pinnedColumnHeader(
+                        documentsLayout,
+                        isShown: (selectedSection == .certifications && !groupedCertifications.isEmpty)
+                            || (selectedSection == .insurance && !groupedInsurances.isEmpty)
+                    ) {
+                        if selectedSection == .insurance {
+                            InsuranceColumnHeader()
+                        } else {
+                            CertificationColumnHeader()
+                        }
+                    }
+                    #endif
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -626,6 +645,7 @@ struct DocumentsView: View {
             ViewThatFits(in: .horizontal) {
                 CertificationOneLineRow(certification: cert, showExpired: cert.isExpired)
                     .reportsOneLine(true, to: documentsLayout)
+                    .reportsRowContentWidth(to: documentsLayout)
                 CertificationRow(certification: cert, showExpired: cert.isExpired)
                     .reportsOneLine(false, to: documentsLayout)
             }
@@ -669,6 +689,7 @@ struct DocumentsView: View {
             ViewThatFits(in: .horizontal) {
                 InsuranceOneLineRow(insurance: insurance, showExpired: insurance.isExpired)
                     .reportsOneLine(true, to: documentsLayout)
+                    .reportsRowContentWidth(to: documentsLayout)
                 InsuranceRow(insurance: insurance, showExpired: insurance.isExpired)
                     .reportsOneLine(false, to: documentsLayout)
             }
@@ -2081,8 +2102,9 @@ struct InsuranceOneLineRow: View {
     }
 }
 
-/// Column labels over the one-line certification rows (macOS); only in the list while its rows
-/// are one-line (`OneLineRowsLayout`).
+/// Column labels over the one-line certification rows (macOS): a row in each section in "All",
+/// pinned above the list with the Certifications filter; shown only while the rows are one-line
+/// (`OneLineRowsLayout`).
 struct CertificationColumnHeader: View {
     var body: some View {
         ColumnHeaderRowContent {
@@ -2107,8 +2129,9 @@ struct CertificationColumnHeader: View {
     }
 }
 
-/// Column labels over the one-line insurance rows (macOS); only in the list while its rows are
-/// one-line (`OneLineRowsLayout`).
+/// Column labels over the one-line insurance rows (macOS): a row in each section in "All",
+/// pinned above the list with the Insurance filter; shown only while the rows are one-line
+/// (`OneLineRowsLayout`).
 struct InsuranceColumnHeader: View {
     var body: some View {
         ColumnHeaderRowContent {

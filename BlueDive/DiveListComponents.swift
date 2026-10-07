@@ -289,9 +289,8 @@ enum DiveListColumns {
         + gas + depth + media + spacing * 8
 }
 
-/// Column labels over the one-line dive rows (macOS), pinned above the list by
-/// `DiveListPinnedColumnHeader`, which shows it only while the rows are one-line
-/// (`OneLineRowsLayout`).
+/// Column labels over the one-line dive rows (macOS), pinned above the list with
+/// `pinnedColumnHeader`, which shows them only while the rows are one-line (`OneLineRowsLayout`).
 struct DiveListColumnHeader: View {
     var body: some View {
         ColumnHeaderRowContent { labels }
@@ -327,44 +326,6 @@ struct DiveListColumnHeader: View {
         text
             .columnHeaderLabel()
             .multilineTextAlignment(alignment)
-    }
-}
-
-/// `DiveListColumnHeader` pinned above the dive list (macOS), so the labels stay visible while
-/// the list scrolls, once for the whole list (flat or grouped by diver). It takes the width the
-/// List gives its one-line rows (`OneLineRowsLayout.rowContentWidth`) and is centred, as the
-/// rows are between their equal side insets. Its own view, so a layout change redraws only it.
-struct DiveListPinnedColumnHeader: View {
-    let layout: OneLineRowsLayout
-
-    var body: some View {
-        if layout.isOneLine, layout.rowContentWidth > 0 {
-            // At most the rows' width, not exactly: with no row on screen (every diver section
-            // collapsed) the width is not updated, and a narrower window must still hide the
-            // labels (`ColumnHeaderRowContent`'s fallback) instead of overflowing.
-            DiveListColumnHeader()
-                .frame(maxWidth: layout.rowContentWidth)
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity)
-        }
-    }
-}
-
-extension View {
-    /// Pins `DiveListPinnedColumnHeader` to the top of the dive list (macOS): a bar with the
-    /// system scroll edge effect on macOS 26+, a safe-area inset over the bar material before.
-    @ViewBuilder
-    func diveListPinnedColumnHeader(_ layout: OneLineRowsLayout) -> some View {
-        if #available(macOS 26.0, *) {
-            safeAreaBar(edge: .top, spacing: 0) {
-                DiveListPinnedColumnHeader(layout: layout)
-            }
-        } else {
-            safeAreaInset(edge: .top, spacing: 0) {
-                DiveListPinnedColumnHeader(layout: layout)
-                    .background(.bar)
-            }
-        }
     }
 }
 #endif

@@ -549,8 +549,9 @@ struct WidthAdaptiveLayout<Wide: View, Narrow: View>: View {
 /// Whether a list's rows show their one-line (column) version (macOS wide-window layouts:
 /// Dives, Equipment, Documents). Owned by the list's view in `@State` and put in the List's
 /// environment; each row writes it from the version `ViewThatFits` shows, so the list shows its
-/// column header row only with one-line rows (no empty row in the stacked layout). Rows only
-/// write it, never read it in `body`, so a change redraws the header, not the rows. A stable
+/// column header — pinned above the list (`pinnedColumnHeader`) or as a row (`columnHeaderRow`) —
+/// only with one-line rows (no empty header in the stacked layout). Rows only write it, never
+/// read it in `body`, so a change redraws the header, not the rows. A stable
 /// reference rather than a Binding, which would change on every parent redraw.
 @Observable final class OneLineRowsLayout {
     var isOneLine = true
@@ -587,7 +588,51 @@ struct ColumnHeaderRowContent<Labels: View>: View {
     }
 }
 
+/// A column header pinned above a list (macOS), so its labels stay visible while the list
+/// scrolls. Shown only while `isShown` and the rows are one-line, at the width the List gives
+/// those rows (`OneLineRowsLayout.rowContentWidth`), centred as the rows are between their equal
+/// side insets. Its own view, so a layout change redraws only it.
+struct PinnedColumnHeader<Header: View>: View {
+    let layout: OneLineRowsLayout
+    let isShown: Bool
+    let header: Header
+
+    var body: some View {
+        if isShown, layout.isOneLine, layout.rowContentWidth > 0 {
+            // At most the rows' width, not exactly: with no row on screen (every section
+            // collapsed) the width is not updated, and a narrower window must still hide the
+            // labels (`ColumnHeaderRowContent`'s fallback) instead of overflowing.
+            header
+                .frame(maxWidth: layout.rowContentWidth)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+        }
+    }
+}
+
 extension View {
+    /// Pins a column header to the top of a list (macOS; see `PinnedColumnHeader`): a bar with
+    /// the system scroll edge effect on macOS 26+, a safe-area inset over the bar material before.
+    /// The list's one-line rows report their width with `reportsRowContentWidth(to:)`.
+    @ViewBuilder
+    func pinnedColumnHeader<Header: View>(
+        _ layout: OneLineRowsLayout,
+        isShown: Bool = true,
+        @ViewBuilder header: () -> Header
+    ) -> some View {
+        let pinned = PinnedColumnHeader(layout: layout, isShown: isShown, header: header())
+        if #available(macOS 26.0, *) {
+            safeAreaBar(edge: .top, spacing: 0) {
+                pinned
+            }
+        } else {
+            safeAreaInset(edge: .top, spacing: 0) {
+                pinned
+                    .background(.bar)
+            }
+        }
+    }
+
     /// Shows a column header as a plain List row: no row background or separator. A row, not a
     /// section header, so it has exactly the rows' width and insets (a sidebar section header is
     /// wider and shrinks on hover for its disclosure chevron, which shifts the labels).

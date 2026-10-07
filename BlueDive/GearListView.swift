@@ -494,13 +494,6 @@ struct GearListView: View {
                         }
                     }
                 )) {
-                    #if os(macOS)
-                    // Column labels as a row, so they share the gear rows' width.
-                    if gearListLayout.isOneLine {
-                        GearListColumnHeader()
-                            .columnHeaderRow()
-                    }
-                    #endif
                     ForEach(items) { item in
                         Button {
                             selectedGear = item
@@ -564,6 +557,9 @@ struct GearListView: View {
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         #if os(macOS)
+        // Column labels pinned above the list, once for all categories; not over an empty
+        // list (a category filter with no results).
+        .pinnedColumnHeader(gearListLayout, isShown: !groupedGear.isEmpty) { GearListColumnHeader() }
         .environment(gearListLayout)
         #endif
         .refreshable {
@@ -1170,11 +1166,12 @@ struct GearRow: View {
         #if os(macOS)
         // The Mac window is wide: one line with every value in a fixed-width column so the
         // rows line up, falling back to the stacked iOS row when the window is too narrow.
-        // Each version tells the list which one is shown, so its column header row is only
-        // there with one-line rows (`OneLineRowsLayout`).
+        // Each version tells the list which one is shown, so its pinned column header is only
+        // there with one-line rows (`OneLineRowsLayout`), at their width.
         ViewThatFits(in: .horizontal) {
             wideRow
                 .reportsOneLine(true, to: oneLineLayout)
+                .reportsRowContentWidth(to: oneLineLayout)
             stackedRow
                 .reportsOneLine(false, to: oneLineLayout)
         }
@@ -1385,8 +1382,8 @@ enum GearListColumns {
         + indicator + spacing * 7
 }
 
-/// Column labels over the one-line Equipment rows (macOS). Only added to the list while its
-/// rows are one-line (`OneLineRowsLayout`), so it leaves no empty row in the stacked layout.
+/// Column labels over the one-line Equipment rows (macOS), pinned above the list with
+/// `pinnedColumnHeader`, which shows them only while the rows are one-line (`OneLineRowsLayout`).
 struct GearListColumnHeader: View {
     var body: some View {
         ColumnHeaderRowContent {
