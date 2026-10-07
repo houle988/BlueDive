@@ -75,7 +75,9 @@ Profile-to-dive matching:
     3. Tiebreaks — max depth (±2 m), then duration (±30 s; the closest wins when it is
        more than 15 s better than the runner-up).
     4. Plausibility gate — a match is rejected when profile max depth differs by more
-       than 5 m or the sample span by more than 2 min from the SQLite dive.
+       than 5 m or the sample span by more than 2 min from the SQLite dive.  The span
+       check is skipped when the XML <duration> equals the SQLite duration (±2 s), since
+       many computers log several minutes of surface samples after the dive ends.
     5. Best-match assignment — when several XML dives claim the same SQLite dive, the
        one with the smallest duration/depth delta wins.
     6. Retry — dives skipped as no_match are retried against the full -12..+12 h
@@ -84,6 +86,61 @@ Profile-to-dive matching:
 
     A match summary and skip breakdown (bad_date, no_match, ambiguous, depth_mismatch,
     span_mismatch, outscored) are printed at the end.
+
+Raw dive computer data (ZRAWDATA, decoded with libdivecomputer):
+    On the first dive with raw data, the script checks the libdivecomputer folder of the
+    BlueDive LibDCSwift fork (https://github.com/houle988/libdc-swift/tree/main/libdivecomputer).
+    When there is no cached copy, or the folder has a newer commit, it downloads the folder
+    and compiles it with the Xcode command-line tools (xcode-select --install) into
+    ~/Library/Caches/BlueDive/macdive_to_bluedive/.  Offline, the cached copy is used;
+    without one, raw data is not decoded.  libdivecomputer runs in a separate worker
+    process: a dive on which it crashes or takes more than 60 s is logged as not decodable,
+    and after two such failures on one computer model that model is skipped.
+
+    Raw data is used for a dive only when it agrees with MacDive: max depth within 0.5 m of
+    MacDive's XML profile (or of the dive record when there is none) and a profile not more
+    than 60 s shorter.  Pressure and PPO₂ readings of 0 mean no data and are ignored.
+
+Data priority (first available source wins; "Raw" = agreeing raw data, see above):
+    Date/time, number, rating, diver, buddies, computer,      SQLite
+      site, notes, tags, types, conditions, operator, boat,
+      weight, gear, average depth, surface interval, CNS,
+      deco model, tank mix / size / working pressure
+    Units (distance, temperature, pressure, volume)            XML <units>
+    Air / high / low temperature (dive)                        XML → SQLite
+    Duration                                                   Raw (computer dive time, if not longer than its
+                                                               profile + 60 s and within 10 min or 20 % of
+                                                               MacDive's) → SQLite
+    Max depth                                                  Raw (computer value, if within 0.5 m of its
+                                                               deepest sample) → SQLite
+    Decompression-dive flag                                    Raw (the app's Bluetooth rule: a deco-stop
+                                                               sample or event; NDL only = no) → SQLite
+    Deco stops (Gas tab, metres)                               Raw only
+    Tank start / end pressure                                  Raw (a transmitter whose begin pressure and
+                                                               pressure at MacDive's end time match the tank
+                                                               within 1 bar, same mix, unambiguous; or the only
+                                                               transmitter of a one-tank dive MacDive has no
+                                                               pressures for) → XML (gas matched by mix,
+                                                               else position) → SQLite
+    Marine life                                                SQLite (dive-linked critters + photo-tagged
+                                                               critters, count = photos tagged)
+    Profile samples (time, depth, temperature, NDL, PPO₂,      Raw → XML.  PPO₂ only as the computer reports it
+      per-cell PPO₂, ceiling, remaining stop time)             (BlueDive calculates it otherwise).
+    Sample tank pressure                                       Raw (mapped transmitters, same mapping as the
+                                                               tank values) → when the raw samples have no
+                                                               main-tank pressure at all: MacDive's main-tank
+                                                               pressure on the raw samples recorded at the same
+                                                               moment (±2 s, only when ≥ 90 % of MacDive's
+                                                               readings line up; nothing copied onto other
+                                                               samples) → XML samples (when they don't line up)
+    Gas switches + active tank                                 Raw (when the computer reports its gas) →
+                                                               MacDive events (tank set when one tank has the mix)
+    Other events (ascent, deep stop, PPO₂, ceiling,            Raw + MacDive events (MacDive's dropped when raw
+      bookmark, safety stop, deco stop)                        has the same event within 30 s)
+    Not imported                                               Set point switches (counted in the log)
+
+    Every value raw data changes is logged per dive as "raw values : … (MacDive → raw
+    data)", and each dive's profile source on its "profile :" line.
 
 Output:
     dives  → <output.xml> plus <output.log>, a per-dive log of tank pressures,
@@ -111,9 +168,12 @@ Requirements: Python 3.8+  (no third-party packages needed)
 
 import argparse
 import base64
+import bisect
 import json
+import os
 import re
 import sqlite3
+import struct
 import sys
 import textwrap
 import unicodedata
@@ -494,31 +554,1114 @@ def fetch_tanks(cur, dive_pk):
     return tanks
 
 
-def fetch_critters(cur, dive_pk, critter_jt):
-    """Return [{name, count}] for marine life sightings."""
+def _critter_junction_cols(jt):
+    """Return (critter_col, other_col) for a critter junction table."""
+    _, c0, c1 = jt
+    if c0.upper().endswith(("TOCRITTER", "TOCRITTERS")):
+        return c0, c1
+    if c1.upper().endswith(("TOCRITTER", "TOCRITTERS")):
+        return c1, c0
+    return c0, c1
+
+
+def fetch_critters(cur, dive_pk, critter_jt, critter_image_jt=None):
+    """
+    Return [{name, count}] for marine life sightings.
+
+    MacDive links critters to a dive directly (critter ↔ dive junction) and/or through the
+    dive's photos (critter ↔ dive-image junction). Both are combined, one entry per name.
+    A critter tagged on photos gets count = number of the dive's photos tagged with it;
+    a critter linked only to the dive keeps its dive-link count.
+    """
     if not table_exists(cur, "ZCRITTER"):
         return []
-    if critter_jt is None:
+    counts: dict = {}
+    if critter_jt is not None:
+        tbl = critter_jt[0]
+        critter_col, dive_col = _critter_junction_cols(critter_jt)
+        try:
+            cur.execute(f"""
+                SELECT c.ZNAME, COUNT(*) AS cnt
+                FROM "{tbl}" j
+                JOIN ZCRITTER c ON j."{critter_col}" = c.Z_PK
+                WHERE j."{dive_col}" = ?
+                GROUP BY c.ZNAME
+            """, (dive_pk,))
+            for name, cnt in cur.fetchall():
+                if name:
+                    counts[name] = cnt
+        except Exception:
+            pass
+    if critter_image_jt is not None and table_exists(cur, "ZDIVEIMAGE"):
+        img_dive_col = col_or_null(columns(cur, "ZDIVEIMAGE"),
+                                   "ZRELATIONSHIPDIVE", "ZRELATIONSHIPDIVEIMAGETODIVE")
+        if img_dive_col != "NULL":
+            tbl = critter_image_jt[0]
+            critter_col, image_col = _critter_junction_cols(critter_image_jt)
+            try:
+                cur.execute(f"""
+                    SELECT c.ZNAME, COUNT(DISTINCT i.Z_PK) AS cnt
+                    FROM "{tbl}" j
+                    JOIN ZDIVEIMAGE i ON j."{image_col}" = i.Z_PK
+                    JOIN ZCRITTER c ON j."{critter_col}" = c.Z_PK
+                    WHERE i."{img_dive_col}" = ?
+                    GROUP BY c.ZNAME
+                """, (dive_pk,))
+                for name, cnt in cur.fetchall():
+                    if name:
+                        counts[name] = cnt   # photo count supersedes the dive-link count
+            except Exception:
+                pass
+    return [{"name": name, "count": counts[name]} for name in sorted(counts)]
+
+
+# MacDive ZEVENT.ZTYPE → BlueDive sample event. Only types whose meaning is unambiguous in
+# MacDive data are mapped; others (set points, CNS, tissue, alarms, photo markers, and
+# types MacDive reuses for different events, e.g. 12 = safety stop or deep stop broken)
+# are not imported because BlueDive has no matching event.
+_MACDIVE_EVENT_MAP = {
+    2:  "ascent",    # Ascent Rate Warning
+    7:  "deepStop",  # Deep Stop
+    10: "gasChange", # Switched to gas: … / Gas Change
+    19: "po2",       # PPO2
+    20: "po2",       # PPO2 High
+    22: "ceiling",   # Safety Stop Ceiling Broken
+    23: "ceiling",   # Safety Stop Ceiling Error
+    28: "bookmark",  # User Bookmark
+}
+
+
+def _nearest_index(times, t):
+    """Index of the value in sorted `times` nearest to t (the earlier one on a tie)."""
+    i = bisect.bisect_left(times, t)
+    if i == len(times) or (i > 0 and t - times[i - 1] <= times[i] - t):
+        i = max(i - 1, 0)
+    return i
+
+
+def _tank_for_mix(mix, tanks):
+    """Index of the only tank with this (o2, he) mix, else None."""
+    if mix is None:
+        return None
+    hits = [i for i, t in enumerate(tanks) if (t["o2"], t["he"]) == tuple(mix)]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _gas_switch_mix(detail):
+    """Parse a MacDive gas-switch detail ('Switched to gas: EAN32' / 'Air' / 'Tx 21/35')
+    into (o2_pct, he_pct), or None when the detail names no mix."""
+    m = re.search(r"Switched to gas:\s*(.+)$", detail or "")
+    if not m:
+        return None
+    gas = m.group(1).strip()
+    if gas.lower() == "air":
+        return (21, 0)
+    m = re.fullmatch(r"(?i)EAN\s*(\d+)", gas)
+    if m:
+        return (int(m.group(1)), 0)
+    m = re.fullmatch(r"(?i)(?:Tx|Trimix)\s*(\d+)\s*/\s*(\d+)", gas)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    return None
+
+
+def fetch_events(cur, dive_pk, tanks):
+    """
+    Return [(time_secs, event, tank_index | None)] for the dive's mappable MacDive events.
+    For a gas switch, tank_index is the position in `tanks` of the only tank with the named
+    mix; it stays None when the mix is unnamed or matches zero or several tanks.
+    """
+    if not table_exists(cur, "ZEVENT"):
         return []
-    tbl, c0, c1 = critter_jt
-    c0u, c1u = c0.upper(), c1.upper()
-    if c0u.endswith("TOCRITTER"):
-        critter_col, dive_col = c0, c1
-    elif c1u.endswith("TOCRITTER"):
-        critter_col, dive_col = c1, c0
-    else:
-        critter_col, dive_col = c0, c1
+    ec = columns(cur, "ZEVENT")
+    if not {"ZTYPE", "ZTIME", "ZRELATIONSHIPEVENTTODIVE"} <= ec:
+        return []
+    detail_col = "ZDETAIL" if "ZDETAIL" in ec else "NULL"
     try:
         cur.execute(f"""
-            SELECT c.ZNAME, COUNT(*) AS cnt
-            FROM "{tbl}" j
-            JOIN ZCRITTER c ON j."{critter_col}" = c.Z_PK
-            WHERE j."{dive_col}" = ?
-            GROUP BY c.ZNAME ORDER BY c.ZNAME
+            SELECT ZTYPE, ZTIME, {detail_col} FROM ZEVENT
+            WHERE ZRELATIONSHIPEVENTTODIVE = ? AND ZTIME IS NOT NULL
+            ORDER BY ZTIME
         """, (dive_pk,))
-        return [{"name": row[0] or "", "count": row[1]} for row in cur.fetchall() if row[0]]
+        rows = cur.fetchall()
     except Exception:
         return []
+    events = []
+    for etype, etime, detail in rows:
+        kind = _MACDIVE_EVENT_MAP.get(int(etype)) if etype is not None else None
+        if kind is None:
+            continue
+        tank_idx = None
+        if kind == "gasChange":
+            tank_idx = _tank_for_mix(_gas_switch_mix(detail), tanks)
+        events.append((float(etime), kind, tank_idx))
+    return events
+
+
+def attach_events_to_samples(samples, events):
+    """
+    Return a copy of samples with each event added to the sample nearest its time.
+    A gas switch also sets current_gas on that sample when its tank was identified.
+    """
+    if not samples or not events:
+        return samples
+    out = [dict(s) for s in samples]
+    times = [s["time"] for s in out]
+    for etime, kind, tank_idx in events:
+        i = _nearest_index(times, etime)
+        if kind is not None:
+            evs = out[i].setdefault("events", [])
+            if kind not in evs:
+                evs.append(kind)
+        # kind None = the computer's initial gas: sets the active tank without an event.
+        if (kind == "gasChange" or kind is None) and tank_idx is not None:
+            out[i]["current_gas"] = tank_idx
+    return out
+
+
+# ---------------------------------------------------------------------------
+# libdivecomputer — decodes MacDive's ZRAWDATA (raw dive computer download)
+# ---------------------------------------------------------------------------
+#
+# The library is the copy vendored in the BlueDive LibDCSwift fork, so migrated dives are
+# decoded by the same parser as the app's Bluetooth import. It is downloaded from GitHub and
+# compiled with the Xcode command-line tools (cc) into a per-user cache on each run when the
+# fork's libdivecomputer folder has a newer commit than the cached build.
+
+LIBDC_REPO     = "houle988/libdc-swift"
+LIBDC_BRANCH   = "main"
+LIBDC_FOLDER   = "libdivecomputer"
+LIBDC_CACHE    = Path.home() / "Library" / "Caches" / "BlueDive" / "macdive_to_bluedive"
+_HTTP_TIMEOUT  = 10
+_LIBDC_DECODE_TIMEOUT = 60   # seconds per dive before the decoding worker is stopped
+
+# libdivecomputer SAMPLE_EVENT_* → BlueDive sample event, the same mapping as the app's
+# Bluetooth import (LibDCSwift GenericParser + BluetoothScannerView.convertDiveEvent).
+_LIBDC_EVENT_MAP = {
+    1:  "decoStop",      # SAMPLE_EVENT_DECOSTOP
+    3:  "ascent",        # SAMPLE_EVENT_ASCENT
+    4:  "ceiling",       # SAMPLE_EVENT_CEILING
+    7:  "violation",     # SAMPLE_EVENT_VIOLATION
+    8:  "bookmark",      # SAMPLE_EVENT_BOOKMARK
+    10: "safetyStop:0",  # SAMPLE_EVENT_SAFETYSTOP
+    13: "safetyStop:1",  # SAMPLE_EVENT_SAFETYSTOP_MANDATORY
+    14: "deepStop",      # SAMPLE_EVENT_DEEPSTOP
+    20: "po2",           # SAMPLE_EVENT_PO2
+}
+# Gas switches come from DC_SAMPLE_GASMIX; SAMPLE_EVENT_GASCHANGE/GASCHANGE2 are deprecated.
+
+_DC_SAMPLE_TIME, _DC_SAMPLE_DEPTH, _DC_SAMPLE_PRESSURE, _DC_SAMPLE_TEMPERATURE = 0, 1, 2, 3
+_DC_SAMPLE_EVENT, _DC_SAMPLE_SETPOINT, _DC_SAMPLE_PPO2 = 4, 9, 10
+_DC_SAMPLE_DECO, _DC_SAMPLE_GASMIX = 12, 13
+_DC_FIELD_DIVETIME, _DC_FIELD_MAXDEPTH = 0, 1
+_DC_FIELD_GASMIX_COUNT, _DC_FIELD_GASMIX, _DC_FIELD_DIVEMODE = 3, 4, 12
+_DC_FIELD_TANK_COUNT, _DC_FIELD_TANK = 10, 11
+_DC_DECO_NDL, _DC_DECO_DECOSTOP = 0, 2
+_DC_SENSOR_NONE = 0xFFFFFFFF
+_DC_GASMIX_UNKNOWN = 0xFFFFFFFF   # e.g. Shearwater, for a tank without a transmitter
+_DC_DIVEMODES = {0: "freedive", 1: "gauge", 2: "OC", 3: "CCR", 4: "SCR"}
+
+
+def _http_get(url, accept=None):
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "macdive_to_bluedive",
+                                                **({"Accept": accept} if accept else {})})
+    with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+        return resp.read()
+
+
+def _libdc_latest_commit():
+    """Return (sha, iso_date) of the newest fork commit that touched the libdivecomputer folder."""
+    url = (f"https://api.github.com/repos/{LIBDC_REPO}/commits"
+           f"?sha={LIBDC_BRANCH}&path={LIBDC_FOLDER}&per_page=1")
+    data = json.loads(_http_get(url, accept="application/vnd.github+json"))
+    if not data:
+        raise RuntimeError(f"no commits found for {LIBDC_REPO}/{LIBDC_FOLDER}")
+    return data[0]["sha"], data[0]["commit"]["committer"]["date"]
+
+
+class _LibDCBuildError(RuntimeError):
+    """The downloaded sources did not compile (remembered so the same commit is not rebuilt)."""
+
+
+def _host_arch():
+    import platform
+    return "arm64" if platform.machine() in ("arm64", "aarch64") else "x86_64"
+
+
+def _libdc_download_and_build(sha, log):
+    """Download the fork at `sha`, keep its libdivecomputer folder, and compile it."""
+    import io, shutil, subprocess, tempfile, zipfile
+    url = f"https://codeload.github.com/{LIBDC_REPO}/zip/{sha}"
+    log(f"  Downloading {LIBDC_REPO}@{sha[:10]} ({LIBDC_FOLDER}/) …")
+    archive = zipfile.ZipFile(io.BytesIO(_http_get(url)))
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        prefix = None
+        for name in archive.namelist():
+            parts = name.split("/", 2)
+            if len(parts) >= 2 and parts[1] == LIBDC_FOLDER:
+                prefix = parts[0] + "/" + LIBDC_FOLDER + "/"
+                break
+        if prefix is None:
+            raise RuntimeError(f"{LIBDC_FOLDER}/ not found in the downloaded archive")
+        src_root = tmp / LIBDC_FOLDER
+        for name in archive.namelist():
+            if name.startswith(prefix) and not name.endswith("/"):
+                dest = src_root / name[len(prefix):]
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(archive.read(name))
+        if not (src_root / "include" / "libdivecomputer" / "version.h").exists():
+            raise RuntimeError("include/libdivecomputer/version.h missing from the fork")
+
+        cc = shutil.which("cc")
+        if cc is None:
+            raise RuntimeError("no C compiler found — install the Xcode command-line tools "
+                               "with: xcode-select --install")
+        sources = sorted(str(p) for p in (src_root / "src").glob("*.c")
+                         if not p.name.endswith("_win32.c"))
+        dylib_tmp = tmp / "libdivecomputer.dylib"
+        # Same defines as the fork's Package.swift; built for the running Python's architecture.
+        cmd = [cc, "-O2", "-w", "-dynamiclib", "-arch", _host_arch(),
+               "-DHAVE_PTHREAD_H", "-DENABLE_LOGGING",
+               "-I", str(src_root / "include"), "-I", str(src_root / "include" / "libdivecomputer"),
+               "-I", str(src_root / "src"), *sources,
+               "-install_name", "@rpath/libdivecomputer.dylib", "-o", str(dylib_tmp)]
+        log(f"  Compiling {len(sources)} libdivecomputer source files with {cc} …")
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise _LibDCBuildError("compilation failed:\n" + (proc.stderr or proc.stdout)[-2000:])
+
+        LIBDC_CACHE.mkdir(parents=True, exist_ok=True)
+        cached_src = LIBDC_CACHE / LIBDC_FOLDER
+        if cached_src.exists():
+            shutil.rmtree(cached_src)
+        shutil.copytree(src_root, cached_src)
+        # Replace the cached library with a new file (never rewrite it in place: macOS can
+        # reject a signed library whose file was modified after it was first loaded).
+        staged = LIBDC_CACHE / "libdivecomputer.dylib.new"
+        shutil.copy2(dylib_tmp, staged)
+        os.replace(staged, LIBDC_CACHE / "libdivecomputer.dylib")
+
+
+def setup_libdivecomputer(log):
+    """
+    Return a LibDCWorker decoder, or None when the library cannot be obtained (raw data is
+    then not decoded and the export behaves as without it). Downloads and builds the fork's
+    libdivecomputer folder when there is no cached build for this architecture or the fork
+    has a newer commit. A commit whose sources failed to compile is not retried.
+    """
+    meta_path   = LIBDC_CACHE / "libdivecomputer.json"
+    failed_path = LIBDC_CACHE / "libdivecomputer-failed.json"
+    dylib       = LIBDC_CACHE / "libdivecomputer.dylib"
+    arch        = _host_arch()
+    cached = None
+    if meta_path.exists() and dylib.exists():
+        try:
+            cached = json.loads(meta_path.read_text())
+        except Exception:
+            cached = None
+    if not (isinstance(cached, dict) and isinstance(cached.get("sha"), str)
+            and isinstance(cached.get("date"), str)):
+        cached = None   # missing or malformed notes: treated as no cached copy
+    if cached and cached.get("arch") != arch:
+        cached = None   # built for another architecture (or by an older script version)
+    log(f"libdivecomputer (raw dive computer data decoder) — source: "
+        f"https://github.com/{LIBDC_REPO}/tree/{LIBDC_BRANCH}/{LIBDC_FOLDER}")
+    if cached:
+        log(f"  Cached copy   : {cached['sha'][:10]}  ({cached['date']}, {arch})  in {LIBDC_CACHE}")
+    else:
+        log(f"  Cached copy   : none for {arch}")
+
+    try:
+        sha, date = _libdc_latest_commit()
+        log(f"  Online version: {sha[:10]}  ({date})")
+        failed = None
+        if failed_path.exists():
+            try:
+                failed = json.loads(failed_path.read_text())
+            except Exception:
+                failed = None
+            if not isinstance(failed, dict):
+                failed = None
+        if cached and cached["sha"] == sha:
+            log("  Cached copy is up to date.")
+        elif failed and failed.get("sha") == sha and failed.get("arch") == arch:
+            raise RuntimeError(f"commit {sha[:10]} failed to compile on a previous run "
+                               f"(delete {failed_path} to retry)")
+        else:
+            log("  Online version is newer — downloading." if cached else "  Downloading.")
+            try:
+                _libdc_download_and_build(sha, log)
+            except _LibDCBuildError:
+                LIBDC_CACHE.mkdir(parents=True, exist_ok=True)
+                failed_path.write_text(json.dumps({"sha": sha, "arch": arch}))
+                raise
+            meta_path.write_text(json.dumps({"sha": sha, "date": date, "arch": arch,
+                                             "built": datetime.now().astimezone().isoformat()}))
+            if failed_path.exists():
+                failed_path.unlink()
+            cached = {"sha": sha, "date": date}
+            log(f"  Built {dylib}")
+    except Exception as exc:
+        if cached:
+            log(f"  Warning: could not check or update the online version ({exc}) — "
+                f"using the cached copy {cached['sha'][:10]}.")
+        else:
+            log(f"  Warning: libdivecomputer unavailable ({exc}) — raw dive computer data "
+                f"will not be decoded; profiles come from the MacDive XML only.")
+            return None
+
+    try:
+        worker = LibDCWorker(str(dylib))
+    except Exception as exc:
+        log(f"  Warning: could not load {dylib} ({exc}) — raw dive computer data will not be decoded.")
+        return None
+    log(f"  Loaded libdivecomputer {worker.version}  ({worker.descriptor_count} dive computer models; "
+        f"decoding runs in a separate process)")
+    return worker
+
+
+class LazyLibDC:
+    """
+    Sets libdivecomputer up (online check, download/build, worker start) only when the first
+    dive with raw data is decoded, so a logbook without raw data never touches the network.
+    """
+
+    def __init__(self, log):
+        self.log = log
+        self.worker = None
+        self.started = False
+
+    def decode(self, raw, computer, rawdate, check=None):
+        if raw and not isinstance(raw, (bytes, bytearray, memoryview)):
+            return None, "raw data stored as text (TEXT affinity) — not decodable"
+        if not self.started:
+            self.started = True
+            self.worker = setup_libdivecomputer(self.log)
+        if self.worker is None:
+            return None, "libdivecomputer unavailable"
+        return self.worker.decode(raw, computer, rawdate, check)
+
+
+def _shearwater_decompress(data):
+    """Undo Shearwater's download compression (9-bit LRE + 32-byte XOR), as libdivecomputer's
+    shearwater_common download does before parsing. MacDive stores the compressed stream."""
+    buf = bytes(data) + b"\x00\x00"
+    nbits = (len(buf) - 2) * 8
+    offset, out = 0, bytearray()
+    while offset + 9 <= nbits:
+        byte, bit = offset // 8, offset % 8
+        value = ((buf[byte] << 8 | buf[byte + 1]) >> (16 - (bit + 9))) & 0x1FF
+        if value & 0x100:
+            out.append(value & 0xFF)
+        elif value == 0:
+            break
+        else:
+            out += bytes(value)
+        offset += 9
+    for i in range(32, len(out)):
+        out[i] ^= out[i - 32]
+    return bytes(out)
+
+
+def _merge_depthless_records(samples):
+    """
+    Fold records without a depth (event-only records some computers send at their own time,
+    e.g. Suunto EON Steel, or data reported before the first time sample) into the record with
+    a depth nearest in time (the earlier one on a tie), so the gas, events, deco, pressures and
+    PPO₂ they carry are kept. Gas and deco state: the latest report wins. Other values: the
+    target record's own values win.
+    """
+    out = [r for r in samples if "depth" in r]
+    if not out:
+        return out
+    times = [r["time"] for r in out]
+    # Gas and deco state: the latest report wins (as the app's Bluetooth import keeps the
+    # last gas of a group), so a switch arriving just after a sample is not lost. Each group
+    # keeps its own report time and is always taken whole from one record.
+    # NDL and a deco stop are one deco state in libdivecomputer: a later report of either
+    # replaces the other.
+    groups = {"gasmix": ("gasmix",), "deco": ("ndl_secs", "deco_depth", "deco_time")}
+    key_group = {k: g for g, keys in groups.items() for k in keys}
+    def fold(target, rec):
+        times_by_group = target.setdefault("_state_times", {})
+        for g, keys in groups.items():
+            if not any(k in rec for k in keys):
+                continue
+            owner = times_by_group.get(g, target["time"] if any(k in target for k in keys) else None)
+            if owner is None or rec["time"] >= owner:
+                for k in keys:
+                    if k in rec:
+                        target[k] = rec[k]
+                    else:
+                        target.pop(k, None)
+                times_by_group[g] = rec["time"]
+        for k, v in rec.items():
+            if k == "events":
+                target["events"].extend(e for e in v if e not in target["events"])
+            elif k in ("pressures", "sensors"):
+                merged = dict(v)
+                merged.update(target.get(k) or {})
+                target[k] = merged
+            elif k != "time" and k not in key_group and k not in target:
+                target[k] = v
+    for rec in samples:
+        if "depth" in rec:
+            continue
+        fold(out[_nearest_index(times, rec["time"])], rec)
+    for r in out:
+        r.pop("_state_times", None)
+    return out
+
+
+def _norm_model(s):
+    s = re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+    return re.sub(r"\bii\b", "2", re.sub(r"\biii\b", "3", s))
+
+
+class LibDC:
+    """ctypes wrapper around the parts of libdivecomputer's parser API used for ZRAWDATA."""
+
+    def __init__(self, path):
+        import ctypes as C
+        self.C = C
+        self._descriptor_cache = {}   # normalised computer name → matching descriptors
+        lib = C.CDLL(path)
+        self.lib = lib
+
+        class Location(C.Structure):
+            _fields_ = [("latitude", C.c_double), ("longitude", C.c_double), ("altitude", C.c_double)]
+        class Pressure(C.Structure):
+            _fields_ = [("tank", C.c_uint), ("value", C.c_double)]
+        class Event(C.Structure):
+            _fields_ = [("type", C.c_uint), ("time", C.c_uint), ("flags", C.c_uint), ("value", C.c_uint)]
+        class Vendor(C.Structure):
+            _fields_ = [("type", C.c_uint), ("size", C.c_uint), ("data", C.c_void_p)]
+        class PPO2(C.Structure):
+            _fields_ = [("sensor", C.c_uint), ("value", C.c_double)]
+        class Deco(C.Structure):
+            _fields_ = [("type", C.c_uint), ("time", C.c_uint), ("depth", C.c_double), ("tts", C.c_uint)]
+        class SampleValue(C.Union):
+            _fields_ = [("time", C.c_uint), ("depth", C.c_double), ("pressure", Pressure),
+                        ("temperature", C.c_double), ("event", Event), ("rbt", C.c_uint),
+                        ("heartbeat", C.c_uint), ("bearing", C.c_uint), ("vendor", Vendor),
+                        ("setpoint", C.c_double), ("ppo2", PPO2), ("cns", C.c_double),
+                        ("deco", Deco), ("gasmix", C.c_uint), ("location", Location)]
+        class GasMix(C.Structure):
+            _fields_ = [("helium", C.c_double), ("oxygen", C.c_double),
+                        ("nitrogen", C.c_double), ("usage", C.c_int)]
+        class Tank(C.Structure):
+            _fields_ = [("gasmix", C.c_uint), ("type", C.c_int), ("volume", C.c_double),
+                        ("workpressure", C.c_double), ("beginpressure", C.c_double),
+                        ("endpressure", C.c_double), ("usage", C.c_int)]
+        self.GasMix = GasMix
+        self.Tank = Tank
+        self.Callback = C.CFUNCTYPE(None, C.c_int, C.POINTER(SampleValue), C.c_void_p)
+
+        vp = C.c_void_p
+        lib.dc_version.restype = C.c_char_p
+        lib.dc_context_new.argtypes = [C.POINTER(vp)]
+        lib.dc_context_set_loglevel.argtypes = [vp, C.c_int]
+        lib.dc_descriptor_iterator_new.argtypes = [C.POINTER(vp), vp]
+        lib.dc_iterator_next.argtypes = [vp, vp]
+        lib.dc_iterator_free.argtypes = [vp]
+        for fn in ("dc_descriptor_get_vendor", "dc_descriptor_get_product"):
+            getattr(lib, fn).argtypes = [vp]
+            getattr(lib, fn).restype = C.c_char_p
+        lib.dc_parser_new2.argtypes = [C.POINTER(vp), vp, vp, C.c_char_p, C.c_size_t]
+        lib.dc_parser_get_field.argtypes = [vp, C.c_int, C.c_uint, vp]
+        lib.dc_parser_samples_foreach.argtypes = [vp, self.Callback, vp]
+        lib.dc_parser_destroy.argtypes = [vp]
+
+        self.version = lib.dc_version(None).decode()
+        self.ctx = vp()
+        if lib.dc_context_new(C.byref(self.ctx)) != 0:
+            raise RuntimeError("dc_context_new failed")
+        lib.dc_context_set_loglevel(self.ctx, 0)   # DC_LOGLEVEL_NONE
+
+        # Descriptors are kept for the lifetime of the process (never freed).
+        self.descriptors = []   # (vendor, product, pointer)
+        it = vp()
+        lib.dc_descriptor_iterator_new(C.byref(it), self.ctx)
+        while True:
+            d = vp()
+            if lib.dc_iterator_next(it, C.byref(d)) != 0:
+                break
+            self.descriptors.append((lib.dc_descriptor_get_vendor(d).decode(),
+                                     lib.dc_descriptor_get_product(d).decode(), d))
+        lib.dc_iterator_free(it)
+        self.descriptor_count = len(self.descriptors)
+
+    def _find(self, vendor, product):
+        for v, p, d in self.descriptors:
+            if v.lower() == vendor.lower() and p.lower() == product.lower():
+                return (v, p, d)
+        return None
+
+    def _descriptors_for(self, computer):
+        """Descriptors whose name matches MacDive's computer name, best first (cached per name)."""
+        name = _norm_model(computer)
+        if not name:
+            return []
+        if name not in self._descriptor_cache:
+            self._descriptor_cache[name] = self._match_descriptors(name)
+        return self._descriptor_cache[name]
+
+    def _match_descriptors(self, name):
+        exact, partial = [], []
+        for v, p, d in self.descriptors:
+            full, prod = _norm_model(f"{v} {p}"), _norm_model(p)
+            if name == full or name == prod:
+                exact.append((v, p, d))
+            elif name.endswith(" " + prod) and _norm_model(v) in name:
+                partial.append((v, p, d))
+        found = exact or partial
+        # MacDive stores every Shearwater download in the Petrel (PNF) format, including
+        # the Predator's, so the Petrel parser is the fallback for any Shearwater name.
+        if any(v == "Shearwater" for v, _, _ in found) or name.startswith("shearwater"):
+            petrel = self._find("Shearwater", "Petrel")
+            if petrel and petrel not in found:
+                found.append(petrel)
+        return found
+
+    def _parse(self, desc, data):
+        C, lib = self.C, self.lib
+        parser = C.c_void_p()
+        if lib.dc_parser_new2(C.byref(parser), self.ctx, desc, data, len(data)) != 0:
+            return None
+        try:
+            samples, cur = [], {}
+            state = {"setpoint": None, "sp_changes": 0}
+
+            def cb(stype, value_p, _ud):
+                v = value_p.contents
+                nonlocal cur
+                if stype == _DC_SAMPLE_TIME:
+                    cur = {"time": v.time / 1000.0, "events": []}
+                    samples.append(cur)
+                    return
+                if not samples:
+                    cur = {"time": 0.0, "events": []}
+                    samples.append(cur)
+                if stype == _DC_SAMPLE_DEPTH:
+                    cur["depth"] = v.depth
+                elif stype == _DC_SAMPLE_TEMPERATURE:
+                    cur["temperature"] = v.temperature
+                # A pressure or PPO₂ of 0 means no data (no transmitter / sensor), as on the
+                # MacDive XML path; it is not recorded.
+                elif stype == _DC_SAMPLE_PRESSURE:
+                    if v.pressure.value > 0:
+                        cur.setdefault("pressures", {})[v.pressure.tank] = v.pressure.value
+                elif stype == _DC_SAMPLE_PPO2:
+                    if v.ppo2.value <= 0:
+                        return                              # 0 = no sensor data
+                    if v.ppo2.sensor == _DC_SENSOR_NONE:
+                        cur["ppo2"] = v.ppo2.value          # voted / controller value
+                    else:
+                        cur.setdefault("sensors", {})[v.ppo2.sensor] = v.ppo2.value
+                elif stype == _DC_SAMPLE_DECO:
+                    # NDL and a mandatory stop are one deco state: the later report replaces
+                    # the other, also within one time sample.
+                    if v.deco.type == _DC_DECO_NDL:
+                        cur["ndl_secs"] = v.deco.time
+                        cur.pop("deco_depth", None)
+                        cur.pop("deco_time", None)
+                    elif v.deco.type == _DC_DECO_DECOSTOP:
+                        # Mandatory stop: required stop depth (m) and remaining time there (s).
+                        cur["deco_depth"] = v.deco.depth
+                        cur["deco_time"] = v.deco.time
+                        cur.pop("ndl_secs", None)
+                elif stype == _DC_SAMPLE_GASMIX:
+                    if v.gasmix != _DC_GASMIX_UNKNOWN:
+                        cur["gasmix"] = v.gasmix
+                elif stype == _DC_SAMPLE_SETPOINT:
+                    if state["setpoint"] is not None and v.setpoint != state["setpoint"]:
+                        state["sp_changes"] += 1
+                    state["setpoint"] = v.setpoint
+                elif stype == _DC_SAMPLE_EVENT:
+                    kind = _LIBDC_EVENT_MAP.get(v.event.type)
+                    if kind and kind not in cur["events"]:
+                        cur["events"].append(kind)
+
+            callback = self.Callback(cb)
+            if lib.dc_parser_samples_foreach(parser, callback, None) != 0:
+                return None
+            samples = _merge_depthless_records(samples)
+            depths = [s["depth"] for s in samples]
+            if not depths:
+                return None
+            n_mix = C.c_uint(0)
+            lib.dc_parser_get_field(parser, _DC_FIELD_GASMIX_COUNT, 0, C.byref(n_mix))
+            gasmixes = []
+            for i in range(n_mix.value):
+                gm = self.GasMix()
+                if lib.dc_parser_get_field(parser, _DC_FIELD_GASMIX, i, C.byref(gm)) == 0:
+                    gasmixes.append((round(gm.oxygen * 100), round(gm.helium * 100)))
+                else:
+                    gasmixes.append(None)
+            mode = C.c_int(-1)
+            lib.dc_parser_get_field(parser, _DC_FIELD_DIVEMODE, 0, C.byref(mode))
+            # Dive-level values the computer recorded (None when the parser has no such field).
+            divetime, maxdepth = C.c_uint(0), C.c_double(0)
+            has_divetime = lib.dc_parser_get_field(parser, _DC_FIELD_DIVETIME, 0, C.byref(divetime)) == 0
+            has_maxdepth = lib.dc_parser_get_field(parser, _DC_FIELD_MAXDEPTH, 0, C.byref(maxdepth)) == 0
+            n_tank, raw_tanks = C.c_uint(0), []
+            if lib.dc_parser_get_field(parser, _DC_FIELD_TANK_COUNT, 0, C.byref(n_tank)) == 0:
+                for i in range(n_tank.value):
+                    tk = self.Tank()
+                    if lib.dc_parser_get_field(parser, _DC_FIELD_TANK, i, C.byref(tk)) == 0:
+                        raw_tanks.append({"gasmix": tk.gasmix, "begin": tk.beginpressure,
+                                          "end": tk.endpressure})
+            return {
+                "divetime":    divetime.value if has_divetime and divetime.value > 0 else None,
+                "dc_maxdepth": maxdepth.value if has_maxdepth and maxdepth.value > 0 else None,
+                "tanks":       raw_tanks,
+                "samples":     samples,
+                "gasmixes":    gasmixes,
+                "divemode":    _DC_DIVEMODES.get(mode.value, "unknown"),
+                "max_depth":   max(depths),
+                "span":        max(s["time"] for s in samples),
+                "sp_changes":  state["sp_changes"],
+            }
+        finally:
+            lib.dc_parser_destroy(parser)
+
+    def decode(self, raw, computer, rawdate, check=None):
+        """
+        Decode MacDive ZRAWDATA. Returns (result, None) or (None, reason).
+        `result` adds "model" (the libdivecomputer descriptor that decoded it). `check` is
+        (reference name, max depth in metres, span in seconds) — see raw_agrees: each
+        descriptor/data candidate that parses is checked against it, and the first that
+        agrees is returned, so a candidate that parses into the wrong dive does not hide a
+        later correct one.
+        """
+        if not raw:
+            return None, "no raw dive computer data"
+        raw = bytes(raw)   # TEXT-affinity values are refused by LibDCWorker.decode
+        descs = self._descriptors_for(computer)
+        if not descs:
+            return None, f"computer '{computer or '(none)'}' not supported by libdivecomputer"
+        variants = []
+        if raw[:4] == b"SBEM":
+            # Suunto EON Steel/Core dive file: libdivecomputer's download prepends the
+            # dive's 32-bit timestamp before handing the file to the parser.
+            ts = int(float(rawdate) + 978307200) if rawdate is not None else 0
+            variants.append(struct.pack("<I", ts & 0xFFFFFFFF) + raw)
+        if any(v == "Shearwater" for v, _, _ in descs):
+            variants.append(_shearwater_decompress(raw))
+        variants.append(raw)
+        first_rejection = None
+        for v, p, d in descs:
+            for data in variants:
+                res = self._parse(d, data)
+                if not res:
+                    continue
+                if check is not None:
+                    ok, why = raw_agrees(res, *check)
+                    if not ok:
+                        first_rejection = first_rejection or why
+                        continue
+                res["model"] = f"{v} {p}"
+                return res, None
+        if first_rejection:
+            return None, first_rejection
+        return None, f"libdivecomputer could not decode the raw data (tried {', '.join(f'{v} {p}' for v, p, _ in descs)})"
+
+
+def _libdc_worker_main(dylib_path):
+    """
+    Decoding worker (run as: macdive_to_bluedive.py --libdc-worker <dylib>). libdivecomputer
+    runs here, not in the export process, so a crash in its native code ends only this
+    process. Protocol: length-prefixed pickles on stdin/stdout.
+    """
+    import pickle
+    # Replies go through a private copy of stdout; the process's own stdout (fd 1) is sent to
+    # /dev/null so output from the native library can never corrupt the reply stream.
+    out = os.fdopen(os.dup(1), "wb")
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 1)
+    os.close(devnull)
+    def send(obj):
+        data = pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+        out.write(struct.pack("<I", len(data)) + data)
+        out.flush()
+    try:
+        lib = LibDC(dylib_path)
+    except Exception as exc:
+        send({"error": str(exc)})
+        return
+    send({"version": lib.version, "descriptors": lib.descriptor_count})
+    inp = sys.stdin.buffer
+    while True:
+        head = inp.read(4)
+        if len(head) < 4:
+            return
+        raw, computer, rawdate, check = pickle.loads(inp.read(struct.unpack("<I", head)[0]))
+        try:
+            send(lib.decode(raw, computer, rawdate, check))
+        except Exception as exc:
+            send((None, f"decoding error: {exc}"))
+
+
+_ACTIVE_WORKERS: set = set()   # LibDCWorker instances still running, closed by export_dives
+
+
+class LibDCWorker:
+    """
+    Runs LibDC in a child process. If libdivecomputer crashes (or hangs past
+    _LIBDC_DECODE_TIMEOUT) on a dive, that dive is reported as not decodable and a new
+    worker is started for the next one.
+    """
+
+    _MAX_FAILURES_PER_MODEL = 2   # crashes/hangs on one computer model before it is skipped
+
+    def __init__(self, dylib_path):
+        self.dylib_path = dylib_path
+        self.proc = None
+        self.failures = {}       # computer name → crashes/hangs so far
+        self.disabled = None     # reason, once the worker cannot be restarted
+        hello = self._start()
+        _ACTIVE_WORKERS.add(self)
+        self.version = hello["version"]
+        self.descriptor_count = hello["descriptors"]
+
+    def _start(self):
+        import subprocess
+        self.proc = subprocess.Popen(
+            [sys.executable, os.path.abspath(__file__), "--libdc-worker", self.dylib_path],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        hello = self._recv(_LIBDC_DECODE_TIMEOUT)
+        if hello is None or "error" in hello:
+            self._stop()
+            raise RuntimeError(hello["error"] if hello else "decoding worker did not start")
+        return hello
+
+    def _stop(self):
+        if self.proc is not None:
+            try:
+                self.proc.kill()
+                self.proc.wait(timeout=5)
+            except Exception:
+                pass
+            self.proc = None
+
+    def _recv(self, timeout):
+        """Read one length-prefixed pickle; None on EOF or timeout."""
+        import pickle, select, time
+        fd = self.proc.stdout.fileno()
+        deadline = time.monotonic() + timeout
+        def read_exact(n):
+            buf = b""
+            while len(buf) < n:
+                left = deadline - time.monotonic()
+                if left <= 0 or not select.select([fd], [], [], left)[0]:
+                    return None
+                chunk = os.read(fd, n - len(buf))
+                if not chunk:
+                    return None
+                buf += chunk
+            return buf
+        head = read_exact(4)
+        if head is None:
+            return None
+        size = struct.unpack("<I", head)[0]
+        if size > 256 * 1024 * 1024:
+            self.corrupt_reply = True    # framing out of sync (stray output from the worker)
+            return None
+        body = read_exact(size)
+        if body is None:
+            return None
+        try:
+            return pickle.loads(body)
+        except Exception:
+            self.corrupt_reply = True    # corrupt reply: handled like a crash on this dive
+            return None
+
+    def decode(self, raw, computer, rawdate, check=None):
+        import pickle
+        if raw and not isinstance(raw, (bytes, bytearray, memoryview)):
+            return None, "raw data stored as text (TEXT affinity) — not decodable"
+        if self.disabled:
+            return None, self.disabled
+        if self.failures.get(computer, 0) >= self._MAX_FAILURES_PER_MODEL:
+            return None, (f"skipped — libdivecomputer crashed or hung "
+                          f"{self._MAX_FAILURES_PER_MODEL} times on '{computer}'")
+        if self.proc is None:
+            try:
+                self._start()
+            except Exception as exc:
+                self.disabled = f"libdivecomputer worker could not be restarted ({exc}) — raw decoding off"
+                return None, self.disabled
+        data = pickle.dumps((bytes(raw) if raw else raw, computer, rawdate, check),
+                            protocol=pickle.HIGHEST_PROTOCOL)
+        self.corrupt_reply = False
+        try:
+            self.proc.stdin.write(struct.pack("<I", len(data)) + data)
+            self.proc.stdin.flush()
+            result = self._recv(_LIBDC_DECODE_TIMEOUT)
+        except (BrokenPipeError, OSError):
+            result = None
+        if result is not None:
+            return result
+        # The worker crashed or hung on this dive: report it and start afresh next time.
+        alive = self.proc.poll() is None
+        code = self.proc.returncode
+        self._stop()
+        self.failures[computer] = self.failures.get(computer, 0) + 1
+        if self.corrupt_reply:
+            return None, "libdivecomputer worker sent a corrupt reply for this dive (restarted)"
+        if alive:
+            return None, f"libdivecomputer did not finish within {_LIBDC_DECODE_TIMEOUT} s (stopped)"
+        return None, (f"libdivecomputer crashed decoding this dive"
+                      + (f" (signal {-code})" if code is not None and code < 0 else ""))
+
+    def close(self):
+        _ACTIVE_WORKERS.discard(self)
+        if self.proc is not None:
+            try:
+                self.proc.stdin.close()
+                self.proc.wait(timeout=5)
+            except Exception:
+                pass
+            self._stop()
+
+
+def raw_has_gas_data(decoded):
+    """True when the computer reported its active gas (DC_SAMPLE_GASMIX) in the raw data."""
+    return any(s.get("gasmix") is not None for s in decoded["samples"])
+
+
+def raw_events(decoded, tanks):
+    """
+    Events from a decoded raw dive as [(time, event | None, tank_index | None)].
+    A gas reported on the first sample is the starting gas: it sets the active tank without
+    an event. Every later change of gas — including a first report later in the dive, from
+    computers that report the gas only when it changes — is a gasChange.
+    """
+    events, prev = [], None
+    first_time = decoded["samples"][0]["time"] if decoded["samples"] else None
+    for s in decoded["samples"]:
+        for kind in s["events"]:
+            events.append((s["time"], kind, None))
+        g = s.get("gasmix")
+        if g is not None and g != prev:
+            mix = decoded["gasmixes"][g] if g < len(decoded["gasmixes"]) else None
+            initial = prev is None and s["time"] == first_time
+            events.append((s["time"], None if initial else "gasChange", _tank_for_mix(mix, tanks)))
+            prev = g
+    return events
+
+
+def merge_events(raw_evs, macdive_evs, raw_has_gas, window=30):
+    """
+    Raw events plus MacDive's own events. When the raw data reports the active gas, gas
+    switches come from it only; otherwise MacDive's gas switches are kept. Any other MacDive
+    event is dropped when the raw data has the same event within `window` seconds (MacDive
+    built its list from the same download, and also reports warnings libdivecomputer does not).
+    """
+    merged = list(raw_evs)
+    for t, kind, idx in macdive_evs:
+        if kind == "gasChange" and raw_has_gas:
+            continue
+        if any(rk == kind and abs(rt - t) <= window for rt, rk, _ in raw_evs):
+            continue
+        merged.append((t, kind, idx))
+    return merged
+
+
+def raw_deco_stops(decoded):
+    """
+    Mandatory decompression stops from a decoded raw dive as [(depth_m, seconds)], deepest
+    first — the same rule as the app's Bluetooth import (extractDecoStops): one stop per
+    depth (rounded to the metre), with the longest remaining time the computer reported there.
+    """
+    stops: dict = {}
+    for s in decoded["samples"]:
+        depth, secs = s.get("deco_depth"), s.get("deco_time")
+        if not depth or not secs or depth <= 0 or secs <= 0:
+            continue
+        key = round(depth)
+        if key not in stops or secs > stops[key][1]:
+            stops[key] = (depth, secs)
+    return sorted(stops.values(), key=lambda st: -st[0])
+
+
+def raw_is_deco(decoded):
+    """
+    The computer's decompression status, by the app's Bluetooth import rule (hadDecoObligation):
+    True when it reported a mandatory deco stop (any DC_DECO_DECOSTOP sample, as the app's
+    `decoStop != nil`) or a deco-stop event; False when it reported deco status (NDL samples)
+    but never an obligation; None when the raw data carries no deco information (MacDive's
+    flag is kept).
+    """
+    samples = decoded["samples"]
+    if any("deco_depth" in s or "decoStop" in s["events"] for s in samples):
+        return True
+    if any("ndl_secs" in s for s in samples):
+        return False
+    return None
+
+
+def raw_tank_mix_ok(decoded, raw_i, tank):
+    """False only when the computer names a gas for raw tank `raw_i` that differs from the tank's mix."""
+    records = decoded.get("tanks") or []
+    if raw_i >= len(records):
+        return True
+    g = records[raw_i]["gasmix"]
+    if g == _DC_GASMIX_UNKNOWN or g >= len(decoded["gasmixes"]) or decoded["gasmixes"][g] is None:
+        return True
+    return tuple(decoded["gasmixes"][g]) == (tank["o2"], tank["he"])
+
+
+def map_raw_tanks(decoded, tanks, cvt_press, tolerance, end_time=None):
+    """
+    One mapping {raw tank index: dive tank index}, used for both the tank start/end pressures
+    and the per-sample tank pressures (libdivecomputer's sample pressure.tank is the index into
+    its tank list). A raw tank matches a dive tank when its begin pressure equals MacDive's start
+    pressure and its reading at MacDive's end time (the computer's end pressure when it has no
+    readings) equals MacDive's end pressure, each within `tolerance` (output unit), with the same
+    mix when the computer names it. A raw tank matching several dive tanks, or a dive tank
+    matched by several raw tanks (e.g. sidemount tanks MacDive logged as one), is not mapped.
+    `tanks` must hold MacDive's values. Returns (mapping, {raw index: (start, end)}, series).
+    """
+    series: dict = {}
+    for s in decoded["samples"]:
+        for t, v in (s.get("pressures") or {}).items():
+            series.setdefault(t, []).append((s["time"], v))
+    records = decoded.get("tanks") or []
+    values = {}   # raw index → (start, end, end at MacDive's end time) in the output unit
+    for i in set(series) | set(range(len(records))):
+        rec = records[i] if i < len(records) else None
+        readings = series.get(i, [])   # 0 readings (no data) are already dropped by LibDC._parse
+        begin = rec["begin"] if rec and rec["begin"] > 0 else (readings[0][1] if readings else None)
+        end = rec["end"] if rec and rec["end"] > 0 else (readings[-1][1] if readings else None)
+        if begin is None or end is None:
+            continue
+        at_end = (min(readings, key=lambda x: abs(x[0] - end_time))[1]
+                  if readings and end_time else end)
+        values[i] = (cvt_press(begin), cvt_press(end), cvt_press(at_end))
+    hits_by_raw = {}
+    for i, (start, _end, at_end) in values.items():
+        hits_by_raw[i] = [k for k, tk in enumerate(tanks)
+                          if tk.get("start") is not None and abs(tk["start"] - start) <= tolerance
+                          and (tk.get("end") is None or abs(tk["end"] - at_end) <= tolerance)
+                          and raw_tank_mix_ok(decoded, i, tk)]
+    # Every match counts toward ambiguity: a dive tank matched by several raw tanks (even one
+    # that also matched another dive tank) is not mapped, nor is a raw tank matching several.
+    claimants: dict = {}
+    for i, hits in hits_by_raw.items():
+        for k in hits:
+            claimants.setdefault(k, []).append(i)
+    mapping = {i: hits[0] for i, hits in hits_by_raw.items()
+               if len(hits) == 1 and len(claimants[hits[0]]) == 1}
+    # One tank, one computer tank with pressures, and MacDive has no pressures for it: they are
+    # the same tank (with the same mix when the computer names it).
+    if (not mapping and len(values) == 1 and len(tanks) == 1
+            and tanks[0].get("start") is None and tanks[0].get("end") is None):
+        only = next(iter(values))
+        if raw_tank_mix_ok(decoded, only, tanks[0]):
+            mapping = {only: 0}
+    return mapping, {i: (v[0], v[1]) for i, v in values.items()}, series
+
+
+def raw_agrees(decoded, ref_name, ref_max_m, ref_span):
+    """
+    (True, None) when the decoded raw profile is the same dive as the reference — MacDive's
+    XML profile, or the dive record when there is none: max depth within 0.5 m, and the raw
+    profile not more than 60 s shorter (it may run longer, since MacDive trims the surface
+    samples logged after the dive). Else (False, reason).
+    """
+    if ref_max_m is None:
+        return False, f"{ref_name} has no max depth to verify the raw profile against"
+    if abs(decoded["max_depth"] - float(ref_max_m)) > 0.5:
+        return False, (f"raw max depth {decoded['max_depth']:.1f} m ≠ {ref_name} "
+                       f"{float(ref_max_m):.1f} m")
+    if ref_span and decoded["span"] < float(ref_span) - 60:
+        return False, (f"raw profile {decoded['span']:.0f} s shorter than {ref_name} "
+                       f"{float(ref_span):.0f} s")
+    return True, None
+
+
+def merge_xml_pressures(raw_samples, xml_samples, window=2.0):
+    """
+    For raw samples with no main-tank pressure at all: put MacDive's main-tank pressures on
+    the raw samples recorded at the same moment (within `window` seconds) — nothing is copied
+    onto other samples. The value goes in the main-tank slot (tankPressure, or per-tank entry
+    0 when the sample has per-tank pressures, where BlueDive reads the main pressure).
+    Applied only when at least 90 % of MacDive's pressure readings within the raw profile find
+    their raw sample, so a shifted timeline is never merged. Not used to fill gaps between the
+    computer's own main-tank readings: MacDive fills those moments with another transmitter's
+    value. Returns (filled, matched, total) — total = MacDive readings within the raw profile.
+    """
+    xs = [x for x in xml_samples if x.get("pressure") is not None]
+    if not xs or not raw_samples:
+        return 0, 0, 0
+    times = [r["time"] for r in raw_samples]
+    lo, hi = times[0] - window, times[-1] + window
+    pairs, total = [], 0
+    for x in xs:
+        if x["time"] < lo or x["time"] > hi:
+            continue
+        total += 1
+        i = _nearest_index(times, x["time"])
+        if abs(times[i] - x["time"]) <= window:
+            pairs.append((i, abs(times[i] - x["time"]), x["pressure"]))
+    if not total or len(pairs) < 0.9 * total:
+        return 0, len(pairs), total
+    best = {}                              # raw sample → MacDive reading closest to its moment
+    for i, dt, pressure in pairs:
+        if i not in best or dt < best[i][0]:
+            best[i] = (dt, pressure)
+    filled = 0
+    for i, (_dt, pressure) in best.items():
+        r = raw_samples[i]
+        if r.get("tank_pressures"):
+            r["tank_pressures"] = {0: pressure, **r["tank_pressures"]}
+        else:
+            r["pressure"] = pressure
+        filled += 1
+    return filled, len(pairs), total
+
+
+def raw_profile_samples(decoded, cvt_depth, cvt_temp, cvt_press, mapping, series):
+    """
+    Profile samples from a decoded raw dive, in the output units (libdivecomputer reports
+    metres, °C and bar). Transmitters mapped to a dive tank (see map_raw_tanks) are written as
+    that tank's pressure: as tankPressure when the first tank is the only one mapped,
+    otherwise as per-tank pressures. Unmapped transmitters are left out, so the samples and
+    the tank values always come from the same tank mapping.
+    """
+    mapped = {raw_i: k for raw_i, k in mapping.items() if raw_i in series}
+    plain = set(mapped.values()) == {0}
+    out = []
+    for s in decoded["samples"]:
+        pressures = s.get("pressures") or {}
+        ndl = s.get("ndl_secs")
+        sample = {
+            "time":        s["time"],
+            "depth":       cvt_depth(s["depth"]),
+            "temperature": cvt_temp(s["temperature"]) if "temperature" in s else None,
+            "pressure":    None,
+            "ppo2":        s.get("ppo2"),
+            "sensor_ppo2": s.get("sensors"),
+            "ndt":         (ndl // 60 if ndl % 60 == 0 else ndl / 60) if ndl is not None else None,
+        }
+        # Mandatory deco obligation, as the app's Bluetooth import stores it: ceiling in the
+        # output distance unit, remaining stop time in minutes, and a decoStop event. A
+        # reported zero ceiling is not an obligation.
+        if (s.get("deco_depth") or 0) > 0:
+            sample["ceiling_depth"] = cvt_depth(s["deco_depth"])
+            if s.get("deco_time") is not None:
+                sample["ceiling_time"] = s["deco_time"] / 60.0
+            sample["events"] = ["decoStop"]
+        per_tank = {mapped[t]: cvt_press(v) for t, v in pressures.items() if t in mapped}
+        if plain and 0 in per_tank:
+            sample["pressure"] = per_tank[0]
+        elif per_tank and not plain:
+            sample["tank_pressures"] = per_tank
+        out.append(sample)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -951,6 +2094,24 @@ def _norm_name(n):
     return " ".join(n.casefold().split())
 
 
+def _num(v):
+    """float(v), or None when v is missing or not numeric (e.g. a TEXT-affinity value)."""
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _durations_agree(xml_dur, sqlite_dur):
+    """
+    True when the XML <duration> and the SQLite duration are the same value (±2 s rounding).
+    Both come from the same MacDive dive record, so the match is confirmed and the profile
+    span check is skipped: many computers (Garmin, Shearwater) keep logging surface samples
+    for several minutes after the dive ends, making the profile longer than the duration.
+    """
+    return xml_dur is not None and sqlite_dur is not None and abs(xml_dur - sqlite_dur) <= 2
+
+
 def _detect_consensus_offset(xml_dives, sqlite_utc_index):
     """
     Return the UTC hour offset that converts the XML's naive local-time dates to UTC.
@@ -1138,7 +2299,7 @@ def match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=False)
                       file=sys.stderr)
                 unresolved.append((xi, "depth_mismatch", xml_dive["date_str"]))
                 continue
-        if xml_samples and c[2] is not None:
+        if xml_samples and c[2] is not None and not _durations_agree(xml_dur, c[2]):
             xml_span = max(s["time"] for s in xml_samples)
             if abs(xml_span - c[2]) > 120:
                 print(f"  Warning: span mismatch for {xml_dive['date_str']} "
@@ -1249,7 +2410,7 @@ def match_samples_to_dives(xml_dives, sqlite_utc_index, xml_depth_in_feet=False)
                 if abs(xml_max_m - c[3]) > 5.0:
                     retry_unresolved.append((xi, "depth_mismatch", xml_dive["date_str"]))
                     continue
-            if xml_samples and c[2] is not None:
+            if xml_samples and c[2] is not None and not _durations_agree(xml_dur, c[2]):
                 xml_span = max(s["time"] for s in xml_samples)
                 if abs(xml_span - c[2]) > 120:
                     retry_unresolved.append((xi, "span_mismatch", xml_dive["date_str"]))
@@ -1316,11 +2477,23 @@ def profile_samples_xml_lines(samples, indent=4):
             attrs.append(f'temperature="{fmt_double(s["temperature"])}"')
         if s.get("pressure") is not None:
             attrs.append(f'tankPressure="{fmt_double(s["pressure"])}"')
+        if s.get("tank_pressures"):
+            attrs.append('tankPressures="' + ",".join(
+                f'{i}:{fmt_double(v)}' for i, v in sorted(s["tank_pressures"].items())) + '"')
         if s.get("ppo2") is not None:
             attrs.append(f'ppo2="{fmt_double(s["ppo2"])}"')
+        if s.get("sensor_ppo2"):
+            attrs.append('sensorPPO2="' + ",".join(
+                f'{i}:{fmt_double(v)}' for i, v in sorted(s["sensor_ppo2"].items())) + '"')
         if s.get("ndt") is not None:
             attrs.append(f'ndl="{s["ndt"]}"')
-        attrs.append('events=""')
+        if s.get("ceiling_depth") is not None:
+            attrs.append(f'ceilingDepth="{fmt_double(s["ceiling_depth"])}"')
+        if s.get("ceiling_time") is not None:
+            attrs.append(f'ceilingTime="{fmt_double(s["ceiling_time"])}"')
+        if s.get("current_gas") is not None:
+            attrs.append(f'currentGas="{s["current_gas"]}"')
+        attrs.append(f'events="{",".join(s.get("events", []))}"')
         lines.append(f'{inner_pad}<sample {" ".join(attrs)}/>')
     lines.append(f'{pad}</profileSamples>')
     return lines
@@ -1331,6 +2504,15 @@ def profile_samples_xml_lines(samples, indent=4):
 # ---------------------------------------------------------------------------
 
 def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
+    """Export dives; the libdivecomputer worker is stopped however the export ends."""
+    try:
+        return _export_dives(input_path, output_path, weight_unit, macdive_xml_path)
+    finally:
+        for worker in list(_ACTIVE_WORKERS):
+            worker.close()
+
+
+def _export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     _reset_schema_caches()
 
     # Parse MacDive XML first — distance/temp/pressure/volume are auto-detected from its <units> tag.
@@ -1376,6 +2558,11 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     _press_to_bar  = units["pressure"] == "bar"
     _vol_to_liters = units["volume"]   == "liters"
 
+    def cvt_bar_out(v):
+        # libdivecomputer reports pressure in bar; convert to the output unit with its own
+        # factor (PSI = 6894.75729 Pa), so a pressure the computer recorded in psi round-trips.
+        return v if (v is None or _press_to_bar) else v / 0.0689475729
+
     def cvt_xml_press(v):
         # XML pressureStart/pressureEnd are correctly unit-converted by MacDive to the display
         # unit (PSI for Canadian/Imperial, bar for Metric). Convert to the output unit.
@@ -1419,6 +2606,13 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     print(f"  Units auto-detected: distance={units['distance']}  temp={units['temp']}  "
           f"pressure={units['pressure']}  volume={units['volume']}  weight={units['weight']}")
 
+    # libdivecomputer setup is logged on screen and at the top of the log file.
+    _header_logs: list = []
+    def _hlog(msg):
+        print(f"  {msg}")
+        _header_logs.append(msg)
+    libdc = LazyLibDC(_hlog)   # set up on the first dive with raw data
+
     con = sqlite3.connect(input_path)
     cur = con.cursor()
 
@@ -1441,7 +2635,26 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     buddy_jt   = find_junction(junctions, "BUDDIES",  "DIVE")
     type_jt    = find_junction(junctions, "DIVETYPE", "DIVE")
     tag_jt     = find_junction(junctions, "TAG",      "DIVE")
-    critter_jt = find_junction(junctions, "CRITTERTODIVE")
+    # Critter ↔ dive and critter ↔ dive-photo junctions, by their exact name endings
+    # (…CRITTERTODIVE / …CRITTERTODIVEIMAGE), so neither can be taken for the other — the
+    # photo junction's name also contains CRITTERTODIVE.
+    critter_jt = next((j for j in junctions
+                       if j[0].upper().endswith(("CRITTERTODIVE", "CRITTERTODIVES"))), None)
+    critter_image_jt = next((j for j in junctions
+                             if j[0].upper().endswith(("CRITTERTODIVEIMAGE", "CRITTERTODIVEIMAGES"))), None)
+    # Fallback for schemas that name the junction after the other side (…DIVETOCRITTER):
+    # a column pointing to critters plus one pointing to dives (or dive photos).
+    def _critter_jt_by_columns(want_image):
+        ends = ("TODIVEIMAGE", "TODIVEIMAGES") if want_image else ("TODIVE", "TODIVES")
+        for j in junctions:
+            cols = [c.upper() for c in j[1:]]
+            crit = [c for c in cols if c.endswith(("TOCRITTER", "TOCRITTERS"))]
+            other = [c for c in cols if c not in crit]
+            if len(crit) == 1 and len(other) == 1 and other[0].endswith(ends):
+                return j
+        return None
+    critter_jt = critter_jt or _critter_jt_by_columns(False)
+    critter_image_jt = critter_image_jt or _critter_jt_by_columns(True)
 
     # Pre-resolve gear-hinted junctions once; passed per-dive to avoid re-scanning.
     # Exclude group-gear junctions (column name contains "GROUP") — those map group PKs
@@ -1553,6 +2766,13 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
     _n_auto_press = 0
     _n_xml_temp   = 0
     _n_auto_temp  = 0
+    # Profile source counters (summary) and reasons raw data was not used.
+    import collections as _collections
+    _n_src       = _collections.Counter()
+    _raw_reasons = _collections.Counter()
+    _n_deco_dives = 0
+    _n_raw_vals   = _collections.Counter()   # dive values taken from raw data instead of MacDive
+    print("  Profile source per dive:")
 
     # Per-dive unit log setup.
     log_path       = str(Path(output_path).with_suffix(".log"))
@@ -1681,7 +2901,7 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
             if _xg is not None and _xg.get("start"):
                 _xml_start  = _xg["start"]
                 _xml_end    = _xg.get("end")
-                _raw_end_sq = _t.get("end")   # SQLite end used when XML end is absent
+                _raw_end_sq = _t.get("end") or None   # SQLite end used when XML end is absent; 0 = no data
                 _t["start"] = cvt_xml_press(_xml_start)
                 if _xml_end:
                     _t["end"] = cvt_xml_press(_xml_end)
@@ -1781,10 +3001,82 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
             _dive_log.append(f"    wp     : {_wp_log}")
             _dive_log.append(f"    volume : {_vol_log}")
 
+        # Raw dive computer data (ZRAWDATA, decoded by libdivecomputer in a worker process).
+        # When it agrees with MacDive's XML profile (or, without one, with the dive record), it
+        # has priority for every value it records: profile, events, decompression stops, and
+        # the dive time, max depth, decompression flag and tank pressures below.
+        xml_samples = pk_to_samples.get(pk, [])
+        if xml_samples:
+            _check = ("MacDive profile",
+                      max(s["depth"] for s in xml_samples) * (0.3048 if xml_depth_in_feet else 1.0),
+                      max(s["time"] for s in xml_samples))
+        else:
+            _check = ("dive", _num(max_depth), _num(duration))
+        if raw_data:
+            decoded, raw_why = libdc.decode(raw_data, comp_name, ts, _check)
+        else:
+            decoded, raw_why = None, None
+        _macdive_duration = _num(duration)
+        _macdive_tanks = [dict(t) for t in tanks]   # MacDive's tank values, before raw overrides
+        _deco_stops = raw_deco_stops(decoded) if decoded is not None else []
+        _tank_map, _raw_tank_values, _raw_series = {}, {}, {}
+        _max_depth_src = "SQLite"
+        if decoded is not None:
+            _changes = []
+            _dur, _md = _macdive_duration, _num(max_depth)
+            # The computer's dive time, used only when plausible: not longer than its own
+            # profile (+60 s) and within 10 min (or 20 %) of MacDive's duration.
+            _dt = decoded["divetime"]
+            if _dt is not None and (_dt > decoded["span"] + 60 or
+                                    (_dur and abs(_dur - _dt) > max(600, 0.2 * _dur))):
+                _dive_log.append(f"  duration   : raw dive time {_dt} s implausible (raw profile "
+                                 f"{decoded['span']:.0f} s, MacDive {_fv(duration, 0)} s) — MacDive's kept")
+                _dt = None
+            if _dt is not None:
+                if _dur is None or abs(_dur - _dt) > 0.5:
+                    _changes.append(f"duration {_fv(duration, 0)} → {_dt} s")
+                    _n_raw_vals["duration"] += 1
+                duration = _dt
+            # The computer's recorded max depth, used only when it agrees with its deepest
+            # sample (which the agreement check compared with MacDive's).
+            _hdr_md = decoded["dc_maxdepth"]
+            if _hdr_md is not None and abs(_hdr_md - decoded["max_depth"]) > 0.5:
+                _dive_log.append(f"  max depth  : raw header {_hdr_md:.2f} m ≠ deepest raw sample "
+                                 f"{decoded['max_depth']:.2f} m — MacDive's kept")
+                _hdr_md = None
+            if _hdr_md is not None:
+                if _md is None or abs(_md - _hdr_md) > 0.005:
+                    _changes.append(f"max depth {_fv(max_depth)} → {_hdr_md:.2f} m")
+                    _n_raw_vals["max depth"] += 1
+                max_depth = _hdr_md
+                _max_depth_src = "raw data"
+            _raw_deco = raw_is_deco(decoded)
+            if _raw_deco is not None:
+                if _raw_deco != bool(is_deco):
+                    _changes.append(f"decompression dive {'yes' if is_deco else 'no'} → "
+                                    f"{'yes' if _raw_deco else 'no'}")
+                    _n_raw_vals["decompression flag"] += 1
+                is_deco = _raw_deco
+            # One tank mapping for the tank cards here and the sample pressures below.
+            _tank_map, _raw_tank_values, _raw_series = map_raw_tanks(
+                decoded, _macdive_tanks, cvt_bar_out, 1.0 if _press_to_bar else 14.5038,
+                _macdive_duration)
+            for _ri, _ti in sorted(_tank_map.items(), key=lambda kv: kv[1]):
+                _t = tanks[_ti]
+                _old = (_t.get("start"), _t.get("end"))
+                _t["start"], _t["end"] = _raw_tank_values[_ri]
+                if _old[0] is None or _old[1] is None or abs(_old[0] - _t["start"]) > 0.005 \
+                        or abs(_old[1] - _t["end"]) > 0.005:
+                    _changes.append(f"tank[{_ti + 1}] {_fv(_old[0])}/{_fv(_old[1])} → "
+                                    f"{_fv(_t['start'])}/{_fv(_t['end'])} {_log_pu}")
+                    _n_raw_vals["tank pressures"] += 1
+            if _changes:
+                _dive_log.append("  raw values : " + "; ".join(_changes) + "  (MacDive → raw data)")
+
         buddy_names = junction_lookup(cur, pk, buddy_jt, buddies)
         type_names  = junction_lookup(cur, pk, type_jt,  types_lkp)
         tag_names   = junction_lookup(cur, pk, tag_jt,   tags_lkp)
-        critters    = fetch_critters(cur, pk, critter_jt)
+        critters    = fetch_critters(cur, pk, critter_jt, critter_image_jt)
         gear_items  = fetch_dive_gear(cur, pk, gear_map, gear_jts)
 
         try:
@@ -1829,7 +3121,7 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
         lines.append(xtag("maxDepth",        fmt_double(cvt_dist(max_depth)),  indent=4))
         lines.append(xtag("averageDepth",    fmt_double(cvt_dist(avg_depth)),  indent=4))
         lines.append(xtag("duration",        str(dur_secs),          indent=4))
-        _dive_log.append(f"  maxDepth   : {_fv(max_depth, 4)} m (SQLite) → {_fv(cvt_dist(max_depth), 4)} {_log_du}")
+        _dive_log.append(f"  maxDepth   : {_fv(max_depth, 4)} m ({_max_depth_src}) → {_fv(cvt_dist(max_depth), 4)} {_log_du}")
         _dive_log.append(f"  avgDepth   : {_fv(avg_depth, 4)} m (SQLite) → {_fv(cvt_dist(avg_depth), 4)} {_log_du}")
         try:
             _surf_int_str = str(round(float(surf_int))) if surf_int is not None else ""
@@ -1994,9 +3286,54 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
                 lines.append("      </item>")
             lines.append("    </gear>")
 
-        # Profile samples from MacDive XML (matched by UTC + diver + duration)
-        samples = pk_to_samples.get(pk, [])
-        if samples:
+        # Profile samples: the raw dive computer data (ZRAWDATA, decoded by libdivecomputer)
+        # has priority when it agrees with MacDive's XML profile (or, without one, with the
+        # dive's max depth and duration); otherwise the MacDive XML samples are used.
+        # (decoded / raw_why come from the raw decode done before the dive values are written.)
+        samples, dive_events, event_src, _keep_xml = [], [], None, False
+        if decoded is not None:
+            raw_samples = raw_profile_samples(decoded, cvt_dist, cvt_temp, cvt_bar_out,
+                                              _tank_map, _raw_series)
+            _n_pt, _n_pt_mapped = len(_raw_series), sum(1 for i in _raw_series if i in _tank_map)
+            # No main-tank pressure anywhere in the raw samples (no transmitter, none matching a
+            # dive tank — e.g. sidemount tanks MacDive logged as one — or only another tank's)
+            # while MacDive's XML samples have it: MacDive's main-tank pressures go onto the raw
+            # samples recorded at the same moment (see merge_xml_pressures). If they don't line
+            # up, MacDive's XML samples are kept instead.
+            _raw_has_main = any(s.get("pressure") is not None or 0 in (s.get("tank_pressures") or {})
+                                for s in raw_samples)
+            _xml_has_pressure = any(s.get("pressure") is not None for s in xml_samples)
+            _pressure_note = None
+            if not _raw_has_main and _xml_has_pressure:
+                _filled, _matched, _total = merge_xml_pressures(raw_samples, xml_samples)
+                if _filled:
+                    _pressure_note = (f"MacDive XML main-tank pressures added to {_filled} raw samples "
+                                      f"recorded at the same moment ({_matched}/{_total} MacDive readings line up)")
+                else:
+                    _keep_xml = True
+                    _pressure_note = (f"MacDive XML samples kept for their tank pressure (only "
+                                      f"{_matched}/{_total} MacDive readings line up with the raw samples)")
+            if _n_pt > 1 or _pressure_note:
+                _dive_log.append(f"  pressures  : {_n_pt} transmitter tank(s) in raw data, {_n_pt_mapped} matched "
+                                 f"to a dive tank by start/end pressure"
+                                 + (f" — {_pressure_note}" if _pressure_note
+                                    else " (unmatched tanks not imported)"))
+            # Gas switches from the raw data (MacDive's when the raw data reports no gas),
+            # other events from both sources.
+            _raw_evs = raw_events(decoded, tanks)
+            dive_events = merge_events(_raw_evs, fetch_events(cur, pk, tanks), raw_has_gas_data(decoded))
+            _n_raw_ev = sum(1 for e in _raw_evs if e[1] is not None)
+            event_src = (f"raw data ({_n_raw_ev}) + MacDive "
+                         f"({sum(1 for e in dive_events if e[1] is not None) - _n_raw_ev})")
+        if decoded is not None and not _keep_xml:
+            samples = raw_samples
+            _profile_src = (f"raw data ({len(samples)} samples, libdivecomputer: {decoded['model']}, "
+                            f"{decoded['divemode']})"
+                            + (" + MacDive sample pressures" if _pressure_note else "")
+                            + ("" if xml_samples else " — no MacDive XML profile"))
+            _n_src["raw"] += 1
+        elif xml_samples:
+            samples = xml_samples
             # Sample depths come from XML in the display unit; convert only if output differs.
             # (All three presets share the same input/output unit system, so these branches
             #  are currently unreachable, but are retained for safety should overrides be added.)
@@ -2006,6 +3343,47 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
                 samples = [{**s, "depth": s["depth"] / 0.3048} for s in samples]
             # Sample tank pressures come from XML already in the display unit; no conversion needed
             # because the output pressure unit always matches the XML export unit for all presets.
+            if decoded is not None:   # _keep_xml: gas switches and events still come from raw data
+                _profile_src = (f"MacDive XML samples ({len(samples)}) + gas switches/events from raw data "
+                                f"(libdivecomputer: {decoded['model']}, {decoded['divemode']}) — raw samples "
+                                f"have no main-tank pressure and don't line up with MacDive's")
+                _n_src["xml+raw"] += 1
+            else:
+                dive_events, event_src = fetch_events(cur, pk, tanks), "MacDive"
+                _profile_src = (f"MacDive XML samples ({len(samples)}) + MacDive events"
+                                + (f"; raw data not used: {raw_why}" if raw_why else ""))
+                _n_src["xml"] += 1
+        else:
+            _profile_src = "none — no MacDive XML profile" + (f"; raw data not used: {raw_why}" if raw_why else "")
+            _n_src["none"] += 1
+        if raw_why:
+            _raw_reasons[re.sub(r"[\d.]+", "#", raw_why)] += 1
+        _dive_log.append(f"  profile    : {_profile_src}")
+        print(f"    Dive #{_log_dive_num}: {_profile_src}")
+        if decoded is not None and decoded["sp_changes"]:
+            _dive_log.append(f"  setpoints  : {decoded['sp_changes']} setpoint switch(es) in raw data — "
+                             f"not imported (BlueDive has no setpoint event)")
+        # Mandatory decompression stops reported by the computer (Gas tab list). Depth in
+        # metres, time in seconds, type 2 = DC_DECO_DECOSTOP.
+        if _deco_stops:
+            lines.append("    <decoStops>")
+            for _sd, _st in _deco_stops:
+                # DecoStop.depth is metres in BlueDive's model, whatever the dive's distance unit.
+                lines.append(f'      <decoStop depth="{fmt_double(_sd)}" time="{int(_st)}" type="2"/>')
+            lines.append("    </decoStops>")
+            _dive_log.append("  deco stops : " + ", ".join(
+                f"{fmt_double(_sd)} m {int(_st) // 60}:{int(_st) % 60:02d}" for _sd, _st in _deco_stops)
+                + " (raw data)")
+            _n_deco_dives += 1
+        if samples:
+            samples = attach_events_to_samples(samples, dive_events)
+            _n_ev = sum(1 for e in dive_events if e[1] is not None)
+            if _n_ev:
+                _n_gas = sum(1 for e in dive_events if e[1] == "gasChange")
+                _n_gas_tank = sum(1 for e in dive_events if e[1] == "gasChange" and e[2] is not None)
+                _dive_log.append(f"  events     : {_n_ev} imported from {event_src}"
+                                 + (f" ({_n_gas} gas switch(es), {_n_gas_tank} matched to a tank)"
+                                    if _n_gas else ""))
             lines.append("    <!-- BlueDiveSamplesData -->")
             lines.extend(profile_samples_xml_lines(samples, indent=4))
 
@@ -2029,11 +3407,32 @@ def export_dives(input_path, output_path, weight_unit, macdive_xml_path):
 
     lines.append("  </dives>")
     lines.append("</blueDiveExport>")
-    con.close()
+    con.close()   # the libdivecomputer worker is closed by export_dives
 
+    _src_summary = [
+        "Profile source summary:",
+        f"  Raw data (libdivecomputer)                       : {_n_src['raw']}",
+        f"  MacDive XML samples + raw gas switches/events    : {_n_src['xml+raw']}",
+        f"  MacDive XML samples + MacDive events             : {_n_src['xml']}",
+        f"  No profile                                       : {_n_src['none']}",
+        f"  Dives with deco stops from raw data              : {_n_deco_dives}",
+        "  Dive values changed by raw data (MacDive → raw): "
+        + (", ".join(f"{k} {v}" for k, v in _n_raw_vals.items()) or "none"),
+    ]
+    if _raw_reasons:
+        _src_summary.append("  Raw data not used (# = number):")
+        for _reason, _cnt in _raw_reasons.most_common():
+            _src_summary.append(f"    {_cnt:5d}  {_reason}")
+    _src_summary.append("")
+
+    if not libdc.started:
+        _hlog("libdivecomputer not needed — no dive has raw dive computer data (ZRAWDATA)")
+    _header_logs.append("")
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")
-    Path(log_path).write_text("\n".join(_all_dive_logs), encoding="utf-8")
+    Path(log_path).write_text("\n".join(_header_logs + _src_summary + _all_dive_logs), encoding="utf-8")
     print(f"✓ {len(rows)} dives exported to {output_path}")
+    for _line in _src_summary[:-1]:
+        print(f"  {_line}")
     print(f"  Log         : {log_path}")
     print(f"  Gear items  : {len(gear_map)}")
     print(f"  Distance    : {distance_fmt}")
@@ -2419,4 +3818,7 @@ Examples:
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 3 and sys.argv[1] == "--libdc-worker":
+        _libdc_worker_main(sys.argv[2])   # internal: libdivecomputer decoding process
+    else:
+        main()

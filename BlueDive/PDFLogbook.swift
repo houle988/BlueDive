@@ -1211,7 +1211,8 @@ struct PDFDiveLogbook {
         // Add deco stops if present
         if dive.isDecompressionDive && !dive.decoStops.isEmpty {
             for stop in dive.decoStops {
-                let depthLabel = dive.displayDepth(stop.depth).localizedString(decimals: 0) + " \(UserPreferences.shared.depthUnit.symbol)"
+                // DecoStop.depth is always metres (see Dive.swift), whatever the dive's importDistanceUnit.
+                let depthLabel = UserPreferences.shared.depthUnit.convert(stop.depth).localizedString(decimals: 0) + " \(UserPreferences.shared.depthUnit.symbol)"
 
                 let timeLabel: String = {
                     let m = Int(stop.time) / 60

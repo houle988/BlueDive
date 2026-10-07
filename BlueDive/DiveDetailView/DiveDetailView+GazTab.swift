@@ -617,7 +617,9 @@ extension DiveDetailView {
     // MARK: - Helper Functions for Decompression
 
     func decoStopDepthLabel(_ depth: Double) -> String {
-        let converted = dive.displayDepth(depth)
+        // DecoStop.depth is always metres (see Dive.swift), whatever the dive's
+        // importDistanceUnit — the chart and PDF read it the same way.
+        let converted = UserPreferences.shared.depthUnit.convert(depth)
         return converted.localizedString(decimals: 0) + " \(UserPreferences.shared.depthUnit.symbol)"
     }
 
