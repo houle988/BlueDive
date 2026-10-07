@@ -101,8 +101,9 @@ struct ContentView: View {
     @State private var showSyncStatusPopover = false
     @State private var collapsedDiverSections: Set<String> = []
     #if os(macOS)
-    /// Whether the dive rows show their one-line version (wide window), reported by the rows;
-    /// the column header row is shown only then. Starts one-line: the main window opens maximized.
+    /// Whether the dive rows show their one-line version (wide window), and their width, reported
+    /// by the rows; the column header pinned above the list is shown only then, at that width.
+    /// Starts one-line: the main window opens maximized.
     @State private var diveListLayout = OneLineRowsLayout()
     /// Selected dive (click or arrow keys); the profile preview above the list shows it.
     /// An observable object rather than a `UUID?` `@State` so a selection change redraws only
@@ -815,13 +816,6 @@ struct ContentView: View {
                                     }
                                 }
                             )) {
-                                #if os(macOS)
-                                // Column labels as a row, so they share the dive rows' width.
-                                if diveListLayout.isOneLine {
-                                    DiveListColumnHeader()
-                                        .columnHeaderRow()
-                                }
-                                #endif
                                 ForEach(sectionSummaries) { summary in
                                     let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
                                     diveRow(summary, rowNumber: rowNumber, isGrouped: true)
@@ -879,17 +873,12 @@ struct ContentView: View {
                     }
                     .contentMargins(.top, 0, for: .scrollContent)
                     #if os(macOS)
+                    // Column labels pinned above the list, once for all diver sections.
+                    .diveListPinnedColumnHeader(diveListLayout)
                     .environment(diveListLayout)
                     #endif
                 } else {
                     diveListContainer {
-                        #if os(macOS)
-                        // Column labels as a row, so they share the dive rows' width.
-                        if diveListLayout.isOneLine {
-                            DiveListColumnHeader()
-                                .columnHeaderRow()
-                        }
-                        #endif
                         ForEach(displayedSummaries) { summary in
                             let rowNumber = dives.count - (store.diveIndexLookup[summary.id] ?? 0)
                             diveRow(summary, rowNumber: rowNumber, isGrouped: false)
@@ -929,6 +918,8 @@ struct ContentView: View {
                     .listStyle(.plain)
                     .contentMargins(.top, 0, for: .scrollContent)
                     #if os(macOS)
+                    // Column labels pinned above the list, so they stay visible while it scrolls.
+                    .diveListPinnedColumnHeader(diveListLayout)
                     .environment(diveListLayout)
                     #endif
                 }

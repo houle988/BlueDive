@@ -555,6 +555,11 @@ struct WidthAdaptiveLayout<Wide: View, Narrow: View>: View {
 @Observable final class OneLineRowsLayout {
     var isOneLine = true
 
+    /// Width the List gives a one-line row, reported by the rows (0 until one is laid out), so
+    /// a column header pinned above the List (outside its rows) can take exactly the rows' width.
+    /// A width rather than a position: a row slides sideways while it is swiped, its width does not.
+    var rowContentWidth: CGFloat = 0
+
     /// Natural width of every one-line row and column header (Dives, Equipment, Documents):
     /// the widest one-line row, the Dives row (`DiveListColumns`: 1 012 pt). `ViewThatFits`
     /// switches a row to its stacked version when the List gives it less than its natural width,
@@ -618,6 +623,15 @@ extension View {
         onAppear {
             guard let layout, layout.isOneLine != isOneLine else { return }
             layout.isOneLine = isOneLine
+        }
+    }
+
+    /// Reports a one-line row's laid-out width to the list's `OneLineRowsLayout` (nil outside
+    /// such a list), for its pinned column header. Writes only when the value changes.
+    func reportsRowContentWidth(to layout: OneLineRowsLayout?) -> some View {
+        onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            guard let layout, layout.rowContentWidth != width else { return }
+            layout.rowContentWidth = width
         }
     }
 }
