@@ -38,6 +38,14 @@ struct AppearanceSettingsView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
                     #endif
+                    // Only relevant when iNaturalist lookups are on (off by default).
+                    if prefs.fetchTaxonomyOnline {
+                        Text("Species names from iNaturalist can be fetched in this language in Settings → Online Services → Update Species from iNaturalist.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
                 .padding()
                 .background(

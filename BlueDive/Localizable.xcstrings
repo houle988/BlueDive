@@ -211,6 +211,29 @@
       },
       "shouldTranslate" : false
     },
+    "%@ already uses this name." : {
+      "comment" : "Warning when adding another name to a species: a different species already has it; %@ is that species",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ verwendet diesen Namen bereits."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ utilise déjà ce nom."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ gebruikt deze naam al."
+          }
+        }
+      }
+    },
     "%@ countries visited" : {
       "comment" : "Plural countries visited goal label",
       "localizations" : {
@@ -477,6 +500,29 @@
         }
       }
     },
+    "%@ is already in the catalogue." : {
+      "comment" : "Warning in the species form: another species already has this name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist bereits im Katalog."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ est déjà dans le catalogue."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ staat al in de catalogus."
+          }
+        }
+      }
+    },
     "%@ of %@ dives exported" : {
       "comment" : "Progress label during dive export showing current and total count",
       "localizations" : {
@@ -639,6 +685,35 @@
         }
       }
     },
+    "%@ sightings will be linked to catalogue species, and %@ new species will be created from their names. Sighting names are not changed." : {
+      "comment" : "Build catalogue confirmation: sightings to link, species to create (locale-formatted numbers)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Sichtungen werden mit Katalogarten verknüpft, und %@ neue Arten werden aus ihren Namen erstellt. Die Namen der Sichtungen werden nicht geändert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ sightings will be linked to catalogue species, and %2$@ new species will be created from their names. Sighting names are not changed."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ observations seront liées à des espèces du catalogue, et %@ nouvelles espèces seront créées à partir de leurs noms. Les noms des observations ne sont pas modifiés."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ waarnemingen worden aan soorten in de catalogus gekoppeld, en er worden %@ nieuwe soorten op basis van hun namen gemaakt. De namen van de waarnemingen worden niet gewijzigd."
+          }
+        }
+      }
+    },
     "%@ species" : {
       "comment" : "Species count goal label",
       "localizations" : {
@@ -680,6 +755,35 @@
         }
       },
       "shouldTranslate" : false
+    },
+    "%@: %@" : {
+      "comment" : "A taxonomic rank and its name, e.g. Family: Nephropidae",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: %@"
+          }
+        }
+      }
     },
     "%@: Auto-detected" : {
       "comment" : "Accessibility label naming the field whose value was auto-detected from the import file",
@@ -1713,6 +1817,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "→ %@"
+          }
+        }
+      }
+    },
+    "+ “%@” will be added to the species catalogue." : {
+      "comment" : "Add/Edit marine life: a new catalogue species is created with this name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ „%@“ wird dem Artenkatalog hinzugefügt."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ « %@ » sera ajouté au catalogue des espèces."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ ‘%@’ wordt aan de soortencatalogus toegevoegd."
           }
         }
       }
@@ -3104,6 +3231,29 @@
         }
       }
     },
+    "Add “%@” to the catalogue" : {
+      "comment" : "Creates a new catalogue species with the searched name and tags it on the photo",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ zum Katalog hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter « %@ » au catalogue"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg ‘%@’ toe aan de catalogus"
+          }
+        }
+      }
+    },
     "Add a buddy" : {
       "localizations" : {
         "de" : {
@@ -3216,6 +3366,28 @@
         }
       }
     },
+    "Add a name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un nom"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg een naam toe"
+          }
+        }
+      }
+    },
     "Add a new tank template" : {
       "comment" : "A heading that instructs the user to add a new tank template.",
       "isCommentAutoGenerated" : true,
@@ -3242,6 +3414,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voeg een tanksjabloon toe"
+          }
+        }
+      }
+    },
+    "Add a Species" : {
+      "comment" : "A heading for a list of species that can be added to a photo.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Art hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg soort toe"
           }
         }
       }
@@ -3649,6 +3845,30 @@
         }
       }
     },
+    "Add Species" : {
+      "comment" : "A button to add a new species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Art hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg soort toe"
+          }
+        }
+      }
+    },
     "Add Tank" : {
       "localizations" : {
         "de" : {
@@ -3713,6 +3933,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voeg de GPS-coördinaten van de duiklocatie toe in ‘Locatiedetails’ om het weer online op te halen."
+          }
+        }
+      }
+    },
+    "Add to Catalogue" : {
+      "comment" : "A button that adds a name to the species catalogue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zum Katalog hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter au catalogue"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voeg toe aan catalogus"
           }
         }
       }
@@ -3836,6 +4080,30 @@
         }
       }
     },
+    "Added to every photo's capture time before matching, e.g. +1 h if the camera was an hour behind the dive computer." : {
+      "comment" : "A description of the camera clock correction.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird vor der Zuordnung zur Aufnahmezeit jedes Fotos addiert, z. B. +1 h, wenn die Kamera eine Stunde hinter dem Tauchcomputer lag."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutée à l’heure de prise de vue de chaque photo avant l’association, p. ex. +1 h si l’appareil photo retardait d’une heure sur l’ordinateur de plongée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wordt vóór het koppelen bij het opnametijdstip van elke foto opgeteld, bv. +1 u als de camera een uur achterliep op de duikcomputer."
+          }
+        }
+      }
+    },
     "Additional information" : {
       "comment" : "A section in the \"Add Certification\" view for additional information about the certification.",
       "isCommentAutoGenerated" : true,
@@ -3862,6 +4130,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aanvullende informatie"
+          }
+        }
+      }
+    },
+    "Adds a sighting to the dive when the dive does not list the species yet." : {
+      "comment" : "A description of the action of adding a species sighting to a dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fügt dem Tauchgang eine Sichtung hinzu, wenn er die Art noch nicht enthält."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoute une observation à la plongée lorsque celle-ci ne mentionne pas encore l’espèce."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voegt een waarneming aan de duik toe als de duik de soort nog niet vermeldt."
           }
         }
       }
@@ -4121,6 +4413,30 @@
         }
       }
     },
+    "All Categories" : {
+      "comment" : "A label for the \"All Categories\" option in a list of categories.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Kategorien"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les catégories"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle categorieën"
+          }
+        }
+      }
+    },
     "All certifications have expired." : {
       "comment" : "Inline message shown in the Documents view Certifications tab when all certifications are expired.",
       "localizations" : {
@@ -4237,6 +4553,28 @@
         }
       }
     },
+    "All dives are checked; this can take a while with many photos. Keep BlueDive open until it finishes." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Tauchgänge werden geprüft; bei vielen Fotos kann das eine Weile dauern. Lass BlueDive geöffnet, bis der Vorgang abgeschlossen ist."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les plongées sont vérifiées; cela peut prendre un certain temps s’il y a beaucoup de photos. Gardez BlueDive ouvert jusqu’à la fin."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle duiken worden gecontroleerd; met veel foto’s kan dit even duren. Houd BlueDive open tot het klaar is."
+          }
+        }
+      }
+    },
     "All dives have been imported" : {
       "comment" : "Subtitle shown when all dives have been successfully imported",
       "localizations" : {
@@ -4321,6 +4659,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alle duikuitrusting, groepen en tanksjablonen bestaan al."
+          }
+        }
+      }
+    },
+    "All Groups" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Gruppen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous les groupes"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle groepen"
           }
         }
       }
@@ -4530,6 +4890,53 @@
         }
       }
     },
+    "Already attached to their dive" : {
+      "comment" : "A description of photos that were already attached to a dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereits mit ihrem Tauchgang verknüpft"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjà associées à leur plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al gekoppeld aan hun duik"
+          }
+        }
+      }
+    },
+    "Already attached to this dive: %@" : {
+      "comment" : "Photo import summary line: photos skipped because the same image is already attached to the dive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereits mit diesem Tauchgang verknüpft: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjà associées à cette plongée : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al gekoppeld aan deze duik: %@"
+          }
+        }
+      }
+    },
     "Already imported — will be skipped" : {
       "comment" : "Section header for the list of duplicate items that are already in the logbook",
       "localizations" : {
@@ -4584,6 +4991,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reeds in je logboek"
+          }
+        }
+      }
+    },
+    "Also add the species to each photo’s dive" : {
+      "comment" : "A description of the action of adding the species to the dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Art auch dem Tauchgang jedes Fotos hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter aussi l’espèce à la plongée de chaque photo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soort ook aan de duik van elke foto toevoegen"
+          }
+        }
+      }
+    },
+    "Also add the species to this photo’s dive" : {
+      "comment" : "A checkbox label that lets the user decide whether to add the tagged species to the dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Art auch dem Tauchgang dieses Fotos hinzufügen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter aussi l’espèce à la plongée de cette photo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soort ook aan de duik van deze foto toevoegen"
+          }
+        }
+      }
+    },
+    "Also known as: %@" : {
+      "comment" : "Other common names of a species from iNaturalist",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auch bekannt als: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aussi appelée : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ook bekend als: %@"
           }
         }
       }
@@ -5578,6 +6056,53 @@
         }
       }
     },
+    "Average Size" : {
+      "comment" : "Label for the average size field in the species form",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchschnittliche Größe"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taille moyenne"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemiddelde grootte"
+          }
+        }
+      }
+    },
+    "Average size: %@" : {
+      "comment" : "Species average size, e.g. Average size: 30 cm",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchschnittliche Größe: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taille moyenne : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemiddelde grootte: %@"
+          }
+        }
+      }
+    },
     "Avg Depth (%@)" : {
       "localizations" : {
         "de" : {
@@ -5692,6 +6217,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gem. AMV"
+          }
+        }
+      }
+    },
+    "Avg. Temp." : {
+      "comment" : "Label for the average temperature of the dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchschn. Temp."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temp. moy."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gem. temp."
           }
         }
       }
@@ -5872,89 +6421,94 @@
         }
       }
     },
-    "Backup failed: could not prepare the archive." : {
-      "comment" : "Error message shown on iOS when the zip archive exists on disk but cannot be read into memory for export.",
+    "Backup failed: could not save the backup file." : {
+      "comment" : "Database backup error: the archive could not be written where the user chose",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sicherung fehlgeschlagen: Archiv konnte nicht vorbereitet werden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup failed: could not prepare the archive."
+            "value" : "Sicherung fehlgeschlagen: Sicherungsdatei konnte nicht gespeichert werden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Échec de la sauvegarde : impossible de préparer l'archive."
+            "value" : "Échec de la sauvegarde : impossible d’enregistrer le fichier de sauvegarde."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Backup mislukt: archief kon niet voorbereid worden."
+            "value" : "Backup mislukt: backupbestand kon niet opgeslagen worden."
           }
         }
       }
     },
-    "Backup failed: could not read the database directory." : {
-      "comment" : "Error message shown when the backup fails because the store directory could not be enumerated.",
+    "Backup failed: could not take a snapshot of the database." : {
+      "comment" : "Database backup error",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sicherung fehlgeschlagen: Datenbankverzeichnis konnte nicht gelesen werden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup failed: could not read the database directory."
+            "value" : "Sicherung fehlgeschlagen: Momentaufnahme der Datenbank konnte nicht erstellt werden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Échec de la sauvegarde : impossible de lire le répertoire de la base de données."
+            "value" : "Échec de la sauvegarde : impossible de faire un instantané de la base de données."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Backup mislukt: kon de databasemap niet lezen."
+            "value" : "Backup mislukt: momentopname van de database kon niet gemaakt worden."
           }
         }
       }
     },
-    "Backup failed: no database files found." : {
-      "comment" : "Error message shown when the backup fails because no store files were found in the database directory.",
+    "Backup failed: could not write the backup description." : {
+      "comment" : "Database backup error",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sicherung fehlgeschlagen: Keine Datenbankdateien gefunden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup failed: no database files found."
+            "value" : "Sicherung fehlgeschlagen: Beschreibung der Sicherung konnte nicht geschrieben werden."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Échec de la sauvegarde : aucun fichier de base de données trouvé."
+            "value" : "Échec de la sauvegarde : impossible d’écrire la description de la sauvegarde."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Backup mislukt: geen databasebestanden gevonden."
+            "value" : "Backup mislukt: beschrijving van de backup kon niet geschreven worden."
+          }
+        }
+      }
+    },
+    "Backup failed: not enough free space. About %@ is needed." : {
+      "comment" : "Database backup error; %@ is a size such as 2.1 GB",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sicherung fehlgeschlagen: Nicht genügend freier Speicherplatz. Benötigt werden etwa %@."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec de la sauvegarde : espace libre insuffisant. Environ %@ est nécessaire."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup mislukt: onvoldoende vrije ruimte. Er is ongeveer %@ nodig."
           }
         }
       }
@@ -6197,6 +6751,30 @@
         }
       }
     },
+    "BlueDive can fill in a species' classification (kingdom to species), common names, Wikipedia summary and a Creative Commons photo from iNaturalist. Only the species name is sent, when a species is created, edited or looked up." : {
+      "comment" : "A description of the data that can be obtained from iNaturalist.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive kann die Klassifikation einer Art (vom Reich bis zur Art), Trivialnamen, eine Wikipedia-Zusammenfassung und ein Creative-Commons-Foto von iNaturalist ergänzen. Es wird nur der Artname gesendet, wenn eine Art erstellt, bearbeitet oder nachgeschlagen wird."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive peut compléter la classification d’une espèce (du règne à l’espèce), ses noms communs, son résumé Wikipédia et une photo sous licence Creative Commons à partir d’iNaturalist. Seul le nom de l’espèce est envoyé, lorsqu’une espèce est créée, modifiée ou recherchée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive kan de classificatie van een soort (van rijk tot soort), gewone namen, een Wikipedia-samenvatting en een Creative Commons-foto van iNaturalist aanvullen. Alleen de soortnaam wordt verstuurd, wanneer een soort wordt gemaakt, bewerkt of opgezocht."
+          }
+        }
+      }
+    },
     "BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo." : {
       "localizations" : {
         "de" : {
@@ -6248,30 +6826,24 @@
         }
       }
     },
-    "BlueDive is not a photo album — keep photos to the most relevant shots. Up to 10 can be selected per import. Large collections may slow down iCloud sync." : {
+    "BlueDive is not a photo album — keep photos to the most relevant shots. Large collections may slow down iCloud sync." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "BlueDive ist kein Fotoalbum — beschränke Fotos auf die relevantesten Aufnahmen. Pro Import können bis zu 10 ausgewählt werden. Große Sammlungen können die iCloud-Synchronisation verlangsamen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BlueDive is not a photo album — keep photos to the most relevant shots. Up to 10 can be selected per import. Large collections may slow down iCloud sync."
+            "value" : "BlueDive ist kein Fotoalbum – beschränke dich auf die wichtigsten Aufnahmen. Große Sammlungen können die iCloud-Synchronisierung verlangsamen."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "BlueDive n'est pas un album photo — limitez les photos aux clichés les plus pertinents. Jusqu'à 10 peuvent être sélectionnées par importation. Des collections volumineuses peuvent ralentir la synchronisation iCloud."
+            "value" : "BlueDive n’est pas un album photo — limitez-vous aux photos les plus pertinentes. Les grandes collections peuvent ralentir la synchronisation iCloud."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "BlueDive is geen fotoalbum — beperk je tot de meest relevante foto’s. Per import kun je maximaal 10 foto’s selecteren. Grote verzamelingen kunnen de iCloud-synchronisatie vertragen."
+            "value" : "BlueDive is geen fotoalbum — beperk je tot de belangrijkste foto’s. Grote verzamelingen kunnen de iCloud-synchronisatie vertragen."
           }
         }
       }
@@ -6599,6 +7171,54 @@
         }
       }
     },
+    "Build" : {
+      "comment" : "A button that triggers the building of the species catalogue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstellen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créer"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opbouwen"
+          }
+        }
+      }
+    },
+    "Build Catalogue from Sightings" : {
+      "comment" : "A confirmation dialog for building the species catalogue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Katalog aus Sichtungen erstellen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créer le catalogue à partir des observations"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Catalogus opbouwen uit waarnemingen"
+          }
+        }
+      }
+    },
     "Calculate the density of your breathing gas at depth. Colour-coded thresholds warn you when gas density may impair breathing and increase CO₂ retention risk." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6797,6 +7417,30 @@
         }
       }
     },
+    "Camera Clock Correction" : {
+      "comment" : "A section header for the camera clock correction settings.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korrektur der Kamerauhr"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correction de l’horloge de l’appareil photo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correctie van de cameraklok"
+          }
+        }
+      }
+    },
     "Canadian" : {
       "comment" : "Label for the Canadian unit system in the import format picker.",
       "localizations" : {
@@ -6912,6 +7556,30 @@
         }
       }
     },
+    "Catalogue Built" : {
+      "comment" : "A title for an alert that displays when the user has built a species catalogue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Katalog erstellt"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Catalogue créé"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Catalogus opgebouwd"
+          }
+        }
+      }
+    },
     "Category" : {
       "comment" : "A label describing the category selection section in the edit gear view.",
       "isCommentAutoGenerated" : true,
@@ -6938,6 +7606,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Categorie"
+          }
+        }
+      }
+    },
+    "Category Name" : {
+      "comment" : "Label for the text field for entering a custom category name.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kategoriename"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom de la catégorie"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Categorienaam"
           }
         }
       }
@@ -7245,6 +7937,78 @@
         }
       }
     },
+    "Choose a File" : {
+      "comment" : "A",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datei auswählen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir un fichier"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestand kiezen"
+          }
+        }
+      }
+    },
+    "Choose from Photos" : {
+      "comment" : "A",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus Fotos auswählen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir dans Photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kiezen uit Foto’s"
+          }
+        }
+      }
+    },
+    "Choose Photos or a Folder…" : {
+      "comment" : "A button that lets the user choose photos or a folder to import.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos oder Ordner auswählen…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir des photos ou un dossier…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s of een map kiezen…"
+          }
+        }
+      }
+    },
     "Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark. Switching from or to System will close Settings to apply the change." : {
       "comment" : "Appearance picker caption for iOS — includes note that switching from/to System closes Settings.",
       "localizations" : {
@@ -7363,6 +8127,82 @@
         }
       }
     },
+    "Choose the matching taxon" : {
+      "comment" : "A heading for the list of matching taxa.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passendes Taxon auswählen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez le taxon correspondant"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies het bijpassende taxon"
+          }
+        }
+      }
+    },
+    "Choose the species that keeps the sightings. The sightings and photos of %@ move to it, it keeps %@ as another name, and %@ is then deleted." : {
+      "comment" : "Merge species explanation; each %@ is the name of the species being merged",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle die Art, die die Sichtungen behält. Die Sichtungen und Fotos von %@ werden auf sie übertragen, sie behält %@ als weiteren Namen, und %@ wird anschließend gelöscht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose the species that keeps the sightings. The sightings and photos of %1$@ move to it, it keeps %2$@ as another name, and %3$@ is then deleted."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez l’espèce qui conserve les observations. Les observations et les photos de %@ y sont transférées, elle conserve %@ comme autre nom, puis %@ est supprimée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies de soort die de waarnemingen behoudt. De waarnemingen en foto’s van %@ gaan naar deze soort, die %@ als andere naam behoudt, en %@ wordt daarna verwijderd."
+          }
+        }
+      }
+    },
+    "Choose the species these sightings belong to. They keep the name “%@”, which the species also keeps as another name." : {
+      "comment" : "Link sightings to a species explanation; %@ is the sightings' recorded name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle die Art, zu der diese Sichtungen gehören. Sie behalten den Namen „%@“, den die Art auch als weiteren Namen behält."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez l’espèce à laquelle appartiennent ces observations. Elles conservent le nom « %@ », que l’espèce conserve aussi comme autre nom."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies de soort waartoe deze waarnemingen behoren. Ze behouden de naam ‘%@’, die de soort ook als andere naam behoudt."
+          }
+        }
+      }
+    },
     "Choose the unit system used by your file" : {
       "comment" : "A description below the title of the unit system picker.",
       "isCommentAutoGenerated" : true,
@@ -7476,6 +8316,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Woelig"
+          }
+        }
+      }
+    },
+    "Class" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klasse"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classe"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klasse"
+          }
+        }
+      }
+    },
+    "Classification" : {
+      "comment" : "A heading for the classification of a species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klassifikation"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classification"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classificatie"
           }
         }
       }
@@ -7785,6 +8672,52 @@
         }
       }
     },
+    "cm" : {
+      "comment" : "Unit symbol: centimetres",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cm"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cm"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cm"
+          }
+        }
+      }
+    },
+    "Cnidarian (Coral, Anemone, Jellyfish)" : {
+      "comment" : "Species category",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nesseltier (Koralle, Anemone, Qualle)"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cnidaire (corail, anémone, méduse)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neteldier (koraal, anemoon, kwal)"
+          }
+        }
+      }
+    },
     "CNS" : {
       "localizations" : {
         "de" : {
@@ -8005,6 +8938,30 @@
         }
       }
     },
+    "Common Name" : {
+      "comment" : "Label for the common name text field in the species form.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trivialname"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom commun"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gewone naam"
+          }
+        }
+      }
+    },
     "Completed with %lld errors. Wait for iCloud sync to finish uploading before closing the app. Monitor the cloud icon on the main screen." : {
       "comment" : "Status message when multiple errors occur during erase. %lld is the error count.",
       "localizations" : {
@@ -8059,6 +9016,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Er is 1 fout opgetreden. Wacht tot de iCloud-synchronisatie is voltooid voordat je de app sluit. Houd het cloudpictogram op het hoofdscherm in de gaten."
+          }
+        }
+      }
+    },
+    "Compressing backup…" : {
+      "comment" : "Database backup progress",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sicherung wird komprimiert…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compression de la sauvegarde…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup comprimeren…"
           }
         }
       }
@@ -8560,6 +9540,116 @@
         }
       }
     },
+    "Convert" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konvertieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convertir"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Converteren"
+          }
+        }
+      }
+    },
+    "Convert photos" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos konvertieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convertir les photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s converteren"
+          }
+        }
+      }
+    },
+    "Convert Photos" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos konvertieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convertir les photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s converteren"
+          }
+        }
+      }
+    },
+    "Convert photos added with earlier versions of BlueDive: each photo gets its own record with a thumbnail and its capture time, and photos taken during a dive appear on its profile. The images are not changed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konvertiere Fotos, die mit früheren Versionen von BlueDive hinzugefügt wurden: Jedes Foto erhält einen eigenen Eintrag mit Miniaturbild und Aufnahmezeit, und während eines Tauchgangs aufgenommene Fotos erscheinen in seinem Profil. Die Bilder selbst werden nicht verändert."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convertissez les photos ajoutées avec des versions antérieures de BlueDive : chaque photo obtient sa propre fiche avec une vignette et son heure de prise de vue, et les photos prises pendant une plongée apparaissent sur son profil. Les images ne sont pas modifiées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Converteer foto’s die met eerdere versies van BlueDive zijn toegevoegd: elke foto krijgt een eigen record met een miniatuur en het opnametijdstip, en foto’s die tijdens een duik zijn gemaakt verschijnen op het profiel. De afbeeldingen worden niet gewijzigd."
+          }
+        }
+      }
+    },
+    "Convert photos?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos konvertieren?"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convertir les photos ?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s converteren?"
+          }
+        }
+      }
+    },
     "Coordinate Mode" : {
       "comment" : "Accessibility label for the segmented picker that switches the dive map between entry and exit GPS coordinates.",
       "localizations" : {
@@ -8854,6 +9944,35 @@
         }
       }
     },
+    "Copying photos… %@ / %@" : {
+      "comment" : "Database backup progress: files copied / total",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos werden kopiert… %@ / %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Copying photos… %1$@ / %2$@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copie des photos… %@ / %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s kopiëren… %@ / %@"
+          }
+        }
+      }
+    },
     "Cost (optional)" : {
       "comment" : "A label for the cost of a service.",
       "isCommentAutoGenerated" : true,
@@ -8880,6 +9999,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kosten (optioneel)"
+          }
+        }
+      }
+    },
+    "Could not be read" : {
+      "comment" : "A label for photos that could not be read by the app.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht lesbar"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Illisibles"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet leesbaar"
+          }
+        }
+      }
+    },
+    "Could not be read: %@" : {
+      "comment" : "Photo import summary line: files that are not readable images",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht lesbar: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Illisibles : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet leesbaar: %@"
+          }
+        }
+      }
+    },
+    "Could not be saved" : {
+      "comment" : "A label for photos that could not be saved.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht gespeichert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non enregistrées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet opgeslagen"
+          }
+        }
+      }
+    },
+    "Could not be saved: %@" : {
+      "comment" : "Photo import summary line: photos lost because saving to the database failed",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht gespeichert: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non enregistrées : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet opgeslagen: %@"
           }
         }
       }
@@ -9119,6 +10332,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kritisch"
+          }
+        }
+      }
+    },
+    "Crustacean" : {
+      "comment" : "Species category",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Krebstier"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crustacé"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schaaldier"
           }
         }
       }
@@ -10378,6 +11614,30 @@
         }
       }
     },
+    "Delete Species" : {
+      "comment" : "A button that deletes the species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Art löschen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer l’espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soort verwijderen"
+          }
+        }
+      }
+    },
     "Delete tank template?" : {
       "comment" : "A confirmation alert title that asks if the user is sure they want to delete a tank template.",
       "isCommentAutoGenerated" : true,
@@ -11037,6 +12297,54 @@
         }
       }
     },
+    "Distribution" : {
+      "comment" : "A label for the distribution map of a species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbreitung"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Répartition"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verspreiding"
+          }
+        }
+      }
+    },
+    "Dive" : {
+      "comment" : "A label for a drop-down list of dives.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgang"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plongée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duik"
+          }
+        }
+      }
+    },
     "Dive #" : {
       "localizations" : {
         "de" : {
@@ -11176,6 +12484,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Duikcomputer"
+          }
+        }
+      }
+    },
+    "Dive deleted before the import" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgang vor dem Import gelöscht"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plongée supprimée avant l’importation"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duik verwijderd vóór het importeren"
           }
         }
       }
@@ -12140,6 +13470,29 @@
         }
       }
     },
+    "Dives with photos left in the previous format (a photo could not be read or saved): %@" : {
+      "comment" : "Legacy photo conversion summary line: dives that still have photos in the old format",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge mit Fotos im bisherigen Format (ein Foto konnte nicht gelesen oder gespeichert werden): %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plongées dont des photos restent dans l’ancien format (une photo n’a pu être lue ou enregistrée) : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken met foto’s in het vorige formaat (een foto kon niet worden gelezen of opgeslagen): %@"
+          }
+        }
+      }
+    },
     "Dives without a diver name are not affected." : {
       "localizations" : {
         "de" : {
@@ -12164,6 +13517,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Duiklogs zonder naam van de duiker vallen hier niet onder."
+          }
+        }
+      }
+    },
+    "Dives: %@" : {
+      "comment" : "Legacy photo conversion summary line: dives whose photos were converted",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plongées : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken: %@"
           }
         }
       }
@@ -13187,6 +14563,52 @@
         }
       }
     },
+    "Each photo is attached to the dive it was taken during, using the capture time recorded by the camera. Make sure the camera clock matched the dive computer, or correct it in the next step. Photos taken outside any dive are skipped." : {
+      "comment" : "A description of how the photos are matched to dives.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedes Foto wird dem Tauchgang zugeordnet, während dessen es aufgenommen wurde, anhand der von der Kamera gespeicherten Aufnahmezeit. Achte darauf, dass die Kamerauhr mit dem Tauchcomputer übereinstimmte, oder korrigiere sie im nächsten Schritt. Fotos, die außerhalb eines Tauchgangs aufgenommen wurden, werden übersprungen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaque photo est associée à la plongée pendant laquelle elle a été prise, d’après l’heure de prise de vue enregistrée par l’appareil photo. Assurez-vous que l’horloge de l’appareil photo correspondait à celle de l’ordinateur de plongée, ou corrigez-la à l’étape suivante. Les photos prises en dehors de toute plongée sont ignorées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elke foto wordt gekoppeld aan de duik waarin hij is gemaakt, op basis van het opnametijdstip dat de camera heeft vastgelegd. Zorg dat de cameraklok gelijkliep met de duikcomputer, of corrigeer dit in de volgende stap. Foto’s die buiten een duik zijn gemaakt, worden overgeslagen."
+          }
+        }
+      }
+    },
+    "Each photo is stored as its own record, with a thumbnail and the capture time read from the image. The images themselves are not changed. Photos taken during the dive appear on the dive profile." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedes Foto wird als eigener Eintrag gespeichert, mit Miniaturbild und der aus dem Bild gelesenen Aufnahmezeit. Die Bilder selbst werden nicht verändert. Während des Tauchgangs aufgenommene Fotos erscheinen im Tauchprofil."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaque photo est enregistrée dans sa propre fiche, avec une vignette et l’heure de prise de vue lue dans l’image. Les images elles-mêmes ne sont pas modifiées. Les photos prises pendant la plongée apparaissent sur le profil de plongée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elke foto wordt als eigen record opgeslagen, met een miniatuur en het opnametijdstip uit de afbeelding. De afbeeldingen zelf worden niet gewijzigd. Foto’s die tijdens de duik zijn gemaakt verschijnen op het duikprofiel."
+          }
+        }
+      }
+    },
     "Easy" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13241,6 +14663,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gemakkelijk-Gemiddeld"
+          }
+        }
+      }
+    },
+    "Echinoderm" : {
+      "comment" : "Species category (sea stars, urchins, sea cucumbers)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stachelhäuter"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échinoderme"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stekelhuidige"
           }
         }
       }
@@ -13590,6 +15035,28 @@
         }
       }
     },
+    "Edit Species" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Art bearbeiten"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier l’espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzig soort"
+          }
+        }
+      }
+    },
     "Edit Tank Template" : {
       "comment" : "The title of the view that appears in the navigation bar at the top of the screen.",
       "isCommentAutoGenerated" : true,
@@ -13822,6 +15289,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Schakel dit in voordat je verbinding maakt met een apparaat. Bewaar het logboek vanaf het foutscherm na een mislukte synchronisatie."
+          }
+        }
+      }
+    },
+    "Encounters" : {
+      "comment" : "A heading for the encounters of a species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Begegnungen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rencontres"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ontmoetingen"
           }
         }
       }
@@ -14668,6 +16159,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Elke duik, perfect herbeleefd."
+          }
+        }
+      }
+    },
+    "Every sighting is already in the catalogue." : {
+      "comment" : "Alert message when the build catalogue action is cancelled.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Sichtungen sind bereits im Katalog."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les observations sont déjà dans le catalogue."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle waarnemingen staan al in de catalogus."
           }
         }
       }
@@ -15650,6 +17165,29 @@
         }
       }
     },
+    "Family" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Familie"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Famille"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Familie"
+          }
+        }
+      }
+    },
     "Fast (10-18 m/min)" : {
       "comment" : "A label for the legend entry for the fastest ascent rate.",
       "isCommentAutoGenerated" : true,
@@ -15770,6 +17308,28 @@
         }
       }
     },
+    "Featured Image" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hauptbild"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image principale"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoofdafbeelding"
+          }
+        }
+      }
+    },
     "Feet" : {
       "comment" : "Unit name: feet",
       "localizations" : {
@@ -15825,6 +17385,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voet (ft)"
+          }
+        }
+      }
+    },
+    "Fetch Common Names in %@" : {
+      "comment" : "Heading: fetch iNaturalist common names in the app language; %@ is the language name, e.g. Deutsch",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trivialnamen auf %@ abrufen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obtenir les noms communs en %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gewone namen in het %@ ophalen"
+          }
+        }
+      }
+    },
+    "Fetch Names" : {
+      "comment" : "A button that fetches common names for species that are linked to",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen abrufen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obtenir les noms"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen ophalen"
           }
         }
       }
@@ -16256,6 +17863,30 @@
         }
       }
     },
+    "Filter by Category" : {
+      "comment" : "A filter option to narrow the list of species by category.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach Kategorie filtern"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtrer par catégorie"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filteren op categorie"
+          }
+        }
+      }
+    },
     "Filter by diver" : {
       "comment" : "A label for a filter picker.",
       "isCommentAutoGenerated" : true,
@@ -16312,6 +17943,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Filter op duiker: "
+          }
+        }
+      }
+    },
+    "Filter by Group" : {
+      "comment" : "A filter option to sort the list of species by the group they belong to.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach Gruppe filtern"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtrer par groupe"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filteren op groep"
           }
         }
       }
@@ -16461,6 +18116,30 @@
         }
       }
     },
+    "Find Species in Photos" : {
+      "comment" : "A button that finds species in photos.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten in Fotos finden"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trouver des espèces dans les photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten in foto’s zoeken"
+          }
+        }
+      }
+    },
     "Fingerprint" : {
       "comment" : "Section header for the dive fingerprint in the Samples tab.",
       "localizations" : {
@@ -16578,6 +18257,29 @@
         }
       }
     },
+    "Fish" : {
+      "comment" : "Species category",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fisch"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poisson"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis"
+          }
+        }
+      }
+    },
     "Fog" : {
       "comment" : "Weather condition",
       "localizations" : {
@@ -16597,6 +18299,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mist"
+          }
+        }
+      }
+    },
+    "For species already linked to iNaturalist, fetches their common name in the app language, so they are shown in it. Only the species' iNaturalist number and the language are sent; the names you entered are not changed." : {
+      "comment" : "A description of the feature that fetches common names for species already linked to iNaturalist.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruft für bereits mit iNaturalist verknüpfte Arten den Trivialnamen in der App-Sprache ab, damit sie darin angezeigt werden. Es werden nur die iNaturalist-Nummer der Art und die Sprache gesendet; deine eingegebenen Namen werden nicht geändert."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour les espèces déjà liées à iNaturalist, obtient leur nom commun dans la langue de l’app afin qu’elles y soient affichées. Seuls le numéro iNaturalist de l’espèce et la langue sont envoyés; les noms que vous avez saisis ne sont pas modifiés."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haalt voor soorten die al aan iNaturalist zijn gekoppeld de gewone naam in de app-taal op, zodat ze daarin worden getoond. Alleen het iNaturalist-nummer van de soort en de taal worden verstuurd; door jou ingevoerde namen worden niet gewijzigd."
           }
         }
       }
@@ -18076,6 +19802,29 @@
         }
       }
     },
+    "Genus" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gattung"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Genre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geslacht"
+          }
+        }
+      }
+    },
     "German Translation, Testing and ideas for new features" : {
       "localizations" : {
         "de" : {
@@ -18857,6 +20606,28 @@
         }
       }
     },
+    "Hide photos on the profile" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos im Profil ausblenden"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les photos sur le profil"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s op het profiel verbergen"
+          }
+        }
+      }
+    },
     "High" : {
       "comment" : "A status label for dives with a high decompression limit.",
       "isCommentAutoGenerated" : true,
@@ -18962,6 +20733,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beginscherm-widgets"
+          }
+        }
+      }
+    },
+    "Hours: %@" : {
+      "comment" : "Camera clock correction in hours, e.g. Hours: +2",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stunden: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heures : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uren: %@"
           }
         }
       }
@@ -19079,8 +20873,7 @@
       }
     },
     "Hybrid" : {
-      "comment" : "A map style that shows both roads and hybrid imagery.",
-      "isCommentAutoGenerated" : true,
+      "comment" : "Taxonomic rank",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -19886,34 +21679,6 @@
         }
       }
     },
-    "Import Limit Reached" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Importlimit erreicht"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import Limit Reached"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Limite d'importation atteinte"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Importlimiet bereikt"
-          }
-        }
-      }
-    },
     "Import Options" : {
       "comment" : "Title of the import options picker sheet.",
       "localizations" : {
@@ -19939,6 +21704,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importopties"
+          }
+        }
+      }
+    },
+    "Import Photos" : {
+      "comment" : "A button that imports photos into Blue Dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos importieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer des photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importeer foto’s"
           }
         }
       }
@@ -20030,6 +21819,30 @@
         }
       }
     },
+    "Imported" : {
+      "comment" : "A label for the number of photos that were successfully imported.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geïmporteerd"
+          }
+        }
+      }
+    },
     "Imported Data Format" : {
       "comment" : "A section header that indicates the format of the user's imported dive data.",
       "isCommentAutoGenerated" : true,
@@ -20056,6 +21869,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geïmporteerd dataformaat"
+          }
+        }
+      }
+    },
+    "Imported: %@" : {
+      "comment" : "Photo import summary line: photos added",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importiert: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importées : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geïmporteerd: %@"
           }
         }
       }
@@ -20118,6 +21954,52 @@
         }
       }
     },
+    "Importing Photos" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos werden importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importation des photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s importeren"
+          }
+        }
+      }
+    },
+    "Importing photos…" : {
+      "comment" : "A title for the progress screen when importing photos.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos werden importiert…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importation des photos…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s importeren…"
+          }
+        }
+      }
+    },
     "Importing..." : {
       "comment" : "A placeholder text displayed while importing data.",
       "isCommentAutoGenerated" : true,
@@ -20144,6 +22026,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importeren…"
+          }
+        }
+      }
+    },
+    "in" : {
+      "comment" : "Unit symbol: inches",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "po"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in"
           }
         }
       }
@@ -20225,6 +22130,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Inactieve duikuitrusting"
+          }
+        }
+      }
+    },
+    "iNaturalist could not be reached. Check the connection and try again." : {
+      "comment" : "iNaturalist lookup failed (offline or service error)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iNaturalist ist nicht erreichbar. Prüfe die Verbindung und versuche es erneut."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de joindre iNaturalist. Vérifiez la connexion et réessayez."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iNaturalist is niet bereikbaar. Controleer de verbinding en probeer het opnieuw."
           }
         }
       }
@@ -20946,6 +22874,29 @@
         }
       }
     },
+    "Kingdom" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reich"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Règne"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rijk"
+          }
+        }
+      }
+    },
     "Known Dive Computers" : {
       "comment" : "A section header in the \"Known Dive Computers\" view of the Bluetooth scanner.",
       "isCommentAutoGenerated" : true,
@@ -21355,6 +23306,175 @@
         }
       }
     },
+    "Link" : {
+      "comment" : "A button that links the species in the photos.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verknüpfen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koppelen"
+          }
+        }
+      }
+    },
+    "Link Sightings" : {
+      "comment" : "The title of a confirmation alert that links sightings to a species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichtungen verknüpfen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier les observations"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waarnemingen koppelen"
+          }
+        }
+      }
+    },
+    "Link the sightings named “%@” to %@?" : {
+      "comment" : "Link sightings confirmation: recorded name, species name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Sichtungen mit dem Namen „%@“ mit %@ verknüpfen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Link the sightings named “%1$@” to %2$@?"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier les observations nommées « %@ » à %@ ?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De waarnemingen met de naam ‘%@’ koppelen aan %@?"
+          }
+        }
+      }
+    },
+    "Link to %@" : {
+      "comment" : "Species-in-photos review: link the photo to this existing species",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit %@ verknüpfen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier à %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koppelen aan %@"
+          }
+        }
+      }
+    },
+    "Link to an Existing Species…" : {
+      "comment" : "A button that links sightings to an existing species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit vorhandener Art verknüpfen…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier à une espèce existante…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koppelen aan een bestaande soort…"
+          }
+        }
+      }
+    },
+    "Link to Species" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Art verknüpfen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier à une espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koppelen aan soort"
+          }
+        }
+      }
+    },
+    "Linked to %@ in the species catalogue." : {
+      "comment" : "Add/Edit marine life: the sighting will be linked to this catalogue species",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit %@ im Artenkatalog verknüpft."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lié à %@ dans le catalogue des espèces."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gekoppeld aan %@ in de soortencatalogus."
+          }
+        }
+      }
+    },
     "Liters" : {
       "comment" : "Unit name: litres",
       "localizations" : {
@@ -21652,6 +23772,78 @@
         }
       }
     },
+    "Look Up on iNaturalist" : {
+      "comment" : "The title of the screen that lets the user look up a species on iNaturalist.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf iNaturalist nachschlagen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher sur iNaturalist"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opzoeken op iNaturalist"
+          }
+        }
+      }
+    },
+    "Look up species on iNaturalist" : {
+      "comment" : "A toggle that lets the user opt-in to look up species on iNaturalist.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten auf iNaturalist nachschlagen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher les espèces sur iNaturalist"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten opzoeken op iNaturalist"
+          }
+        }
+      }
+    },
+    "Look up species on iNaturalist?" : {
+      "comment" : "A question for the user to decide whether to turn on the feature",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten auf iNaturalist nachschlagen?"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher les espèces sur iNaturalist ?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten opzoeken op iNaturalist?"
+          }
+        }
+      }
+    },
     "Looking for your dive computer..." : {
       "comment" : "Subtitle shown while scanning for a specific known dive computer",
       "localizations" : {
@@ -21677,6 +23869,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zoeken naar duikcomputer…"
+          }
+        }
+      }
+    },
+    "Looks up every species that has a scientific name and is not linked to iNaturalist yet. Only exact scientific-name matches are used; other species can be looked up one by one from their page. Only the species name is sent." : {
+      "comment" : "A description of the function of the screen.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlägt jede Art nach, die einen wissenschaftlichen Namen hat und noch nicht mit iNaturalist verknüpft ist. Es werden nur exakte Übereinstimmungen des wissenschaftlichen Namens verwendet; andere Arten können einzeln auf ihrer Seite nachgeschlagen werden. Es wird nur der Artname gesendet."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche chaque espèce qui a un nom scientifique et n’est pas encore liée à iNaturalist. Seules les correspondances exactes du nom scientifique sont utilisées; les autres espèces peuvent être recherchées une à une depuis leur page. Seul le nom de l’espèce est envoyé."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoekt elke soort op die een wetenschappelijke naam heeft en nog niet aan iNaturalist is gekoppeld. Alleen exacte overeenkomsten van de wetenschappelijke naam worden gebruikt; andere soorten kun je één voor één op hun pagina opzoeken. Alleen de soortnaam wordt verstuurd."
           }
         }
       }
@@ -22415,6 +24631,29 @@
         }
       }
     },
+    "Marine Mammal" : {
+      "comment" : "Species category",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeressäuger"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mammifère marin"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeezoogdier"
+          }
+        }
+      }
+    },
     "Marine Sightings" : {
       "comment" : "Feature title on the WelcomeWizardView page 3, describing the ability to log marine life spotted during each dive.",
       "isCommentAutoGenerated" : true,
@@ -22531,6 +24770,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markeer het eerste onderhoud om het bijhouden te starten"
+          }
+        }
+      }
+    },
+    "Matched (%@)" : {
+      "comment" : "Section header: photos matched to exactly one dive, with their count",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugeordnet (%@)"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Associées (%@)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gekoppeld (%@)"
           }
         }
       }
@@ -22907,6 +25169,35 @@
         }
       }
     },
+    "Merge %@ into %@?" : {
+      "comment" : "Merge species confirmation: source name, target name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mit %@ zusammenführen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Merge %1$@ into %2$@?"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusionner %@ avec %@ ?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ samenvoegen met %@?"
+          }
+        }
+      }
+    },
     "Merge Dives" : {
       "comment" : "The title of a sheet that allows merging two dives.",
       "isCommentAutoGenerated" : true,
@@ -22963,6 +25254,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Duiken samenvoegen?"
+          }
+        }
+      }
+    },
+    "Merge Into" : {
+      "comment" : "The title of a screen that lets the user choose which species to merge another species into.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zusammenführen mit"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusionner avec"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Samenvoegen met"
+          }
+        }
+      }
+    },
+    "Merge Into Another Species…" : {
+      "comment" : "A button that displays a sheet for merging the current species into another.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit anderer Art zusammenführen…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusionner avec une autre espèce…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Samenvoegen met een andere soort…"
+          }
+        }
+      }
+    },
+    "Merge Species" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten zusammenführen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusionner les espèces"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten samenvoegen"
           }
         }
       }
@@ -23545,6 +25906,29 @@
         }
       }
     },
+    "Minutes: %@" : {
+      "comment" : "Camera clock correction in minutes, e.g. Minutes: -5",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minuten: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minutes : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minuten: %@"
+          }
+        }
+      }
+    },
     "Model" : {
       "comment" : "Label for the \"Model\" field in the \"Technical Details\" section of the \"Add Gear\" screen.",
       "isCommentAutoGenerated" : true,
@@ -23659,6 +26043,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gemiddeld-Uitdagend"
+          }
+        }
+      }
+    },
+    "Mollusc" : {
+      "comment" : "Species category (snails, nudibranchs, octopus, etc.)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weichtier"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mollusque"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekdier"
           }
         }
       }
@@ -23983,6 +26390,76 @@
         }
       }
     },
+    "Names" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noms"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen"
+          }
+        }
+      }
+    },
+    "Names found in the photos’ captions and keywords. Done links the species switched on; the close button leaves without linking. The photos themselves are not changed." : {
+      "comment" : "A description of the species proposal section of the photo batch import sheet.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Bildunterschriften und Stichwörtern der Fotos gefundene Namen. „Fertig“ verknüpft die aktivierten Arten; die Schließen-Taste beendet ohne Verknüpfung. Die Fotos selbst werden nicht verändert."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noms trouvés dans les légendes et les mots-clés des photos. Terminé lie les espèces activées; le bouton de fermeture quitte sans lier. Les photos elles-mêmes ne sont pas modifiées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen gevonden in de bijschriften en trefwoorden van de foto’s. ‘Klaar’ koppelt de ingeschakelde soorten; de sluitknop sluit zonder te koppelen. De foto’s zelf worden niet gewijzigd."
+          }
+        }
+      }
+    },
+    "Names found in the photos’ captions and keywords. Only the links you switch on are made; new species start switched off. The photos themselves are not changed." : {
+      "comment" : "A description of the list of species that can be linked to photos.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Bildunterschriften und Stichwörtern der Fotos gefundene Namen. Nur die aktivierten Verknüpfungen werden erstellt; neue Arten sind zunächst deaktiviert. Die Fotos selbst werden nicht verändert."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noms trouvés dans les légendes et les mots-clés des photos. Seuls les liens que vous activez sont créés; les nouvelles espèces sont désactivées au départ. Les photos elles-mêmes ne sont pas modifiées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namen gevonden in de bijschriften en trefwoorden van de foto’s. Alleen de koppelingen die je inschakelt, worden gemaakt; nieuwe soorten staan eerst uit. De foto’s zelf worden niet gewijzigd."
+          }
+        }
+      }
+    },
     "NDL" : {
       "comment" : "Deco stop type: no-decompression limit",
       "localizations" : {
@@ -24066,6 +26543,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nieuw — zal worden geïmporteerd"
+          }
+        }
+      }
+    },
+    "New Category…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Kategorie…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle catégorie…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieuwe categorie…"
           }
         }
       }
@@ -24243,6 +26742,51 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nieuw onderwaterleven"
+          }
+        }
+      }
+    },
+    "New Species" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Art"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieuwe soort"
+          }
+        }
+      }
+    },
+    "New species: %@" : {
+      "comment" : "Species-in-photos review: a new catalogue species is created with this common name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue Art: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle espèce : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieuwe soort: %@"
           }
         }
       }
@@ -24729,6 +27273,51 @@
         }
       }
     },
+    "No capture time in the file" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Aufnahmezeit in der Datei"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune heure de prise de vue dans le fichier"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen opnametijdstip in het bestand"
+          }
+        }
+      }
+    },
+    "No capture time in the file: not shown on the profile." : {
+      "comment" : "Photo viewer note: the image file has no EXIF capture time",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Aufnahmezeit in der Datei: nicht im Profil angezeigt."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune heure de prise de vue dans le fichier : non affichée sur le profil."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen opnametijdstip in het bestand: niet op het profiel getoond."
+          }
+        }
+      }
+    },
     "No certifications" : {
       "comment" : "A message displayed when a user has no certifications.",
       "isCommentAutoGenerated" : true,
@@ -24894,6 +27483,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geen apparaten geregistreerd"
+          }
+        }
+      }
+    },
+    "No dive at this time" : {
+      "comment" : "A description of a photo that was not taken during a dive.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Tauchgang zu dieser Zeit"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune plongée à cette heure"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen duik op dit tijdstip"
           }
         }
       }
@@ -25924,6 +28537,30 @@
         }
       }
     },
+    "No New Species Found" : {
+      "comment" : "A title for an alert that appears when no new species can be created from the photos.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine neuen Arten gefunden"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune nouvelle espèce trouvée"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen nieuwe soorten gevonden"
+          }
+        }
+      }
+    },
     "No notes" : {
       "localizations" : {
         "de" : {
@@ -25948,6 +28585,78 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geen notities"
+          }
+        }
+      }
+    },
+    "No notes." : {
+      "comment" : "A placeholder text for the notes section of a species detail view.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Notizen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune note."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen notities."
+          }
+        }
+      }
+    },
+    "No photo caption or keyword names a species that is not already linked to the photo." : {
+      "comment" : "A description of the alert that appears when a user tries to build the species catalogue from sightings, but no species can be created from the photo captions.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Bildunterschrift und kein Stichwort nennt eine Art, die nicht bereits mit dem Foto verknüpft ist."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune légende ni aucun mot-clé de photo ne nomme une espèce qui n’est pas déjà liée à la photo."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen bijschrift of trefwoord noemt een soort die nog niet aan de foto is gekoppeld."
+          }
+        }
+      }
+    },
+    "No photo of this species yet. Photos whose caption or keywords name this species can be linked when you import them or scan your photos." : {
+      "comment" : "A description of the lack of photos of a species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch kein Foto dieser Art. Fotos, deren Bildunterschrift oder Stichwörter diese Art nennen, können beim Import oder beim Durchsuchen deiner Fotos verknüpft werden."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune photo de cette espèce pour l’instant. Les photos dont la légende ou les mots-clés nomment cette espèce peuvent y être liées lors de leur importation ou d’une analyse de vos photos."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog geen foto van deze soort. Foto’s waarvan het bijschrift of de trefwoorden deze soort noemen, kunnen worden gekoppeld wanneer je ze importeert of je foto’s scant."
           }
         }
       }
@@ -26187,6 +28896,30 @@
         }
       }
     },
+    "No species on this photo yet." : {
+      "comment" : "A message displayed when a photo has no species tags.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch keine Art auf diesem Foto."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune espèce sur cette photo pour l’instant."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog geen soort op deze foto."
+          }
+        }
+      }
+    },
     "No Tank Templates" : {
       "localizations" : {
         "de" : {
@@ -26211,6 +28944,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geen tanksjablonen"
+          }
+        }
+      }
+    },
+    "No taxon found on iNaturalist." : {
+      "comment" : "iNaturalist lookup: the search returned nothing",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Taxon auf iNaturalist gefunden."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun taxon trouvé sur iNaturalist."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen taxon gevonden op iNaturalist."
           }
         }
       }
@@ -26453,6 +29209,30 @@
         }
       }
     },
+    "None of the dives with this species has GPS coordinates." : {
+      "comment" : "A message displayed when a species's location is not available.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keiner der Tauchgänge mit dieser Art hat GPS-Koordinaten."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune des plongées avec cette espèce n’a de coordonnées GPS."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen van de duiken met deze soort heeft GPS-coördinaten."
+          }
+        }
+      }
+    },
     "Normal" : {
       "comment" : "A label for a depth range on the dive chart.",
       "isCommentAutoGenerated" : true,
@@ -26511,6 +29291,30 @@
         }
       }
     },
+    "Not a readable image" : {
+      "comment" : "A description of a photo that is not a readable image.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein lesbares Bild"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image illisible"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen leesbare afbeelding"
+          }
+        }
+      }
+    },
     "Not Checked" : {
       "comment" : "The accessibility label for the button that allows the user to agree to the disclaimer.",
       "isCommentAutoGenerated" : true,
@@ -26535,6 +29339,53 @@
         }
       }
     },
+    "Not in the catalogue" : {
+      "comment" : "A description of a species that is not in the marine life catalogue.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht im Katalog"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Absente du catalogue"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet in de catalogus"
+          }
+        }
+      }
+    },
+    "Not Matched (%@)" : {
+      "comment" : "Section header: photos that match no dive and will be skipped, with their count",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht zugeordnet (%@)"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non associées (%@)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet gekoppeld (%@)"
+          }
+        }
+      }
+    },
     "Not Now" : {
       "localizations" : {
         "de" : {
@@ -26553,6 +29404,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Niet nu"
+          }
+        }
+      }
+    },
+    "Not seen on any dive yet." : {
+      "comment" : "A description displayed when a species has no dives.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch bei keinem Tauchgang gesehen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore observée en plongée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog bij geen enkele duik gezien."
           }
         }
       }
@@ -26971,6 +29846,30 @@
         }
       }
     },
+    "On This Photo" : {
+      "comment" : "The title of a screen that lists species on a photo.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf diesem Foto"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sur cette photo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op deze foto"
+          }
+        }
+      }
+    },
     "Online Services" : {
       "comment" : "Title of the Online Services settings view.",
       "isCommentAutoGenerated" : true,
@@ -27071,30 +29970,26 @@
         }
       }
     },
-    "Only the first 10 photos were imported. Open the menu again to add more." : {
+    "Only the name above is sent to iNaturalist." : {
+      "comment" : "A description of the data that is sent to iNaturalist.",
+      "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Es wurden nur die ersten 10 Fotos importiert. Öffne das Menü erneut, um weitere hinzuzufügen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only the first 10 photos were imported. Open the menu again to add more."
+            "value" : "Nur der obige Name wird an iNaturalist gesendet."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seules les 10 premières photos ont été importées. Ouvrez le menu à nouveau pour en ajouter d'autres."
+            "value" : "Seul le nom ci-dessus est envoyé à iNaturalist."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Slechts de eerste 10 foto's zijn geïmporteerd. Open het menu opnieuw om nog meer foto’s toe te voegen."
+            "value" : "Alleen de naam hierboven wordt naar iNaturalist verstuurd."
           }
         }
       }
@@ -27341,6 +30236,29 @@
         }
       }
     },
+    "Order" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordnung"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orde"
+          }
+        }
+      }
+    },
     "Organization" : {
       "comment" : "A label displayed next to a menu for selecting a certification organization",
       "isCommentAutoGenerated" : true,
@@ -27485,6 +30403,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Overig"
+          }
+        }
+      }
+    },
+    "Other Names" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitere Namen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autres noms"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere namen"
+          }
+        }
+      }
+    },
+    "Other names are used to recognise sightings and photo keywords written differently. Removing one does not change any sighting." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitere Namen dienen dazu, anders geschriebene Sichtungen und Foto-Stichwörter zu erkennen. Das Entfernen eines Namens ändert keine Sichtung."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les autres noms servent à reconnaître les observations et les mots-clés de photos écrits autrement. En retirer un ne modifie aucune observation."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere namen worden gebruikt om anders geschreven waarnemingen en fototrefwoorden te herkennen. Een naam verwijderen wijzigt geen enkele waarneming."
           }
         }
       }
@@ -27917,31 +30879,60 @@
         }
       }
     },
-    "Photo %lld of %lld" : {
-      "comment" : "Announces the current photo's position while paging through a dive's photos",
+    "Photo %@ of %@" : {
+      "comment" : "Announces the current photo's position while paging through photos (locale-formatted numbers)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Foto %lld von %lld"
+            "value" : "Foto %@ von %@"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Photo %1$lld of %2$lld"
+            "value" : "Photo %1$@ of %2$@"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Photo %lld sur %lld"
+            "value" : "Photo %@ sur %@"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Foto %lld van %lld"
+            "value" : "Foto %@ van %@"
+          }
+        }
+      }
+    },
+    "Photo at %@, %@" : {
+      "comment" : "Accessibility label of a photo marker on the dive profile: elapsed dive time (e.g. 22:05) and depth (e.g. 18.2 m)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto bei %@, %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo at %1$@, %2$@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo à %@, %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto op %@, %@"
           }
         }
       }
@@ -28004,6 +30995,118 @@
         }
       }
     },
+    "Photos are being added to one of these dives. Merge them once the import has finished." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu einem dieser Tauchgänge werden gerade Fotos hinzugefügt. Führe sie zusammen, sobald der Import abgeschlossen ist."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Des photos sont en cours d’ajout à l’une de ces plongées. Fusionnez-les une fois l’importation terminée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er worden foto’s aan een van deze duiken toegevoegd. Voeg ze samen zodra de import is voltooid."
+          }
+        }
+      }
+    },
+    "Photos Converted" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos konvertiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos converties"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s geconverteerd"
+          }
+        }
+      }
+    },
+    "Photos converted: %@" : {
+      "comment" : "Legacy photo conversion summary line: photos converted",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konvertierte Fotos: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos converties : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geconverteerde foto’s: %@"
+          }
+        }
+      }
+    },
+    "Photos Imported" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos importiert"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos importées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s geïmporteerd"
+          }
+        }
+      }
+    },
+    "Phylum" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stamm"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Embranchement"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stam"
+          }
+        }
+      }
+    },
     "Pick on Map" : {
       "localizations" : {
         "de" : {
@@ -28052,6 +31155,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Geplande datum"
+          }
+        }
+      }
+    },
+    "Plant & Algae" : {
+      "comment" : "Species category",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pflanze & Alge"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plante et algue"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plant & alg"
           }
         }
       }
@@ -28374,6 +31500,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PPO₂ (bar, schaal 0–2)"
+          }
+        }
+      }
+    },
+    "Preparing backup…" : {
+      "comment" : "Database backup progress",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sicherung wird vorbereitet…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préparation de la sauvegarde…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup voorbereiden…"
           }
         }
       }
@@ -29006,6 +32155,30 @@
         }
       }
     },
+    "Reading photos…" : {
+      "comment" : "A title for the progress section when the app is reading photos.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos werden gelesen…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture des photos…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s lezen…"
+          }
+        }
+      }
+    },
     "Ready" : {
       "comment" : "Title shown in the Bluetooth scanner when ready to connect to a device",
       "localizations" : {
@@ -29602,6 +32775,29 @@
         }
       }
     },
+    "Remove %@ from this photo" : {
+      "comment" : "Accessibility label: removes a species tag from a photo; %@ is the species name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ von diesem Foto entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer %@ de cette photo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ van deze foto verwijderen"
+          }
+        }
+      }
+    },
     "Remove Equipment" : {
       "comment" : "The title of an alert that appears when a user tries to remove an equipment from a dive.",
       "isCommentAutoGenerated" : true,
@@ -29628,6 +32824,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verwijder duikuitrusting"
+          }
+        }
+      }
+    },
+    "Remove Image" : {
+      "comment" : "A button",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bild entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer l’image"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afbeelding verwijderen"
           }
         }
       }
@@ -29739,6 +32959,29 @@
         }
       }
     },
+    "Remove the other name %@" : {
+      "comment" : "Accessibility label: removes one of a species' other names; %@ is the name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiteren Namen %@ entfernen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer l’autre nom %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere naam %@ verwijderen"
+          }
+        }
+      }
+    },
     "Remove this photo from the dive?" : {
       "comment" : "A message displayed when the user attempts to delete a photo from a dive.",
       "isCommentAutoGenerated" : true,
@@ -29795,6 +33038,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verwijder gewicht"
+          }
+        }
+      }
+    },
+    "Removing a species from the photo does not remove it from the dive's marine life." : {
+      "comment" : "A description of the effect of removing a species from a photo.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird eine Art vom Foto entfernt, bleibt sie bei den Unterwasserlebewesen des Tauchgangs."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer une espèce de la photo ne la retire pas de la vie marine de la plongée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een soort van de foto verwijderen haalt hem niet weg uit het onderwaterleven van de duik."
           }
         }
       }
@@ -30038,6 +33305,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uitstapcoördinaten vervangen"
+          }
+        }
+      }
+    },
+    "Reptile" : {
+      "comment" : "Species category (sea turtles, sea snakes)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reptil"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reptile"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reptiel"
           }
         }
       }
@@ -31670,6 +34960,29 @@
         }
       }
     },
+    "Saving backup…" : {
+      "comment" : "Database backup progress (macOS): the archive is written where the user chose",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sicherung wird gespeichert…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement de la sauvegarde…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup opslaan…"
+          }
+        }
+      }
+    },
     "Saving to logbook..." : {
       "comment" : "Subtitle shown while saving downloaded dives to the logbook",
       "localizations" : {
@@ -31728,6 +35041,54 @@
         }
       }
     },
+    "Scientific Name" : {
+      "comment" : "Label for the scientific name text field in the species form.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wissenschaftlicher Name"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom scientifique"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wetenschappelijke naam"
+          }
+        }
+      }
+    },
+    "Scientific or common name" : {
+      "comment" : "Label for the text field where the user can enter the name of the species to search for on iNaturalist.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wissenschaftlicher oder Trivialname"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom scientifique ou commun"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wetenschappelijke of gewone naam"
+          }
+        }
+      }
+    },
     "Scroll Left" : {
       "localizations" : {
         "de" : {
@@ -31770,6 +35131,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Naar rechts scrollen"
+          }
+        }
+      }
+    },
+    "Search" : {
+      "comment" : "A button that triggers a search on iNaturalist.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoeken"
           }
         }
       }
@@ -32068,6 +35453,30 @@
         }
       }
     },
+    "Search species" : {
+      "comment" : "Label for the search bar in the species picker list.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Art suchen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher une espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soort zoeken"
+          }
+        }
+      }
+    },
     "Searching for Bluetooth dive computers..." : {
       "comment" : "Subtitle shown while scanning for Bluetooth dive computers",
       "localizations" : {
@@ -32242,6 +35651,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tweede duik"
+          }
+        }
+      }
+    },
+    "Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereich"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Section"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderdeel"
           }
         }
       }
@@ -33468,6 +36899,52 @@
         }
       }
     },
+    "Several Dives Match (%@)" : {
+      "comment" : "Section header: photos taken during more than one dive (e.g. two divers' dives), with their count",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehrere Tauchgänge passen (%@)"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plusieurs plongées correspondent (%@)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meerdere duiken komen overeen (%@)"
+          }
+        }
+      }
+    },
+    "Shark & Ray" : {
+      "comment" : "Species category",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai & Rochen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requin et raie"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haai & rog"
+          }
+        }
+      }
+    },
     "Shortest" : {
       "comment" : "Label for the shortest dive in the bottom time statistics tile.",
       "localizations" : {
@@ -33646,6 +37123,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Toon minder"
+          }
+        }
+      }
+    },
+    "Show photos on the profile" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos im Profil anzeigen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les photos sur le profil"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto’s op het profiel tonen"
           }
         }
       }
@@ -34523,6 +38022,30 @@
         }
       }
     },
+    "Some photos use the previous storage format. Convert them to show their capture time and place them on the dive profile." : {
+      "comment" : "A description of the photos that use the legacy storage format.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Fotos verwenden das bisherige Speicherformat. Konvertiere sie, um ihre Aufnahmezeit anzuzeigen und sie im Tauchprofil zu platzieren."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certaines photos utilisent l’ancien format de stockage. Convertissez-les pour afficher leur heure de prise de vue et les placer sur le profil de plongée."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sommige foto’s gebruiken het vorige opslagformaat. Converteer ze om hun opnametijdstip te tonen en ze op het duikprofiel te plaatsen."
+          }
+        }
+      }
+    },
     "Sort" : {
       "comment" : "Title of a section in the Dive Filter Sheet that allows the user to sort the list of dives.",
       "isCommentAutoGenerated" : true,
@@ -34578,6 +38101,7 @@
       }
     },
     "Species" : {
+      "comment" : "Taxonomic rank",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -34601,6 +38125,206 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Soorten"
+          }
+        }
+      }
+    },
+    "Species (taxonomic rank)" : {
+      "comment" : "Taxonomic rank, singular (one species)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Art"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Species"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soort"
+          }
+        }
+      }
+    },
+    "Species Catalogue" : {
+      "comment" : "Description of a feature that allows users to see a species' classification (kingdom to species), common names, Wikipedia summary and a Creative Commons photo from iNaturalist. Only the species name is sent, when a",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artenkatalog"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Catalogue des espèces"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soortencatalogus"
+          }
+        }
+      }
+    },
+    "Species complex" : {
+      "comment" : "Taxonomic rank: a group of closely related species",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artenkomplex"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Complexe d’espèces"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soortcomplex"
+          }
+        }
+      }
+    },
+    "Species created: %@. Sightings linked: %@." : {
+      "comment" : "Build catalogue result (locale-formatted numbers)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstellte Arten: %@. Verknüpfte Sichtungen: %@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Species created: %1$@. Sightings linked: %2$@."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espèces créées : %@. Observations liées : %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemaakte soorten: %@. Gekoppelde waarnemingen: %@."
+          }
+        }
+      }
+    },
+    "Species data from [iNaturalist](https://www.inaturalist.org). Photos are shown with their author's credit and licence." : {
+      "comment" : "A description of the data that is displayed in the \"Species\" section of the app.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artdaten von [iNaturalist](https://www.inaturalist.org). Fotos werden mit Urhebernennung und Lizenz angezeigt."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Données sur les espèces provenant d’[iNaturalist](https://www.inaturalist.org). Les photos sont affichées avec le crédit de leur auteur et leur licence."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soortgegevens van [iNaturalist](https://www.inaturalist.org). Foto’s worden getoond met de vermelding van de maker en de licentie."
+          }
+        }
+      }
+    },
+    "Species in Photos" : {
+      "comment" : "The title of the screen that lists the species in photos.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten in Fotos"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espèces dans les photos"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten in foto’s"
+          }
+        }
+      }
+    },
+    "Species names from iNaturalist can be fetched in this language in Settings → Online Services → Update Species from iNaturalist." : {
+      "comment" : "A description of the feature that allows users to fetch species names from iNaturalist in their preferred language.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artnamen von iNaturalist können unter Einstellungen → Online-Dienste → Arten von iNaturalist aktualisieren in dieser Sprache abgerufen werden."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les noms d’espèces d’iNaturalist peuvent être obtenus dans cette langue dans Réglages → Services en ligne → Mettre à jour les espèces depuis iNaturalist."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soortnamen van iNaturalist kunnen in deze taal worden opgehaald via Instellingen → Onlinediensten → Soorten bijwerken vanuit iNaturalist."
+          }
+        }
+      }
+    },
+    "Species on This Photo" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten auf diesem Foto"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espèces sur cette photo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten op deze foto"
           }
         }
       }
@@ -34631,6 +38355,81 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Soorten gezien"
+          }
+        }
+      }
+    },
+    "Species to look up: %@" : {
+      "comment" : "Number of catalogue species not yet looked up on iNaturalist",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachzuschlagende Arten: %@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espèces à rechercher : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op te zoeken soorten: %@"
+          }
+        }
+      }
+    },
+    "Species without a name in %@: %@" : {
+      "comment" : "Number of linked species missing an iNaturalist common name in the app language; first %@ is the language name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten ohne Namen auf %@: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Species without a name in %1$@: %2$@"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espèces sans nom en %@ : %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten zonder naam in het %@: %@"
+          }
+        }
+      }
+    },
+    "Sponge" : {
+      "comment" : "Species category",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schwamm"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Éponge"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spons"
           }
         }
       }
@@ -34964,6 +38763,99 @@
         }
       }
     },
+    "Stop Updating" : {
+      "comment" : "A button that stops the background task of updating species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisierung anhalten"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter la mise à jour"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bijwerken stoppen"
+          }
+        }
+      }
+    },
+    "Stopped: iNaturalist is not available right now. Updated: %@." : {
+      "comment" : "iNaturalist update stopped because the service answered with an error (locale-formatted number)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angehalten: iNaturalist ist derzeit nicht verfügbar. Aktualisiert: %@."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêté : iNaturalist n’est pas disponible pour le moment. Mises à jour : %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestopt: iNaturalist is momenteel niet beschikbaar. Bijgewerkt: %@."
+          }
+        }
+      }
+    },
+    "Stopped: no connection. Updated: %@." : {
+      "comment" : "iNaturalist update stopped because the device is offline (locale-formatted number)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angehalten: keine Verbindung. Aktualisiert: %@."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêté : aucune connexion. Mises à jour : %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestopt: geen verbinding. Bijgewerkt: %@."
+          }
+        }
+      }
+    },
+    "Stopped. Updated: %@." : {
+      "comment" : "iNaturalist update stopped by the user (locale-formatted number)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angehalten. Aktualisiert: %@."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêté. Mises à jour : %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestopt. Bijgewerkt: %@."
+          }
+        }
+      }
+    },
     "Store diving certifications and get expiry alerts." : {
       "comment" : "Feature title for logging and managing diving certifications.",
       "isCommentAutoGenerated" : true,
@@ -35050,6 +38942,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bewaar je duikverzekeringen en houd de verlengingsdata bij de hand."
+          }
+        }
+      }
+    },
+    "Stored in the previous format: convert the dive's photos to place it on the profile." : {
+      "comment" : "Photo viewer note for a legacy photo, which has no capture time or profile position",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im bisherigen Format gespeichert: Konvertiere die Fotos des Tauchgangs, um es im Profil zu platzieren."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrée dans l’ancien format : convertissez les photos de la plongée pour la placer sur le profil."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opgeslagen in het vorige formaat: converteer de foto’s van de duik om hem op het profiel te plaatsen."
           }
         }
       }
@@ -35168,6 +39083,121 @@
         }
       }
     },
+    "Subclass" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterklasse"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous-classe"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderklasse"
+          }
+        }
+      }
+    },
+    "Subfamily" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterfamilie"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous-famille"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderfamilie"
+          }
+        }
+      }
+    },
+    "Subgenus" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Untergattung"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous-genre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ondergeslacht"
+          }
+        }
+      }
+    },
+    "Suborder" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterordnung"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous-ordre"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onderorde"
+          }
+        }
+      }
+    },
+    "Subspecies" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterart"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous-espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ondersoort"
+          }
+        }
+      }
+    },
     "Sunny" : {
       "localizations" : {
         "de" : {
@@ -35215,6 +39245,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zonnig (dag)"
+          }
+        }
+      }
+    },
+    "Superfamily" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überfamilie"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Superfamille"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Superfamilie"
           }
         }
       }
@@ -35873,6 +39926,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tags"
+          }
+        }
+      }
+    },
+    "Taken on %@, outside this dive: not shown on the profile." : {
+      "comment" : "Photo viewer note: the photo's capture time (date and time) is outside the dive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufgenommen am %@, außerhalb dieses Tauchgangs: nicht im Profil angezeigt."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prise le %@, en dehors de cette plongée : non affichée sur le profil."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemaakt op %@, buiten deze duik: niet op het profiel getoond."
           }
         }
       }
@@ -36629,6 +40705,29 @@
         }
       }
     },
+    "The converted photos could not be removed from the previous format. Convert again to finish." : {
+      "comment" : "Photo conversion summary line: the records were saved but the old copies are still there",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die konvertierten Fotos konnten nicht aus dem bisherigen Format entfernt werden. Konvertiere erneut, um den Vorgang abzuschließen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les photos converties n’ont pu être retirées de l’ancien format. Convertissez de nouveau pour terminer."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De geconverteerde foto’s konden niet uit het vorige formaat worden verwijderd. Converteer opnieuw om te voltooien."
+          }
+        }
+      }
+    },
     "The coordinates and date are sent only when you fetch the weather online." : {
       "localizations" : {
         "de" : {
@@ -36836,6 +40935,53 @@
         }
       }
     },
+    "The species could not be updated. Try again." : {
+      "comment" : "iNaturalist lookup: the chosen taxon could not be saved on the species",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Art konnte nicht aktualisiert werden. Versuche es erneut."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’espèce n’a pas pu être mise à jour. Réessayez."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De soort kon niet worden bijgewerkt. Probeer het opnieuw."
+          }
+        }
+      }
+    },
+    "The species is removed from the catalogue. Its sightings stay on their dives with the names they were recorded with, and its photos stay on their dives." : {
+      "comment" : "The message in a confirmation alert that deletes a species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Art wird aus dem Katalog entfernt. Ihre Sichtungen bleiben mit den erfassten Namen bei ihren Tauchgängen, und ihre Fotos bleiben bei ihren Tauchgängen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’espèce est retirée du catalogue. Ses observations restent sur leurs plongées avec les noms sous lesquels elles ont été enregistrées, et ses photos restent sur leurs plongées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De soort wordt uit de catalogus verwijderd. De waarnemingen blijven bij hun duiken met de namen waaronder ze zijn vastgelegd, en de foto’s blijven bij hun duiken."
+          }
+        }
+      }
+    },
     "The sync bookmark is saved even when every downloaded dive falls before your date, so the next sync still fetches only genuinely new dives." : {
       "comment" : "The text above the sync bookmark.",
       "isCommentAutoGenerated" : true,
@@ -37023,6 +41169,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deze rekenhulpen zijn geen vervanging voor een officiële duikopleiding of -certificering. Plan duiken altijd samen met een gekwalificeerde instructeur of duikprofessional."
+          }
+        }
+      }
+    },
+    "These photos are skipped. You can still add them to a dive from its Photos section." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Fotos werden übersprungen. Du kannst sie trotzdem über den Bereich „Fotos“ eines Tauchgangs hinzufügen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces photos sont ignorées. Vous pouvez quand même les ajouter à une plongée depuis sa section Photos."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze foto’s worden overgeslagen. Je kunt ze nog steeds via het onderdeel Foto’s aan een duik toevoegen."
+          }
+        }
+      }
+    },
+    "These photos were taken during more than one logged dive. Choose the dive for each photo." : {
+      "comment" : "Footer for the photo batch import sheet.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Fotos wurden während mehrerer erfasster Tauchgänge aufgenommen. Wähle für jedes Foto den Tauchgang."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces photos ont été prises pendant plus d’une plongée enregistrée. Choisissez la plongée de chaque photo."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze foto’s zijn gemaakt tijdens meer dan één gelogde duik. Kies voor elke foto de duik."
+          }
+        }
+      }
+    },
+    "These sightings are not in the species catalogue yet. Add the name to the catalogue to give it a profile, photos and statistics; the sightings keep the name they were recorded with." : {
+      "comment" : "A description of the content of the view.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Sichtungen sind noch nicht im Artenkatalog. Füge den Namen dem Katalog hinzu, um ihm ein Profil, Fotos und Statistiken zu geben; die Sichtungen behalten den erfassten Namen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces observations ne sont pas encore dans le catalogue des espèces. Ajoutez le nom au catalogue pour lui donner une fiche, des photos et des statistiques; les observations conservent le nom sous lequel elles ont été enregistrées."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze waarnemingen staan nog niet in de soortencatalogus. Voeg de naam toe aan de catalogus om hem een profiel, foto’s en statistieken te geven; de waarnemingen behouden de naam waaronder ze zijn vastgelegd."
           }
         }
       }
@@ -39006,6 +43222,53 @@
         }
       }
     },
+    "Update Species" : {
+      "comment" : "Title of the Settings page that looks up all species on iNaturalist",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten aktualisieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre à jour les espèces"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten bijwerken"
+          }
+        }
+      }
+    },
+    "Update Species from iNaturalist" : {
+      "comment" : "A button that updates the app's species database from iNaturalist.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arten von iNaturalist aktualisieren"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre à jour les espèces depuis iNaturalist"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soorten bijwerken vanuit iNaturalist"
+          }
+        }
+      }
+    },
     "Update template information" : {
       "comment" : "A description below the title of the view, explaining its purpose.",
       "isCommentAutoGenerated" : true,
@@ -39136,6 +43399,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bijgewerkt"
+          }
+        }
+      }
+    },
+    "Updated: %@. Not found on iNaturalist: %@." : {
+      "comment" : "Result of the iNaturalist update of all species (locale-formatted numbers)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisiert: %@. Nicht auf iNaturalist gefunden: %@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated: %1$@. Not found on iNaturalist: %2$@."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mises à jour : %@. Introuvables sur iNaturalist : %@."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bijgewerkt: %@. Niet gevonden op iNaturalist: %@."
           }
         }
       }
@@ -39680,6 +43972,29 @@
         }
       }
     },
+    "Variety" : {
+      "comment" : "Taxonomic rank",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Varietät"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Variété"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Variëteit"
+          }
+        }
+      }
+    },
     "Version %@" : {
       "comment" : "A footer displaying the version of the app. The argument is the string “%1$arg-%2$arg”.",
       "isCommentAutoGenerated" : true,
@@ -39909,6 +44224,54 @@
         }
       }
     },
+    "View Dives" : {
+      "comment" : "A button that shows dives for a particular marine life taxon.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge anzeigen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voir les plongées"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken bekijken"
+          }
+        }
+      }
+    },
+    "View Dives with This Critter" : {
+      "comment" : "A button that opens a new screen showing dives with the same species.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tauchgänge mit dieser Art anzeigen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voir les plongées avec cette espèce"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duiken met deze soort bekijken"
+          }
+        }
+      }
+    },
     "View larger map" : {
       "localizations" : {
         "de" : {
@@ -39927,6 +44290,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Grotere kaart weergeven"
+          }
+        }
+      }
+    },
+    "View on iNaturalist" : {
+      "comment" : "A label for a link to the iNaturalist website.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf iNaturalist ansehen"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voir sur iNaturalist"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bekijken op iNaturalist"
           }
         }
       }
@@ -40998,6 +45385,28 @@
         }
       }
     },
+    "When on, each photo taken during the dive appears on the profile chart at the moment it was taken, at the depth recorded by your dive computer. Tap a thumbnail to open the photo." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn aktiviert, erscheint jedes während des Tauchgangs aufgenommene Foto im Profildiagramm zum Zeitpunkt der Aufnahme, in der von deinem Tauchcomputer aufgezeichneten Tiefe. Tippe auf ein Miniaturbild, um das Foto zu öffnen."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsque cette option est activée, chaque photo prise pendant la plongée apparaît sur le graphique du profil au moment où elle a été prise, à la profondeur enregistrée par votre ordinateur de plongée. Touchez une vignette pour ouvrir la photo."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indien ingeschakeld verschijnt elke foto die tijdens de duik is gemaakt op de profielgrafiek op het moment van opname, op de diepte die je duikcomputer heeft vastgelegd. Tik op een miniatuur om de foto te openen."
+          }
+        }
+      }
+    },
     "When on, the dive details show a Samples tab with the raw data recorded by your dive computer at each sample point. Long dives can take a moment to display in full." : {
       "comment" : "A description of the Samples tab in the Dive Profile settings.",
       "isCommentAutoGenerated" : true,
@@ -41093,6 +45502,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Welk apparaat is dit?"
+          }
+        }
+      }
+    },
+    "Wikipedia" : {
+      "comment" : "A link to a Wikipedia article.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikipedia"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikipédia"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikipedia"
           }
         }
       }
@@ -41758,6 +46191,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Werkdruk moet een geldig getal zijn"
+          }
+        }
+      }
+    },
+    "Worm" : {
+      "comment" : "Species category",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wurm"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worm"
           }
         }
       }

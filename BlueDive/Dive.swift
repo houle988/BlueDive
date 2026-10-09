@@ -241,7 +241,11 @@ final class MarineSight {
     
     // Inverse relationship to Dive
     var dive: Dive?
-    
+
+    /// Catalogue species this sighting is linked to. Optional: sightings created before the
+    /// species catalogue (or imported as free text) keep only `name`, which is never rewritten.
+    var species: Species?
+
     init(id: UUID = UUID(), name: String, count: Int = 1) {
         self.id = id
         self.name = name
@@ -455,7 +459,12 @@ final class Dive {
     
     @Relationship(deleteRule: .cascade, inverse: \MarineSight.dive)
     var seenFish: [MarineSight]? = []
-    
+
+    /// Photos stored one record per image (original bytes, thumbnail, capture metadata).
+    /// The legacy `photosData` array is kept untouched until the user converts it.
+    @Relationship(deleteRule: .cascade, inverse: \DivePhoto.dive)
+    var photos: [DivePhoto]? = []
+
     @Relationship(deleteRule: .nullify)
     var usedGear: [Gear]? = []
 

@@ -1339,6 +1339,51 @@ extension ContentView {
             earlier.decompressionAlgorithm = later.decompressionAlgorithm
         }
 
+        // --- Photos: moved to the merged dive before the later dive is deleted (its delete
+        // would take its photo records, and their originals, with it). Their profile positions
+        // follow from their capture times on the merged timeline (DivePhoto.profileOffset); a
+        // stored position (used only for a photo without a capture time) moves with the later
+        // dive's samples, by the same offset.
+        for photo in later.photos ?? [] {
+            if let offset = photo.profileOffsetSeconds {
+                photo.profileOffsetSeconds = offset + timeOffset * 60
+            }
+            photo.attach(to: earlier)
+        }
+        if let laterLegacy = later.photosData, !laterLegacy.isEmpty {
+            earlier.photosData = (earlier.photosData ?? []) + laterLegacy
+            later.photosData = nil
+        }
+
+        // --- Marine life: the later dive's sightings join the merged dive (its delete would
+        // take them with it). The same critter on both dives — same species, or the same name
+        // (ignoring case) for sightings not in the catalogue — is combined into the earlier
+        // dive's sighting: it keeps its name, takes the larger quantity, and the species link
+        // when it had none.
+        for sight in later.seenFish ?? [] {
+            let laterName = SpeciesCatalog.key(sight.name)
+            let match = (earlier.seenFish ?? []).first { existing in
+                if let a = existing.species?.persistentModelID, let b = sight.species?.persistentModelID {
+                    return a == b
+                }
+                return SpeciesCatalog.key(existing.name) == laterName
+            }
+            if let match {
+                match.count = max(match.count, sight.count)
+                if match.species == nil { match.species = sight.species }
+                modelContext.delete(sight)
+            } else {
+                sight.dive = earlier
+            }
+        }
+
+        // --- Equipment: the later dive's gear is added to the merged dive (no duplicates).
+        var gear = earlier.usedGear ?? []
+        for item in later.usedGear ?? [] where !gear.contains(where: { $0.persistentModelID == item.persistentModelID }) {
+            gear.append(item)
+        }
+        earlier.usedGear = gear
+
         // --- Delete the later dive ---
         modelContext.delete(later)
         try? modelContext.save()

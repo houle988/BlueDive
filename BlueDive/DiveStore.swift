@@ -220,6 +220,10 @@ final class DiveStore {
     @ObservationIgnored private var remoteHistoryContainer: ModelContainer?
     /// Bumped whenever the fish/photo badge caches change; see scheduleAggregation.
     @ObservationIgnored private var badgeCacheGeneration = 0
+    /// Bumped on every full rebuild and every badge refresh — local sighting saves (a quantity
+    /// or species-link edit leaves the summaries unchanged) and remote fish changes — so the
+    /// Marine Life statistics know to recompute.
+    private(set) var marineLifeVersion = 0
 
     // MARK: - Background Tasks
     private var searchDebounceTask: Task<Void, Never>?
@@ -431,6 +435,7 @@ final class DiveStore {
         self.hasReceivedDives = true
         self.cachedSelectedDiver = selectedDiver
         self.cachedMarineSights = allMarineSights
+        self.marineLifeVersion &+= 1
         // Also covers ContentView's first-mount rebuild, which does not go through scheduleRebuild.
         self.latestQueryDives = dives
         self.latestQuerySights = allMarineSights
@@ -453,6 +458,7 @@ final class DiveStore {
         let membershipChanged = currentDiveIDs != lastPhotoSweepDiveIDs
         if membershipChanged {
             cachedDivesWithPhotos = Set(dives.filter { !($0.photosData?.isEmpty ?? true) }.map { $0.id })
+                .union(Self.diveIDsWithPhotoRecords(among: dives))
             lastPhotoSweepDiveIDs = currentDiveIDs
         }
 
@@ -663,15 +669,48 @@ final class DiveStore {
         cachedAvailableMarineLife  = marineLifeSet.sorted()
     }
 
+    /// The dives (among `dives`) that have photo records: the identifiers of the dives with
+    /// at least one photo, from the store, without materialising any photo or dive.
+    private static func diveIDsWithPhotoRecords(among dives: [Dive]) -> Set<UUID> {
+        guard let context = dives.first?.modelContext else { return [] }
+        let descriptor = FetchDescriptor<Dive>(predicate: #Predicate {
+            // Not `isEmpty` / `count`: Core Data cannot translate either on a to-many here.
+            $0.photos?.contains(where: { _ in true }) ?? false
+        })
+        guard let identifiers = try? context.fetchIdentifiers(descriptor) else { return [] }
+        let idByPID = Dictionary(dives.map { ($0.persistentModelID, $0.id) }, uniquingKeysWith: { first, _ in first })
+        return Set(identifiers.compactMap { idByPID[$0] })
+    }
+
+    /// Whether the dive has photos: a count of its photo records (one SQLite count through
+    /// the indexed dive relationship; it also sees photos just saved by the import context,
+    /// before the main context merges them), then the legacy array.
+    private static func hasPhotos(_ dive: Dive) -> Bool {
+        if let context = dive.modelContext {
+            let divePID = dive.persistentModelID
+            let descriptor = FetchDescriptor<DivePhoto>(predicate: #Predicate { $0.dive?.persistentModelID == divePID })
+            if ((try? context.fetchCount(descriptor)) ?? 0) > 0 { return true }
+        }
+        return !(dive.photosData?.isEmpty ?? true)
+    }
+
+    /// Photos of the dive (records and legacy images), compared by the remote-change merge
+    /// check. Reading the legacy array loads its images, so this runs only for dives whose
+    /// photos changed.
+    private static func photoCount(_ dive: Dive) -> Int {
+        (dive.photos?.count ?? 0) + (dive.photosData?.count ?? 0)
+    }
+
     // Targeted badge refresh for a single dive after in-place photo or marine-life edits.
     // Only faults seenFish/photosData for the ONE changed dive, then refreshes filter options.
     @MainActor
     func refreshBadgeSets(for diveID: UUID, in dives: [Dive], showFilterSheet: Bool, selectedDiver: String) {
         guard let dive = dives.first(where: { $0.id == diveID }) else { return }
         badgeCacheGeneration &+= 1
+        marineLifeVersion &+= 1
         let hasFish = !(dive.seenFish?.isEmpty ?? true)
         if hasFish { cachedDivesWithFish.insert(diveID) } else { cachedDivesWithFish.remove(diveID) }
-        let hasPhotos = !(dive.photosData?.isEmpty ?? true)
+        let hasPhotos = Self.hasPhotos(dive)
         if hasPhotos { cachedDivesWithPhotos.insert(diveID) } else { cachedDivesWithPhotos.remove(diveID) }
 
         // Patch all summary caches BEFORE any rebuild so rebuildFilteredDives reads current data.
@@ -864,7 +903,7 @@ final class DiveStore {
     // transactions, keeps only other devices' changes, and patches just the affected dives:
     //
     //   timestamp, diverName, current sort field      → one full rebuild (commitListRebuild)
-    //   seenFish, photosData                          → badge refresh for those dives
+    //   seenFish, photosData, photos                  → badge refresh for those dives
     //   other fields shown in rows (DiveSummary)      → summary patch for those dives
     //   anything else (notes, averageDepth, profile…) → nothing
     //
@@ -903,7 +942,7 @@ final class DiveStore {
         var rowPIDs: Set<PersistentIdentifier> = []
         var badgePIDs: Set<PersistentIdentifier> = []
         /// The badge dives whose photos changed (a subset of badgePIDs). Only these have their
-        /// photo count compared, which loads every photo blob of the dive.
+        /// photo count compared, which loads the dive's legacy photosData images.
         var photoPIDs: Set<PersistentIdentifier> = []
         var deletedPIDs: Set<PersistentIdentifier> = []
         /// MarineSight rows whose name changed; resolved to their parent dives' badges.
@@ -1291,7 +1330,9 @@ final class DiveStore {
             \Dive.surfaceInterval, \Dive.rating, \Dive.buddies, \Dive.diveTypes, \Dive.tags,
             Dive.tanksDataKeyPath
         ]
-        let badgeKeys: Set<PartialKeyPath<Dive>> = [\Dive.seenFish, \Dive.photosData]
+        // A photo record added or removed on another device comes with a `photos` update on its dive.
+        let photoKeys: Set<PartialKeyPath<Dive>> = [\Dive.photosData, \Dive.photos]
+        let badgeKeys: Set<PartialKeyPath<Dive>> = photoKeys.union([\Dive.seenFish])
 
         for transaction in transactions {
             if let author = transaction.author, author.hasPrefix(Self.appHistoryAuthorPrefix) {
@@ -1329,7 +1370,7 @@ final class DiveStore {
                         batch.rowPIDs.insert(pid)
                     }
                     if !keys.isDisjoint(with: badgeKeys) { batch.badgePIDs.insert(pid) }
-                    if keys.contains(\Dive.photosData) { batch.photoPIDs.insert(pid) }
+                    if !keys.isDisjoint(with: photoKeys) { batch.photoPIDs.insert(pid) }
                 case .delete(let delete):
                     if delete.changedPersistentIdentifier.entityName == "Dive" {
                         batch.deletedPIDs.insert(delete.changedPersistentIdentifier)
@@ -1349,7 +1390,7 @@ final class DiveStore {
     /// the store (grouped queries, see fetchModels). `missing` are dives the store no longer has;
     /// a fetch error only skips that dive's check (it must never be mistaken for a deletion).
     /// Photo counts are recorded only for dives whose photos changed (`photoPIDs`), because
-    /// reading them loads every photo blob of the dive.
+    /// reading them loads the dive's legacy photosData images.
     private func freshExpectations(
         for pids: Set<PersistentIdentifier>,
         badgePIDs: Set<PersistentIdentifier>,
@@ -1364,7 +1405,7 @@ final class DiveStore {
             expectations[pid] = RemoteDiveExpectation(
                 summary: DiveSummary(from: dive),
                 fishNames: badgePIDs.contains(pid) ? Self.fishNames(of: dive) : nil,
-                photoCount: photoPIDs.contains(pid) ? (dive.photosData?.count ?? 0) : nil
+                photoCount: photoPIDs.contains(pid) ? Self.photoCount(dive) : nil
             )
         }
         return (expectations, fetched.missing)
@@ -1389,7 +1430,7 @@ final class DiveStore {
     /// pending ones); before returning — on success or at the last attempt — every listed dive
     /// is compared with the store, because the caller's rebuild or re-filter then reads all of
     /// them with no await in between. Photo counts are compared only on that final check (they
-    /// load every photo blob). Returns false on timeout; the caller then applies what the main
+    /// load the legacy photosData images). Returns false on timeout; the caller then applies what the main
     /// context has, or defers if a deletion is pending.
     private func waitForMainContextMerge(
         of expectations: [PersistentIdentifier: RemoteDiveExpectation],
@@ -1458,7 +1499,7 @@ final class DiveStore {
             guard let id = diveIDByPID[pid], let dive = diveByID[id] else { continue }
             if DiveSummary(from: dive) != expected.summary { return false }
             if let names = expected.fishNames, Self.fishNames(of: dive) != names { return false }
-            if includingPhotos, let count = expected.photoCount, (dive.photosData?.count ?? 0) != count { return false }
+            if includingPhotos, let count = expected.photoCount, Self.photoCount(dive) != count { return false }
         }
         return true
     }
@@ -1471,10 +1512,11 @@ final class DiveStore {
     }
 
     /// Refreshes the fish badge caches for the given dives, and the photo badge only for those
-    /// whose photos changed (`photos`; reading photosData loads every photo blob). Faults these
+    /// whose photos changed (`photos`; reading photosData loads its images). Faults these
     /// dives only, and publishes each cache with one assignment.
     private func refreshBadgeCaches(for ids: Set<UUID>, photos: Set<UUID>) {
         badgeCacheGeneration &+= 1
+        var fishChanged = false
         var withFish = cachedDivesWithFish
         var withPhotos = cachedDivesWithPhotos
         for id in ids {
@@ -1482,15 +1524,22 @@ final class DiveStore {
             let fish = dive.seenFish ?? []
             if fish.isEmpty { withFish.remove(id) } else { withFish.insert(id) }
             if photos.contains(id) {
-                if dive.photosData?.isEmpty ?? true { withPhotos.remove(id) } else { withPhotos.insert(id) }
+                if Self.hasPhotos(dive) { withPhotos.insert(id) } else { withPhotos.remove(id) }
             }
-            fishNamesByID[id] = fish.compactMap { sight -> String? in
+            let names = fish.compactMap { sight -> String? in
                 let n = sight.name.trimmingCharacters(in: .whitespaces)
                 return n.isEmpty ? nil : n
             }
+            // Compared as sorted lists (the full rebuild stores the names in sighting order
+            // from another query, and none for a dive without fish).
+            if (fishNamesByID[id] ?? []).sorted() != names.sorted() { fishChanged = true }
+            fishNamesByID[id] = names
         }
         cachedDivesWithFish = withFish
         cachedDivesWithPhotos = withPhotos
+        // Fish added, removed or renamed on another device (not photo-only changes): the
+        // Marine Life statistics recompute.
+        if fishChanged { marineLifeVersion &+= 1 }
     }
 
     private func logRemoteHistory(_ message: String) {

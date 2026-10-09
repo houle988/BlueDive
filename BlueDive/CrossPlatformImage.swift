@@ -37,11 +37,17 @@ extension Data {
         PlatformImage(data: self)
     }
 
-    /// Content-keyed id for SwiftUI `.task(id:)` on photo data.
-    /// XOR of a prefix hash and count is O(1), collision-resistant for same-size
-    /// photos, and stronger than count alone: a deletion that shifts a different
-    /// photo into the same ForEach/index slot changes the id and triggers a re-run.
-    var photoTaskID: Int { prefix(64).hashValue ^ count }
+    /// Content-keyed id for photo data (SwiftUI identity, `.task(id:)`).
+    /// Hashes the first and last 256 bytes and the size, so it stays O(1): a deletion that
+    /// shifts a different photo into the same index changes the id. The tail is included
+    /// because photos from one camera often share their first bytes (the EXIF header).
+    var photoTaskID: Int {
+        var hasher = Hasher()
+        hasher.combine(prefix(256))
+        hasher.combine(suffix(256))
+        hasher.combine(count)
+        return hasher.finalize()
+    }
 }
 
 // MARK: - Cross-platform semantic colors
@@ -99,6 +105,11 @@ extension Color {
     /// Indigo: PPO₂ chip.
     static var readableIndigo: Color {
         readableOnTint(darkMode: .indigo, lightMode: (red: 0.27, green: 0.25, blue: 0.65))
+    }
+
+    /// Pink: photos chip.
+    static var readablePink: Color {
+        readableOnTint(darkMode: .pink, lightMode: (red: 0.62, green: 0.10, blue: 0.30))
     }
 
     /// Text colour for a label drawn on a light tint of its own colour (badges, chart chips):

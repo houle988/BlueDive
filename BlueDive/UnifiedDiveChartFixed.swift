@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import Charts
 
 // MARK: - Comparable clamping helper
@@ -222,6 +223,9 @@ struct ToggleButton: View {
     /// chip's light tint in light mode (see `Color.readableOnTint`).
     var textColor: Color? = nil
     var isAvailable: Bool = true
+    /// False for an icon-only chip where the row has no room for the label; the caller then
+    /// sets the accessibility label.
+    var showsLabel: Bool = true
 
     @ViewBuilder
     private var labelText: some View {
@@ -244,8 +248,10 @@ struct ToggleButton: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption)
-                labelText
-                    .font(.caption2)
+                if showsLabel {
+                    labelText
+                        .font(.caption2)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -1214,6 +1220,19 @@ private extension View {
 }
 #endif
 
+// MARK: - Profile Photo Marker
+
+/// A photo shown on the dive profile at its capture time.
+private struct ProfilePhotoMarker: Identifiable {
+    /// The photo's id.
+    let id: UUID
+    /// Elapsed dive time, in minutes (the chart's x unit).
+    let minutes: Double
+    /// Depth recorded at the sample nearest that time, in the display unit.
+    let depth: Double
+    let image: PlatformImage?
+}
+
 // MARK: - UnifiedDiveChartOptimized
 
 /// Graphique unifié interactif pour le profil de plongée - VERSION OPTIMISÉE
@@ -1250,6 +1269,20 @@ struct UnifiedDiveChartOptimized: View {
     /// Entry time (diamond position) per mandatory deco stop for tooltip matching — built once per dive.
     @State private var cachedDecoStopEntries: [(stop: DecoStop, entryTime: Double)] = []
 
+    // MARK: - Photo Markers
+    @Environment(\.modelContext) private var modelContext
+    /// Optional so the chart previews run without a store; the app always provides one.
+    @Environment(DiveStore.self) private var store: DiveStore?
+    @State private var photoMarkers: [ProfilePhotoMarker] = []
+    /// The photo a tapped marker opens (its id, not a position: the markers are rebuilt after
+    /// a photo is removed, and positions shift meanwhile).
+    @State private var markerPreview: MarkerPreviewTarget?
+
+    private struct MarkerPreviewTarget: Identifiable {
+        let id = UUID()
+        let photoID: UUID
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             toggleControls
@@ -1267,6 +1300,207 @@ struct UnifiedDiveChartOptimized: View {
         .onChange(of: visibility.showPPO2) { _, newValue in
             if newValue { rebuildPPO2Cache() } else { cachedPPO2BySampleID = [:] }
         }
+        .task(id: photoMarkerKey) {
+            await buildPhotoMarkers()
+        }
+        .sheet(item: $markerPreview) { item in
+            let photos = markerPhotos
+            PhotoPreviewSheet(
+                photoIDs: photos.map(\.id.uuidString),
+                photoData: { index in
+                    guard photos.indices.contains(index) else { return Data() }
+                    return photos[index].previewBytes ?? Data()
+                },
+                initialIndex: photos.firstIndex { $0.id == item.photoID } ?? 0,
+                photoRecord: { index in photos.indices.contains(index) ? photos[index] : nil },
+                hasOriginal: { index in photos.indices.contains(index) && photos[index].original != nil },
+                onDelete: { photoID in deleteMarkerPhoto(id: photoID) }
+            )
+            .standardSheetPresentation()
+        }
+    }
+
+    // MARK: - Photo Markers
+
+    /// Photos placed on the profile, in time order.
+    private var markerPhotos: [DivePhoto] {
+        let ids = photoMarkers.map(\.id)
+        let byID = Dictionary((dive.photos ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return ids.compactMap { byID[$0] }
+    }
+
+    /// Changes when a marker must be rebuilt: photos added, removed or moved (including by an
+    /// edit of the dive's start time or profile), units, setting. Reads no image data: a
+    /// photo's thumbnail never changes after import.
+    private var photoMarkerKey: Int {
+        var hasher = Hasher()
+        hasher.combine(dive.id)
+        guard prefs.showPhotosOnProfile else { return hasher.finalize() }
+        hasher.combine(unitsHash)
+        hasher.combine(dive.profileSamples.count)
+        for photo in dive.photos ?? [] {
+            guard let offset = photo.profileOffset(in: dive) else { continue }
+            hasher.combine(photo.id)
+            hasher.combine(offset)
+            // A thumbnail arriving from iCloud after its photo rebuilds the marker (reads the
+            // link only, not the image).
+            hasher.combine(photo.thumbnail != nil)
+        }
+        return hasher.finalize()
+    }
+
+    private func buildPhotoMarkers() async {
+        guard prefs.showPhotosOnProfile else { photoMarkers = []; return }
+        let photos = (dive.photos ?? [])
+            .compactMap { photo in photo.profileOffset(in: dive).map { (photo, $0) } }
+            .sorted { $0.1 < $1.1 }
+        let samples = dive.profileSamples.sorted { $0.time < $1.time }
+        guard !photos.isEmpty, !samples.isEmpty else { photoMarkers = []; return }
+        // Every value read from the models before the decode: a photo (or the dive) deleted
+        // by an iCloud merge meanwhile is never read afterwards.
+        let placed: [(id: UUID, minutes: Double, depth: Double, thumbnail: Data?)] = photos.compactMap { photo, offset in
+            let minutes = offset / 60
+            // The depth recorded at the sample nearest the photo's time (no interpolation).
+            guard let sample = Self.nearestSample(to: minutes, in: samples) else { return nil }
+            return (photo.id, minutes, dive.displayProfileDepth(sample.depth), photo.thumbnailBytes)
+        }
+        let thumbnails = placed.map { ($0.id, $0.thumbnail) }
+        let images = await Task.detached(priority: .userInitiated) {
+            Dictionary(thumbnails.map { ($0.0, $0.1.flatMap { PlatformImage(data: $0) }) },
+                       uniquingKeysWith: { first, _ in first })
+        }.value
+        guard !Task.isCancelled else { return }
+        photoMarkers = placed.map { item in
+            ProfilePhotoMarker(id: item.id, minutes: item.minutes, depth: item.depth, image: images[item.id] ?? nil)
+        }
+    }
+
+    /// The sample whose time is closest to `minutes` (`samples` sorted by time).
+    private static func nearestSample(to minutes: Double, in samples: [DiveProfilePoint]) -> DiveProfilePoint? {
+        guard !samples.isEmpty else { return nil }
+        var low = 0, high = samples.count - 1
+        while low < high {
+            let mid = (low + high) / 2
+            if samples[mid].time < minutes { low = mid + 1 } else { high = mid }
+        }
+        if low > 0, abs(samples[low - 1].time - minutes) <= abs(samples[low].time - minutes) {
+            return samples[low - 1]
+        }
+        return samples[low]
+    }
+
+    private func deleteMarkerPhoto(id: String) {
+        guard let photo = (dive.photos ?? []).first(where: { $0.id.uuidString == id }) else { return }
+        modelContext.delete(photo)
+        try? modelContext.save()
+        store?.commit(dive, affects: .rowBadges)
+    }
+
+    private struct MarkerPlacement {
+        let marker: ProfilePhotoMarker
+        let index: Int
+        /// Position of the marker's dot in the plot area.
+        let x: CGFloat
+        let y: CGFloat
+        /// Length of the stem between the dot and the thumbnail.
+        let stem: CGFloat
+        /// The thumbnail hangs below the dot instead of standing above it.
+        let below: Bool
+    }
+
+    private static let markerThumbSize: CGFloat = 30
+    private static let markerDotSize: CGFloat = 5
+
+    /// Places each thumbnail so it stays inside the plot area and does not cover another one:
+    /// just above its dot, else just below, then one level higher, one level lower, and so on.
+    /// The dot always stays on the depth line at the photo's time.
+    private func markerPlacements(proxy: ChartProxy, plotSize: CGSize) -> [MarkerPlacement] {
+        let thumb = Self.markerThumbSize
+        let halfDot = Self.markerDotSize / 2
+        let gap: CGFloat = 4
+        var placed: [CGRect] = []
+        var placements: [MarkerPlacement] = []
+        for (index, marker) in photoMarkers.enumerated() {
+            guard let x = proxy.position(forX: marker.minutes),
+                  let y = proxy.position(forY: -marker.depth) else { continue }
+            func rect(stem: CGFloat, below: Bool) -> CGRect {
+                let top = below ? y + halfDot + stem : y - halfDot - stem - thumb
+                return CGRect(x: x - thumb / 2, y: top, width: thumb, height: thumb)
+            }
+            var chosen: (stem: CGFloat, below: Bool)?
+            var fallback: (stem: CGFloat, below: Bool)?
+            for level in 0..<12 {
+                let stem = 6 + CGFloat(level) * (thumb + gap)
+                for below in [false, true] {
+                    let candidate = rect(stem: stem, below: below)
+                    guard candidate.minY >= 0, candidate.maxY <= plotSize.height else { continue }
+                    if fallback == nil { fallback = (stem, below) }
+                    if !placed.contains(where: { $0.insetBy(dx: -1, dy: -1).intersects(candidate) }) {
+                        chosen = (stem, below)
+                        break
+                    }
+                }
+                if chosen != nil { break }
+            }
+            let choice = chosen ?? fallback ?? (6, false)
+            placed.append(rect(stem: choice.stem, below: choice.below))
+            placements.append(MarkerPlacement(marker: marker, index: index, x: x, y: y,
+                                              stem: choice.stem, below: choice.below))
+        }
+        return placements
+    }
+
+    private func photoMarkerView(_ marker: ProfilePhotoMarker, index: Int, stemHeight: CGFloat, below: Bool) -> some View {
+        Button {
+            markerPreview = MarkerPreviewTarget(photoID: marker.id)
+        } label: {
+            VStack(spacing: 0) {
+                if below {
+                    Circle()
+                        .fill(Color.pink)
+                        .frame(width: Self.markerDotSize, height: Self.markerDotSize)
+                    Rectangle()
+                        .fill(Color.pink)
+                        .frame(width: 1.5, height: stemHeight)
+                }
+                Group {
+                    if let image = marker.image {
+                        Image(platformImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "photo")
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.pink)
+                    }
+                }
+                .frame(width: Self.markerThumbSize, height: Self.markerThumbSize)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white, lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                if !below {
+                    Rectangle()
+                        .fill(Color.pink)
+                        .frame(width: 1.5, height: stemHeight)
+                    Circle()
+                        .fill(Color.pink)
+                        .frame(width: Self.markerDotSize, height: Self.markerDotSize)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: String(
+            format: NSLocalizedString("Photo at %@, %@", bundle: .forAppLanguage(), value: "Photo at %@, %@", comment: "Accessibility label of a photo marker on the dive profile: elapsed dive time (e.g. 22:05) and depth (e.g. 18.2 m)"),
+            Self.elapsedText(minutes: marker.minutes),
+            "\(marker.depth.localizedString(decimals: 1)) \(prefs.depthUnit.symbol)"
+        )))
+    }
+
+    /// Elapsed dive time as minutes:seconds, e.g. "22:05".
+    private static func elapsedText(minutes: Double) -> String {
+        let total = Int(exactly: (minutes * 60).rounded()) ?? 0
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
     
     // MARK: - Toggle Controls
@@ -1363,10 +1597,31 @@ struct UnifiedDiveChartOptimized: View {
         )
     }
 
+    /// Whether the dive has a photo placed on the profile (the Photos chip is dimmed otherwise).
+    private var hasProfilePhotos: Bool {
+        (dive.photos ?? []).contains { $0.profileOffset(in: dive) != nil }
+    }
+
+    /// Shows or hides the photo markers. Bound to the same saved preference as Settings →
+    /// Dive Profile → Show photos on the profile, so both always agree. Independent of the
+    /// other chips, like Deco. Shown in the dive detail and in the dive list's preview alike.
+    private func photosChip(showsLabel: Bool) -> some View {
+        ToggleButton(
+            isOn: $prefs.showPhotosOnProfile,
+            icon: "camera.fill",
+            label: "Photos",
+            color: .pink,
+            textColor: Color.readablePink,
+            isAvailable: hasProfilePhotos,
+            showsLabel: showsLabel
+        )
+        .accessibilityLabel(prefs.showPhotosOnProfile ? Text("Hide photos on the profile") : Text("Show photos on the profile"))
+    }
+
     private var toggleControls: some View {
         VStack(spacing: 12) {
             #if os(macOS)
-            // The Mac window is usually wide enough for all six chips on one row;
+            // The Mac window is usually wide enough for all the chips on one row;
             // fall back to the two iOS rows when it is not. ViewThatFits measures
             // the chips at their full-label width, so the single row is only used
             // when no chip would have to switch to its short label.
@@ -1374,16 +1629,31 @@ struct UnifiedDiveChartOptimized: View {
                 HStack(spacing: 12) {
                     primaryToggleChips
                     secondaryToggleChips
+                    photosChip(showsLabel: true)
                 }
                 VStack(spacing: 12) {
                     HStack(spacing: 12) { primaryToggleChips }
-                    HStack(spacing: 12) { secondaryToggleChips }
+                    HStack(spacing: 12) {
+                        secondaryToggleChips
+                        photosChip(showsLabel: true)
+                    }
                 }
             }
             #else
             HStack(spacing: 12) { primaryToggleChips }
 
-            HStack(spacing: 12) { secondaryToggleChips }
+            // Labelled like the other chips when the row has room; icon only where a fourth
+            // labelled chip would not fit (a small iPhone).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    secondaryToggleChips
+                    photosChip(showsLabel: true)
+                }
+                HStack(spacing: 12) {
+                    secondaryToggleChips
+                    photosChip(showsLabel: false)
+                }
+            }
             #endif
             Text("Depth is always displayed on the chart")
                 .font(.caption2)
@@ -1430,23 +1700,6 @@ struct UnifiedDiveChartOptimized: View {
                                 .offset(x: origin + fraction * width)
                         }
 
-                        // ── Tooltip ──
-                        if cursorX != nil, let point = cachedInterpolatedPoint {
-                            ChartTooltipView(
-                                point: point,
-                                visibility: visibility,
-                                dive: dive,
-                                decoStopEntries: cachedDecoStopEntries
-                            )
-                            .offset(x: tooltipOffsetX(
-                                screenX: cursorScreenX,
-                                plotOriginX: origin,
-                                plotWidth: width
-                            ))
-                            .offset(y: 8)
-                            .allowsHitTesting(false)
-                        }
-
                         // ── Touch capture zone — sized to the plot area only ──
                         Rectangle()
                             .fill(Color.clear)
@@ -1478,6 +1731,40 @@ struct UnifiedDiveChartOptimized: View {
                                         }
                                     }
                             )
+
+                        // ── Photo markers — above the touch zone so a tap opens the photo.
+                        // The marker's dot sits on the curve: the view (30 pt thumbnail, stem,
+                        // 5 pt dot) is centred half its height minus half the dot above the dot.
+                        ZStack(alignment: .topLeading) {
+                            ForEach(markerPlacements(proxy: proxy, plotSize: geo[frame].size), id: \.marker.id) { placement in
+                                // The view is thumbnail + stem + dot; its centre sits half its
+                                // height (less half the dot) above — or below — the dot's centre.
+                                let offset = (Self.markerThumbSize + placement.stem + Self.markerDotSize) / 2
+                                    - Self.markerDotSize / 2
+                                photoMarkerView(placement.marker, index: placement.index,
+                                                stemHeight: placement.stem, below: placement.below)
+                                    .position(x: geo[frame].minX + placement.x,
+                                              y: geo[frame].minY + placement.y + (placement.below ? offset : -offset))
+                            }
+                        }
+                        .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+
+                        // ── Tooltip — last, so it is drawn over the photo markers while scrubbing.
+                        if cursorX != nil, let point = cachedInterpolatedPoint {
+                            ChartTooltipView(
+                                point: point,
+                                visibility: visibility,
+                                dive: dive,
+                                decoStopEntries: cachedDecoStopEntries
+                            )
+                            .offset(x: tooltipOffsetX(
+                                screenX: cursorScreenX,
+                                plotOriginX: origin,
+                                plotWidth: width
+                            ))
+                            .offset(y: 8)
+                            .allowsHitTesting(false)
+                        }
                     }
                 }
             }

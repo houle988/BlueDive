@@ -94,12 +94,22 @@ struct DiveDetailView: View {
     @State var showDeleteGearAlert = false
     @State var selectedGearForDetail: Gear?
     @State var isEditingPhotos = false
-    @State var photoIndexToDelete: Int?
+    /// The photo (`DivePhotoEntry.id`) the Remove alert is about. An id, not a position: an
+    /// import still running can add photos that sort ahead of it while the alert is open.
+    @State var photoIDToDelete: String?
     @State var showDeletePhotoAlert = false
     @State var showPhotosPicker = false
     @State var showFileImporter = false
     @State var showFileImportError = false
-    @State var showFileTruncationAlert = false
+    @State var photoImportResult: PhotoImporter.Result?
+    /// A summary with problems (failed saves, unreadable files) waiting for the species review
+    /// sheet to close: an alert cannot be shown while the sheet is presented.
+    @State var pendingPhotoImportResult: PhotoImporter.Result?
+    /// Dive whose photos are being imported (the import keeps running if the user moves to another dive).
+    @State var importingPhotosDiveID: PersistentIdentifier?
+    @State var showConvertLegacyPhotosAlert = false
+    /// Species found in the IPTC text of photos just imported, waiting for confirmation.
+    @State var speciesProposals: [SpeciesPhotoProposal] = []
     @State var isEditingMarineLife = false
     @State var fishToDelete: MarineSight?
     @State var showDeleteFishAlert = false
@@ -466,7 +476,10 @@ struct DiveDetailView: View {
             showPhotosPicker = false
             showFileImporter = false
             showFileImportError = false
-            showFileTruncationAlert = false
+            photoImportResult = nil
+            pendingPhotoImportResult = nil
+            showConvertLegacyPhotosAlert = false
+            speciesProposals = []
             isEditingEquipment = false
             isEditingPhotos = false
             isEditingMarineLife = false
@@ -474,7 +487,7 @@ struct DiveDetailView: View {
             // Also clear transient targets so they can't point to the previous dive's items.
             selectedPhotoForPreview = nil
             gearToDelete = nil
-            photoIndexToDelete = nil
+            photoIDToDelete = nil
             fishToDelete = nil
             fishToEdit = nil
             showDeleteGearAlert = false

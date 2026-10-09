@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import ImageIO
 
 // MARK: - Dive Trip Model
 
@@ -47,8 +48,44 @@ struct DiveTrip: Identifiable {
     var uniqueSites: Int {
         Set(dives.map { $0.siteName.lowercased() }).count
     }
-    var photos: [Data] {
-        dives.flatMap { $0.photosData ?? [] }
+    /// Where the cover comes from: the earliest photo record (with a thumbnail) of the first
+    /// dive that has one, else that dive's first legacy photo. Found from the links only — no
+    /// image is read — so it can key the card's decode task.
+    enum CoverSource {
+        case photo(DivePhoto)
+        case legacy(Dive)
+
+        /// Changes when the cover changes (a photo added, removed, or a thumbnail arriving
+        /// from iCloud), so the card decodes the new one.
+        var key: String {
+            switch self {
+            case .photo(let photo): return "p:\(photo.id.uuidString)"
+            case .legacy(let dive): return "l:\(dive.id.uuidString)"
+            }
+        }
+    }
+
+    var coverSource: CoverSource? {
+        for dive in dives {
+            // Photos whose thumbnail has arrived (`thumbnail != nil` reads the link only).
+            let withThumbnail = (dive.photos ?? []).filter { $0.thumbnail != nil }
+            if let photo = withThumbnail.min(by: { ($0.captureDate ?? $0.createdAt) < ($1.captureDate ?? $1.createdAt) }) {
+                return .photo(photo)
+            }
+            if !(dive.photosData?.isEmpty ?? true) { return .legacy(dive) }
+        }
+        return nil
+    }
+
+    /// Cover image for the trip card: the source's thumbnail (CLAUDE.md, "Image Data in
+    /// SwiftData": grids read thumbnails, never originals; 512 px is enough for the 140 pt
+    /// header), or the legacy photo. Only that one image is loaded; `TripCard` decodes it once,
+    /// off the main thread.
+    func coverPhotoData(from source: CoverSource) -> Data? {
+        switch source {
+        case .photo(let photo): return photo.thumbnailBytes
+        case .legacy(let dive): return dive.photosData?.first
+        }
     }
 }
 
@@ -292,11 +329,12 @@ struct TripCard: View {
     var fillsRowHeight = false
     #endif
     @Environment(\.locale) private var locale
+    /// The cover, decoded once per trip off the main thread at card size — not the full
+    /// original on every render (CLAUDE.md, "Image Data in SwiftData").
+    @State private var coverPhoto: PlatformImage?
 
-    private var coverPhoto: PlatformImage? {
-        guard let data = trip.photos.first else { return nil }
-        return PlatformImage(data: data)
-    }
+    /// Longest side of the decoded cover: sharp at the card's width on a Retina display.
+    private static let coverPixelSize = 900
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -317,6 +355,31 @@ struct TripCard: View {
                 }
                 .frame(height: 140)
                 .clipped()
+                // Keyed on the cover's source, not `trip.id` (a new UUID on every trips rebuild):
+                // a list refresh does not decode the covers again, and a new cover does.
+                .task(id: trip.coverSource?.key) {
+                    guard let source = trip.coverSource, let data = trip.coverPhotoData(from: source) else {
+                        coverPhoto = nil
+                        return
+                    }
+                    let size = Self.coverPixelSize
+                    let image = await Task.detached(priority: .utility) { () -> PlatformImage? in
+                        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+                        let options: [CFString: Any] = [
+                            kCGImageSourceThumbnailMaxPixelSize: size,
+                            kCGImageSourceCreateThumbnailFromImageAlways: true,
+                            kCGImageSourceCreateThumbnailWithTransform: true
+                        ]
+                        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+                        #if os(iOS)
+                        return UIImage(cgImage: cgImage)
+                        #else
+                        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                        #endif
+                    }.value
+                    guard !Task.isCancelled else { return }
+                    coverPhoto = image
+                }
 
                 // Overlay gradient for text readability
                 LinearGradient(
@@ -567,7 +630,7 @@ struct TripDetailSheet: View {
             ForEach(sortedDives) { dive in
                 NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { dismiss() }) {
                     DiveRowView(
-                        summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
+                        summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: store.cachedDivesWithPhotos.contains(dive.id)),
                         diveNumber: numberMap[dive.persistentModelID] ?? 0
                     )
                     .padding(.vertical, 4)

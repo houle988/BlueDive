@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import CoreData
 import UserNotifications
 import os.log
 import LibDCSwift
@@ -301,9 +302,9 @@ struct BlueDiveApp: App {
     
     // MARK: - Schema
     
-    /// Single source of truth for the SwiftData schema.
-    /// Used by the production container.
-    static let appSchema = Schema([
+    /// Every SwiftData model type. Shared by `appSchema` and the CloudKit schema
+    /// initialization (DEBUG), so the two can never list different models.
+    static let appModelTypes: [any PersistentModel.Type] = [
         Dive.self,
         MarineSight.self,
         Gear.self,
@@ -312,7 +313,16 @@ struct BlueDiveApp: App {
         DeviceFingerprint.self,
         TankTemplate.self,
         GearGroup.self,
-    ])
+        DivePhoto.self,
+        DivePhotoThumbnail.self,
+        DivePhotoOriginal.self,
+        Species.self,
+        SpeciesImage.self,
+    ]
+
+    /// Single source of truth for the SwiftData schema.
+    /// Used by the production container.
+    static let appSchema = Schema(appModelTypes)
  
     #if DEBUG
     /// Fires a test notification 5 seconds after launch linked to a real gear or cert item.
@@ -435,7 +445,14 @@ struct BlueDiveApp: App {
             allowsSave: true,
             cloudKitDatabase: cloudKitDB
         )
-        
+
+        #if DEBUG
+        // Only on request, and only when iCloud sync is on.
+        if iCloudEnabled, UserDefaults.standard.bool(forKey: initializeCloudKitSchemaKey) {
+            initializeCloudKitSchema(storeURL: modelConfiguration.url)
+        }
+        #endif
+
         do {
             let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
             
@@ -461,6 +478,53 @@ struct BlueDiveApp: App {
         }
     }
     
+    #if DEBUG
+    /// Launch argument that creates the complete CloudKit development schema once:
+    /// Xcode → Product → Scheme → Edit Scheme → Run → Arguments → `-initializeCloudKitSchema YES`.
+    static let initializeCloudKitSchemaKey = "initializeCloudKitSchema"
+
+    /// Uploads a representative record for every model, with a value for every field Core Data
+    /// may write (including the `CD_<field>_ckAsset` fields of large values and fields the app
+    /// never fills, such as `Species.sourceIdentifier`), then deletes those records. CloudKit
+    /// creates a field only when a record carries a value for it, so data entered by hand
+    /// cannot complete the schema. Apple's documented SwiftData approach: Core Data loads the
+    /// same store, initializes the schema, and unloads the store before SwiftData opens it,
+    /// so the two frameworks never sync at the same time. Development environment only
+    /// (Debug builds); deploy the schema to production in the CloudKit Console afterwards.
+    private static func initializeCloudKitSchema(storeURL: URL) {
+        logger.info("☁️ Initializing the CloudKit development schema…")
+        do {
+            try autoreleasepool {
+                let description = NSPersistentStoreDescription(url: storeURL)
+                description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
+                    containerIdentifier: CloudKitSyncMonitor.cloudKitContainerID)
+                // The store keeps the history tracking SwiftData uses with it.
+                description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+                description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+                // Loaded synchronously, so the schema is initialized after the load finishes.
+                description.shouldAddStoreAsynchronously = false
+                guard let model = NSManagedObjectModel.makeManagedObjectModel(for: appModelTypes) else {
+                    logger.error("❌ CloudKit schema: could not build the managed object model")
+                    return
+                }
+                let container = NSPersistentCloudKitContainer(name: "BlueDive", managedObjectModel: model)
+                container.persistentStoreDescriptions = [description]
+                var loadError: Error?
+                container.loadPersistentStores { _, error in loadError = error }
+                if let loadError { throw loadError }
+                try container.initializeCloudKitSchema()
+                // Unloaded before SwiftData opens the store.
+                if let store = container.persistentStoreCoordinator.persistentStores.first {
+                    try container.persistentStoreCoordinator.remove(store)
+                }
+            }
+            logger.info("✅ CloudKit development schema initialized — check the CloudKit Console")
+        } catch {
+            logger.error("❌ CloudKit schema initialization failed: \(error.localizedDescription)")
+        }
+    }
+    #endif
+
     /// Creates an in-memory container as fallback
     private static func createFallbackContainer(schema: Schema, error originalError: Error) -> ModelContainer {
         logger.warning("⚠️ Attempting to create an in-memory container (fallback)")

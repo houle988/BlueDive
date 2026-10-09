@@ -1,4 +1,5 @@
 import SwiftUI
+import ImageIO
 import Charts
 import SwiftData
 import PhotosUI
@@ -446,14 +447,103 @@ extension DiveDetailView {
         ]
     }
 
+    /// The dive's photos in strip order: images still in the legacy `photosData` array first
+    /// (they were added before), then `DivePhoto` records by capture time (or time added).
+    var photoEntries: [DivePhotoEntry] {
+        // Legacy ids follow the image content, not its position: after a deletion the next
+        // photo moves into the same index and must not reuse the deleted one's id (the
+        // preview reloads, and shares, only when the id changes). Identical images get
+        // their occurrence number.
+        var occurrences: [Int: Int] = [:]
+        let legacy = (dive.photosData ?? []).enumerated().map { index, data in
+            let key = data.photoTaskID
+            let occurrence = occurrences[key, default: 0]
+            occurrences[key] = occurrence + 1
+            return DivePhotoEntry(id: "legacy-\(key)-\(occurrence)", source: .legacy(index))
+        }
+        let records = (dive.photos ?? []).sorted {
+            ($0.captureDate ?? $0.createdAt, $0.createdAt) < ($1.captureDate ?? $1.createdAt, $1.createdAt)
+        }
+        return legacy + records.map { DivePhotoEntry(id: $0.id.uuidString, source: .photo($0)) }
+    }
+
+    /// Bytes shown in the strip: the thumbnail for a photo record (nil while it has not
+    /// arrived from iCloud), the full image for a legacy photo (which has no thumbnail).
+    func stripData(for entry: DivePhotoEntry) -> Data? {
+        switch entry.source {
+        case .photo(let photo):
+            return photo.thumbnailBytes
+        case .legacy(let index):
+            guard let photos = dive.photosData, photos.indices.contains(index) else { return nil }
+            return photos[index]
+        }
+    }
+
+    /// Identity of a tile's image: the entry, and whether its thumbnail has arrived (read from
+    /// the link only), so a thumbnail synced after its photo is decoded when it lands.
+    func stripKey(for entry: DivePhotoEntry) -> String {
+        switch entry.source {
+        case .photo(let photo): return "\(entry.id)|\(photo.thumbnail != nil)"
+        case .legacy: return entry.id
+        }
+    }
+
+    /// Full image bytes for the preview (the thumbnail while an iCloud photo is still downloading).
+    func fullImageData(for entry: DivePhotoEntry) -> Data {
+        switch entry.source {
+        case .photo(let photo):
+            return photo.previewBytes ?? Data()
+        case .legacy(let index):
+            guard let photos = dive.photosData, photos.indices.contains(index) else { return Data() }
+            return photos[index]
+        }
+    }
+
+    var hasLegacyPhotos: Bool { !(dive.photosData?.isEmpty ?? true) }
+
+    /// Why a photo has no marker on the dive profile; nil when it has one.
+    func profileNote(for entry: DivePhotoEntry) -> String? {
+        switch entry.source {
+        case .legacy:
+            return NSLocalizedString("Stored in the previous format: convert the dive's photos to place it on the profile.", bundle: .forAppLanguage(), value: "Stored in the previous format: convert the dive's photos to place it on the profile.", comment: "Photo viewer note for a legacy photo, which has no capture time or profile position")
+        case .photo(let photo):
+            guard photo.profileOffset(in: dive) == nil else { return nil }
+            guard let captured = photo.captureDate else {
+                return NSLocalizedString("No capture time in the file: not shown on the profile.", bundle: .forAppLanguage(), value: "No capture time in the file: not shown on the profile.", comment: "Photo viewer note: the image file has no EXIF capture time")
+            }
+            let date = captured.addingTimeInterval(photo.clockAdjustmentSeconds)
+                .formatted(.dateTime.day().month().year().hour().minute().second().locale(locale))
+            return String(format: NSLocalizedString("Taken on %@, outside this dive: not shown on the profile.", bundle: .forAppLanguage(), value: "Taken on %@, outside this dive: not shown on the profile.", comment: "Photo viewer note: the photo's capture time (date and time) is outside the dive"), date)
+        }
+    }
+
+    /// An import or conversion is writing to this dive: started here, or on another screen
+    /// (Settings → Convert, the batch import, another window).
+    var isImportingPhotosForThisDive: Bool {
+        importingPhotosDiveID == dive.persistentModelID || PhotoImporter.isBusy(dive.persistentModelID)
+    }
+
+    /// Legacy photos cannot be removed while a run (here or on another screen, e.g. Settings →
+    /// Convert) writes to the dive: a conversion has already read them and would bring a
+    /// removed one back as a record.
+    var legacyPhotosLocked: Bool {
+        importingPhotosDiveID != nil || PhotoImporter.isBusy(dive.persistentModelID)
+    }
+
     var photosSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let entries = photoEntries
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("Photos", systemImage: "photo")
                     .font(.headline)
                     .foregroundStyle(.pink)
                 Spacer()
-                if !(dive.photosData?.isEmpty ?? true) {
+                if isImportingPhotosForThisDive {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel(Text("Importing Photos"))
+                }
+                if !entries.isEmpty {
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isEditingPhotos.toggle()
@@ -493,28 +583,29 @@ extension DiveDetailView {
                     }
                 }
                 .buttonStyle(.plain)
+                .disabled(importingPhotosDiveID != nil || isImportingPhotosForThisDive)
                 .accessibilityLabel(Text("Add Photo"))
             }
 
-            if dive.photosData?.isEmpty ?? true {
+            if entries.isEmpty {
                 Text("No photo.")
                     .font(.caption)
                     .foregroundStyle(.gray)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
-                        ForEach(Array((dive.photosData ?? []).enumerated()), id: \.offset) { index, photoData in
-                            if let uiImage = PlatformImage(data: photoData) {
+                        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                            // A photo whose thumbnail has not arrived from iCloud yet shows a
+                            // placeholder tile (never its original, CLAUDE.md).
+                            Group {
                                 ZStack(alignment: .topTrailing) {
-                                    Image(platformImage: uiImage)
-                                        .resizable()
-                                        .scaledToFill()
+                                    PhotoStripTile(imageKey: stripKey(for: entry), load: { stripData(for: entry) })
                                         .frame(width: 150, height: 150)
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                         .contentShape(Rectangle())
                                         .onTapGesture {
                                             if !isEditingPhotos {
-                                                selectedPhotoForPreview = IdentifiablePhotoData(data: photoData, index: index)
+                                                selectedPhotoForPreview = IdentifiablePhotoData(index: index)
                                             }
                                         }
                                         .onLongPressGesture {
@@ -522,9 +613,9 @@ extension DiveDetailView {
                                                 isEditingPhotos.toggle()
                                             }
                                         }
-                                    if isEditingPhotos {
+                                    if isEditingPhotos, !(entry.isLegacy && legacyPhotosLocked) {
                                         Button {
-                                            photoIndexToDelete = index
+                                            photoIDToDelete = entry.id
                                             showDeletePhotoAlert = true
                                         } label: {
                                             // Badge sits at the photo's top-trailing corner,
@@ -555,7 +646,10 @@ extension DiveDetailView {
                     .padding(.vertical, 4)
                 }
             }
-            Text("BlueDive is not a photo album — keep photos to the most relevant shots. Up to 10 can be selected per import. Large collections may slow down iCloud sync.")
+            if hasLegacyPhotos {
+                legacyPhotosNotice
+            }
+            Text("BlueDive is not a photo album — keep photos to the most relevant shots. Large collections may slow down iCloud sync.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -571,40 +665,48 @@ extension DiveDetailView {
             }
         }
         #endif
-        .alert("Remove Photo", isPresented: $showDeletePhotoAlert, presenting: photoIndexToDelete) { index in
+        .alert("Remove Photo", isPresented: $showDeletePhotoAlert, presenting: photoIDToDelete) { photoID in
             Button("Remove", role: .destructive) {
                 withAnimation {
-                    deletePhoto(at: index)
+                    deletePhoto(id: photoID)
                 }
-                if (dive.photosData?.isEmpty ?? true) {
+                if photoEntries.isEmpty {
                     isEditingPhotos = false
                 }
             }
-            Button("Cancel", role: .cancel) { photoIndexToDelete = nil }
+            Button("Cancel", role: .cancel) { photoIDToDelete = nil }
         } message: { _ in
             Text("Remove this photo from the dive?")
         }
         .sheet(item: $selectedPhotoForPreview) { item in
+            let entries = photoEntries
             PhotoPreviewSheet(
-                photos: Binding(
-                    get: { dive.photosData ?? [] },
-                    set: {
-                        dive.photosData = $0
-                        try? modelContext.save()
-                        store.commit(dive, affects: .rowBadges)
-                    }
-                ),
+                photoIDs: entries.map(\.id),
+                photoData: { index in entries.indices.contains(index) ? fullImageData(for: entries[index]) : Data() },
                 initialIndex: item.index,
-                onDelete: { index in
-                    deletePhoto(at: index)
-                    if dive.photosData?.isEmpty ?? true {
+                photoNote: { index in entries.indices.contains(index) ? profileNote(for: entries[index]) : nil },
+                photoRecord: { index in
+                    guard entries.indices.contains(index), case .photo(let photo) = entries[index].source else { return nil }
+                    return photo
+                },
+                canDelete: { index in
+                    entries.indices.contains(index) && !(entries[index].isLegacy && legacyPhotosLocked)
+                },
+                hasOriginal: { index in
+                    guard entries.indices.contains(index), case .photo(let photo) = entries[index].source else { return true }
+                    return photo.original != nil
+                },
+                onDelete: { photoID in
+                    deletePhoto(id: photoID)
+                    if photoEntries.isEmpty {
                         isEditingPhotos = false
                     }
                 }
             )
             .standardSheetPresentation()
         }
-        .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
+        // No selection limit; `.current` keeps the original file (no HEIC → JPEG transcoding).
+        .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotos, matching: .images, preferredItemEncoding: .current)
         .onChange(of: selectedPhotos) {
             Task {
                 await loadPhotos()
@@ -624,29 +726,68 @@ extension DiveDetailView {
         } message: {
             Text("The selected photos could not be imported.")
         }
-        .alert("Import Limit Reached", isPresented: $showFileTruncationAlert) {
+        .alert("Photos Imported", isPresented: Binding(
+            get: { photoImportResult != nil },
+            set: { if !$0 { photoImportResult = nil } }
+        ), presenting: photoImportResult) { _ in
             Button("OK", role: .cancel) { }
+        } message: { result in
+            Text(verbatim: ([
+                String(format: NSLocalizedString("Imported: %@", bundle: .forAppLanguage(), value: "Imported: %@", comment: "Photo import summary line: photos added"), Double(result.imported).localizedString(decimals: 0)),
+                String(format: NSLocalizedString("Already attached to this dive: %@", bundle: .forAppLanguage(), value: "Already attached to this dive: %@", comment: "Photo import summary line: photos skipped because the same image is already attached to the dive"), Double(result.duplicates).localizedString(decimals: 0)),
+                String(format: NSLocalizedString("Could not be read: %@", bundle: .forAppLanguage(), value: "Could not be read: %@", comment: "Photo import summary line: files that are not readable images"), Double(result.unreadable).localizedString(decimals: 0))
+            ] + (result.failedToSave > 0 ? [
+                String(format: NSLocalizedString("Could not be saved: %@", bundle: .forAppLanguage(), value: "Could not be saved: %@", comment: "Photo import summary line: photos lost because saving to the database failed"), Double(result.failedToSave).localizedString(decimals: 0))
+            ] : []) + (result.legacyNotTrimmed ? [
+                NSLocalizedString("The converted photos could not be removed from the previous format. Convert again to finish.", bundle: .forAppLanguage(), value: "The converted photos could not be removed from the previous format. Convert again to finish.", comment: "Photo conversion summary line: the records were saved but the old copies are still there")
+            ] : [])).joined(separator: "\n"))
+        }
+        .sheet(isPresented: Binding(
+            get: { !speciesProposals.isEmpty },
+            set: { if !$0 { speciesProposals = [] } }
+        ), onDismiss: {
+            // The import's problems, once the species review is closed.
+            if let pending = pendingPhotoImportResult {
+                pendingPhotoImportResult = nil
+                photoImportResult = pending
+            }
+        }) {
+            SpeciesPhotoReviewSheet(proposals: speciesProposals)
+                .standardSheetPresentation()
+        }
+        .alert("Convert Photos", isPresented: $showConvertLegacyPhotosAlert) {
+            Button("Convert") {
+                Task { await convertLegacyPhotos() }
+            }
+            Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Only the first 10 photos were imported. Open the menu again to add more.")
+            Text("Each photo is stored as its own record, with a thumbnail and the capture time read from the image. The images themselves are not changed. Photos taken during the dive appear on the dive profile.")
+        }
+    }
+
+    /// Shown while the dive still has photos in the legacy storage format.
+    private var legacyPhotosNotice: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("Some photos use the previous storage format. Convert them to show their capture time and place them on the dive profile.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Button("Convert") {
+                showConvertLegacyPhotosAlert = true
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.pink)
+            .borderlessButton()
+            .disabled(importingPhotosDiveID != nil || isImportingPhotosForThisDive)
         }
     }
 
     @MainActor
     func loadPhotos() async {
         guard !selectedPhotos.isEmpty else { return }
-        let targetDiveID = dive.persistentModelID
-        for item in selectedPhotos {
-            guard dive.persistentModelID == targetDiveID else { break }
-            if let data = try? await item.loadTransferable(type: Data.self) {
-                if dive.photosData == nil {
-                    dive.photosData = []
-                }
-                dive.photosData?.append(data)
-            }
-        }
+        let items = selectedPhotos
         selectedPhotos.removeAll()
-        try? modelContext.save()
-        store.commit(dive, affects: .rowBadges)
+        await runPhotoImport(items.map { .pickerItem($0) })
     }
 
     @MainActor
@@ -655,47 +796,72 @@ extension DiveDetailView {
             showFileImportError = true
             return
         }
-        let capped = Array(urls.prefix(10))
-        let wasTruncated = urls.count > 10
-        // Capture the target dive before suspension so we can abort if the user
-        // navigates away while file I/O is in progress.
-        let targetDiveID = dive.persistentModelID
-        // Read files off the main thread to avoid blocking the UI
-        let datas: [Data] = await Task.detached(priority: .userInitiated) {
-            var results: [Data] = []
-            for url in capped {
-                guard url.startAccessingSecurityScopedResource() else { continue }
-                defer { url.stopAccessingSecurityScopedResource() }
-                if let data = try? Data(contentsOf: url) {
-                    results.append(data)
-                }
-            }
-            return results
-        }.value
-        // Abort if the user navigated to a different dive during the file read
-        guard dive.persistentModelID == targetDiveID else { return }
-        for data in datas {
-            if dive.photosData == nil {
-                dive.photosData = []
-            }
-            dive.photosData?.append(data)
-        }
-        // Surface an error if the picker succeeded but every file failed to read
-        if datas.isEmpty && !capped.isEmpty {
+        await runPhotoImport(urls.map { .file($0) })
+    }
+
+    /// Imports into the dive shown when the import started, even if the user moves to
+    /// another dive meanwhile.
+    @MainActor
+    func runPhotoImport(_ sources: [PhotoImporter.Source]) async {
+        guard !sources.isEmpty, importingPhotosDiveID == nil else { return }
+        let diveID = dive.persistentModelID
+        importingPhotosDiveID = diveID
+        let result = await PhotoImporter.importPhotos(sources, toDiveWith: diveID, container: modelContext.container)
+        importingPhotosDiveID = nil
+        commitPhotoChange(diveID: diveID)
+        // Species named in the photos' captions or keywords: offered for confirmation.
+        let catalogue = (try? modelContext.fetch(FetchDescriptor<Species>())) ?? []
+        let proposals = SpeciesPhotoMatcher.proposals(
+            for: SpeciesPhotoMatcher.photos(withIDs: result.importedPhotoIDs, in: modelContext),
+            catalogue: catalogue)
+        // Reported only while the same dive is shown.
+        guard dive.persistentModelID == diveID else { return }
+        let hasProblems = result.duplicates > 0 || result.unreadable > 0 || result.failedToSave > 0
+        if result.imported == 0 && result.duplicates == 0 {
             showFileImportError = true
-            return
-        }
-        try? modelContext.save()
-        store.commit(dive, affects: .rowBadges)
-        if wasTruncated {
-            showFileTruncationAlert = true
+        } else if !proposals.isEmpty {
+            speciesProposals = proposals
+            if hasProblems { pendingPhotoImportResult = result }
+        } else if hasProblems {
+            photoImportResult = result
         }
     }
 
     @MainActor
-    func deletePhoto(at index: Int) {
-        guard dive.photosData?.indices.contains(index) == true else { return }
-        dive.photosData?.remove(at: index)
+    func convertLegacyPhotos() async {
+        guard importingPhotosDiveID == nil else { return }
+        let diveID = dive.persistentModelID
+        importingPhotosDiveID = diveID
+        let result = await PhotoImporter.convertLegacyPhotos(ofDiveWith: diveID, container: modelContext.container)
+        importingPhotosDiveID = nil
+        commitPhotoChange(diveID: diveID)
+        if let result, result.unreadable > 0 || result.failedToSave > 0 || result.legacyNotTrimmed,
+           dive.persistentModelID == diveID {
+            photoImportResult = result
+        }
+    }
+
+    /// Refreshes the dive list's photo badge for the dive the import wrote to, unless that
+    /// dive was deleted while the import ran.
+    @MainActor
+    private func commitPhotoChange(diveID: PersistentIdentifier) {
+        if let target = PhotoImporter.fetchDive(diveID, in: modelContext) {
+            store.commit(target, affects: .rowBadges)
+        }
+    }
+
+    @MainActor
+    func deletePhoto(id: String) {
+        guard let entry = photoEntries.first(where: { $0.id == id }) else { return }
+        switch entry.source {
+        case .photo(let photo):
+            modelContext.delete(photo)
+        case .legacy(let legacyIndex):
+            // A conversion running in the background has already read the legacy array and
+            // would bring the deleted photo back as a record.
+            guard !legacyPhotosLocked, dive.photosData?.indices.contains(legacyIndex) == true else { return }
+            dive.photosData?.remove(at: legacyIndex)
+        }
         try? modelContext.save()
         store.commit(dive, affects: .rowBadges)
     }
@@ -1585,3 +1751,39 @@ extension View {
     }
 }
 #endif
+
+/// A photo strip tile: the image, decoded once per image off the main thread (not in the
+/// photos section's body, which re-renders on every edit-mode toggle or import progress), or a
+/// placeholder while there is none (a thumbnail not arrived from iCloud yet). A large image (a
+/// legacy photo has no thumbnail) is scaled down to the tile's size, not decoded in full.
+struct PhotoStripTile: View {
+    let imageKey: String
+    let load: () -> Data?
+    @State private var image: PlatformImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(platformImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.secondary.opacity(0.15)
+                Image(systemName: "photo")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .task(id: imageKey) {
+            guard let data = load() else { image = nil; return }
+            let decoded = await Task.detached(priority: .userInitiated) { () -> PlatformImage? in
+                guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                      let thumbnail = PhotoMetadataReader.thumbnailJPEG(of: source, maxPixelSize: 450, quality: 0.85)
+                else { return PlatformImage(data: data) }
+                return PlatformImage(data: thumbnail)
+            }.value
+            guard !Task.isCancelled else { return }
+            image = decoded
+        }
+    }
+}

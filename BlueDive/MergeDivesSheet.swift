@@ -44,6 +44,15 @@ struct MergeDivesSheet: View {
         }
     }
 
+    /// Whether a photo import or conversion is writing to one of the selected dives. Merging
+    /// then would move only the photos saved so far and delete the later dive under the
+    /// running import (observable: the Merge button re-enables when the import ends).
+    private var selectionIsImportingPhotos: Bool {
+        [selectedDiveA, selectedDiveB].contains { dive in
+            dive.map { PhotoImporter.isBusy($0.persistentModelID) } ?? false
+        }
+    }
+
     /// Quick summary for the confirmation dialog
     private var mergeSummary: String {
         guard let a = selectedDiveA, let b = selectedDiveB else { return "" }
@@ -94,7 +103,7 @@ struct MergeDivesSheet: View {
         .alert("Merge dives?", isPresented: $showConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Merge", role: .destructive) {
-                if let a = selectedDiveA, let b = selectedDiveB {
+                if let a = selectedDiveA, let b = selectedDiveB, !selectionIsImportingPhotos {
                     onMerge(a, b)
                     dismiss()
                 }
@@ -118,7 +127,7 @@ struct MergeDivesSheet: View {
                 showConfirmation = true
             }
             .buttonStyle(.borderedProminent)
-            .disabled(selectedDiveA == nil || selectedDiveB == nil)
+            .disabled(selectedDiveA == nil || selectedDiveB == nil || selectionIsImportingPhotos)
         }
     }
 
@@ -166,6 +175,13 @@ struct MergeDivesSheet: View {
             HStack(spacing: 12) {
                 mergeSlotCard(number: "1", dive: selectedDiveA, placeholder: "First dive")
                 mergeSlotCard(number: "2", dive: selectedDiveB, placeholder: "Second dive")
+            }
+
+            if selectionIsImportingPhotos {
+                Label("Photos are being added to one of these dives. Merge them once the import has finished.",
+                      systemImage: "photo.badge.arrow.down")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
         }
         .padding()

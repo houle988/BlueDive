@@ -83,6 +83,7 @@ struct ContentView: View {
     @State private var showDiveTrips = false
     @State private var showCalendarHeatmap = false
     @State private var showMarineLife = false
+    @State private var showPhotoBatchImport = false
     @State private var showDashboard = false
     @State private var showMinimumGasPlanning = false
     @State private var showGasDensityCalculator = false
@@ -426,6 +427,10 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showMarineLife) {
                 MarineLifeView()
+                    .standardSheetPresentation()
+            }
+            .sheet(isPresented: $showPhotoBatchImport) {
+                PhotoBatchImportSheet()
                     .standardSheetPresentation()
             }
             .sheet(isPresented: $showDashboard) {
@@ -1136,6 +1141,9 @@ struct ContentView: View {
                 Label("Marine Life", systemImage: "fish.fill")
             }
             if !dives.isEmpty {
+                Button(action: { showPhotoBatchImport = true }) {
+                    Label("Import Photos", systemImage: "photo.badge.plus")
+                }
                 Divider()
                 Button(action: exportAllDivesToXML) {
                     Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")

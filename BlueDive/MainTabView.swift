@@ -19,6 +19,9 @@ struct MainTabView: View {
     /// the setting it controls).
     @AppStorage("onlineServicesPromptShown") private var onlineServicesPromptShown = false
     @State private var showOnlineServicesPrompt = false
+    /// Set once the one-time iNaturalist question has been answered (per device).
+    @AppStorage("taxonomyPromptShown") private var taxonomyPromptShown = false
+    @State private var showTaxonomyPrompt = false
     @Environment(\.introVisible) private var introVisible
     @Environment(FileImportCoordinator.self) private var importCoordinator
 
@@ -37,15 +40,49 @@ struct MainTabView: View {
         // Answered first: once it is, nothing else is read, so MainTabView stops observing
         // the setting and the import coordinator for this.
         !onlineServicesPromptShown
-            && !introVisible && lastAcceptedDisclaimerVersion == DiveIntroConfig.currentVersion
-            && hasCompletedOnboarding
             && !UserPreferences.shared.fetchWeatherOnline
+            && canAskLaunchQuestion
+    }
+
+    /// The iNaturalist question, asked once under the same conditions, only after the weather
+    /// question is answered (or the weather is already on) so the two never appear together:
+    /// new users get it right after the weather question, existing users on the first launch
+    /// after updating. Never asked when iNaturalist lookups are already on.
+    private var shouldAskTaxonomy: Bool {
+        !taxonomyPromptShown
+            && !UserPreferences.shared.fetchTaxonomyOnline
+            && (onlineServicesPromptShown || UserPreferences.shared.fetchWeatherOnline)
+            && !showOnlineServicesPrompt
+            && canAskLaunchQuestion
+    }
+
+    /// After the intro, the disclaimer and the Welcome Wizard, and not while a sheet is up or
+    /// in a session opened with a file or a widget link.
+    private var canAskLaunchQuestion: Bool {
+        !introVisible && lastAcceptedDisclaimerVersion == DiveIntroConfig.currentVersion
+            && hasCompletedOnboarding
             // An alert cannot appear over another sheet on iOS and would be lost: wait for a
             // reminder deep-link sheet to close, and skip a session opened with a file or a
             // widget link.
             && gearToOpen == nil && certToRenew == nil && insuranceToRenew == nil
             && !importCoordinator.receivedExternalOpen
     }
+
+    // MARK: - Launch Questions
+
+    /// The one-time Online Services questions (Open-Meteo weather, then iNaturalist), in their
+    /// own modifier so `body` stays small enough for the type checker.
+    private var launchQuestions: LaunchQuestions {
+        LaunchQuestions(
+            askWeather: shouldAskOnlineServices,
+            askTaxonomy: shouldAskTaxonomy,
+            showWeather: $showOnlineServicesPrompt,
+            showTaxonomy: $showTaxonomyPrompt,
+            weatherAnswered: { onlineServicesPromptShown = true },
+            taxonomyAnswered: { taxonomyPromptShown = true }
+        )
+    }
+
 
     private var disclaimerBinding: Binding<Bool> {
         Binding(
@@ -111,6 +148,9 @@ struct MainTabView: View {
             // Applies other devices' edits to existing dives (iCloud) to DiveStore's caches,
             // whatever tab is selected. See RemoteChangeFeeder.
             .background(RemoteChangeFeeder())
+            // Image records that lost an iCloud conflict (DivePhotoBlobs.swift), a minute after the
+            // window opens (a second window sweeps again and finds nothing).
+            .task { await PhotoBlobSweeper.sweepLater(container: modelContext.container) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .addDiveManual)) { _ in
             selectedTab = 0
@@ -238,33 +278,7 @@ struct MainTabView: View {
                 .standardSheetPresentation()
         }
         #endif
-        .task(id: shouldAskOnlineServices) {
-            guard shouldAskOnlineServices else { return }
-            // Let the wizard's cover or sheet finish closing; an alert presented during that
-            // transition can be dropped.
-            // A change of the conditions cancels this task, and a cancelled sleep throws.
-            guard (try? await Task.sleep(for: .milliseconds(600))) != nil else { return }
-            showOnlineServicesPrompt = true
-        }
-        // Close the alert when asking is no longer right: answered in another window (iPad
-        // scenes, Mac windows), or a file, widget link or reminder arrived while it is up —
-        // left unanswered then, so it is asked again later — so their sheets can appear.
-        .onChange(of: shouldAskOnlineServices) { _, canAsk in
-            if !canAsk { showOnlineServicesPrompt = false }
-        }
-        .alert("Fetch the weather online for your dives?", isPresented: $showOnlineServicesPrompt) {
-            Button("Turn On") {
-                // Also records the answer (UserPreferences.fetchWeatherOnline's didSet).
-                UserPreferences.shared.fetchWeatherOnline = true
-            }
-            Button("Not Now", role: .cancel) {
-                onlineServicesPromptShown = true
-            }
-        } message: {
-            // Built from sentences shared with Online Services and the Welcome Tour, so each is
-            // translated once.
-            Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent only when you fetch the weather online.") + Text(verbatim: " ") + Text("You can change this anytime in Settings → Online Services.")
-        }
+        .modifier(launchQuestions)
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 // Clear badge and delivered notifications when the user opens the app
@@ -360,4 +374,69 @@ struct MainTabView: View {
         )
     }
     
+}
+
+// MARK: - Launch Questions
+
+/// The one-time Online Services questions asked at launch: the Open-Meteo weather, then
+/// iNaturalist (see `MainTabView.shouldAskOnlineServices` / `shouldAskTaxonomy`).
+private struct LaunchQuestions: ViewModifier {
+    let askWeather: Bool
+    let askTaxonomy: Bool
+    @Binding var showWeather: Bool
+    @Binding var showTaxonomy: Bool
+    let weatherAnswered: () -> Void
+    let taxonomyAnswered: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: askWeather) {
+                guard askWeather else { return }
+                // Let the wizard's cover or sheet finish closing; an alert presented during that
+                // transition can be dropped.
+                // A change of the conditions cancels this task, and a cancelled sleep throws.
+                guard (try? await Task.sleep(for: .milliseconds(600))) != nil else { return }
+                showWeather = true
+            }
+            // Close the alert when asking is no longer right: answered in another window (iPad
+            // scenes, Mac windows), or a file, widget link or reminder arrived while it is up —
+            // left unanswered then, so it is asked again later — so their sheets can appear.
+            .onChange(of: askWeather) { _, canAsk in
+                if !canAsk { showWeather = false }
+            }
+            .alert("Fetch the weather online for your dives?", isPresented: $showWeather) {
+                Button("Turn On") {
+                    // Also records the answer (UserPreferences.fetchWeatherOnline's didSet).
+                    UserPreferences.shared.fetchWeatherOnline = true
+                }
+                Button("Not Now", role: .cancel) {
+                    weatherAnswered()
+                }
+            } message: {
+                // Built from sentences shared with Online Services and the Welcome Tour, so each is
+                // translated once.
+                Text("BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.") + Text(verbatim: " ") + Text("The coordinates and date are sent only when you fetch the weather online.") + Text(verbatim: " ") + Text("You can change this anytime in Settings → Online Services.")
+            }
+            .task(id: askTaxonomy) {
+                guard askTaxonomy else { return }
+                // Let the weather alert (or the wizard) finish closing first.
+                guard (try? await Task.sleep(for: .milliseconds(600))) != nil else { return }
+                showTaxonomy = true
+            }
+            .onChange(of: askTaxonomy) { _, canAsk in
+                if !canAsk { showTaxonomy = false }
+            }
+            .alert("Look up species on iNaturalist?", isPresented: $showTaxonomy) {
+                Button("Turn On") {
+                    // Also records the answer (UserPreferences.fetchTaxonomyOnline's didSet).
+                    UserPreferences.shared.fetchTaxonomyOnline = true
+                }
+                Button("Not Now", role: .cancel) {
+                    taxonomyAnswered()
+                }
+            } message: {
+                // Sentences shared with Online Services and the Welcome Tour, translated once.
+                Text("BlueDive can fill in a species' classification (kingdom to species), common names, Wikipedia summary and a Creative Commons photo from iNaturalist. Only the species name is sent, when a species is created, edited or looked up.") + Text(verbatim: " ") + Text("You can change this anytime in Settings → Online Services.")
+            }
+    }
 }

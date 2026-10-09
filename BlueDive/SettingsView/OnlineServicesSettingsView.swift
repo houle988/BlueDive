@@ -49,11 +49,81 @@ struct OnlineServicesSettingsView: View {
                 .padding(.horizontal)
 
                 updateAllWeatherCard
+
+                taxonomyCard
             }
             .padding(.vertical)
         }
         .settingsGradientBackground()
         .navigationTitle(Text(verbatim: NSLocalizedString("Online Services", bundle: .forAppLanguage(), value: "Online Services", comment: "")))
+    }
+
+    /// iNaturalist species lookups: the opt-in toggle, attribution, and the page that looks up
+    /// every species (greyed out while the service is off).
+    private var taxonomyCard: some View {
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $prefs.fetchTaxonomyOnline) {
+                    Label {
+                        Text("Look up species on iNaturalist")
+                    } icon: {
+                        Image(systemName: "leaf")
+                            .foregroundStyle(.green)
+                    }
+                }
+                .fullWidthSwitch()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            Text("BlueDive can fill in a species' classification (kingdom to species), common names, Wikipedia summary and a Creative Commons photo from iNaturalist. Only the species name is sent, when a species is created, edited or looked up.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("Species data from [iNaturalist](https://www.inaturalist.org). Photos are shown with their author's credit and licence.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 8) {
+                NavigationLink {
+                    UpdateAllTaxonomyView()
+                        .closeSheetButtonOnMac { closeSettings() }
+                } label: {
+                    HStack {
+                        Label {
+                            Text("Update Species from iNaturalist")
+                        } icon: {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundStyle(.green)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
+                    .padding()
+                    .contentShape(Rectangle())
+                }
+                .borderlessButton()
+                .disabled(!prefs.fetchTaxonomyOnline)
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
     }
 
     /// Opens the page that fetches the weather for all dives with GPS coordinates. Greyed out

@@ -157,11 +157,70 @@ struct AddFishView: View {
     @State private var quantity = SightingQuantity.single
     @State private var showSuggestions = false
     @FocusState private var isNameFocused: Bool
+    @Query(sort: \Species.commonName) private var catalogue: [Species]
+    /// Catalogue species chosen from the suggestions (cleared when the name is edited away from it).
+    @State private var pickedSpecies: Species?
+    /// Built once per catalogue change, so typing never scans the whole catalogue.
+    @State private var nameIndex = SpeciesNameIndex()
+    /// Suggestions for the current text, computed once per keystroke.
+    @State private var catalogueSuggestions: [Species] = []
+    @State private var nameSuggestions: [String] = []
 
-    private var nameSuggestions: [String] {
-        guard !fishName.isEmpty else { return [] }
-        return fishNames.filter {
-            $0.localizedCaseInsensitiveContains(fishName) && $0.lowercased() != fishName.lowercased()
+    /// Recomputes the suggestions for the typed text: up to 4 catalogue species whose common,
+    /// scientific or other name contains it, then earlier sighting names that are not
+    /// catalogue names.
+    private func updateSuggestions() {
+        let typed = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !typed.isEmpty else {
+            catalogueSuggestions = []
+            nameSuggestions = []
+            return
+        }
+        catalogueSuggestions = nameIndex.species(containing: typed, excluding: pickedSpecies, limit: 4)
+        var names: [String] = []
+        let lowered = typed.lowercased()
+        for name in fishNames where names.count < 4 {
+            if name.localizedCaseInsensitiveContains(typed), name.lowercased() != lowered,
+               nameIndex.species(named: name) == nil {
+                names.append(name)
+            }
+        }
+        nameSuggestions = names
+    }
+
+    private var hasSuggestions: Bool { !catalogueSuggestions.isEmpty || !nameSuggestions.isEmpty }
+
+    /// The species the sighting will be linked to: the one picked, else the one known by the name.
+    private var matchedSpecies: Species? {
+        pickedSpecies ?? nameIndex.species(named: fishName)
+    }
+
+    /// Which catalogue species the sighting will be linked to, or that a new one is added.
+    @ViewBuilder
+    private var catalogueHint: some View {
+        let typed = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !typed.isEmpty {
+            if let species = matchedSpecies {
+                Label {
+                    Text(verbatim: String(format: NSLocalizedString("Linked to %@ in the species catalogue.", bundle: .forAppLanguage(), value: "Linked to %@ in the species catalogue.", comment: "Add/Edit marine life: the sighting will be linked to this catalogue species"), species.displayName))
+                } icon: {
+                    Image(systemName: "books.vertical.fill")
+                        .foregroundStyle(.orange)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Label {
+                    Text(verbatim: String(format: NSLocalizedString("+ “%@” will be added to the species catalogue.", bundle: .forAppLanguage(), value: "+ “%@” will be added to the species catalogue.", comment: "Add/Edit marine life: a new catalogue species is created with this name"), typed))
+                } icon: {
+                    Image(systemName: "plus.circle")
+                        .foregroundStyle(.orange)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -215,11 +274,18 @@ struct AddFishView: View {
                                         )
                                         .focused($isNameFocused)
                                         .onChange(of: fishName) {
-                                            showSuggestions = isNameFocused && !nameSuggestions.isEmpty
+                                            // The pick stays while the text is still one of the
+                                            // picked species' names (any name it is known by).
+                                            if let picked = pickedSpecies,
+                                               nameIndex.species(named: fishName)?.persistentModelID != picked.persistentModelID {
+                                                pickedSpecies = nil
+                                            }
+                                            updateSuggestions()
+                                            showSuggestions = isNameFocused && hasSuggestions
                                         }
                                         .onChange(of: isNameFocused) {
                                             if isNameFocused {
-                                                showSuggestions = !nameSuggestions.isEmpty
+                                                showSuggestions = hasSuggestions
                                             } else {
                                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                                     showSuggestions = false
@@ -239,9 +305,38 @@ struct AddFishView: View {
                                         .padding(.trailing, 8)
                                     }
                                 }
-                                if showSuggestions && !nameSuggestions.isEmpty {
+                                if showSuggestions && hasSuggestions {
                                     VStack(alignment: .leading, spacing: 0) {
-                                        ForEach(nameSuggestions.prefix(4), id: \.self) { suggestion in
+                                        ForEach(catalogueSuggestions.prefix(4)) { species in
+                                            Button {
+                                                pickedSpecies = species
+                                                // The name as shown (in the app language).
+                                                fishName = species.displayName
+                                                showSuggestions = false
+                                            } label: {
+                                                HStack(spacing: 8) {
+                                                    Image(systemName: "books.vertical")
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.orange)
+                                                    Text(verbatim: species.displayName)
+                                                        .foregroundStyle(.cyan)
+                                                        .lineLimit(1)
+                                                    if let scientific = species.scientificName, !scientific.isEmpty {
+                                                        Text(verbatim: scientific)
+                                                            .font(.caption)
+                                                            .italic()
+                                                            .foregroundStyle(.secondary)
+                                                            .lineLimit(1)
+                                                    }
+                                                }
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.vertical, 6)
+                                                .padding(.horizontal, 10)
+                                                .contentShape(Rectangle())
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                        ForEach(nameSuggestions.prefix(max(0, 4 - catalogueSuggestions.count)), id: \.self) { suggestion in
                                             Button {
                                                 fishName = suggestion
                                                 showSuggestions = false
@@ -270,6 +365,8 @@ struct AddFishView: View {
                                     )
                                 }
                             }
+
+                            catalogueHint
 
                             // Quantity picker
                             VStack(alignment: .leading, spacing: 6) {
@@ -366,6 +463,10 @@ struct AddFishView: View {
                 .padding()
             }
             .background(AppBackground().ignoresSafeArea())
+            .task(id: catalogue.count) {
+                nameIndex = SpeciesNameIndex(catalogue: catalogue)
+                updateSuggestions()
+            }
             .navigationTitle("New Marine Life")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -381,6 +482,9 @@ struct AddFishView: View {
 
         // Établir la relation bidirectionnelle
         newFish.dive = dive
+        // Linked to the catalogue species (created when the name is new, together with the
+        // earlier sightings of that name).
+        newFish.species = matchedSpecies ?? SpeciesCatalog.findOrCreateForSighting(named: trimmedName, in: modelContext)
 
         // Insérer dans le contexte SwiftData
         modelContext.insert(newFish)
@@ -406,18 +510,84 @@ struct EditFishView: View {
     @State private var quantity: SightingQuantity
     @State private var showSuggestions = false
     @FocusState private var isNameFocused: Bool
+    @Query(sort: \Species.commonName) private var catalogue: [Species]
+    /// Catalogue species chosen from the suggestions (cleared when the name is edited away from it).
+    @State private var pickedSpecies: Species?
+    /// Built once per catalogue change, so typing never scans the whole catalogue.
+    @State private var nameIndex = SpeciesNameIndex()
+    /// Suggestions for the current text, computed once per keystroke.
+    @State private var catalogueSuggestions: [Species] = []
+    @State private var nameSuggestions: [String] = []
 
     init(fish: MarineSight, fishNames: [String] = []) {
         self.fish = fish
         self.fishNames = fishNames
         _fishName = State(initialValue: fish.name)
         _quantity = State(initialValue: SightingQuantity.from(count: fish.count))
+        _pickedSpecies = State(initialValue: fish.species)
     }
 
-    private var nameSuggestions: [String] {
-        guard !fishName.isEmpty else { return [] }
-        return fishNames.filter {
-            $0.localizedCaseInsensitiveContains(fishName) && $0.lowercased() != fishName.lowercased()
+    /// Recomputes the suggestions for the typed text: up to 4 catalogue species whose common,
+    /// scientific or other name contains it, then earlier sighting names that are not
+    /// catalogue names.
+    private func updateSuggestions() {
+        let typed = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !typed.isEmpty else {
+            catalogueSuggestions = []
+            nameSuggestions = []
+            return
+        }
+        catalogueSuggestions = nameIndex.species(containing: typed, excluding: pickedSpecies, limit: 4)
+        var names: [String] = []
+        let lowered = typed.lowercased()
+        for name in fishNames where names.count < 4 {
+            if name.localizedCaseInsensitiveContains(typed), name.lowercased() != lowered,
+               nameIndex.species(named: name) == nil {
+                names.append(name)
+            }
+        }
+        nameSuggestions = names
+    }
+
+    private var hasSuggestions: Bool { !catalogueSuggestions.isEmpty || !nameSuggestions.isEmpty }
+
+    /// The species the sighting will be linked to: the one picked, else the one known by the name.
+    private var matchedSpecies: Species? {
+        // The sighting keeps its species while its name is unchanged, even when that name is
+        // not (or no longer) one of the species' names.
+        pickedSpecies
+            ?? (SpeciesCatalog.key(fishName) == SpeciesCatalog.key(fish.name) ? fish.species : nil)
+            ?? nameIndex.species(named: fishName)
+    }
+
+    /// Which catalogue species the sighting will be linked to, or that a new one is added.
+    @ViewBuilder
+    private var catalogueHint: some View {
+        let typed = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !typed.isEmpty {
+            if let species = matchedSpecies {
+                Label {
+                    Text(verbatim: String(format: NSLocalizedString("Linked to %@ in the species catalogue.", bundle: .forAppLanguage(), value: "Linked to %@ in the species catalogue.", comment: "Add/Edit marine life: the sighting will be linked to this catalogue species"), species.displayName))
+                } icon: {
+                    Image(systemName: "books.vertical.fill")
+                        .foregroundStyle(.orange)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else if SpeciesCatalog.key(typed) != SpeciesCatalog.key(fish.name) || fish.species != nil {
+                // Same rule as saveFish: an unlinked sighting saved under its own name stays
+                // out of the catalogue.
+                Label {
+                    Text(verbatim: String(format: NSLocalizedString("+ “%@” will be added to the species catalogue.", bundle: .forAppLanguage(), value: "+ “%@” will be added to the species catalogue.", comment: "Add/Edit marine life: a new catalogue species is created with this name"), typed))
+                } icon: {
+                    Image(systemName: "plus.circle")
+                        .foregroundStyle(.orange)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -471,11 +641,18 @@ struct EditFishView: View {
                                         )
                                         .focused($isNameFocused)
                                         .onChange(of: fishName) {
-                                            showSuggestions = isNameFocused && !nameSuggestions.isEmpty
+                                            // The pick stays while the text is still one of the
+                                            // picked species' names (any name it is known by).
+                                            if let picked = pickedSpecies,
+                                               nameIndex.species(named: fishName)?.persistentModelID != picked.persistentModelID {
+                                                pickedSpecies = nil
+                                            }
+                                            updateSuggestions()
+                                            showSuggestions = isNameFocused && hasSuggestions
                                         }
                                         .onChange(of: isNameFocused) {
                                             if isNameFocused {
-                                                showSuggestions = !nameSuggestions.isEmpty
+                                                showSuggestions = hasSuggestions
                                             } else {
                                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                                     showSuggestions = false
@@ -495,9 +672,38 @@ struct EditFishView: View {
                                         .padding(.trailing, 8)
                                     }
                                 }
-                                if showSuggestions && !nameSuggestions.isEmpty {
+                                if showSuggestions && hasSuggestions {
                                     VStack(alignment: .leading, spacing: 0) {
-                                        ForEach(nameSuggestions.prefix(4), id: \.self) { suggestion in
+                                        ForEach(catalogueSuggestions.prefix(4)) { species in
+                                            Button {
+                                                pickedSpecies = species
+                                                // The name as shown (in the app language).
+                                                fishName = species.displayName
+                                                showSuggestions = false
+                                            } label: {
+                                                HStack(spacing: 8) {
+                                                    Image(systemName: "books.vertical")
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.orange)
+                                                    Text(verbatim: species.displayName)
+                                                        .foregroundStyle(.cyan)
+                                                        .lineLimit(1)
+                                                    if let scientific = species.scientificName, !scientific.isEmpty {
+                                                        Text(verbatim: scientific)
+                                                            .font(.caption)
+                                                            .italic()
+                                                            .foregroundStyle(.secondary)
+                                                            .lineLimit(1)
+                                                    }
+                                                }
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.vertical, 6)
+                                                .padding(.horizontal, 10)
+                                                .contentShape(Rectangle())
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                        ForEach(nameSuggestions.prefix(max(0, 4 - catalogueSuggestions.count)), id: \.self) { suggestion in
                                             Button {
                                                 fishName = suggestion
                                                 showSuggestions = false
@@ -526,6 +732,8 @@ struct EditFishView: View {
                                     )
                                 }
                             }
+
+                            catalogueHint
 
                             // Quantity picker
                             VStack(alignment: .leading, spacing: 6) {
@@ -622,6 +830,10 @@ struct EditFishView: View {
                 .padding()
             }
             .background(AppBackground().ignoresSafeArea())
+            .task(id: catalogue.count) {
+                nameIndex = SpeciesNameIndex(catalogue: catalogue)
+                updateSuggestions()
+            }
             .navigationTitle("Edit Marine Life")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -631,8 +843,18 @@ struct EditFishView: View {
 
     @MainActor
     private func saveFish() {
-        fish.name = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newName = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let renamed = SpeciesCatalog.key(newName) != SpeciesCatalog.key(fish.name)
+        fish.name = newName
         fish.count = quantity.rawValue
+        // Linked to the catalogue species. A new name creates it (with the earlier sightings
+        // of that name); a sighting recorded before the catalogue keeps no link when only its
+        // quantity changes, as the catalogue is built from sightings only on request.
+        if let matchedSpecies {
+            fish.species = matchedSpecies
+        } else if renamed || fish.species != nil {
+            fish.species = SpeciesCatalog.findOrCreateForSighting(named: newName, in: modelContext)
+        }
         try? modelContext.save()
         if let fishDive = fish.dive {
             store.commit(fishDive, affects: .rowBadges)
@@ -1296,19 +1518,56 @@ struct PhotoTransferable: Transferable {
 
 struct IdentifiablePhotoData: Identifiable {
     let id = UUID()
-    let data: Data
+    /// Index of the photo to open; the preview loads its bytes itself.
     let index: Int
+}
+
+/// One photo in a dive's photo strip: a `DivePhoto` record, or an image still stored in the
+/// legacy `Dive.photosData` array (until the user converts it).
+struct DivePhotoEntry: Identifiable {
+    enum Source {
+        case photo(DivePhoto)
+        case legacy(Int)
+    }
+    let id: String
+    let source: Source
+
+    var isLegacy: Bool {
+        if case .legacy = source { return true }
+        return false
+    }
 }
 
 // MARK: - Photo Preview Sheet
 
 struct PhotoPreviewSheet: View {
-    @Binding var photos: [Data]
+    /// One identifier per photo, in display order (the count of photos).
+    let photoIDs: [String]
+    /// Loads the bytes of the photo at an index. Called only for the photo being shown (and
+    /// when it is shared or saved), so a dive with many photos never loads them all at once.
+    let photoData: (Int) -> Data
     let initialIndex: Int
-    let onDelete: (Int) -> Void
+    /// A line shown under the photo at an index (e.g. why it is not on the dive profile).
+    let photoNote: (Int) -> String?
+    /// The photo record at an index, when it can be tagged with species (nil for a legacy
+    /// photo, or where tagging is not offered).
+    let photoRecord: (Int) -> DivePhoto?
+    /// Removes the photo with an id (from `photoIDs`); nil hides the Remove button (e.g. a
+    /// species gallery). An id, not an index: an import still running can add photos that
+    /// sort ahead of the shown one while the confirmation is open.
+    let onDelete: ((String) -> Void)?
+    /// Whether the photo at an index can be removed now (the Remove button is disabled otherwise).
+    let canDelete: (Int) -> Bool
+    /// Whether the photo's original is here. While it is still downloading from iCloud the
+    /// viewer shows the thumbnail and Share / Save As are disabled — the thumbnail is never
+    /// handed out as the photo — and the page reloads when the original arrives.
+    let hasOriginal: (Int) -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var currentIndex: Int
     @State private var showDeleteAlert = false
+    /// The photo the Remove confirmation is about, taken when the button is tapped.
+    @State private var deleteTargetID: String?
+    @State private var taggingPhoto: DivePhoto?
     @State private var shareThumbnail: PlatformImage?
     @State private var isPageSeeded: Bool
     @State private var cachedExportName: String
@@ -1316,8 +1575,18 @@ struct PhotoPreviewSheet: View {
     @State private var sessionTempFileURLs: Set<URL> = []
     @State private var isPreparingShare = false
 
-    init(photos: Binding<[Data]>, initialIndex: Int, onDelete: @escaping (Int) -> Void) {
-        self._photos = photos
+    init(photoIDs: [String], photoData: @escaping (Int) -> Data, initialIndex: Int,
+         photoNote: @escaping (Int) -> String? = { _ in nil },
+         photoRecord: @escaping (Int) -> DivePhoto? = { _ in nil },
+         canDelete: @escaping (Int) -> Bool = { _ in true },
+         hasOriginal: @escaping (Int) -> Bool = { _ in true },
+         onDelete: ((String) -> Void)?) {
+        self.canDelete = canDelete
+        self.hasOriginal = hasOriginal
+        self.photoIDs = photoIDs
+        self.photoData = photoData
+        self.photoNote = photoNote
+        self.photoRecord = photoRecord
         self.initialIndex = initialIndex
         self.onDelete = onDelete
         self._currentIndex = State(initialValue: initialIndex)
@@ -1330,22 +1599,31 @@ struct PhotoPreviewSheet: View {
         self._cachedExportName = State(initialValue: "\(exportPrefix) \(PhotoPreviewSheet.exportDateFormatter.string(from: Date()))")
     }
 
-    // Returns nil when photos is empty so callers never subscript into an empty array.
+    // Returns nil when photos is empty so callers never subscript into an empty array,
+    // and while the original is still downloading (only the original is exported).
     private var currentPhoto: Data? {
-        guard !photos.isEmpty else { return nil }
-        return photos[min(currentIndex, photos.count - 1)]
+        guard !photoIDs.isEmpty else { return nil }
+        let index = min(currentIndex, photoIDs.count - 1)
+        guard hasOriginal(index) else { return nil }
+        return photoData(index)
+    }
+
+    /// Page identity: the photo, and whether its original is here, so the page reloads (from
+    /// the thumbnail to the original) when the original arrives from iCloud.
+    private func pageID(_ index: Int) -> String {
+        "\(photoIDs[index])|\(hasOriginal(index))"
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if photos.isEmpty {
+                if photoIDs.isEmpty {
                     AppBackground().ignoresSafeArea()
                 } else {
                     #if os(iOS)
                     TabView(selection: $currentIndex) {
-                        ForEach(photos.indices, id: \.self) { index in
-                            PhotoPageView(data: photos[index], index: index, total: photos.count)
+                        ForEach(photoIDs.indices, id: \.self) { index in
+                            PhotoPageView(photoID: pageID(index), load: { photoData(index) }, index: index, total: photoIDs.count)
                                 .tag(index)
                         }
                     }
@@ -1355,16 +1633,50 @@ struct PhotoPreviewSheet: View {
                     #else
                     // The paging TabView style is unavailable on macOS: show the current
                     // photo only and navigate with the Previous / Next toolbar buttons.
-                    if let photo = currentPhoto {
-                        PhotoPageView(data: photo, index: currentIndex, total: photos.count)
+                    if !photoIDs.isEmpty {
+                        let index = min(currentIndex, photoIDs.count - 1)
+                        PhotoPageView(photoID: pageID(index), load: { photoData(index) }, index: index, total: photoIDs.count)
                             .id(currentIndex)
                     }
                     #endif
                 }
             }
             .background(AppBackground().ignoresSafeArea())
+            .overlay(alignment: .bottom) {
+                if !photoIDs.isEmpty {
+                    let index = min(currentIndex, photoIDs.count - 1)
+                    let speciesNames = (photoRecord(index)?.species ?? []).map(\.displayName).sorted()
+                    let note = photoNote(index)
+                    if !speciesNames.isEmpty || note != nil {
+                        VStack(spacing: 4) {
+                            if !speciesNames.isEmpty {
+                                Label {
+                                    Text(verbatim: speciesNames.joined(separator: " · "))
+                                } icon: {
+                                    Image(systemName: "fish.fill")
+                                        .foregroundStyle(.orange)
+                                }
+                                .font(.caption.weight(.semibold))
+                            }
+                            if let note {
+                                Text(verbatim: note)
+                                    .font(.caption)
+                            }
+                        }
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .padding()
+                    }
+                }
+            }
+            .sheet(item: $taggingPhoto) { photo in
+                PhotoSpeciesTagSheet(photo: photo)
+                    .standardSheetPresentation()
+            }
             .toolbar {
-                if photos.count > 1 {
+                if photoIDs.count > 1 {
                     ToolbarItem(placement: .bottomBar) {
                         Button {
                             currentIndex -= 1
@@ -1374,7 +1686,7 @@ struct PhotoPreviewSheet: View {
                         .disabled(currentIndex == 0)
                     }
                     ToolbarItem(placement: .bottomBar) {
-                        Text(verbatim: "\(currentIndex + 1) / \(photos.count)")
+                        Text(verbatim: "\(Double(currentIndex + 1).localizedString(decimals: 0)) / \(Double(photoIDs.count).localizedString(decimals: 0))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
@@ -1385,13 +1697,23 @@ struct PhotoPreviewSheet: View {
                         } label: {
                             Label("Next Photo", systemImage: "chevron.right")
                         }
-                        .disabled(currentIndex == photos.count - 1)
+                        .disabled(currentIndex == photoIDs.count - 1)
                     }
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
+                }
+                if !photoIDs.isEmpty, let record = photoRecord(min(currentIndex, photoIDs.count - 1)) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            taggingPhoto = record
+                        } label: {
+                            Image(systemName: "fish")
+                        }
+                        .accessibilityLabel(Text("Species on This Photo"))
+                    }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     #if os(macOS)
@@ -1401,7 +1723,8 @@ struct PhotoPreviewSheet: View {
                     } label: {
                         Label("Save As", systemImage: "square.and.arrow.down")
                     }
-                    .disabled(photos.isEmpty)
+                    // `hasOriginal` reads the link only; `currentPhoto` would load the original.
+                    .disabled(photoIDs.isEmpty || !hasOriginal(min(currentIndex, photoIDs.count - 1)))
                     #else
                     if let shareItem = cachedShareItem {
                         let name = cachedExportName
@@ -1427,21 +1750,26 @@ struct PhotoPreviewSheet: View {
                     }
                     #endif
                 }
-                ToolbarItem(placement: .destructiveAction) {
-                    Button(role: .destructive) {
-                        showDeleteAlert = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundStyle(.red)
+                if onDelete != nil {
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button(role: .destructive) {
+                            guard !photoIDs.isEmpty else { return }
+                            deleteTargetID = photoIDs[min(currentIndex, photoIDs.count - 1)]
+                            showDeleteAlert = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .disabled(photoIDs.isEmpty || !canDelete(min(currentIndex, photoIDs.count - 1)))
+                        .accessibilityLabel(Text("Remove Photo"))
                     }
-                    .disabled(photos.isEmpty)
-                    .accessibilityLabel(Text("Remove Photo"))
                 }
             }
             .alert("Remove Photo", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) {
-                    onDelete(currentIndex)
-                    // onChange(of: photos.count) handles both index clamping and dismissal
+                    if let deleteTargetID { onDelete?(deleteTargetID) }
+                    deleteTargetID = nil
+                    // onChange(of: photoIDs.count) handles both index clamping and dismissal
                     // when count reaches zero (covers in-app delete AND external iCloud sync).
                 }
                 Button("Cancel", role: .cancel) { }
@@ -1466,7 +1794,13 @@ struct PhotoPreviewSheet: View {
                 // shareThumbnail IS cleared so the SharePreview image updates correctly.
                 isPreparingShare = true
                 shareThumbnail = nil
-                guard let data = currentPhoto else { isPreparingShare = false; return }
+                guard let data = currentPhoto else {
+                    // Nothing to share yet (the original is downloading): no share item, so
+                    // the button is the disabled placeholder, never the previous photo.
+                    cachedShareItem = nil
+                    isPreparingShare = false
+                    return
+                }
                 // Build the share item and thumbnail in one detached pass — the same
                 // CGImageSource is reused for type detection and thumbnail decode,
                 // so HEIC photos are parsed only once, fully off the main thread.
@@ -1501,7 +1835,7 @@ struct PhotoPreviewSheet: View {
                 // two path-construction sites cannot silently diverge.
                 sessionTempFileURLs.insert(shareItem.tempFileURL())
             }
-            .onChange(of: photos.count) { _, newCount in
+            .onChange(of: photoIDs.count) { _, newCount in
                 if newCount == 0 {
                     // Covers both in-app delete-of-last and external iCloud sync emptying the array.
                     dismiss()
@@ -1512,7 +1846,7 @@ struct PhotoPreviewSheet: View {
             .task {
                 guard !isPageSeeded else { return }
                 // A single photo has no neighbour to visit; no offset mis-alignment occurs.
-                guard photos.count > 1 else { isPageSeeded = true; return }
+                guard photoIDs.count > 1 else { isPageSeeded = true; return }
                 let target = currentIndex   // always > 0 here (isPageSeeded == false iff initialIndex > 0)
                 // Safety net: if the invariant above ever weakens, avoid setting index to -1.
                 guard target > 0 else { isPageSeeded = true; return }
@@ -1531,7 +1865,7 @@ struct PhotoPreviewSheet: View {
                 // unlike Task.yield() which only reschedules without guaranteeing a UIKit layout commit.
                 try? await Task.sleep(nanoseconds: 33_000_000)
                 // Re-clamp in case photos shrank while sleeping (e.g., concurrent iCloud sync).
-                currentIndex = photos.isEmpty ? 0 : min(target, photos.count - 1)
+                currentIndex = photoIDs.isEmpty ? 0 : min(target, photoIDs.count - 1)
                 try? await Task.sleep(nanoseconds: 33_000_000)
                 #endif
                 isPageSeeded = true
@@ -1565,7 +1899,8 @@ struct PhotoPreviewSheet: View {
         // mechanism fires twice (id=0 on first appear, real id after seeding), but the
         // body guard at the top of the task neutralizes the id=0 fire as a no-op.
         guard isPageSeeded else { return 0 }
-        return currentPhoto?.photoTaskID ?? 0
+        guard !photoIDs.isEmpty else { return 0 }
+        return pageID(min(currentIndex, photoIDs.count - 1)).hashValue
     }
 
     private var exportFileName: String {
@@ -1598,7 +1933,9 @@ struct PhotoPreviewSheet: View {
 // MARK: - Photo Page View
 
 private struct PhotoPageView: View {
-    let data: Data
+    let photoID: String
+    /// Reads the photo's bytes when the page appears (not when it is created).
+    let load: () -> Data
     let index: Int
     let total: Int
     @State private var image: PlatformImage?
@@ -1612,7 +1949,7 @@ private struct PhotoPageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %lld of %lld", bundle: .forAppLanguage(), comment: "Announces the current photo's position while paging through a dive's photos"), index + 1, total)))
+                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %@ of %@", bundle: .forAppLanguage(), value: "Photo %@ of %@", comment: "Announces the current photo's position while paging through photos (locale-formatted numbers)"), Double(index + 1).localizedString(decimals: 0), Double(total).localizedString(decimals: 0))))
             } else {
                 ZStack {
                     AppBackground().ignoresSafeArea()
@@ -1620,8 +1957,8 @@ private struct PhotoPageView: View {
                 }
             }
         }
-        .task(id: data.photoTaskID) {
-            let d = data
+        .task(id: photoID) {
+            let d = load()
             let decoded = await Task.detached(priority: .userInitiated) {
                 PlatformImage(data: d)
             }.value

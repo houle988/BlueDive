@@ -425,6 +425,11 @@ class UserPreferences {
     var hideClearedDecoStops: Bool {
         didSet { UserDefaults.standard.set(hideClearedDecoStops, forKey: "hideClearedDecoStops") }
     }
+    /// When true, the dive profile chart shows a thumbnail for each photo taken during the
+    /// dive, at its capture time. On by default. No App Group write: the widget renders no chart.
+    var showPhotosOnProfile: Bool {
+        didSet { UserDefaults.standard.set(showPhotosOnProfile, forKey: "showPhotosOnProfile") }
+    }
     /// When true, the dive detail view shows the Samples tab (raw dive computer data).
     /// Off by default: the tab is a diagnostic view and a long table is slow to render.
     /// No App Group write: the widget does not show dive detail tabs.
@@ -442,6 +447,16 @@ class UserPreferences {
             // Turning it on anywhere answers the one-time launch question, so turning it off
             // later (or Reset to Defaults) does not bring that question back.
             if fetchWeatherOnline { UserDefaults.standard.set(true, forKey: "onlineServicesPromptShown") }
+        }
+    }
+    /// When true, species can be looked up on iNaturalist (taxonomy, common names, Wikipedia
+    /// summary, a Creative Commons photo); only the species name is sent. Off by default.
+    /// No App Group write: the widget shows no species.
+    var fetchTaxonomyOnline: Bool {
+        didSet {
+            UserDefaults.standard.set(fetchTaxonomyOnline, forKey: "fetchTaxonomyOnline")
+            // Turning it on anywhere answers the one-time launch question, as for the weather.
+            if fetchTaxonomyOnline { UserDefaults.standard.set(true, forKey: "taxonomyPromptShown") }
         }
     }
     #if os(macOS)
@@ -466,7 +481,10 @@ class UserPreferences {
         // OFF default — no registerDefaults entry needed.
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
+        // On by default: an absent key reads as true.
+        self.showPhotosOnProfile = UserDefaults.standard.object(forKey: "showPhotosOnProfile") as? Bool ?? true
         self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
+        self.fetchTaxonomyOnline = UserDefaults.standard.bool(forKey: "fetchTaxonomyOnline")
         #if os(macOS)
         // On by default: an absent key reads as true.
         self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
@@ -488,7 +506,9 @@ class UserPreferences {
         languageMode    = .system
         hideClearedDecoStops = false
         showSamplesTab = false
+        showPhotosOnProfile = true
         fetchWeatherOnline = false
+        fetchTaxonomyOnline = false
         #if os(macOS)
         showDiveListProfilePreview = true
         #endif

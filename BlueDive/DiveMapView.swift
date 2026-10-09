@@ -1261,6 +1261,7 @@ struct DiveMapCard: View {
     let diveNumber: Int
     let onClose: () -> Void
     @Environment(\.locale) private var locale
+    @Environment(DiveStore.self) private var store
     @State private var prefs = UserPreferences.shared
 
     private func formattedDate(_ date: Date) -> String {
@@ -1314,7 +1315,7 @@ struct DiveMapCard: View {
                         .accessibilityLabel(Text("Has fish sightings"))
                 }
 
-                if !(dive.photosData?.isEmpty ?? true) {
+                if store.cachedDivesWithPhotos.contains(dive.id) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(.red)

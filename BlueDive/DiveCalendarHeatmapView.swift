@@ -513,7 +513,7 @@ struct DayDivesSheetView: View {
                 ForEach(dives) { dive in
                     NavigationLink(destination: DiveDetailView(dive: dive, diveNumber: numberMap[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { dismiss() }) {
                         DiveRowView(
-                            summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: !(dive.photosData?.isEmpty ?? true)),
+                            summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: store.cachedDivesWithPhotos.contains(dive.id)),
                             diveNumber: numberMap[dive.persistentModelID] ?? 0
                         )
                     }

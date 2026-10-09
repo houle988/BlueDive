@@ -44,6 +44,38 @@ struct DiveProfileSettingsView: View {
 
                 VStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $prefs.showPhotosOnProfile) {
+                            // Pink to match the Photos section of the dive detail view.
+                            Label {
+                                Text("Show photos on the profile")
+                            } icon: {
+                                Image(systemName: "photo")
+                                    .foregroundStyle(.pink)
+                            }
+                        }
+                        .fullWidthSwitch()
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    Text("When on, each photo taken during the dive appears on the profile chart at the moment it was taken, at the depth recorded by your dive computer. Tap a thumbnail to open the photo.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Toggle(isOn: $prefs.showSamplesTab) {
                             // Teal to match the Samples tab's colour in the dive detail view.
                             Label {
