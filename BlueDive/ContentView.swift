@@ -1097,6 +1097,12 @@ struct ContentView: View {
             Button(action: { showFileImporter = true }) {
                 Label("Import", systemImage: "doc.badge.plus")
             }
+            if !dives.isEmpty {
+                Divider()
+                Button(action: { showPhotoBatchImport = true }) {
+                    Label("Import Photos", systemImage: "photo.badge.plus")
+                }
+            }
         } label: {
             Image(systemName: "plus")
                 .foregroundStyle(.cyan)
@@ -1141,9 +1147,6 @@ struct ContentView: View {
                 Label("Marine Life", systemImage: "fish.fill")
             }
             if !dives.isEmpty {
-                Button(action: { showPhotoBatchImport = true }) {
-                    Label("Import Photos", systemImage: "photo.badge.plus")
-                }
                 Divider()
                 Button(action: exportAllDivesToXML) {
                     Label("Export All Dives to XML", systemImage: "chevron.left.forwardslash.chevron.right")

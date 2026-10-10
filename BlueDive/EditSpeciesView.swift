@@ -56,6 +56,16 @@ struct EditSpeciesView: View {
     /// Another species already known by the entered common or scientific name; updated
     /// once per keystroke.
     @State private var duplicate: Species?
+    @State private var prefs = UserPreferences.shared
+    /// New species: the iNaturalist taxon chosen in the form, linked when the species is saved.
+    @State private var pickedTaxon: INaturalistService.Taxon?
+    /// The common name the last lookup wrote in the form: a later lookup replaces it rather
+    /// than keeping it as another name (it was never typed).
+    @State private var filledCommonName: String?
+    /// The scientific name of a taxon picked, then declined with "Don't Link": Save does not
+    /// link the species to it automatically either.
+    @State private var declinedTaxonName: String?
+    @State private var showLookup = false
 
     private static let newCategoryTag = "\u{0}new"
 
@@ -161,6 +171,35 @@ struct EditSpeciesView: View {
                         Text(verbatim: String(format: NSLocalizedString("%@ is already in the catalogue.", bundle: .forAppLanguage(), value: "%@ is already in the catalogue.", comment: "Warning in the species form: another species already has this name"), duplicate.commonName))
                             .font(.caption)
                             .foregroundStyle(.red)
+                    }
+                    if species == nil, prefs.fetchTaxonomyOnline {
+                        Button {
+                            showLookup = true
+                        } label: {
+                            Label("Look Up on iNaturalist", systemImage: "leaf")
+                        }
+                        .listRowButton()
+                        // Not while a typed name is another species' (the lookup could move it to
+                        // Other Names and get round the duplicate check).
+                        .disabled(lookupQuery.isEmpty || duplicate != nil)
+                        if let pickedTaxon {
+                            HStack(spacing: 8) {
+                                Text(verbatim: String(format: NSLocalizedString("Will be linked to %@", bundle: .forAppLanguage(), value: "Will be linked to %@", comment: "New species form: the iNaturalist taxon chosen, linked when the species is saved; %@ is its scientific name"), pickedTaxon.name))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button {
+                                    declinedTaxonName = pickedTaxon.name
+                                    self.pickedTaxon = nil
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                        .clearButtonTapTarget()
+                                        .accessibilityLabel(Text("Don't Link"))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
                 } header: {
                     Text("Names")
@@ -330,9 +369,21 @@ struct EditSpeciesView: View {
                 updateDuplicate()
                 updateOtherNameConflict()
             }
+            .sheet(isPresented: $showLookup) {
+                INaturalistLookupSheet(query: lookupQuery) { taxon in fill(from: taxon) }
+                    .standardSheetPresentation()
+            }
             .onChange(of: commonName) { updateDuplicate() }
             .onChange(of: newOtherName) { updateOtherNameConflict() }
-            .onChange(of: scientificName) { updateDuplicate() }
+            .onChange(of: scientificName) {
+                updateDuplicate()
+                // A scientific name retyped after the lookup no longer names the chosen taxon:
+                // linking it would show one taxon's classification under another's name.
+                if let pickedTaxon, SpeciesCatalog.key(scientificName.trimmingCharacters(in: .whitespacesAndNewlines))
+                    != SpeciesCatalog.key(pickedTaxon.name) {
+                    self.pickedTaxon = nil
+                }
+            }
             .onChange(of: pickedPhoto) { _, item in
                 guard let item else { return }
                 Task {
@@ -365,6 +416,48 @@ struct EditSpeciesView: View {
                 .accessibilityHidden(true)
         } else {
             SpeciesImageView(species: nil, size: 120)
+        }
+    }
+
+    /// What a lookup from the form searches: the scientific name, else the common name.
+    private var lookupQuery: String {
+        let scientific = scientificName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return scientific.isEmpty ? trimmedName : scientific
+    }
+
+    /// New species: remembers the chosen taxon (linked on Save) and fills the fields left empty.
+    /// The scientific name becomes the chosen taxon's (a typed synonym or another result would
+    /// put one taxon's classification under another's name). With "Use iNaturalist common
+    /// names" on, iNaturalist's name replaces the typed common name, which moves to Other
+    /// Names — shown before saving, so it can be undone: Save then keeps the form's name
+    /// (`allowNameSwap: false`).
+    private func fill(from taxon: INaturalistService.Taxon) {
+        pickedTaxon = taxon
+        if SpeciesCatalog.key(scientificName.trimmingCharacters(in: .whitespacesAndNewlines)) != SpeciesCatalog.key(taxon.name) {
+            scientificName = taxon.name
+        }
+        let inatName = taxon.localizedCommonName ?? taxon.englishCommonName
+        let typed = trimmedName
+        let wasFilled = filledCommonName.map { SpeciesCatalog.key($0) == SpeciesCatalog.key(typed) } ?? false
+        if typed.isEmpty || wasFilled {
+            commonName = inatName ?? taxon.name
+            filledCommonName = commonName
+            otherNames.removeAll { SpeciesCatalog.key($0) == SpeciesCatalog.key(commonName) }
+        } else if prefs.useINaturalistCommonNames, let inatName,
+                  SpeciesCatalog.key(inatName) != SpeciesCatalog.key(typed),
+                  nameIndex.otherSpecies(named: inatName, excluding: species) == nil,
+                  nameIndex.otherSpecies(named: typed, excluding: species) == nil {
+            // A typed name that is only the scientific name is not kept: it is stored already.
+            let isScientificName = SpeciesCatalog.key(typed) == SpeciesCatalog.key(scientificName)
+            if !isScientificName, !otherNames.contains(where: { SpeciesCatalog.key($0) == SpeciesCatalog.key(typed) }) {
+                otherNames.append(typed)
+            }
+            otherNames.removeAll { SpeciesCatalog.key($0) == SpeciesCatalog.key(inatName) }
+            commonName = inatName
+            filledCommonName = inatName
+        }
+        if categorySelection.isEmpty, let category = INaturalistUpdater.suggestedCategory(for: taxon.classification) {
+            categorySelection = category.storedValue
         }
     }
 
@@ -415,6 +508,9 @@ struct EditSpeciesView: View {
         }
         // A name typed but not added yet is kept too.
         if canAddOtherName { otherNames.append(trimmedOtherName) }
+        // A new species' name is not also one of its other names (the iNaturalist name swap
+        // undone in the form leaves the typed name in both).
+        if isNew { otherNames.removeAll { SpeciesCatalog.key($0) == SpeciesCatalog.key(trimmedName) } }
         if isNew || otherNames != opened.otherNames { target.altNames = otherNames.isEmpty ? nil : otherNames }
         if isNew || imageChanged {
             target.setFeaturedImage(imageData, thumbnail: thumbnailData, attribution: imageAttribution)
@@ -427,9 +523,23 @@ struct EditSpeciesView: View {
         if !newNames.isEmpty {
             SpeciesCatalog.linkUnlinkedSightings(named: newNames, to: target, in: modelContext)
         }
+        // A taxon declined with "Don't Link", while the scientific name is still its own: marked
+        // as looked up, so no automatic lookup (here or "Update Species") links it; it can still
+        // be linked from the species page.
+        let declined = isNew && pickedTaxon == nil
+            && declinedTaxonName.map { SpeciesCatalog.key($0) == SpeciesCatalog.key(scientific) } ?? false
+        if declined { target.inatFetchedAt = .now }
         try? modelContext.save()
-        // Fill in the taxonomy from iNaturalist when allowed (exact scientific name only).
-        INaturalistUpdater.updateInBackground([target], in: modelContext)
+        if isNew, let pickedTaxon {
+            // Linked to the taxon chosen in the form (classification, names, Wikipedia and a
+            // Creative Commons photo when the species has no image of its own).
+            let id = target.persistentModelID
+            let container = modelContext.container
+            Task { await INaturalistUpdater.apply(pickedTaxon, toSpecies: id, container: container, allowNameSwap: false) }
+        } else if !declined {
+            // Fill in the taxonomy from iNaturalist when allowed (exact scientific name only).
+            INaturalistUpdater.updateInBackground([target], in: modelContext)
+        }
         dismiss()
     }
 }

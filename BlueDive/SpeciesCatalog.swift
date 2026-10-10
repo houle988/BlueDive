@@ -291,14 +291,16 @@ enum SpeciesCatalog {
 
     /// Links every sighting not yet in the catalogue to the species of the same name,
     /// creating the species that do not exist (common name = the most frequent spelling).
-    /// Returns (species created, sightings linked).
+    /// Returns the number of species created and of sightings linked, and the species created (looked up on
+    /// iNaturalist by the caller when lookups are on).
     @discardableResult
-    static func buildFromSightings(in context: ModelContext) -> (created: Int, linked: Int) {
+    static func buildFromSightings(in context: ModelContext) -> (created: Int, linked: Int, newSpecies: [Species]) {
         let groups = unlinkedSightingGroups(in: context)
         // Each group has its own name (groups are keyed by name), so a species created here
         // never matches another group: the index of the existing catalogue is enough.
         let index = SpeciesNameIndex(catalogue: (try? context.fetch(FetchDescriptor<Species>())) ?? [])
         var created = 0, linked = 0
+        var newSpecies: [Species] = []
         for group in groups {
             let species: Species
             if let existing = index.species(named: group.name) {
@@ -306,6 +308,7 @@ enum SpeciesCatalog {
             } else {
                 species = Species(commonName: group.name)
                 context.insert(species)
+                newSpecies.append(species)
                 created += 1
             }
             for sight in group.sights {
@@ -314,7 +317,7 @@ enum SpeciesCatalog {
             }
         }
         try? context.save()
-        return (created, linked)
+        return (created, linked, newSpecies)
     }
 
     /// Links the unlinked sightings named `name` (ignoring case) to `species`. The sightings

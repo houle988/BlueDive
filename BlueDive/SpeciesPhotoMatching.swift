@@ -147,6 +147,13 @@ enum ScientificNameDetector {
         wholeName.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
+    /// Whether `text` alone is written as a scientific name (capitalised genus, lower-case
+    /// epithets, not ordinary words). Only a candidate: "Whitetip reef shark" is written the
+    /// same way, so the name is confirmed by an exact iNaturalist match before it is used.
+    static func looksScientific(_ text: String) -> Bool {
+        matchesName(text) && isScientific(normalised(text))
+    }
+
     static func detect(keywords: [String]?, caption: String?, title: String?) -> [Detection] {
         var found: [Detection] = []
         func add(_ detection: Detection) {

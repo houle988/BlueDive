@@ -13,16 +13,16 @@ struct UpdateAllTaxonomyView: View {
     @State private var status: INaturalistUpdater.BatchStatus?
     @State private var task: Task<Void, Never>?
     @State private var pendingCount: Int?
-    /// Fetching common names in the app language for already linked species.
+    /// Fetching common names in the common-names language for already linked species.
     @State private var namesStatus: INaturalistUpdater.BatchStatus?
     @State private var namesTask: Task<Void, Never>?
     @State private var namesPendingCount: Int?
 
     private var isFetchingNames: Bool { namesStatus?.isRunning ?? false }
 
-    /// The app language's name in that language, e.g. "Deutsch".
+    /// The common-names language's name in that language, e.g. "Deutsch".
     private var languageName: String {
-        let code = INaturalistService.appLanguageCode
+        let code = INaturalistService.nameLanguageCode
         return Locale(identifier: code).localizedString(forLanguageCode: code)?.capitalized ?? code
     }
 
@@ -34,6 +34,11 @@ struct UpdateAllTaxonomyView: View {
                 Text("Looks up every species that has a scientific name and is not linked to iNaturalist yet. Only exact scientific-name matches are used; other species can be looked up one by one from their page. Only the species name is sent.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if UserPreferences.shared.useINaturalistCommonNames {
+                    Text("With “Use iNaturalist common names” on, a species linked here takes iNaturalist's common name, and the name it had is kept in Other Names.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 if let pendingCount {
                     Text(verbatim: String(format: NSLocalizedString("Species to look up: %@", bundle: .forAppLanguage(), value: "Species to look up: %@", comment: "Number of catalogue species not yet looked up on iNaturalist"), Double(pendingCount).localizedString(decimals: 0)))
@@ -62,13 +67,13 @@ struct UpdateAllTaxonomyView: View {
                 Divider()
                     .padding(.vertical, 8)
 
-                Text(verbatim: String(format: NSLocalizedString("Fetch Common Names in %@", bundle: .forAppLanguage(), value: "Fetch Common Names in %@", comment: "Heading: fetch iNaturalist common names in the app language; %@ is the language name, e.g. Deutsch"), languageName))
+                Text(verbatim: String(format: NSLocalizedString("Fetch Common Names in %@", bundle: .forAppLanguage(), value: "Fetch Common Names in %@", comment: "Heading: fetch iNaturalist common names in the common-names language; %@ is the language name, e.g. Deutsch"), languageName))
                     .font(.headline)
-                Text("For species already linked to iNaturalist, fetches their common name in the app language, so they are shown in it. Only the species' iNaturalist number and the language are sent; the names you entered are not changed.")
+                Text("For species already linked to iNaturalist, fetches their common name in this language, so they are shown in it. Only the species' iNaturalist number and the language are sent; the names you entered are not changed.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let namesPendingCount {
-                    Text(verbatim: String(format: NSLocalizedString("Species without a name in %@: %@", bundle: .forAppLanguage(), value: "Species without a name in %@: %@", comment: "Number of linked species missing an iNaturalist common name in the app language; first %@ is the language name"), languageName, Double(namesPendingCount).localizedString(decimals: 0)))
+                    Text(verbatim: String(format: NSLocalizedString("Species without a name in %@: %@", bundle: .forAppLanguage(), value: "Species without a name in %@: %@", comment: "Number of linked species missing an iNaturalist common name in the common-names language; first %@ is the language name"), languageName, Double(namesPendingCount).localizedString(decimals: 0)))
                         .font(.subheadline)
                 }
                 Button {
@@ -142,12 +147,12 @@ struct UpdateAllTaxonomyView: View {
         // The same rule as the update itself, so the count is what Update Species processes.
         pendingCount = all.filter(INaturalistUpdater.needsLookup).count
         namesPendingCount = INaturalistUpdater.speciesMissingName(
-            in: all, languageCode: INaturalistService.appLanguageCode).count
+            in: all, languageCode: INaturalistService.nameLanguageCode).count
     }
 
     private func startNames() {
         let container = modelContext.container
-        let language = INaturalistService.appLanguageCode
+        let language = INaturalistService.nameLanguageCode
         #if os(iOS)
         UIApplication.shared.isIdleTimerDisabled = true
         #endif

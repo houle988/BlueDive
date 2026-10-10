@@ -2,14 +2,25 @@ import SwiftUI
 import SwiftData
 
 /// Searches iNaturalist for a species and links the chosen taxon to it (taxonomy, common
-/// names, Wikipedia summary, a Creative Commons photo if the species has no image).
+/// names, Wikipedia summary, a Creative Commons photo if the species has no image), or — for a
+/// species not created yet (Add Species) — hands the chosen taxon back to the form.
 struct INaturalistLookupSheet: View {
-    @Bindable var species: Species
+    enum Target {
+        /// Links the taxon to this species and saves it.
+        case species(Species)
+        /// Returns the taxon to the caller (nothing is saved here).
+        case pick((INaturalistService.Taxon) -> Void)
+    }
+
+    private let target: Target
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
     @State private var query: String
     @State private var results: [INaturalistService.TaxonSummary] = []
+    /// Previews of another Creative Commons photo, for results whose default photo is not one
+    /// ("Use another Creative Commons photo"), by taxon ID.
+    @State private var alternativePreviews: [Int: URL] = [:]
     @State private var isSearching = false
     @State private var applyingID: Int?
     @State private var errorText: String?
@@ -18,9 +29,15 @@ struct INaturalistLookupSheet: View {
     @State private var chooseTask: Task<Void, Never>?
 
     init(species: Species) {
-        self.species = species
+        target = .species(species)
         let scientific = species.scientificName ?? ""
         _query = State(initialValue: scientific.isEmpty ? species.commonName : scientific)
+    }
+
+    /// Searches `query` and hands the chosen taxon to `onPick`.
+    init(query: String, onPick: @escaping (INaturalistService.Taxon) -> Void) {
+        target = .pick(onPick)
+        _query = State(initialValue: query)
     }
 
     var body: some View {
@@ -62,6 +79,9 @@ struct INaturalistLookupSheet: View {
                     Section {
                         ForEach(results) { result in
                             Button {
+                                // Previews still loading are dropped: their request would go out
+                                // with the taxon's own (iNaturalist asks for one per second).
+                                searchTask?.cancel()
                                 chooseTask?.cancel()
                                 chooseTask = Task { await choose(result) }
                             } label: {
@@ -93,7 +113,9 @@ struct INaturalistLookupSheet: View {
 
     private func resultRow(_ result: INaturalistService.TaxonSummary) -> some View {
         HStack(spacing: 12) {
-            AsyncImage(url: result.photoURL) { image in
+            // The photo that would be stored: the default one when Creative Commons, else the
+            // alternative one, else none (the placeholder).
+            AsyncImage(url: result.photoURL ?? alternativePreviews[result.id]) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Color.secondary.opacity(0.15)
@@ -132,13 +154,15 @@ struct INaturalistLookupSheet: View {
         isSearching = true
         errorText = nil
         do {
-            let found = try await INaturalistService.search(text, languageCode: INaturalistService.appLanguageCode)
+            let found = try await INaturalistService.search(text, languageCode: INaturalistService.nameLanguageCode)
             guard !Task.isCancelled else { return }
             isSearching = false
             results = found
+            alternativePreviews = [:]
             if results.isEmpty {
                 errorText = NSLocalizedString("No taxon found on iNaturalist.", bundle: .forAppLanguage(), value: "No taxon found on iNaturalist.", comment: "iNaturalist lookup: the search returned nothing")
             }
+            await loadAlternativePreviews(for: found)
         } catch {
             guard !Task.isCancelled else { return }
             isSearching = false
@@ -146,12 +170,34 @@ struct INaturalistLookupSheet: View {
         }
     }
 
+    /// One request for the results whose default photo is not Creative Commons, a second after
+    /// the search (as iNaturalist asks). On failure they keep the placeholder; choosing works.
+    private func loadAlternativePreviews(for found: [INaturalistService.TaxonSummary]) async {
+        let ids = found.filter(\.needsAlternativePhoto).map(\.id)
+        guard !ids.isEmpty, UserPreferences.shared.useAlternativeINaturalistPhoto else { return }
+        try? await Task.sleep(for: .seconds(1))
+        guard !Task.isCancelled,
+              let previews = try? await INaturalistService.previewPhotos(for: ids, languageCode: INaturalistService.nameLanguageCode),
+              !Task.isCancelled else { return }
+        alternativePreviews = previews
+    }
+
     private func choose(_ result: INaturalistService.TaxonSummary) async {
         applyingID = result.id
         defer { applyingID = nil }
         do {
-            let taxon = try await INaturalistService.taxon(id: result.id, languageCode: INaturalistService.appLanguageCode)
+            let taxon = try await INaturalistService.taxon(id: result.id, languageCode: INaturalistService.nameLanguageCode,
+                                                           allowAlternativePhoto: UserPreferences.shared.useAlternativeINaturalistPhoto)
             guard !Task.isCancelled else { return }
+            let species: Species
+            switch target {
+            case .pick(let onPick):
+                onPick(taxon)
+                dismiss()
+                return
+            case .species(let target):
+                species = target
+            }
             // In a taxonomy context of its own (see INaturalistUpdater.apply); the species page
             // shows the result once the main context merges the save.
             // Saved first, so a species just created (still unsaved here) can be found there.

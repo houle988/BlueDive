@@ -39,7 +39,7 @@ struct AppearanceSettingsView: View {
                         .padding(.horizontal)
                     #endif
                     // Only relevant when iNaturalist lookups are on (off by default).
-                    if prefs.fetchTaxonomyOnline {
+                    if prefs.fetchTaxonomyOnline, prefs.taxonomyNameLanguage.isEmpty {
                         Text("Species names from iNaturalist can be fetched in this language in Settings → Online Services → Update Species from iNaturalist.")
                             .font(.caption)
                             .foregroundStyle(.secondary)

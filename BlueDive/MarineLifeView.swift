@@ -21,6 +21,8 @@ struct MarineLifeView: View {
     @State private var searchText: String = ""
     /// Stored category value to show only ("" = all categories).
     @State private var categoryFilter: String = ""
+    /// Shows only the catalogue species not linked to iNaturalist yet.
+    @State private var notLinkedFilter = false
     /// iNaturalist taxon to show only, as "rank|name" ("" = all), e.g. "family|Nephropidae".
     @State private var taxonFilter: String = ""
     @State private var showAddSpecies = false
@@ -36,7 +38,7 @@ struct MarineLifeView: View {
     /// species-link edit leaves the dive summaries unchanged — or a full rebuild),
     /// contentVersion (catalogue actions here), the catalogue, the diver, the language.
     private var statsKey: String {
-        "\(store.marineLifeVersion):\(contentVersion):\(catalogueHash):\(selectedDiver):\(UserPreferences.shared.languageMode.rawValue)"
+        "\(store.marineLifeVersion):\(contentVersion):\(catalogueHash):\(selectedDiver):\(UserPreferences.shared.languageMode.rawValue):\(UserPreferences.shared.taxonomyNameLanguage)"
     }
     /// The inputs the shown statistics were computed for.
     @State private var computedStatsKey = ""
@@ -68,6 +70,8 @@ struct MarineLifeView: View {
         /// The species' other names (other, iNaturalist and stored common names) and the names
         /// its sightings were recorded with, for the search.
         let otherNames: [String]
+        /// A catalogue species linked to an iNaturalist taxon.
+        let isLinked: Bool
     }
 
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
@@ -147,6 +151,10 @@ struct MarineLifeView: View {
         cachedTaxonSpeciesIDs = Set(catalogue.filter { $0.taxonName(rank: rank) == name }.map(\.persistentModelID))
     }
 
+    /// The "not linked" filter applies only while iNaturalist lookups are on (its menu item is
+    /// hidden otherwise).
+    private var notLinkedFilterActive: Bool { notLinkedFilter && UserPreferences.shared.fetchTaxonomyOnline }
+
     /// Read once per body pass (`speciesListSection`): it searches every name of every row.
     private var filteredSpecies: [SpeciesAggregate] {
         let trimmed = searchText.trimmingCharacters(in: .whitespaces)
@@ -158,6 +166,7 @@ struct MarineLifeView: View {
         }
         return cachedSpecies.filter { aggregate in
             if !categoryFilter.isEmpty, aggregate.category != categoryFilter { return false }
+            if notLinkedFilterActive, aggregate.speciesID == nil || aggregate.isLinked { return false }
             if let taxonIDs {
                 guard let id = aggregate.speciesID, taxonIDs.contains(id) else { return false }
             }
@@ -218,7 +227,9 @@ struct MarineLifeView: View {
         // Display data of each catalogue species, read once (live query results).
         var speciesInfo: [PersistentIdentifier: (id: UUID, name: String, scientific: String?, category: String?,
                                                  otherNames: Set<String>)] = [:]
+        var linkedSpecies = Set<PersistentIdentifier>()
         for species in catalogue {
+            if species.inatTaxonID != nil { linkedSpecies.insert(species.persistentModelID) }
             let names = Set([species.commonName] + (species.altNames ?? []) + species.inatCommonNames.values.filter { !$0.isEmpty })
             speciesInfo[species.persistentModelID] = (species.id, species.displayName, species.scientificName,
                                                       species.category, names)
@@ -278,7 +289,8 @@ struct MarineLifeView: View {
                 lastSeen: value.last,
                 diveIDs: value.dives,
                 quantityCounts: value.qtyCounts,
-                otherNames: value.otherNames.sorted()
+                otherNames: value.otherNames.sorted(),
+                isLinked: value.speciesID.map { linkedSpecies.contains($0) } ?? false
             )
         }
         .sorted {
@@ -393,8 +405,11 @@ struct MarineLifeView: View {
                 if plan.sightingsToLink > 0 {
                     Button("Build") {
                         let result = SpeciesCatalog.buildFromSightings(in: modelContext)
-                        buildResult = result
+                        buildResult = (result.created, result.linked)
                         contentVersion += 1
+                        // Species created under a scientific name are linked to iNaturalist
+                        // in the background when lookups are on (one request per second).
+                        INaturalistUpdater.updateInBackground(result.newSpecies, in: modelContext)
                     }
                 }
                 Button("Cancel", role: .cancel) { }
@@ -430,8 +445,20 @@ struct MarineLifeView: View {
             } label: {
                 Label("Find Species in Photos", systemImage: "text.viewfinder")
             }
-            if Self.filterRanks.contains(where: { !taxonNames(rank: $0).isEmpty }) || !usedCategories.isEmpty {
+            if Self.filterRanks.contains(where: { !taxonNames(rank: $0).isEmpty }) || !usedCategories.isEmpty
+                || UserPreferences.shared.fetchTaxonomyOnline {
                 Divider()
+            }
+            if UserPreferences.shared.fetchTaxonomyOnline {
+                Button {
+                    notLinkedFilter.toggle()
+                } label: {
+                    if notLinkedFilter {
+                        Label("Not Linked to iNaturalist", systemImage: "checkmark")
+                    } else {
+                        Text("Not Linked to iNaturalist")
+                    }
+                }
             }
             if Self.filterRanks.contains(where: { !taxonNames(rank: $0).isEmpty }) {
                 // Filter by Group › All Groups / Class › / Order › / Family › / Genus ›
@@ -480,7 +507,7 @@ struct MarineLifeView: View {
             }
         } label: {
             // Orange while a filter is active, like the app's other filter buttons.
-            if categoryFilter.isEmpty && taxonFilter.isEmpty {
+            if categoryFilter.isEmpty && taxonFilter.isEmpty && !notLinkedFilterActive {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.cyan)
             } else {

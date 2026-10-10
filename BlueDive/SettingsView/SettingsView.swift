@@ -459,6 +459,22 @@ class UserPreferences {
             if fetchTaxonomyOnline { UserDefaults.standard.set(true, forKey: "taxonomyPromptShown") }
         }
     }
+    /// Language of the common names fetched from iNaturalist and shown for linked species: a
+    /// two-letter code, or "" to follow the app language (`INaturalistService.nameLanguageCode`).
+    var taxonomyNameLanguage: String {
+        didSet { UserDefaults.standard.set(taxonomyNameLanguage, forKey: "taxonomyNameLanguage") }
+    }
+    /// When true, linking a species to iNaturalist makes iNaturalist's common name its name and
+    /// keeps the name it had as another name (`INaturalistUpdater.apply`). On by default.
+    var useINaturalistCommonNames: Bool {
+        didSet { UserDefaults.standard.set(useINaturalistCommonNames, forKey: "useINaturalistCommonNames") }
+    }
+    /// When true, a species whose default iNaturalist photo is not Creative Commons gets the
+    /// taxon's first Creative Commons photo instead (`INaturalistService.chosenPhoto`); the lookup
+    /// previews that photo. On by default.
+    var useAlternativeINaturalistPhoto: Bool {
+        didSet { UserDefaults.standard.set(useAlternativeINaturalistPhoto, forKey: "useAlternativeINaturalistPhoto") }
+    }
     #if os(macOS)
     /// When true, the main dive list shows the profile chart of the selected dive above the
     /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
@@ -485,6 +501,9 @@ class UserPreferences {
         self.showPhotosOnProfile = UserDefaults.standard.object(forKey: "showPhotosOnProfile") as? Bool ?? true
         self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
         self.fetchTaxonomyOnline = UserDefaults.standard.bool(forKey: "fetchTaxonomyOnline")
+        self.taxonomyNameLanguage = UserDefaults.standard.string(forKey: "taxonomyNameLanguage") ?? ""
+        self.useINaturalistCommonNames = UserDefaults.standard.object(forKey: "useINaturalistCommonNames") as? Bool ?? true
+        self.useAlternativeINaturalistPhoto = UserDefaults.standard.object(forKey: "useAlternativeINaturalistPhoto") as? Bool ?? true
         #if os(macOS)
         // On by default: an absent key reads as true.
         self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
@@ -509,6 +528,9 @@ class UserPreferences {
         showPhotosOnProfile = true
         fetchWeatherOnline = false
         fetchTaxonomyOnline = false
+        taxonomyNameLanguage = ""
+        useINaturalistCommonNames = true
+        useAlternativeINaturalistPhoto = true
         #if os(macOS)
         showDiveListProfilePreview = true
         #endif

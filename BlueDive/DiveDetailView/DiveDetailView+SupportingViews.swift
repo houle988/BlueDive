@@ -492,6 +492,10 @@ struct AddFishView: View {
         // Sauvegarder les changements
         try? modelContext.save()
         store.commit(dive, affects: .rowBadges)
+        // A species created under a scientific name is linked to iNaturalist when allowed.
+        if matchedSpecies == nil, let species = newFish.species {
+            INaturalistUpdater.updateInBackground([species], in: modelContext)
+        }
 
         dismiss()
     }
@@ -850,12 +854,18 @@ struct EditFishView: View {
         // Linked to the catalogue species. A new name creates it (with the earlier sightings
         // of that name); a sighting recorded before the catalogue keeps no link when only its
         // quantity changes, as the catalogue is built from sightings only on request.
+        var createdOrFound: Species?
         if let matchedSpecies {
             fish.species = matchedSpecies
         } else if renamed || fish.species != nil {
-            fish.species = SpeciesCatalog.findOrCreateForSighting(named: newName, in: modelContext)
+            createdOrFound = SpeciesCatalog.findOrCreateForSighting(named: newName, in: modelContext)
+            fish.species = createdOrFound
         }
         try? modelContext.save()
+        // The species created for the new name — or an existing one found under it — is
+        // looked up on iNaturalist when allowed (`needsLookup`/`lookupName(of:)` skip one
+        // already linked or looked up).
+        if let createdOrFound { INaturalistUpdater.updateInBackground([createdOrFound], in: modelContext) }
         if let fishDive = fish.dive {
             store.commit(fishDive, affects: .rowBadges)
         } else {

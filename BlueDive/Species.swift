@@ -9,6 +9,10 @@ import SwiftData
 @Model
 final class Species {
     var id: UUID = UUID()
+    /// When the species was created on this or another device. Not shown; kept so duplicates
+    /// created on two devices before they sync can later be resolved automatically (keep the
+    /// older one) — a value that cannot be reconstructed afterwards.
+    var createdAt: Date = Date.now
 
     var commonName: String = ""
     var scientificName: String?

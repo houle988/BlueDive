@@ -171,6 +171,8 @@ struct PhotoSpeciesTagSheet: View {
         // A new species also takes the earlier sightings recorded under that name.
         let species = SpeciesCatalog.findOrCreateForSighting(named: name, in: modelContext)
         tag(species)
+        // A species created under a scientific name is linked to iNaturalist when allowed.
+        INaturalistUpdater.updateInBackground([species], in: modelContext)
     }
 
     private func untag(_ species: Species) {

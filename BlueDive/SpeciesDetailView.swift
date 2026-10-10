@@ -260,6 +260,8 @@ struct SpeciesDetailView: View {
 
             if !species.taxonomy.isEmpty || species.wikipediaSummary != nil {
                 taxonomyCard
+            } else if prefs.fetchTaxonomyOnline, species.inatTaxonID == nil {
+                notLinkedCard
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -329,6 +331,26 @@ struct SpeciesDetailView: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformSecondaryBackground.opacity(0.6)))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    /// Where the classification would be, for a species not linked to iNaturalist yet: the
+    /// lookup without going through the … menu.
+    private var notLinkedCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Not linked to iNaturalist")
+                .font(.headline)
+            Button {
+                showLookup = true
+            } label: {
+                Label("Look Up on iNaturalist", systemImage: "leaf")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.platformSecondaryBackground.opacity(0.6)))
+        .padding(.horizontal)
     }
 
     /// iNaturalist classification (kingdom to species), other common names, Wikipedia summary.

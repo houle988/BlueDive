@@ -32,7 +32,12 @@ enum INaturalistService {
         let name: String
         let rank: String
         let commonName: String?
+        /// Preview of the default photo, only when its licence lets it be stored (the
+        /// photo that would be stored); nil otherwise.
         let photoURL: URL?
+        /// The default photo cannot be stored (all rights reserved): another photo of the taxon
+        /// may be used instead (`previewPhotos(for:)`).
+        let needsAlternativePhoto: Bool
     }
 
     /// Full details of one taxon.
@@ -49,9 +54,11 @@ enum INaturalistService {
         let wikipediaURL: String?
         /// Wikipedia summary as plain text.
         let wikipediaSummary: String?
+        /// The photo stored for the taxon (`chosenPhoto`): the default photo, or another
+        /// Creative Commons photo of the taxon when the default one cannot be stored.
         let photoURL: URL?
         let photoAttribution: String?
-        /// Licence code of the default photo (e.g. "cc-by-nc"); nil = all rights reserved.
+        /// Licence code of that photo (e.g. "cc-by-nc"); nil = all rights reserved.
         let photoLicense: String?
     }
 
@@ -59,12 +66,23 @@ enum INaturalistService {
         URL(string: "https://www.inaturalist.org/taxa/\(taxonID)")
     }
 
-    /// Two-letter code of the app language (in-app override, else the system), for common names.
+    /// Two-letter code of the app language (in-app override, else the system).
     @MainActor
     static var appLanguageCode: String {
         let locale = UserPreferences.shared.languageMode.locale ?? Locale.current
         return locale.language.languageCode?.identifier ?? "en"
     }
+
+    /// Language of the iNaturalist common names: the one chosen in Settings → Online Services,
+    /// else the app language. Used for every request and for the name shown.
+    @MainActor
+    static var nameLanguageCode: String {
+        let chosen = UserPreferences.shared.taxonomyNameLanguage
+        return chosen.isEmpty ? appLanguageCode : chosen
+    }
+
+    /// Languages offered for the common names (iNaturalist locales with good coverage).
+    static let nameLanguageCodes = ["en", "fr", "de", "nl", "es", "it", "pt", "nb", "sv", "da", "fi", "pl", "ja"]
 
     /// Taxa whose name or common name matches `query`.
     static func search(_ query: String, languageCode: String) async throws -> [TaxonSummary] {
@@ -74,10 +92,48 @@ enum INaturalistService {
             URLQueryItem(name: "locale", value: languageCode)
         ])
         return response.results.map {
-            TaxonSummary(id: $0.id, name: $0.name, rank: $0.rank,
-                         commonName: $0.preferredCommonName ?? $0.englishCommonName,
-                         photoURL: $0.defaultPhoto?.squareURL.flatMap(URL.init(string:)))
+            let defaultIsOpen = isOpenLicence($0.defaultPhoto?.licenseCode)
+            return TaxonSummary(id: $0.id, name: $0.name, rank: $0.rank,
+                                commonName: $0.preferredCommonName ?? $0.englishCommonName,
+                                photoURL: defaultIsOpen ? $0.defaultPhoto?.squareURL.flatMap(URL.init(string:)) : nil,
+                                needsAlternativePhoto: !defaultIsOpen)
         }
+    }
+
+    /// Previews of the photo that would be stored for each taxon (`chosenPhoto`, alternative
+    /// photos allowed), by taxon ID: one request for all of them. A taxon with no Creative
+    /// Commons photo is left out.
+    static func previewPhotos(for ids: [Int], languageCode: String) async throws -> [Int: URL] {
+        guard !ids.isEmpty else { return [:] }
+        let response: DetailResponse = try await get(path: "taxa/\(ids.map(String.init).joined(separator: ","))", query: [
+            URLQueryItem(name: "locale", value: languageCode)
+        ])
+        var previews: [Int: URL] = [:]
+        for result in response.results {
+            if let url = chosenPhoto(of: result, allowAlternative: true)?.squareURL.flatMap(URL.init(string:)) {
+                previews[result.id] = url
+            }
+        }
+        return previews
+    }
+
+    /// Whether a photo's licence lets BlueDive store it: Creative Commons ("cc-by", "cc0", …) or
+    /// public domain ("pd"); not "all rights reserved" (no licence).
+    static func isOpenLicence(_ license: String?) -> Bool {
+        guard let license = license?.lowercased() else { return false }
+        return license.hasPrefix("cc") || license == "pd"
+    }
+
+    /// The photo stored for a taxon: its default photo when its licence allows it, else — with
+    /// `allowAlternative` ("Use another Creative Commons photo") — the first of its other photos
+    /// whose licence does, else none. A photo listed under another taxon is skipped (a safeguard:
+    /// iNaturalist lists every photo under the taxon asked for); one without a taxon is kept.
+    private static func chosenPhoto(of result: Result, allowAlternative: Bool) -> Photo? {
+        if let photo = result.defaultPhoto, isOpenLicence(photo.licenseCode) { return photo }
+        guard allowAlternative else { return nil }
+        return result.taxonPhotos?.first {
+            ($0.taxon.map { $0.id == result.id } ?? true) && isOpenLicence($0.photo?.licenseCode)
+        }?.photo
     }
 
     /// The taxon whose scientific name is exactly `name` (ignoring case), at the rank the
@@ -99,7 +155,8 @@ enum INaturalistService {
         return ofRank.count == 1 ? ofRank.first : nil
     }
 
-    static func taxon(id: Int, languageCode: String) async throws -> Taxon {
+    static func taxon(id: Int, languageCode: String,
+                      allowAlternativePhoto: Bool) async throws -> Taxon {
         let response: DetailResponse = try await get(path: "taxa/\(id)", query: [
             URLQueryItem(name: "locale", value: languageCode)
         ])
@@ -109,6 +166,7 @@ enum INaturalistService {
         }
         classification.append(Rank(rank: result.rank, name: result.name, id: result.id,
                                    commonName: result.preferredCommonName))
+        let photo = chosenPhoto(of: result, allowAlternative: allowAlternativePhoto)
         return Taxon(
             id: result.id, name: result.name, rank: result.rank,
             localizedCommonName: result.preferredCommonName,
@@ -117,9 +175,9 @@ enum INaturalistService {
             classification: classification,
             wikipediaURL: result.wikipediaURL,
             wikipediaSummary: result.wikipediaSummary.map(plainText),
-            photoURL: result.defaultPhoto?.mediumURL.flatMap(URL.init(string:)),
-            photoAttribution: result.defaultPhoto?.attribution,
-            photoLicense: result.defaultPhoto?.licenseCode
+            photoURL: photo?.mediumURL.flatMap(URL.init(string:)),
+            photoAttribution: photo?.attribution,
+            photoLicense: photo?.licenseCode
         )
     }
 
@@ -184,10 +242,13 @@ enum INaturalistService {
         let wikipediaURL: String?
         let wikipediaSummary: String?
         let defaultPhoto: Photo?
+        /// The taxon's photos, default first (detail requests only).
+        let taxonPhotos: [TaxonPhoto]?
         let ancestors: [Ancestor]?
 
         enum CodingKeys: String, CodingKey {
             case id, name, rank, ancestors
+            case taxonPhotos = "taxon_photos"
             case preferredCommonName = "preferred_common_name"
             case englishCommonName = "english_common_name"
             case wikipediaURL = "wikipedia_url"
@@ -206,6 +267,14 @@ enum INaturalistService {
             case id, name, rank
             case preferredCommonName = "preferred_common_name"
         }
+    }
+
+    private struct TaxonPhoto: Decodable {
+        struct TaxonReference: Decodable { let id: Int }
+        /// Optional: one entry without a photo must not fail the whole taxon.
+        let photo: Photo?
+        /// The taxon the photo is listed under.
+        let taxon: TaxonReference?
     }
 
     private struct Photo: Decodable {
@@ -251,7 +320,7 @@ extension Species {
     }
 
     /// Name shown for the species. When the stored common name is one of iNaturalist's
-    /// names, iNaturalist's name in the current app language is shown if it was fetched;
+    /// names, iNaturalist's name in the names language (`nameLanguageCode`) is shown if it was fetched;
     /// otherwise — a name typed by the user or read from keywords — the stored name, as is.
     /// Display only: `commonName` is never changed.
     @MainActor
@@ -259,7 +328,7 @@ extension Species {
         let names = inatCommonNames
         guard !names.isEmpty,
               names.values.contains(where: { SpeciesCatalog.key($0) == SpeciesCatalog.key(commonName) }),
-              let localized = names[INaturalistService.appLanguageCode], !localized.isEmpty
+              let localized = names[INaturalistService.nameLanguageCode], !localized.isEmpty
         else { return commonName }
         return localized
     }
@@ -308,26 +377,29 @@ enum INaturalistUpdater {
     }
 
     /// Stores the taxon on the species. iNaturalist data goes into its own fields; the
-    /// user's fields are only filled when empty, except a common name that is only the
-    /// scientific name (a placeholder), which the iNaturalist common name replaces. A name
-    /// another species already has is not given (no two species with one name). The default
-    /// photo is downloaded only when the species has no image and the photo has a Creative
-    /// Commons licence, and its credit is kept with it. Returns whether it was saved.
+    /// user's fields are only filled when empty, except the common name: a placeholder (only
+    /// the scientific name) is replaced by the iNaturalist common name, and any other name
+    /// too when "Use iNaturalist common names" is on (the name it had becomes another name). A name
+    /// another species already has is not given (no two species with one name). The taxon's
+    /// photo (`chosenPhoto`) is downloaded only when the species has no image and the photo's
+    /// licence allows it, and its credit is kept with it. Returns whether it was saved.
     ///
     /// The photo is downloaded first; the species is then read as saved now, in a taxonomy
     /// context of its own, and every field is decided and saved with no suspension in between,
     /// so an edit saved during the requests and the download (a rename, a category, an image)
     /// is never overwritten. With `lookupOf`, the update is skipped unless the species still
-    /// waits for a lookup of that scientific name (`needsLookup`).
+    /// waits for a lookup of that name (`lookupName(of:)`). `allowNameSwap: false` keeps the
+    /// common name the caller decided on (the new species form, which already offered the swap).
     @discardableResult
     static func apply(_ taxon: INaturalistService.Taxon, toSpecies id: PersistentIdentifier,
-                      container: ModelContainer, lookupOf name: String? = nil) async -> Bool {
+                      container: ModelContainer, lookupOf name: String? = nil,
+                      allowNameSwap: Bool = true) async -> Bool {
         let photo = await featuredPhoto(of: taxon, forSpecies: id, container: container)
         let context = taxonomyContext(container)
         guard let species = fetchSpecies(id, in: context) else { return false }
         if let name {
-            guard needsLookup(species),
-                  SpeciesCatalog.key(species.scientificName ?? "") == SpeciesCatalog.key(name) else { return false }
+            guard let pending = lookupName(of: species),
+                  SpeciesCatalog.key(pending) == SpeciesCatalog.key(name) else { return false }
         }
         // Re-linked to another taxon (a correction in the lookup sheet): what came from the
         // previous taxon is replaced — its names in every language, its Creative Commons photo
@@ -364,16 +436,19 @@ enum INaturalistUpdater {
             species.scientificName = taxon.name
         }
         // The common name: a placeholder (the scientific name of a species created from a
-        // detected name) becomes iNaturalist's common name when no other species has it.
-        // After a re-link, a common name that was the previous taxon's (its name or one of its
-        // iNaturalist names) is replaced in the same way, else by the chosen taxon's
-        // scientific name, so no name of the previous taxon is left.
+        // detected name or a sighting) becomes iNaturalist's common name when no other species
+        // has it — only with "Use iNaturalist common names" on (and not when the caller kept
+        // its name); off, the species keeps the name it was given. After a re-link, a common
+        // name that was the previous taxon's (its name or one of its iNaturalist names) is
+        // always replaced in the same way, else by the chosen taxon's scientific name, so no
+        // name of the previous taxon is left.
         let commonName = taxon.localizedCommonName ?? taxon.englishCommonName
         let commonKey = SpeciesCatalog.key(species.commonName)
         let commonFromPreviousTaxon = previousTaxonName.map { SpeciesCatalog.key($0) == commonKey } ?? false
             || previousCommonNames.contains(commonKey)
         let commonIsPlaceholder = commonKey == SpeciesCatalog.key(taxon.name) || commonFromPreviousTaxon
-        if commonIsPlaceholder {
+        let usesINaturalistNames = allowNameSwap && UserPreferences.shared.useINaturalistCommonNames
+        if commonIsPlaceholder, commonFromPreviousTaxon || usesINaturalistNames {
             if let commonName, others.species(named: commonName) == nil {
                 species.commonName = commonName
                 // The sightings recorded under that name join it, as when a species is created.
@@ -381,6 +456,25 @@ enum INaturalistUpdater {
             } else if commonFromPreviousTaxon {
                 species.commonName = taxon.name
             }
+        } else if !commonIsPlaceholder, usesINaturalistNames, previousTaxonID == nil,
+                  let commonName, !commonKey.isEmpty, SpeciesCatalog.key(commonName) != commonKey,
+                  !names.values.contains(where: { SpeciesCatalog.key($0) == commonKey }),
+                  others.species(named: commonName) == nil {
+            // "Use iNaturalist common names", on a first link only (a species already linked
+            // keeps its name): iNaturalist's name (in the names language, else English) becomes
+            // the name, and the name the species had — typed or read from a keyword — is kept as
+            // another name, so the sightings and keywords written with it are still recognised.
+            // Kept as is when it is already one of iNaturalist's names (shown in the names
+            // language anyway) or another species has iNaturalist's name.
+            var otherNames = species.altNames ?? []
+            if !otherNames.contains(where: { SpeciesCatalog.key($0) == commonKey }) {
+                otherNames.append(species.commonName)
+            }
+            // The new name is not also listed as another name.
+            otherNames.removeAll { SpeciesCatalog.key($0) == SpeciesCatalog.key(commonName) }
+            species.altNames = otherNames.isEmpty ? nil : otherNames
+            species.commonName = commonName
+            SpeciesCatalog.linkUnlinkedSightings(named: [commonName], to: species, in: context)
         }
         if species.category?.isEmpty ?? true, let category = suggestedCategory(for: taxon.classification) {
             species.category = category.storedValue
@@ -393,14 +487,14 @@ enum INaturalistUpdater {
         return save(context)
     }
 
-    /// The taxon's default photo, downloaded when it has a Creative Commons licence and the
+    /// The taxon's photo (`chosenPhoto`), downloaded when its licence allows it and the
     /// species, as saved now, would take it: no image, or the previous taxon's photo after a
     /// re-link. Whether it is stored is decided again after the download (`apply`).
     private static func featuredPhoto(of taxon: INaturalistService.Taxon, forSpecies id: PersistentIdentifier,
                                       container: ModelContainer) async -> (data: Data, thumbnail: Data?)? {
         // The context is kept for as long as the species is read.
         let context = taxonomyContext(container)
-        guard let url = taxon.photoURL, let license = taxon.photoLicense, license.lowercased().hasPrefix("cc"),
+        guard let url = taxon.photoURL, INaturalistService.isOpenLicence(taxon.photoLicense),
               let species = fetchSpecies(id, in: context) else { return nil }
         let relinked = species.inatTaxonID != nil && species.inatTaxonID != taxon.id
         guard !species.hasFeaturedImage || (relinked && species.featuredImageAttribution != nil) else { return nil }
@@ -449,13 +543,29 @@ enum INaturalistUpdater {
 
     /// Whether an automatic lookup applies to the species: a scientific name, not linked to a
     /// taxon yet, and not already looked up without a match (until its scientific name changes).
-    /// The one rule for `updateIfPossible`, `updateAll` and the pending count in Settings.
+    /// The rule for `updateAll` and the pending count in Settings; automatic lookups of new
+    /// species (`updateIfPossible`) also accept a common name written as a scientific name
+    /// (`lookupName(of:)`).
     static func needsLookup(_ species: Species) -> Bool {
         species.inatTaxonID == nil && species.inatFetchedAt == nil && !(species.scientificName?.isEmpty ?? true)
     }
 
+    /// The name an automatic lookup of a new species asks for: its scientific name
+    /// (`needsLookup`), else — for a species with no scientific name, not linked or looked up
+    /// yet — a common name written as a scientific name (a sighting named "Octopus vulgaris").
+    /// That name is never stored as the scientific name by itself: only an exact iNaturalist
+    /// match fills it (`apply`), so "Whitetip reef shark", written the same way, stays a
+    /// common name.
+    static func lookupName(of species: Species) -> String? {
+        if needsLookup(species) { return species.scientificName }
+        guard species.inatTaxonID == nil, species.inatFetchedAt == nil,
+              species.scientificName?.isEmpty ?? true else { return nil }
+        let common = species.commonName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ScientificNameDetector.looksScientific(common) ? common : nil
+    }
+
     enum LookupOutcome {
-        /// Nothing asked: lookups off, no scientific name, already linked or already looked up.
+        /// Nothing asked: lookups off, no name to look up, already linked or already looked up.
         case skipped
         /// Asked, but nothing stored: the species changed or was deleted during the requests,
         /// or the save failed.
@@ -468,26 +578,29 @@ enum INaturalistUpdater {
         case failed(serviceUnavailable: Bool)
     }
 
-    /// Looks up the species by its scientific name (exact match only) and applies the taxon.
-    /// Does nothing when online lookups are off, the species has no scientific name, is
-    /// already linked to a taxon, or was already looked up without a match (`inatFetchedAt`
-    /// set, no taxon; cleared when its scientific name is edited).
+    /// Looks up the species by its scientific name, or a common name written as one
+    /// (`lookupName(of:)`; exact match only), and applies the taxon. Does nothing when online
+    /// lookups are off, the species has no such name, is already linked to a taxon, or was
+    /// already looked up without a match (`inatFetchedAt` set, no taxon; cleared when its
+    /// scientific name is edited).
     @discardableResult
     static func updateIfPossible(_ species: Species, in context: ModelContext) async -> LookupOutcome {
-        guard UserPreferences.shared.fetchTaxonomyOnline, isAlive(species), needsLookup(species),
-              let name = species.scientificName else { return .skipped }
-        let language = INaturalistService.appLanguageCode
+        guard UserPreferences.shared.fetchTaxonomyOnline, isAlive(species),
+              let name = lookupName(of: species) else { return .skipped }
+        let language = INaturalistService.nameLanguageCode
         do {
             guard let match = try await INaturalistService.exactMatch(for: name, languageCode: language) else {
                 // Recorded on the species as saved now, if it still waits for this lookup.
                 let fresh = taxonomyContext(context.container)
-                guard let saved = fetchSpecies(species.persistentModelID, in: fresh), needsLookup(saved),
-                      SpeciesCatalog.key(saved.scientificName ?? "") == SpeciesCatalog.key(name) else { return .abandoned }
+                guard let saved = fetchSpecies(species.persistentModelID, in: fresh),
+                      let pending = lookupName(of: saved),
+                      SpeciesCatalog.key(pending) == SpeciesCatalog.key(name) else { return .abandoned }
                 saved.inatFetchedAt = .now
                 save(fresh)
                 return .notFound
             }
-            let taxon = try await INaturalistService.taxon(id: match.id, languageCode: language)
+            let taxon = try await INaturalistService.taxon(id: match.id, languageCode: language,
+                                                           allowAlternativePhoto: UserPreferences.shared.useAlternativeINaturalistPhoto)
             return await apply(taxon, toSpecies: species.persistentModelID, container: context.container,
                                lookupOf: name) ? .updated : .abandoned
         } catch {
@@ -564,7 +677,9 @@ enum INaturalistUpdater {
         for (index, item) in pending.enumerated() {
             if Task.isCancelled { return .stopped(updated: updated) }
             do {
-                let taxon = try await INaturalistService.taxon(id: item.taxonID, languageCode: languageCode)
+                // Names only: the photo is not used.
+                let taxon = try await INaturalistService.taxon(id: item.taxonID, languageCode: languageCode,
+                                                               allowAlternativePhoto: false)
                 let context = taxonomyContext(container)
                 if let species = fetchSpecies(item.id, in: context),
                    species.inatTaxonID == item.taxonID, species.inatCommonNames[languageCode] == nil {
@@ -606,7 +721,7 @@ enum INaturalistUpdater {
                 .filter(needsLookup)
                 .compactMap { species in species.scientificName.map { (species.persistentModelID, $0) } }
         }()
-        let language = INaturalistService.appLanguageCode
+        let language = INaturalistService.nameLanguageCode
         var updated = 0, notFound = 0
         progress(.running(done: 0, total: pending.count))
         for (index, item) in pending.enumerated() {
@@ -616,7 +731,8 @@ enum INaturalistUpdater {
                 var taxon: INaturalistService.Taxon?
                 if let match {
                     try await Task.sleep(for: .seconds(1))
-                    taxon = try await INaturalistService.taxon(id: match.id, languageCode: language)
+                    taxon = try await INaturalistService.taxon(id: match.id, languageCode: language,
+                                                               allowAlternativePhoto: UserPreferences.shared.useAlternativeINaturalistPhoto)
                 }
                 // Applied to the species as saved now, if it still waits for a lookup under the
                 // same name (`apply` checks it after the photo download).

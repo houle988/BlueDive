@@ -58,6 +58,17 @@ struct OnlineServicesSettingsView: View {
         .navigationTitle(Text(verbatim: NSLocalizedString("Online Services", bundle: .forAppLanguage(), value: "Online Services", comment: "")))
     }
 
+    /// A language for the common-names picker: its name in the app language, followed by its own
+    /// name when they differ ("Norwegian (Norsk Bokmål)").
+    private static func languageName(_ code: String) -> String {
+        let appLocale = Locale(identifier: INaturalistService.appLanguageCode)
+        let own = Locale(identifier: code).localizedString(forLanguageCode: code)?
+            .capitalized(with: Locale(identifier: code)) ?? code
+        guard let inAppLanguage = appLocale.localizedString(forLanguageCode: code)?.capitalized(with: appLocale),
+              inAppLanguage != own else { return own }
+        return "\(inAppLanguage) (\(own))"
+    }
+
     /// iNaturalist species lookups: the opt-in toggle, attribution, and the page that looks up
     /// every species (greyed out while the service is off).
     private var taxonomyCard: some View {
@@ -75,6 +86,63 @@ struct OnlineServicesSettingsView: View {
             }
             .padding()
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            HStack {
+                Label {
+                    Text("Common names language")
+                } icon: {
+                    Image(systemName: "character.bubble")
+                        .foregroundStyle(.green)
+                }
+                Spacer()
+                Picker("Common names language", selection: $prefs.taxonomyNameLanguage) {
+                    Text("App language").tag("")
+                    ForEach(INaturalistService.nameLanguageCodes, id: \.self) { code in
+                        Text(verbatim: Self.languageName(code)).tag(code)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+            .disabled(!prefs.fetchTaxonomyOnline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $prefs.useINaturalistCommonNames) {
+                    Label {
+                        Text("Use iNaturalist common names")
+                    } icon: {
+                        Image(systemName: "textformat")
+                            .foregroundStyle(.green)
+                    }
+                }
+                .fullWidthSwitch()
+                Text("When a species is linked, iNaturalist's common name becomes its name and the name it had is kept in Other Names. When off, species keep the names they were given.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+            .disabled(!prefs.fetchTaxonomyOnline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $prefs.useAlternativeINaturalistPhoto) {
+                    Label {
+                        Text("Use another Creative Commons photo")
+                    } icon: {
+                        Image(systemName: "photo")
+                            .foregroundStyle(.green)
+                    }
+                }
+                .fullWidthSwitch()
+                Text("When a species' main iNaturalist photo can't be used (all rights reserved), its first Creative Commons photo is used instead.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+            .disabled(!prefs.fetchTaxonomyOnline)
 
             Text("BlueDive can fill in a species' classification (kingdom to species), common names, Wikipedia summary and a Creative Commons photo from iNaturalist. Only the species name is sent, when a species is created, edited or looked up.")
                 .font(.caption)
