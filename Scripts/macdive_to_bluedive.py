@@ -62,6 +62,24 @@ Flags:
             - Volume: unit inferred from working pressure (PSI → cuft, bar → L);
               omitted when working pressure is unknown.
 
+    --import-unmatched-tanks                  (dives; off by default)
+        For rebreather divers.  On CCR/SCR dives whose dive computer marks its cylinders
+        as oxygen or diluent (raw data), match them to MacDive's tanks by role and gas
+        instead of pressure — MacDive often kept only the diluent, with the oxygen
+        cylinder's pressures — and add the cylinders MacDive does not have, with the
+        computer's start/end and sample pressures.  The oxygen cylinder is added as
+        100 % O₂ (inferred from its role; the computer records no mix) without size or
+        working pressure.  Ambiguous cases are logged and left as in MacDive; open-circuit
+        dives are never changed.  See "Rebreather cylinders" in the priority table below.
+
+    --drop-duplicate-tanks                    (dives; off by default)
+        Leave out tanks that are exact copies of an earlier tank on the same dive — same
+        MacDive tank, gas, size, working pressure, material and type, neither with a start
+        or end pressure — rows MacDive stored twice.  Tanks with a pressure are never
+        dropped.  Each removal is logged ("MacDive tank[n] not exported — exact copy of
+        tank[m]").  Note: two real stages of the same tank and gas, logged without
+        pressures, look the same and would be dropped too.
+
     --critter-species {scientific,omit}      (dives, species; default: scientific)
         What MacDive's critter "Species" field holds — MacDive labels it only "Species" and
         users fill it differently.  'scientific' exports it as the species' scientific name
@@ -162,6 +180,11 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
                                                                transmitter of a one-tank dive MacDive has no
                                                                pressures for) → XML (gas matched by mix,
                                                                else position) → SQLite
+    Duplicate tanks (--drop-duplicate-tanks only; off by     Left out: a tank that is an exact copy of an
+      default)                                                 earlier one on the same dive — same MacDive tank,
+                                                               gas, size, working pressure, material and type,
+                                                               neither with a pressure (rows MacDive stored
+                                                               twice). Tanks with a pressure are always kept.
     Rebreather cylinders (--import-unmatched-tanks only;       Raw: on CCR/SCR dives whose computer marks its
       off by default)                                          cylinders as oxygen or diluent, they are matched
                                                                to MacDive's tanks by role and gas, not pressure
@@ -222,6 +245,11 @@ Examples:
     # A library whose critter Species field holds group names, not scientific names
     python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
         --weight-unit kg --macdive-xml MacDive-Export.xml --critter-species omit
+
+    # Rebreather dives: add the cylinders MacDive missed; leave out tanks MacDive stored twice
+    python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
+        --weight-unit kg --macdive-xml MacDive-Export.xml \\
+        --import-unmatched-tanks --drop-duplicate-tanks
 
     python3 macdive_to_bluedive.py MacDive.sqlite --schema
 
@@ -574,11 +602,12 @@ def fetch_tanks(cur, dive_pk):
     o2_col   = "g.ZOXYGEN"          if "ZOXYGEN"          in gc else "NULL"
     he_col   = "g.ZHELIUM"          if "ZHELIUM"          in gc else "NULL"
     type_col = "t.ZTANKTYPE"        if "ZTANKTYPE"        in tc else "NULL"
+    tank_fk_col = "tg.ZRELATIONSHIPTANK" if "ZRELATIONSHIPTANK" in tgc else "NULL"
 
     sql = f"""
         SELECT tg.ZAIRSTART, tg.ZAIREND,
                {size_col}, {wp_col}, {mat_col},
-               {o2_col}, {he_col}, {type_col}
+               {o2_col}, {he_col}, {type_col}, {tank_fk_col}
         FROM ZTANKANDGAS tg
         LEFT JOIN ZTANK t ON tg.ZRELATIONSHIPTANK = t.Z_PK
         LEFT JOIN ZGAS  g ON tg.ZRELATIONSHIPGAS  = g.Z_PK
@@ -592,7 +621,7 @@ def fetch_tanks(cur, dive_pk):
         return []
     tanks = []
     for row in rows:
-        air_start, air_end, size, wp, mat, o2raw, he_raw, tank_type = row
+        air_start, air_end, size, wp, mat, o2raw, he_raw, tank_type, tank_fk = row
         # O2/He stored as fractions (0.21) or percentages (21). Exactly 1.0 means
         # 100% O2 (pure oxygen, a valid deco gas) — not 1%.
         # o2raw == 0 is treated as absent (same as None) — a stored 0 means "not recorded",
@@ -612,6 +641,7 @@ def fetch_tanks(cur, dive_pk):
             "vol": size, "wp": wp, "mat": mat,
             "o2": o2_pct, "he": he_pct,
             "type": tank_type,
+            "tank_fk": tank_fk,   # MacDive tank (template) the row uses
         })
     return tanks
 
@@ -1777,6 +1807,27 @@ def map_raw_tanks(decoded, tanks, cvt_press, tolerance, end_time=None):
     return mapping, {i: (v[0], v[1]) for i, v in values.items()}, series
 
 
+def drop_duplicate_tanks(tanks):
+    """
+    For --drop-duplicate-tanks: remove tanks that are exact copies of an earlier one — the
+    same MacDive tank, gas, size, working pressure, material and type, and neither with any
+    start or end pressure. Returns (kept tanks, [(dropped position, position of the copy kept)])
+    with 1-based MacDive positions. Tanks with a pressure are never dropped.
+    """
+    kept, dropped, seen = [], [], {}
+    for pos, t in enumerate(tanks, 1):
+        empty = t.get("start") is None and t.get("end") is None
+        key = (t.get("tank_fk"), t["o2"], t["he"], t.get("vol_out"), t.get("wp_out"),
+               t.get("mat"), t.get("type"))
+        if empty and t.get("tank_fk") is not None and key in seen:
+            dropped.append((pos, seen[key]))
+            continue
+        if empty:
+            seen.setdefault(key, pos)
+        kept.append(t)
+    return kept, dropped
+
+
 def rebreather_tank_plan(decoded, tanks, base_mapping, values):
     """
     For --import-unmatched-tanks on a rebreather dive (CCR/SCR) whose computer records tank
@@ -2773,18 +2824,19 @@ def profile_samples_xml_lines(samples, indent=4):
 # ---------------------------------------------------------------------------
 
 def export_dives(input_path, output_path, weight_unit, macdive_xml_path, import_unmatched_tanks=False,
-                 critter_opts=None):
+                 critter_opts=None, drop_dup_tanks=False):
     """Export dives; the libdivecomputer worker is stopped however the export ends."""
     try:
         return _export_dives(input_path, output_path, weight_unit, macdive_xml_path,
-                             import_unmatched_tanks, critter_opts or default_critter_opts(input_path))
+                             import_unmatched_tanks, critter_opts or default_critter_opts(input_path),
+                             drop_dup_tanks)
     finally:
         for worker in list(_ACTIVE_WORKERS):
             worker.close()
 
 
 def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import_unmatched_tanks,
-                  critter_opts):
+                  critter_opts, drop_dup_tanks=False):
     _reset_schema_caches()
 
     # Parse MacDive XML first — distance/temp/pressure/volume are auto-detected from its <units> tag.
@@ -3049,6 +3101,7 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
     _n_deco_dives = 0
     _n_raw_vals   = _collections.Counter()   # dive values taken from raw data instead of MacDive
     _n_unmatched  = _collections.Counter()   # computer tanks MacDive did not have
+    _n_dup_tanks  = _collections.Counter()   # --drop-duplicate-tanks removals
     print("  Profile source per dive:")
 
     # Per-dive unit log setup.
@@ -3277,6 +3330,17 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
             _dive_log.append(f"    end    : {_end_log}")
             _dive_log.append(f"    wp     : {_wp_log}")
             _dive_log.append(f"    volume : {_vol_log}")
+
+        # --drop-duplicate-tanks: exact copies of a tank (same MacDive tank, gas, size, no
+        # pressures — rows MacDive stored twice) are left out; tanks with a pressure never are.
+        if drop_dup_tanks and len(tanks) > 1:
+            tanks, _dups = drop_duplicate_tanks(tanks)
+            for _pos, _orig in _dups:
+                _dive_log.append(f"  tanks      : MacDive tank[{_pos}] not exported — exact copy of "
+                                 f"tank[{_orig}] (same tank, gas and size, no pressures)")
+            if _dups:
+                _n_dup_tanks["tanks"] += len(_dups)
+                _n_dup_tanks["dives"] += 1
 
         # Raw dive computer data (ZRAWDATA, decoded by libdivecomputer in a worker process).
         # When it agrees with MacDive's XML profile (or, without one, with the dive record), it
@@ -3739,6 +3803,9 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
         f"  Dives with deco stops from raw data              : {_n_deco_dives}",
         "  Dive values changed by raw data (MacDive → raw): "
         + (", ".join(f"{k} {v}" for k, v in _n_raw_vals.items()) or "none"),
+        "  Duplicate tanks (--drop-duplicate-tanks "
+        + ("on): " + (f"{_n_dup_tanks['tanks']} exact copies not exported on {_n_dup_tanks['dives']} dives"
+                      if _n_dup_tanks else "none found") if drop_dup_tanks else "off)"),
         "  Unmatched computer tanks (--import-unmatched-tanks "
         + ("on" if import_unmatched_tanks else "off") + "): "
         + (", ".join(f"{k} {v}" for k, v in _n_unmatched.items()) or "none"),
@@ -4154,6 +4221,11 @@ Examples:
   # Critter Species field holding group names, not scientific names: leave it out
   python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
       --weight-unit kg --macdive-xml MacDive-Export.xml --critter-species omit
+
+  # Rebreather dives: add the cylinders MacDive missed; leave out tanks MacDive stored twice
+  python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
+      --weight-unit kg --macdive-xml MacDive-Export.xml \\
+      --import-unmatched-tanks --drop-duplicate-tanks
         """,
     )
     parser.add_argument("input",  help="Path to the MacDive .sqlite file")
@@ -4174,6 +4246,10 @@ Examples:
                         help="Dives: also add rebreather cylinders the dive computer recorded but MacDive "
                              "did not (the computer marks them as oxygen or diluent), with the computer's "
                              "pressures. An oxygen cylinder is added as 100%% O2. Off by default.")
+    parser.add_argument("--drop-duplicate-tanks", dest="drop_duplicate_tanks", action="store_true",
+                        help="Dives: leave out tanks that are exact copies of another tank on the same "
+                             "dive (same MacDive tank, gas and size, no pressures) — rows MacDive stored "
+                             "twice. Tanks with a pressure are never dropped. Off by default.")
     parser.add_argument("--critter-species", choices=["scientific", "omit"], default="scientific",
                         dest="critter_species",
                         help="Dives, species: what MacDive's critter Species field is. 'scientific' "
@@ -4211,7 +4287,8 @@ Examples:
         if not Path(args.macdive_xml).exists():
             parser.error(f"MacDive XML file not found: {args.macdive_xml}")
         export_dives(args.input, args.output, args.weight, macdive_xml_path=args.macdive_xml,
-                     import_unmatched_tanks=args.import_unmatched_tanks, critter_opts=critter_opts)
+                     import_unmatched_tanks=args.import_unmatched_tanks, critter_opts=critter_opts,
+                     drop_dup_tanks=args.drop_duplicate_tanks)
 
     elif args.export_type == "gears":
         if args.weight is None:
