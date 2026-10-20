@@ -15,6 +15,8 @@ enum DiveTab: String, CaseIterable, Identifiable {
     case siteDetails = "Site Details"
     case conditions  = "Conditions"
     case gaz         = "Gas"
+    case photos      = "Photos"
+    case marineLife  = "Marine Life"
     case samples     = "Samples"
     case xmlExport   = "XML Export"
     case uddfExport  = "UDDF Export"
@@ -27,6 +29,8 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return "Site Details"
         case .conditions:  return "Conditions"
         case .gaz:         return "Gas"
+        case .marineLife:  return "Marine Life"
+        case .photos:      return "Photos"
         case .samples:     return "Samples"
         case .xmlExport:   return "XML Export"
         case .uddfExport:  return "UDDF Export"
@@ -44,6 +48,8 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return "mappin.and.ellipse.circle"
         case .conditions:  return "cloud.sun"
         case .gaz:         return "bubbles.and.sparkles"
+        case .marineLife:  return "fish"
+        case .photos:      return "photo.on.rectangle"
         case .samples:     return "waveform.path.ecg"
         case .xmlExport:   return "doc.text.magnifyingglass"
         case .uddfExport:  return "doc.badge.gearshape.fill"
@@ -56,6 +62,8 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return .blue
         case .conditions:  return .yellow
         case .gaz:         return .green
+        case .marineLife:  return .orange
+        case .photos:      return .pink
         case .samples:     return .teal
         case .xmlExport:   return .indigo
         case .uddfExport:  return .teal
@@ -74,14 +82,6 @@ struct DiveDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(DiveStore.self) var store
     @Query(sort: \GearGroup.name) var gearGroups: [GearGroup]
-    // Kept here (not in AddFishView/EditFishView) so the query stays active while DiveDetailView
-    // is on screen and does not activate/deactivate with the sheet, avoiding a re-fetch on dismiss.
-    @Query(sort: \MarineSight.name) private var allFish: [MarineSight]
-
-    private var existingFishNames: [String] {
-        var seen = Set<String>()
-        return allFish.compactMap { seen.insert($0.name).inserted ? $0.name : nil }
-    }
 
     @State var showEditSheet = false
     @State var showAddFish = false
@@ -89,34 +89,70 @@ struct DiveDetailView: View {
     @State var selectedPhotos: [PhotosPickerItem] = []
     @State var prefs = UserPreferences.shared
     @State var selectedTab: DiveTab = .menu
+    /// Tab bar scroll state: whether tiles are hidden past each edge, and which tiles are
+    /// fully on screen (the arrows scroll to the first hidden tile in their direction).
+    @State private var tabBarHiddenLeading = false
+    @State private var tabBarHiddenTrailing = false
+    @State private var fullyVisibleTabs: Set<DiveTab> = []
     @State var isEditingEquipment = false
     @State var gearToDelete: Gear?
     @State var showDeleteGearAlert = false
     @State var selectedGearForDetail: Gear?
     @State var isEditingPhotos = false
-    @State var photoIndexToDelete: Int?
+    /// The photo (`DivePhotoEntry.id`) the Remove alert is about. An id, not a position: an
+    /// import still running can add photos that sort ahead of it while the alert is open.
+    @State var photoIDToDelete: String?
     @State var showDeletePhotoAlert = false
     @State var showPhotosPicker = false
     @State var showFileImporter = false
     @State var showFileImportError = false
-    @State var showFileTruncationAlert = false
+    @State var photoImportResult: PhotoImporter.Result?
+    /// A summary with problems (failed saves, unreadable files) waiting for the species review
+    /// sheet to close: an alert cannot be shown while the sheet is presented.
+    @State var pendingPhotoImportResult: PhotoImporter.Result?
+    /// Dive whose photos are being imported (the import keeps running if the user moves to another dive).
+    @State var importingPhotosDiveID: PersistentIdentifier?
+    /// Another photo task holds the dive: the import waits for it.
+    @State var photoImportWaiting = false
+    /// Files the import could not decide on (they may already be in BlueDive), with the
+    /// first pass's counts and the dive it imported into, waiting for the user's choices.
+    @State var reimportQuestions: [PhotoImporter.ReimportQuestion] = []
+    @State var reimportFirstPass: PhotoImporter.Result?
+    @State var reimportDiveID: PersistentIdentifier?
+    /// Held by a photo import's tasks, which may finish after this view is gone.
+    @State var photoImportSession = PhotoImportSession()
+    @State var showConvertLegacyPhotosAlert = false
+    /// Species found in the IPTC text of photos just imported, waiting for confirmation.
+    @State var speciesProposals: [SpeciesPhotoProposal] = []
     @State var isEditingMarineLife = false
     @State var fishToDelete: MarineSight?
     @State var showDeleteFishAlert = false
     @State var fishToEdit: MarineSight?
+    /// Catalogue species opened from a sighting in the Marine Life grid, shown in a sheet.
+    @State var shownSpecies: Species?
     @State var selectedPhotoForPreview: IdentifiablePhotoData?
     @State var selectedTankIndex: Int = 0
     @State var showFullScreenSiteMap = false
     @State private var dragOffset: CGFloat = 0
     @State private var pendingDive: Dive? = nil
-    @State private var viewWidth: CGFloat = 400
+    // Side the incoming preview enters from when navigateTo starts with dragOffset still 0
+    // (previous/next buttons, VoiceOver actions). A swipe never needs it: the preview only
+    // appears once dragOffset is already non-zero, and its sign gives the side.
+    @State private var pendingEntersFromTrailing: Bool = false
+    @State var viewWidth: CGFloat = 400
     @State private var scrollLocked: Bool = false
     @State private var unlockToken: UUID = UUID()
     @State private var isNavigating: Bool = false
     @State private var cachedDiveNumber: Int = 0
     @State private var cachedCurrentIndex: Int? = nil
     @State var profileSamplesLoaded = false
+    /// When false, the Samples tab table shows only the first `samplesPreviewLimit` rows.
+    @State var showAllSamples = false
+    /// Natural widths of the Samples table header titles, measured in the current language.
+    @State var sampleHeaderWidths: [SampleColumn: CGFloat] = [:]
     @Environment(\.layoutDirection) private var layoutDirection
+    /// True when pushed inside a sheet on macOS (Statistics, Trips, Marine Life, Calendar).
+    @Environment(\.isPushedInSheet) private var isPushedInSheet
 
     // Swipe navigation tuning
     private static let swipeCommitDuration: Double = 0.28
@@ -191,7 +227,7 @@ struct DiveDetailView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Color.cyan.opacity(0.2))
-                .foregroundStyle(.cyan)
+                .foregroundStyle(Color.readableCyan)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             Text(siteName)
                 .font(.headline)
@@ -227,14 +263,16 @@ struct DiveDetailView: View {
                 if let pending = pendingDive {
                     DiveSlidingPreview(dive: pending, diveNumber: pending.diveNumber ?? pendingDiveNumber(for: pending), initialTab: selectedTab)
                         .frame(width: geo.size.width, height: geo.size.height)
-                        .offset(x: dragOffset < 0
+                        .offset(x: (dragOffset < 0 || (dragOffset == 0 && pendingEntersFromTrailing))
                             ? dragOffset + geo.size.width
                             : dragOffset - geo.size.width)
                 }
 
                 // Current dive content
                 VStack(spacing: 0) {
-                    diveTabBar
+                    // The photo import's dialogs hang on the tab bar, which is always shown, so
+                    // an import finishing while another tab is open still presents them.
+                    photoImportDialogs(diveTabBar)
 
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -245,6 +283,8 @@ struct DiveDetailView: View {
                                 case .siteDetails: siteDetailsTabContent
                                 case .conditions:  conditionsTabContent
                                 case .gaz:         gazTabContent
+                                case .marineLife:  marineSightingsSection
+                                case .photos:      photosSection
                                 case .samples:     samplesTabContent
                                 case .xmlExport:   xmlExportTabContent
                                 case .uddfExport:  uddfExportTabContent
@@ -255,12 +295,22 @@ struct DiveDetailView: View {
                         }
                         .scrollDisabled(scrollLocked)
                         .onChange(of: dive) { _, _ in
+                            showAllSamples = false
                             proxy.scrollTo("diveTop", anchor: .top)
+                        }
+                        // Leave the Samples tab if it is hidden in Settings while it is shown.
+                        .onChange(of: prefs.showSamplesTab) { _, isShown in
+                            if !isShown && selectedTab == .samples { selectedTab = .menu }
+                        }
+                        // Leave photo and marine life edit mode with their tab.
+                        .onChange(of: selectedTab) { _, _ in
+                            isEditingPhotos = false
+                            isEditingMarineLife = false
                         }
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
-                .background(Color.platformBackground)
+                .background(AppBackground())
                 .offset(x: dragOffset)
             }
             .clipped()
@@ -331,7 +381,7 @@ struct DiveDetailView: View {
                 }
         )
         .modifier(NavTitleIfNotPreview(title: dive.siteName, isSlidePreview: isSlidePreview))
-        .background(Color.platformBackground.ignoresSafeArea())
+        .background(AppBackground().ignoresSafeArea())
         #if os(iOS)
         // Disable the system interactive back-swipe so our own edge swipe can
         // navigate to the previous dive instead of popping to the list.
@@ -359,10 +409,28 @@ struct DiveDetailView: View {
                 }
                 #endif
                 #if os(macOS)
+                // One ToolbarItemGroup per cluster so macOS shares a glass capsule, as the iOS
+                // navigation bar does; separate items (especially menus) get separate capsules.
+                // In a sheet, macOS draws a .primaryAction item as the sheet's accent-filled
+                // default button at the bottom (cyan icons on a cyan fill), so a dive pushed
+                // inside a sheet uses .sheetPrimaryAction for both groups instead.
                 if !sortedDives.isEmpty {
-                    ToolbarItem(placement: .principal) {
-                        diveNavigationButtons
+                    ToolbarItemGroup(placement: isPushedInSheet ? .sheetPrimaryAction : .principalOutsideTabBar) {
+                        previousDiveButton
+                        nextDiveButton
                     }
+                    // Both groups sit in the trailing area (.principalOutsideTabBar is
+                    // .primaryAction on macOS), where macOS would merge them into one capsule;
+                    // a fixed spacer keeps previous/next and Export/Edit as distinct groups.
+                    // (Pre-26 toolbars have no Liquid Glass merging, so no spacer is needed there.)
+                    if #available(iOS 26.0, macOS 26.0, *) {
+                        ToolbarSpacer(.fixed, placement: isPushedInSheet ? .sheetPrimaryAction : .primaryAction)
+                    }
+                }
+                ToolbarItemGroup(placement: isPushedInSheet ? .sheetPrimaryAction : .primaryAction) {
+                    exportDiveMenu
+                        .toolbarMenuIndicatorHiddenOnMac()
+                    editDiveButton
                 }
                 #else
                 ToolbarItem(placement: .principal) {
@@ -379,83 +447,46 @@ struct DiveDetailView: View {
                         }
                     }
                 }
-                #endif
                 ToolbarItem(placement: .primaryAction) {
-                    // Export menu
-                    Menu {
-                        Button {
-                            exportToXML()
-                        } label: {
-                            Label("Export Dive to XML", systemImage: "doc.text")
-                        }
-                        Button {
-                            exportToUDDF()
-                        } label: {
-                            Label("Export Dive to UDDF", systemImage: "doc.badge.gearshape")
-                        }
-                        Button {
-                            exportToPDF()
-                        } label: {
-                            Label("Export Dive to PDF", systemImage: "doc.richtext")
-                        }
-                    } label: {
-                        #if os(macOS)
-                        Label("Export", systemImage: "square.and.arrow.up.circle.fill")
-                            .foregroundStyle(.cyan)
-                        #else
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundStyle(.cyan)
-                        #endif
-                    }
-                    .accessibilityLabel(Text("Export Dive"))
+                    exportDiveMenu
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    // Edit button
-                    Button {
-                        showEditSheet = true
-                    } label: {
-                        #if os(macOS)
-                        Label("Edit", systemImage: "pencil.circle.fill")
-                            .foregroundStyle(.cyan)
-                        #else
-                        Image(systemName: "pencil")
-                            .foregroundStyle(.cyan)
-                        #endif
-                    }
-                    .accessibilityLabel(Text("Edit Dive"))
+                    editDiveButton
                 }
+                #endif
             }
         }
         .sheet(isPresented: $showEditSheet) {
             editSheetForCurrentTab
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(isPresented: $showAddFish) {
-            AddFishView(dive: dive, fishNames: existingFishNames)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+            DiveMarineLifeSheet(dive: dive)
+                .standardSheetPresentation()
         }
+        // No marine life left (removed here or from the Marine Life sheet): edit mode ends, so
+        // the next sightings do not appear with remove badges.
+        .onChange(of: (dive.seenFish ?? []).isEmpty) { _, isEmpty in
+            if isEmpty { isEditingMarineLife = false }
+        }
+        // A sighting not in the catalogue: linked to a species (catalogue sightings open
+        // their species page and change their quantity from their tile).
         .sheet(item: $fishToEdit) { fish in
-            EditFishView(fish: fish, fishNames: existingFishNames)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+            LinkSightingSheet(fish: fish)
+                .standardSheetPresentation()
+        }
+        .sheet(item: $shownSpecies) { species in
+            SpeciesSheet(species: species, numberMap: speciesPageNumberMap, showDiveList: nil)
+                .standardSheetPresentation()
         }
         .sheet(isPresented: $showAddGear) {
             AddGearToDiveView(dive: dive)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         .sheet(item: $selectedGearForDetail) { gear in
             GearServiceView(gear: gear)
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
         }
         #if os(iOS)
         .fileExporter(
@@ -481,7 +512,10 @@ struct DiveDetailView: View {
             showPhotosPicker = false
             showFileImporter = false
             showFileImportError = false
-            showFileTruncationAlert = false
+            photoImportResult = nil
+            pendingPhotoImportResult = nil
+            showConvertLegacyPhotosAlert = false
+            speciesProposals = []
             isEditingEquipment = false
             isEditingPhotos = false
             isEditingMarineLife = false
@@ -489,7 +523,7 @@ struct DiveDetailView: View {
             // Also clear transient targets so they can't point to the previous dive's items.
             selectedPhotoForPreview = nil
             gearToDelete = nil
-            photoIndexToDelete = nil
+            photoIDToDelete = nil
             fishToDelete = nil
             fishToEdit = nil
             showDeleteGearAlert = false
@@ -503,9 +537,11 @@ struct DiveDetailView: View {
             UIAccessibility.post(notification: .screenChanged, argument: announcement)
             #endif
         }
+        .onAppear { photoImportSession.isShown = true }
         .onDisappear {
             // Invalidate any pending async reset so it can't fire after the view leaves.
             unlockToken = UUID()
+            photoImportSession.isShown = false
         }
         #if os(iOS)
         .accessibilityAction(named: Text("Previous dive")) {
@@ -523,10 +559,14 @@ struct DiveDetailView: View {
         // Prevent overlapping navigations from rapid chevron taps.
         guard !isNavigating else { return }
         isNavigating = true
-        pendingDive = targetDive
         // Visual direction: "forward" means the incoming dive comes from the trailing edge.
         let rtl = layoutDirection == .rightToLeft
         let visualForward = rtl ? !forward : forward
+        // Set before pendingDive so the preview is first placed on the correct side while
+        // dragOffset is still 0; otherwise "next" starts on the left and slides across the
+        // outgoing dive instead of in from the right.
+        pendingEntersFromTrailing = visualForward
+        pendingDive = targetDive
         let targetOffset: CGFloat = visualForward ? -viewWidth : viewWidth
         #if os(iOS)
         hapticGenerator.impactOccurred()
@@ -547,93 +587,192 @@ struct DiveDetailView: View {
         }
     }
 
-    private var diveNavigationButtons: some View {
-        HStack(spacing: 4) {
-            Button {
-                if let prev = previousDiveInList { navigateTo(prev, forward: false) }
-            } label: {
-                Image(systemName: "chevron.left.circle")
-                    .font(.title3)
-                    .foregroundStyle(previousDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
-                    .padding(8)
-                    .contentShape(Rectangle())
-            }
-            .disabled(previousDiveInList == nil)
-            .help("Previous dive")
-            .accessibilityLabel(Text("Previous dive"))
-
-            Button {
-                if let next = nextDiveInList { navigateTo(next, forward: true) }
-            } label: {
-                Image(systemName: "chevron.right.circle")
-                    .font(.title3)
-                    .foregroundStyle(nextDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
-                    .padding(8)
-                    .contentShape(Rectangle())
-            }
-            .disabled(nextDiveInList == nil)
-            .help("Next dive")
-            .accessibilityLabel(Text("Next dive"))
+    #if os(macOS)
+    // Previous / next dive buttons (macOS replaces the iOS swipe-between-dives gesture).
+    // Each is its own ToolbarItem so toolbar overflow can manage them independently.
+    private var previousDiveButton: some View {
+        Button {
+            if let prev = previousDiveInList { navigateTo(prev, forward: false) }
+        } label: {
+            Image(systemName: "chevron.left")
+                .foregroundStyle(previousDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
         }
+        .disabled(previousDiveInList == nil)
+        .help("Previous dive")
+        .accessibilityLabel(Text("Previous dive"))
+    }
+
+    private var nextDiveButton: some View {
+        Button {
+            if let next = nextDiveInList { navigateTo(next, forward: true) }
+        } label: {
+            Image(systemName: "chevron.right")
+                .foregroundStyle(nextDiveInList != nil ? Color.cyan : Color.secondary.opacity(0.3))
+        }
+        .disabled(nextDiveInList == nil)
+        .help("Next dive")
+        .accessibilityLabel(Text("Next dive"))
+    }
+    #endif
+
+    // Export / Edit toolbar controls, shared by the iOS and macOS toolbar layouts.
+
+    private var exportDiveMenu: some View {
+        // Export menu
+        Menu {
+            Button {
+                exportToXML()
+            } label: {
+                Label("Export Dive to XML", systemImage: "doc.text")
+            }
+            Button {
+                exportToUDDF()
+            } label: {
+                Label("Export Dive to UDDF", systemImage: "doc.badge.gearshape")
+            }
+            Button {
+                exportToPDF()
+            } label: {
+                Label("Export Dive to PDF", systemImage: "doc.richtext")
+            }
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Export Dive"))
+    }
+
+    private var editDiveButton: some View {
+        // Edit button
+        Button {
+            showEditSheet = true
+        } label: {
+            Image(systemName: "pencil")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Edit Dive"))
     }
 
     // MARK: - Tab Bar
 
     private var diveTabBar: some View {
-        #if os(macOS)
-        // macOS : segmented control natif
-        Picker("", selection: $selectedTab) {
-            ForEach(DiveTab.visibleCases) { tab in
-                Label(tab.localizedName, systemImage: tab.icon).tag(tab)
-            }
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(Color.primary.opacity(0.05))
-        .animation(.easeInOut(duration: 0.2), value: selectedTab)
-        #else
-        // iOS : tab bar scrollable avec indicateur coloré
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(DiveTab.visibleCases) { tab in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedTab = tab
+        // Scrollable tab bar, the selected tab marked in its colour.
+        let tabs = DiveTab.visibleCases.filter { $0 != .samples || prefs.showSamplesTab }
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(tabs) { tab in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedTab = tab
+                            }
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: tab.icon)
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(selectedTab == tab ? tab.color : .secondary)
+                                Text(tab.localizedName)
+                                    .font(.caption2)
+                                    .fontWeight(selectedTab == tab ? .semibold : .regular)
+                                    .foregroundStyle(selectedTab == tab ? tab.color : .secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 20)
+                            .contentShape(Rectangle())
+                            .background(
+                                selectedTab == tab
+                                    ? tab.color.opacity(0.12)
+                                    : Color.clear
+                            )
+                            .animation(.easeInOut(duration: 0.2), value: selectedTab)
+                            .overlay(
+                                Rectangle()
+                                    .fill(selectedTab == tab ? tab.color : Color.clear)
+                                    .frame(height: 2),
+                                alignment: .bottom
+                            )
                         }
-                    } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 18))
-                                .foregroundStyle(selectedTab == tab ? tab.color : .secondary)
-                            Text(tab.localizedName)
-                                .font(.caption2)
-                                .fontWeight(selectedTab == tab ? .semibold : .regular)
-                                .foregroundStyle(selectedTab == tab ? tab.color : .secondary)
+                        .buttonStyle(.plain)
+                        .id(tab)
+                        .onScrollVisibilityChange(threshold: 0.95) { isVisible in
+                            if isVisible {
+                                fullyVisibleTabs.insert(tab)
+                            } else {
+                                fullyVisibleTabs.remove(tab)
+                            }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 20)
-                        .contentShape(Rectangle())
-                        .background(
-                            selectedTab == tab
-                                ? tab.color.opacity(0.12)
-                                : Color.clear
-                        )
-                        .animation(.easeInOut(duration: 0.2), value: selectedTab)
-                        .overlay(
-                            Rectangle()
-                                .fill(selectedTab == tab ? tab.color : Color.clear)
-                                .frame(height: 2),
-                            alignment: .bottom
-                        )
                     }
-                    .buttonStyle(.plain)
                 }
             }
+            // Tiles hidden past an edge: the bar is wider than an iPhone screen.
+            .onScrollGeometryChange(for: [Bool].self) { geometry in
+                // The visible part of the content, in content coordinates (insets included).
+                let visible = geometry.visibleRect
+                return [visible.minX > 1, visible.maxX < geometry.contentSize.width - 1]
+            } action: { _, hidden in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    tabBarHiddenLeading = hidden[0]
+                    tabBarHiddenTrailing = hidden[1]
+                }
+            }
+            // Fade the tiles under each arrow so the bar reads as continuing past the edge.
+            .mask {
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: tabBarHiddenLeading ? 36 : 0)
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: tabBarHiddenTrailing ? 36 : 0)
+                }
+            }
+            .overlay(alignment: .leading) {
+                if tabBarHiddenLeading {
+                    tabBarScrollArrow(systemName: "chevron.left") {
+                        // The last tile before the first fully visible one — or the first tile
+                        // itself when only its edge is cut off (it still counts as visible).
+                        guard let first = tabs.firstIndex(where: fullyVisibleTabs.contains) else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(tabs[max(first - 1, 0)], anchor: .center) }
+                    }
+                    .accessibilityLabel(Text("Scroll tabs left"))
+                    .transition(.opacity)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                if tabBarHiddenTrailing {
+                    tabBarScrollArrow(systemName: "chevron.right") {
+                        // The first tile after the last fully visible one — or the last tile
+                        // itself when only its edge is cut off (it still counts as visible).
+                        guard let last = tabs.lastIndex(where: fullyVisibleTabs.contains) else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(tabs[min(last + 1, tabs.count - 1)], anchor: .center) }
+                    }
+                    .accessibilityLabel(Text("Scroll tabs right"))
+                    .transition(.opacity)
+                }
+            }
+            // Keep the selected tab in view: the bar is wider than an iPhone screen, and a dive
+            // can open on a later tab (e.g. Marine Life, from a species).
+            .onAppear { proxy.scrollTo(selectedTab, anchor: .center) }
+            .onChange(of: selectedTab) { _, tab in
+                withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(tab, anchor: .center) }
+            }
         }
         .background(Color.primary.opacity(0.05))
-        #endif
+    }
+
+    /// A translucent edge arrow shown when more tab tiles are hidden in its direction.
+    private func tabBarScrollArrow(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                // A full-height translucent strip, the same height as the tab bar.
+                .frame(width: 28)
+                .frame(maxHeight: .infinity)
+                .background(.ultraThinMaterial)
+                .contentShape(Rectangle())
+        }
+        .borderlessButton()
     }
 
     // MARK: - Edit Sheet Router
@@ -651,6 +790,14 @@ struct DiveDetailView: View {
             EditGazView(dive: dive, tankIndex: selectedTankIndex) { newIndex in
                 selectedTankIndex = newIndex
             }
+        case .marineLife:
+            // Marine life is added and removed with its card's own buttons.
+            noEditAvailableView(title: DiveTab.marineLife.localizedName,
+                                message: "Add or remove marine life with the buttons on its card.")
+        case .photos:
+            // Photos are added and removed with their card's own buttons.
+            noEditAvailableView(title: DiveTab.photos.localizedName,
+                                message: "Add or remove photos with the buttons on their card.")
         case .samples:
             // Samples come from a dive computer — no manual editing
             noEditAvailableView(title: DiveTab.samples.localizedName,
@@ -666,28 +813,6 @@ struct DiveDetailView: View {
 
     @ViewBuilder
     private func noEditAvailableView(title: LocalizedStringKey, message: LocalizedStringKey) -> some View {
-        #if os(macOS)
-        VStack(spacing: 20) {
-            HStack {
-                Spacer()
-                Button("Close") { showEditSheet = false }
-                    .keyboardShortcut(.escape, modifiers: [])
-            }
-            .padding()
-            Spacer()
-            Image(systemName: "lock.circle.fill")
-                .font(.system(size: 50))
-                .foregroundStyle(.secondary)
-            Text("Editing Not Available")
-                .font(.headline).foregroundStyle(.primary)
-            Text(message)
-                .font(.subheadline).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).padding(.horizontal, 30)
-            Spacer()
-        }
-        .frame(width: 400, height: 280)
-        .background(Color(NSColor.windowBackgroundColor))
-        #else
         NavigationStack {
             VStack(spacing: 20) {
                 Image(systemName: "lock.circle")
@@ -700,7 +825,7 @@ struct DiveDetailView: View {
                     .multilineTextAlignment(.center).padding(.horizontal, 30)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
             .navigationTitle(Text(title))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -711,7 +836,6 @@ struct DiveDetailView: View {
                 }
             }
         }
-        #endif
     }
 }
 
@@ -727,14 +851,22 @@ private struct NavTitleIfNotPreview: ViewModifier {
         if isSlidePreview {
             content
         } else {
-            #if os(iOS)
             content
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
-            #else
-            content
-                .navigationTitle(title)
-            #endif
         }
     }
+}
+
+/// State of a dive's photo import that must outlive `DiveDetailView`: the import's tasks hold
+/// it, and can still tell after an `await` whether the screen is shown and whether the
+/// re-import decision sheet has closed. Not observed by any view.
+@MainActor
+final class PhotoImportSession {
+    /// The dive screen is on screen.
+    var isShown = true
+    /// The re-import decision sheet is presented (until its dismissal has finished).
+    var decisionSheetOpen = false
+    /// The finished import's summary, waiting for the decision sheet to close.
+    var pendingSummary: (result: PhotoImporter.Result, diveID: PersistentIdentifier)?
 }

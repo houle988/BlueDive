@@ -1,0 +1,322 @@
+import SwiftUI
+
+struct WelcomeWizardView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var currentPage = 0
+    @State private var appeared = false
+
+    private let pages: [WelcomePage] = [
+        // Page 1: Getting dives in
+        WelcomePage(
+            icon: "water.waves",
+            iconColor: .cyan,
+            title: "Welcome to BlueDive",
+            subtitle: "Your modern personal dive logbook",
+            features: [
+                Feature(icon: "doc.badge.plus", color: .blue, title: "Import Formats", description: "Import from BlueDive XML, MacDive XML, UDDF, Subsurface, or Garmin FIT files — all major dive log formats supported."),
+                Feature(icon: "antenna.radiowaves.left.and.right", color: .cyan, title: "Bluetooth Sync", description: "Connect directly to your dive computer via Bluetooth to download dives wirelessly."),
+                Feature(icon: "plus.circle", color: .green, title: "Manual Entry", description: "Log dives manually with full control over date, depth, duration, and all details."),
+            ]
+        ),
+        // Page 2: Exploring & analyzing
+        WelcomePage(
+            icon: "chart.bar",
+            iconColor: .orange,
+            title: "Explore Your Data",
+            subtitle: "Powerful tools to analyze your dives",
+            features: [
+                Feature(icon: "chart.bar", color: .orange, title: "Dashboard", description: "View statistics, charts, and trends across all your dives."),
+                Feature(icon: "chart.bar.xaxis", color: .yellow, title: "Statistics", description: "Track lifetime totals, personal bests, and dive trends — depth, time, gas consumption, and more."),
+                Feature(icon: "map", color: .green, title: "Dive Map", description: "See all your dive sites plotted on an interactive world map."),
+                Feature(icon: "calendar", color: .purple, title: "Calendar Heatmap", description: "Visualize your diving activity over time."),
+                Feature(icon: "map", color: .teal, title: "Dive Trips", description: "Group your dives into trips and relive your dive travel adventures."),
+            ]
+        ),
+        // Page 3: Search, organize, manage
+        WelcomePage(
+            icon: "magnifyingglass",
+            iconColor: .blue,
+            title: "Search & Organize",
+            subtitle: "Find any dive in seconds",
+            features: [
+                Feature(icon: "line.3.horizontal.decrease.circle", color: .orange, title: "Search & Filters", description: "Search by site, buddy, country, or tag. Filter by year, depth, gas type, rating, and more."),
+                Feature(icon: "arrow.triangle.merge", color: .indigo, title: "Merge Dives", description: "Combine duplicate dive entries into a single, complete record."),
+                Feature(icon: "fish", color: .teal, title: "Marine Sightings", description: "Log fish and marine life spotted during each dive."),
+                Feature(icon: "cloud.sun", color: .yellow, title: "Online Weather", description: "BlueDive can fill in the weather, air temperature and wind for a dive from its GPS coordinates, using Open-Meteo.", descriptionSuffix: "You can change this anytime in Settings → Online Services."),
+                Feature(icon: "leaf", color: .green, title: "Species Catalogue", description: "BlueDive can fill in a species' classification (kingdom to species), common names, Wikipedia summary and a Creative Commons photo from iNaturalist. Only the species name is sent, when a species is created, edited or looked up.", descriptionSuffix: "You can change this anytime in Settings → Online Services."),
+            ]
+        ),
+        // Page 4: Gear & certifications
+        WelcomePage(
+            icon: "wrench.and.screwdriver",
+            iconColor: .gray,
+            title: "Track Your Gear",
+            subtitle: "Equipment, tanks & certifications",
+            features: [
+                Feature(icon: "wrench.and.screwdriver", color: .gray, title: "Equipment", description: "Track your gear with service dates and get automatic maintenance reminders."),
+                Feature(icon: "tray.2", color: .brown, title: "Gear Groups", description: "Organize equipment into groups — e.g. tropical kit, cold water setup."),
+                Feature(icon: "cylinder", color: .mint, title: "Tank Templates", description: "Save your favourite tank configurations for quick reuse."),
+                Feature(icon: "graduationcap", color: .blue, title: "Certifications", description: "Store diving certifications and get expiry alerts."),
+                Feature(icon: "shield", color: .green, title: "Diving Insurance", description: "Store your dive insurance policies and keep renewal dates at hand."),
+            ]
+        ),
+        // Page 5: Dive tools (Hidden – uncomment to re-enable calculators page)
+//        WelcomePage(
+//            icon: "checklist",
+//            iconColor: .red,
+//            title: "Dive Tools",
+//            subtitle: "Safety tools for every dive",
+//            features: [
+//                Feature(icon: "lungs.fill", color: .red, title: "Minimum Gas Calculator", description: "Calculate the minimum breathing gas needed to safely bring you and your buddy to the surface if either of you runs out of air at depth."),
+//                Feature(icon: "atom", color: .teal, title: "Gas Density Calculator", description: "Calculate the density of your breathing gas at depth. Colour-coded thresholds warn you when gas density may impair breathing and increase CO₂ retention risk."),
+//            ]
+//        ),
+        // Page 6: Sync, export, profile, settings
+        WelcomePage(
+            icon: "gear",
+            iconColor: .cyan,
+            title: "Your Data, Your Way",
+            subtitle: "Sync, export & personalize",
+            features: [
+                Feature(icon: "icloud", color: .cyan, title: "iCloud Sync", description: "Your dives sync automatically across all your Apple devices."),
+                Feature(icon: "square.and.arrow.up", color: .indigo, title: "Export Anytime", description: "Export your logbook to XML, UDDF or PDF format whenever you need."),
+                Feature(icon: "rectangle.3.group", color: .blue, title: "Widgets", description: "Add BlueDive widgets to your Home Screen or desktop to start a new dive in one tap and see your dive count and diver stats."),
+                Feature(icon: "person.circle", color: .pink, title: "Diver Profile", description: "Keep your diver info, emergency contacts, and insurance details handy."),
+                Feature(icon: "gear", color: .gray, title: "Settings", description: "Choose your units (metric/imperial), appearance, language, and notification preferences."),
+                Feature(icon: "book", color: .blue, title: "Documentation", description: "Guides, tips, and reference material to help you get the most out of BlueDive.", url: wikiDocumentationURL),
+            ]
+        ),
+    ]
+
+    var body: some View {
+        ZStack {
+            // Background
+            LinearGradient(
+                colors: [Color.platformBackground, Color.cyan.opacity(0.06), Color.platformBackground],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Page content
+                #if os(iOS)
+                TabView(selection: $currentPage) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
+                        pageView(page)
+                            .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                #else
+                pageView(pages[currentPage])
+                    .id(currentPage)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: currentPage)
+                #endif
+
+                // Bottom controls
+                VStack(spacing: 20) {
+                    Divider().opacity(0.3).padding(.horizontal, 24)
+                    // Page indicators
+                    HStack(spacing: 8) {
+                        ForEach(0..<pages.count, id: \.self) { index in
+                            Capsule()
+                                .fill(index == currentPage ? Color.cyan : Color.primary.opacity(0.2))
+                                .frame(width: index == currentPage ? 24 : 8, height: 8)
+                                .animation(.spring(response: 0.3), value: currentPage)
+                        }
+                    }
+                    // The dots are purely decorative; this exposes the position they convey
+                    // visually as a single spoken element instead of dropping it entirely.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Page %lld of %lld", bundle: .forAppLanguage(), comment: "Announces the current page's position in the welcome wizard's page indicator"), currentPage + 1, pages.count)))
+
+                    // Buttons
+                    HStack {
+                        if currentPage > 0 {
+                            Button {
+                                #if os(iOS)
+                                currentPage -= 1
+                                #else
+                                withAnimation { currentPage -= 1 }
+                                #endif
+                            } label: {
+                                Text("Back")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                                    // The padding responds too, not only the text.
+                                    .contentShape(Rectangle())
+                            }
+                            .transition(.opacity)
+                            .borderlessButton()
+                        }
+
+                        Spacer()
+
+                        Button {
+                            if currentPage < pages.count - 1 {
+                                #if os(iOS)
+                                currentPage += 1
+                                #else
+                                withAnimation { currentPage += 1 }
+                                #endif
+                            } else {
+                                hasCompletedOnboarding = true
+                                dismiss()
+                            }
+                        } label: {
+                            Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 32)
+                                .padding(.vertical, 12)
+                                .background(
+                                    Capsule().fill(Color.cyan)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 24)
+
+                    // Skip
+                    if currentPage < pages.count - 1 {
+                        Button {
+                            hasCompletedOnboarding = true
+                            dismiss()
+                        } label: {
+                            Text("Skip")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.25), value: currentPage)
+                .padding(.top, 8)
+                .padding(.bottom, 40)
+                .padding(.horizontal, 8)
+            }
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 20)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5)) {
+                appeared = true
+            }
+        }
+    }
+
+    // MARK: - Page View
+
+    private func pageView(_ page: WelcomePage) -> some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                Spacer().frame(height: 20)
+
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(page.iconColor.opacity(0.12))
+                        .frame(width: 90, height: 90)
+
+                    Image(systemName: page.icon)
+                        .font(.system(size: 40))
+                        .foregroundStyle(page.iconColor)
+                        .accessibilityHidden(true)
+                }
+
+                // Title & subtitle
+                VStack(spacing: 6) {
+                    Text(page.title)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.center)
+
+                    Text(page.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                // Feature rows
+                VStack(spacing: 14) {
+                    ForEach(page.features) { feature in
+                        featureRow(feature)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+
+                Spacer()
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    // MARK: - Feature Row
+
+    private func featureRow(_ feature: Feature) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(feature.color.opacity(0.12))
+                    .frame(width: 42, height: 42)
+
+                Image(systemName: feature.icon)
+                    .font(.body)
+                    .foregroundStyle(feature.color)
+                    .accessibilityHidden(true)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(feature.title)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+
+                // A suffix is a separate, shared sentence (translated once), joined here.
+                (feature.descriptionSuffix.map { Text(feature.description) + Text(verbatim: " ") + Text($0) }
+                    ?? Text(feature.description))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let link = feature.url {
+                    ExternalLinkView(url: link)
+                        .padding(.top, 2)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .sectionCardBackground()
+    }
+}
+
+// MARK: - Data Models
+
+private struct WelcomePage {
+    let icon: String
+    let iconColor: Color
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
+    let features: [Feature]
+}
+
+private struct Feature: Identifiable {
+    let id = UUID()
+    let icon: String
+    let color: Color
+    let title: LocalizedStringKey
+    let description: LocalizedStringKey
+    var descriptionSuffix: LocalizedStringKey? = nil
+    var url: URL? = nil
+}

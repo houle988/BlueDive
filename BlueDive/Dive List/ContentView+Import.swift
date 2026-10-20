@@ -1,0 +1,1619 @@
+import SwiftUI
+import SwiftData
+import UniformTypeIdentifiers
+import os
+
+// MARK: - Import File Type
+
+/// Identifies which parser to invoke for a given import file.
+enum ImportFileType {
+    case macDive
+    case blueDive
+    case uddf
+    case gearCSV
+    case garminFIT
+    case subsurface
+}
+
+// MARK: - File Import Coordinator
+
+/// Wraps a gear/certification/insurance XML payload delivered via file association.
+/// Equality is by ID so SwiftUI onChange comparisons are O(1).
+struct PendingXMLImport: Equatable {
+    let id: UUID
+    let data: Data
+    let fileName: String
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+}
+
+/// Holds a pending file URL delivered by the OS when the user opens a .fit or .uddf
+/// file from Files, Mail, AirDrop, or any share sheet. Injected into the SwiftUI
+/// environment by BlueDiveApp so ContentView can consume it regardless of whether
+/// the app was cold-launched or already running.
+@Observable
+final class FileImportCoordinator {
+    var pendingURL: URL?
+    /// True once the app has been opened with a URL this session (a file, or a widget
+    /// deep link). The sheets those open are owned by ContentView/GearListView/DocumentsView,
+    /// so MainTabView holds back the one-time Online Services prompt for the session rather
+    /// than present an alert that would collide with them.
+    private(set) var receivedExternalOpen = false
+
+    /// Called by BlueDiveApp for every URL the app is opened with.
+    func noteExternalOpen() { receivedExternalOpen = true }
+    var pendingGearXML: PendingXMLImport?
+    var pendingCertXML: PendingXMLImport?
+    var pendingInsuranceXML: PendingXMLImport?
+    var pendingSpeciesXML: PendingXMLImport?
+}
+
+// MARK: - Import Error
+
+enum ImportError: LocalizedError {
+    case accessDenied
+    case parsingFailed
+    case noValidDives
+    case fileSelectionFailed(Error)
+    case saveFailed(Error)
+    case unsupportedFormat
+    case subsurfaceUnsupportedVersion
+
+    var errorDescription: String? {
+        let bundle = Bundle.forAppLanguage()
+        switch self {
+        case .accessDenied:
+            return NSLocalizedString("Unable to access the selected file.", bundle: bundle, comment: "")
+        case .parsingFailed:
+            return NSLocalizedString("The file could not be read correctly.", bundle: bundle, comment: "")
+        case .noValidDives:
+            return NSLocalizedString("No dives with a valid date were found in this file.", bundle: bundle, comment: "Error shown when every dive in the imported file is missing a date and is therefore skipped.")
+        case .fileSelectionFailed(let error):
+            let fmt = NSLocalizedString("Selection error: %@", bundle: bundle, comment: "")
+            return String(format: fmt, error.localizedDescription)
+        case .saveFailed(let error):
+            let fmt = NSLocalizedString("Save error: %@", bundle: bundle, comment: "")
+            return String(format: fmt, error.localizedDescription)
+        case .unsupportedFormat:
+            return NSLocalizedString("Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, Subsurface XML, and Garmin FIT.", bundle: bundle, value: "Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, Subsurface XML, and Garmin FIT.", comment: "Error message displayed when an unsupported file format is selected for import.")
+        case .subsurfaceUnsupportedVersion:
+            return NSLocalizedString("This Subsurface file uses an old format (version 2) that is not supported. Re-export it from Subsurface 4.6 or later.", bundle: bundle, value: "This Subsurface file uses an old format (version 2) that is not supported. Re-export it from Subsurface 4.6 or later.", comment: "Error shown when importing a Subsurface version 2 file, which is not supported.")
+        }
+    }
+}
+
+// MARK: - Gear Import Helpers
+
+struct GearSnapshot: Sendable {
+    let id: UUID
+    let name: String
+    let category: String
+    let diverName: String
+    let serialNumber: String?
+}
+
+private let gearSentinelSerials: Set<String> = ["n/a", "na", "unknown", "none", "0", "00", "-", "--"]
+
+private func normalizedGearSerial(_ s: String?) -> String? {
+    guard let trimmed = s?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+    return gearSentinelSerials.contains(trimmed.lowercased()) ? nil : trimmed
+}
+
+/// Returns the O(1) match key for a gear item, mirroring the logic in `Gear.matches()`.
+/// Gear WITH serial:    `"s:<lowercasedTrimmedName>|<category>|<lowercasedNormSerial>"`
+/// Gear WITHOUT serial: `"d:<lowercasedTrimmedName>|<category>|<lowercasedTrimmedDiver>"`
+private func gearMatchKey(name: String, category: String, diverName: String, serial: String?) -> String {
+    let n = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if let s = normalizedGearSerial(serial) {
+        return "s:\(n)|\(category)|\(s.lowercased())"
+    }
+    let d = diverName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    return "d:\(n)|\(category)|\(d)"
+}
+
+@ModelActor
+actor GearSnapshotReader {
+    func snapshots() throws -> [GearSnapshot] {
+        // Every app context carries a "BlueDive." author (CLAUDE.md), even read-only ones.
+        modelContext.author = "BlueDive.gearSnapshot"
+        return try modelContext.fetch(FetchDescriptor<Gear>()).map {
+            GearSnapshot(id: $0.id, name: $0.name, category: $0.category, diverName: $0.diverName, serialNumber: $0.serialNumber)
+        }
+    }
+}
+
+// MARK: - ContentView Import Extension
+
+extension ContentView {
+
+    func handleFileImport(result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            Task {
+                guard url.startAccessingSecurityScopedResource() else {
+                    await MainActor.run {
+                        importError = .accessDenied
+                        showErrorAlert = true
+                    }
+                    return
+                }
+                let rawData = try? Data(contentsOf: url)
+                url.stopAccessingSecurityScopedResource()
+                await MainActor.run { routeImportData(rawData, url: url) }
+            }
+        case .failure(let error):
+            importError = .fileSelectionFailed(error)
+            showErrorAlert = true
+        }
+    }
+
+    /// Handles a file URL delivered by the OS via document association (Files app, share
+    /// sheet, AirDrop, Mail). Unlike handleFileImport, there is no guarantee the URL is a
+    /// security-scoped bookmark: Inbox copies are directly readable, while iCloud/Files
+    /// routes can be security-scoped. The defensive start/stop dance is a harmless no-op
+    /// for the former and mandatory for the latter.
+    func handleExternalFileURL(_ url: URL) {
+        Task {
+            let accessed = url.startAccessingSecurityScopedResource()
+            let rawData = try? Data(contentsOf: url)
+            if accessed { url.stopAccessingSecurityScopedResource() }
+            guard let rawData else {
+                await MainActor.run { importError = .accessDenied; showErrorAlert = true }
+                return
+            }
+            await MainActor.run { routeImportData(rawData, url: url) }
+        }
+    }
+
+    /// Detects the format of rawData and sets pendingImport (or shows an error).
+    /// Must be called on the main actor; both handleFileImport and handleExternalFileURL
+    /// dispatch here via await MainActor.run {}.
+    @MainActor
+    private func routeImportData(_ rawData: Data?, url: URL) {
+        // Scan the first 4 KB — all format signatures appear near the top.
+        let snippet = rawData.flatMap { String(data: $0.prefix(4096), encoding: .utf8) } ?? ""
+
+        // ── Format detection ──────────────────────────────────────────────
+        // Priority order matters: check the most specific signatures first.
+
+        // 0. Garmin FIT — binary format; check raw bytes before UTF-8 decode.
+        //    FIT signature: ".FIT" (0x2E 0x46 0x49 0x54) at byte offset 8.
+        let isGarminFIT: Bool = {
+            guard let data = rawData, data.count >= 12 else { return false }
+            let sig = data.subdata(in: 8..<12)
+            return sig.elementsEqual([0x2E, 0x46, 0x49, 0x54])
+                || url.pathExtension.lowercased() == "fit"
+        }()
+
+        // 1. BlueDive dive-log XML — our own dive export format.
+        //    Requires both the software tag AND the <blueDiveExport> root element to avoid
+        //    falsely matching gear/cert/insurance XML (which also include <software>BlueDive</software>).
+        //    The .bluedive extension is treated as a dive log only when the content does NOT
+        //    match a more-specific auxiliary type: ExportableFileDocument.writableContentTypes
+        //    includes .blueDiveXML (conforms to public.xml), so iOS can resolve contentType:.xml
+        //    to .blueDiveXML and save gear/cert/insurance exports with a .bluedive extension.
+        //    Fingerprint exports (Settings → Bluetooth Import) are also saved as .bluedive; they
+        //    are excluded here and routed to the fingerprint import flow below.
+        let isFingerprintXML = snippet.contains("<blueDiveFingerprintExport>")
+        let isBlueDive = !isFingerprintXML && ((snippet.contains("<software>BlueDive</software>") && snippet.contains("<blueDiveExport>"))
+            || (url.pathExtension.lowercased() == "bluedive"
+                && !snippet.contains("<blueDiveGearExport>")
+                && !snippet.contains("<blueDiveCertificationExport>")
+                && !snippet.contains("<blueDiveInsuranceExport>")
+                && !snippet.contains("<blueDiveSpeciesExport>")))
+
+        // 1a. BlueDive auxiliary XML types — gear, certification, insurance and species exports.
+        //     Checked after isBlueDive to avoid double-matching.
+        let isGearXML        = !isBlueDive && snippet.contains("<blueDiveGearExport>")
+        let isCertXML        = !isBlueDive && !isGearXML && snippet.contains("<blueDiveCertificationExport>")
+        let isInsuranceXML   = !isBlueDive && !isGearXML && !isCertXML && snippet.contains("<blueDiveInsuranceExport>")
+        let isSpeciesXML     = !isBlueDive && !isGearXML && !isCertXML && !isInsuranceXML && snippet.contains("<blueDiveSpeciesExport>")
+
+        // 2. UDDF — identified by <uddf root element or .uddf extension.
+        //    Checked before MacDive because UDDF files exported by MacDive
+        //    may contain "mac-dive.com" in their <generator> section.
+        let isUDDF = !isBlueDive && (
+            snippet.contains("<uddf")
+            || url.pathExtension.lowercased() == "uddf"
+        )
+
+        // 3. Subsurface XML — identified by program='subsurface' or program="subsurface"
+        //    in the root <divelog> element, or by the .ssrf extension.
+        //    Checked before MacDive to prevent the loose mac-dive.com fallback
+        //    from matching files that happen to contain that string. Also excludes the
+        //    BlueDive auxiliary XML types so a gear/cert/insurance export can never be
+        //    misrouted here even if its payload happened to contain "program=".
+        let isSubsurface = !isBlueDive && !isUDDF && !isGearXML && !isCertXML && !isInsuranceXML && !isSpeciesXML && (
+            snippet.contains("program='subsurface'")
+            || snippet.contains("program=\"subsurface\"")
+            || url.pathExtension.lowercased() == "ssrf"
+        )
+
+        // 4. MacDive XML — identified by its DOCTYPE declaration.
+        //    A species export is excluded: its notes may mention mac-dive.com.
+        let isMacDive = !isBlueDive && !isUDDF && !isSubsurface && !isSpeciesXML && (
+            snippet.contains("<!DOCTYPE dives SYSTEM \"http://www.mac-dive.com/macdive_logbook.dtd\">")
+            || snippet.contains("mac-dive.com")
+        )
+
+        if isFingerprintXML {
+            // BlueDive fingerprint XML — imported here with the same flow as
+            // Settings → Bluetooth Import (preview, then add the devices not stored yet).
+            if let data = rawData {
+                pendingFingerprintImport = FingerprintImportRequest(fileName: url.lastPathComponent, content: .success(data))
+            }
+
+        } else if isGarminFIT {
+            // Garmin FIT — SI units are embedded; show the options sheet
+            // for confirm/cancel parity with UDDF (no unit pickers, no gear toggle).
+            let options = ImportFormatOptions()
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .garminFIT)
+            }
+
+        } else if isBlueDive {
+            // BlueDive XML — units are stored inside the file but we
+            // still show the import sheet so the user can toggle gear import.
+            let options = ImportFormatOptions()
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .blueDive)
+            }
+
+        } else if isUDDF {
+            // UDDF — units are always SI (converted to metric by the parser)
+            // but we still show the import sheet so the user can toggle gear import.
+            let options = ImportFormatOptions()
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .uddf)
+            }
+
+        } else if isSubsurface {
+            // Subsurface XML — always metric (like UDDF); show the import sheet
+            // so the user can toggle gear import. Dive computers listed in
+            // <settings><divecomputerid> are imported as Gear items when enabled.
+            let options = ImportFormatOptions()
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options, fileType: .subsurface)
+            }
+
+        } else if isMacDive {
+            // MacDive XML — units are ambiguous, show the picker first.
+            let options: ImportFormatOptions
+            if let data = rawData,
+               let detected = DetectedUnitSystem.detect(from: data) {
+                options = detected.formatOptions
+            } else {
+                options = ImportFormatOptions()
+            }
+            importFormatOptions = options
+            if let data = rawData {
+                pendingImport = PendingImport(url: url, data: data, formatOptions: options)
+            }
+
+        } else if isGearXML {
+            // BlueDive Gear XML — route to Equipment tab via coordinator + notification.
+            if let data = rawData {
+                importCoordinator.pendingGearXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
+                NotificationCenter.default.post(name: .importGearXML, object: nil)
+            }
+
+        } else if isCertXML {
+            // BlueDive Certification XML — route to Documents tab via coordinator + notification.
+            if let data = rawData {
+                importCoordinator.pendingCertXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
+                NotificationCenter.default.post(name: .importCertificationXML, object: nil)
+            }
+
+        } else if isInsuranceXML {
+            // BlueDive Insurance XML — route to Documents tab via coordinator + notification.
+            if let data = rawData {
+                importCoordinator.pendingInsuranceXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
+                NotificationCenter.default.post(name: .importInsuranceXML, object: nil)
+            }
+
+        } else if isSpeciesXML {
+            // BlueDive species catalogue XML — route to Marine Life tab via coordinator + notification.
+            if let data = rawData {
+                importCoordinator.pendingSpeciesXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
+                NotificationCenter.default.post(name: .importSpeciesXML, object: nil)
+            }
+
+        } else {
+            // Unrecognised format — inform the user.
+            importError = .unsupportedFormat
+            showErrorAlert = true
+        }
+    }
+
+    func importDiveFile(from url: URL, preloadedData: Data? = nil, formats: ImportFormatOptions?, fileType: ImportFileType) {
+        isImporting = true
+
+        Task {
+            do {
+                let data: Data
+                if let preloaded = preloadedData {
+                    data = preloaded
+                } else {
+                    guard url.startAccessingSecurityScopedResource() else {
+                        throw ImportError.accessDenied
+                    }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    data = try Data(contentsOf: url)
+                }
+
+                let chosenFormats = formats ?? ImportFormatOptions()
+                let parsedDives: [BlueDiveGlobalData] = try await withCheckedThrowingContinuation { continuation in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        do {
+                            let result = try self.parseImportData(data, fileType: fileType, formats: chosenFormats)
+                            continuation.resume(returning: result)
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                }
+
+                await MainActor.run {
+                    routeParsedDives(parsedDives, fileName: url.lastPathComponent, createsSpecies: chosenFormats.importSpecies)
+                }
+
+            } catch let error as ImportError {
+                await MainActor.run {
+                    isImporting = false
+                    importProgressFileName = ""
+                    importError = error
+                    showErrorAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    isImporting = false
+                    importProgressFileName = ""
+                    importError = .saveFailed(error)
+                    showErrorAlert = true
+                }
+            }
+        }
+    }
+
+    // MARK: - Parsing
+
+    // Parse and insert are kept separate so duplicate detection can run between them.
+    // Dives without a date are silently dropped — they cannot be reliably deduplicated
+    // and a timestamp is mandatory for a valid logbook entry.
+    private func parseImportData(
+        _ data: Data,
+        fileType: ImportFileType,
+        formats: ImportFormatOptions
+    ) throws -> [BlueDiveGlobalData] {
+        let parsed: [BlueDiveGlobalData]
+        switch fileType {
+        case .macDive:
+            parsed = try parseMacDiveXML(data: data, formats: formats)
+        case .blueDive:
+            parsed = try parseBlueDiveXML(data: data, importGear: formats.importGear)
+        case .uddf:
+            parsed = try parseUDDFXML(data: data, importGear: formats.importGear)
+        case .gearCSV:
+            throw ImportError.unsupportedFormat
+        case .garminFIT:
+            parsed = try parseGarminFIT(data: data)
+        case .subsurface:
+            parsed = try parseSubsurfaceXML(data: data, importGear: formats.importGear)
+        }
+        return parsed.filter { $0.date != nil }
+    }
+
+    private func parseMacDiveXML(data: Data, formats: ImportFormatOptions) throws -> [BlueDiveGlobalData] {
+        let parser = MacDiveXMLParser()
+        parser.distanceFormat    = formats.distanceFormat
+        parser.temperatureFormat = formats.temperatureFormat
+        parser.pressureFormat    = formats.pressureFormat
+        parser.volumeFormat      = formats.volumeFormat
+        parser.weightFormat      = formats.weightFormat
+        parser.importGear        = formats.importGear
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    private func parseBlueDiveXML(data: Data, importGear: Bool) throws -> [BlueDiveGlobalData] {
+        // The species the sightings link to come first in the file (`<speciesCatalogue>`):
+        // read up to the dives, then handed to the dive parser. Absent in older files.
+        let species = SpeciesXMLParser(containerPath: ["blueDiveExport", "speciesCatalogue"],
+                                       stopElements: ["dives", "dive"]).parse(data: data) ?? []
+        let parser = BlueDiveXMLParser()
+        parser.importGear = importGear
+        parser.speciesByID = Dictionary(species.compactMap { item in item.id.map { ($0, item) } },
+                                        uniquingKeysWith: { first, _ in first })
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    private func parseGarminFIT(data: Data) throws -> [BlueDiveGlobalData] {
+        let parser = GarminFITParser()
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    private func parseUDDFXML(data: Data, importGear: Bool) throws -> [BlueDiveGlobalData] {
+        let parser = UDDFXMLParser()
+        parser.importGear = importGear
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    private func parseSubsurfaceXML(data: Data, importGear: Bool) throws -> [BlueDiveGlobalData] {
+        let parser = SubsurfaceXMLParser()
+        parser.importGear = importGear
+        guard let parsedData = parser.parse(data: data), !parsedData.isEmpty else {
+            if parser.rejectedUnsupportedVersion {
+                throw ImportError.subsurfaceUnsupportedVersion
+            }
+            throw ImportError.parsingFailed
+        }
+        return parsedData
+    }
+
+    // MARK: - Duplicate Detection
+
+    @MainActor
+    /// `createsSpecies`: Import Species (BlueDive XML); see `SpeciesImportResolver`.
+    func routeParsedDives(_ parsed: [BlueDiveGlobalData], fileName: String, createsSpecies: Bool = true) {
+        guard !parsed.isEmpty else {
+            isImporting = false
+            importProgressFileName = ""
+            importError = .noValidDives
+            showErrorAlert = true
+            return
+        }
+        let duplicates = findDuplicateMatches(in: parsed)
+        if duplicates.isEmpty {
+            commitParsedDives(parsed, indices: Array(parsed.indices), fileName: fileName, createsSpecies: createsSpecies)
+        } else {
+            isImporting = false
+            importProgressFileName = ""
+            pendingDuplicateImport = PendingDuplicateImport(
+                parsedDives: parsed,
+                duplicates: duplicates,
+                fileName: fileName,
+                createsSpecies: createsSpecies
+            )
+        }
+    }
+
+    @MainActor
+    func commitParsedDives(_ parsed: [BlueDiveGlobalData], indices: [Int], fileName: String, createsSpecies: Bool = true) {
+        isImporting = true
+        importProgressFileName = fileName
+        let container = modelContext.container
+        Task {
+            // defer guarantees the overlay resets on every exit path — normal completion,
+            // a SwiftData save trap, or any other unhandled error inside the do block.
+            defer {
+                isImporting = false
+                importProgressFileName = ""
+                importProgressTotal = 0
+                importProgressCurrent = 0
+            }
+
+            // Fetch gear snapshots on a background ModelActor — non-blocking on the main actor.
+            // Snapshot data is value-typed (Sendable) so it crosses the actor boundary safely.
+            var snapshotByID: [UUID: GearSnapshot] = [:]
+            var snapshotByMatchKey: [String: GearSnapshot] = [:]
+            if let snaps = try? await GearSnapshotReader(modelContainer: container).snapshots() {
+                for snap in snaps {
+                    snapshotByID[snap.id] = snap
+                    snapshotByMatchKey[gearMatchKey(name: snap.name, category: snap.category, diverName: snap.diverName, serial: snap.serialNumber)] = snap
+                }
+            }
+
+            // Set total before sleeping so the progress bar appears during the sheet-dismiss
+            // animation rather than showing a spinner for the full 350 ms pause.
+            importProgressCurrent = 0
+            importProgressTotal = indices.count
+
+            // Free the main actor for ~350 ms so the duplicate-sheet dismiss animation and the
+            // overlay fade-in can both complete before the heavy insert loop begins. Without this
+            // pause the first 50 synchronous inserts block CoreAnimation and the sheet hangs.
+            try? await Task.sleep(nanoseconds: 350_000_000)
+
+            // Lazy cache: actual Gear objects from the main context, fetched by UUID on first use.
+            var resolvedGearByID: [UUID: Gear] = [:]
+
+            // Pre-resolve diver names for every dive. FIT files carry a device serial but may omit a
+            // UserProfile name; we look up the gear computer by serial to find the associated diver.
+            // Results are cached by serial so a batch from the same device triggers only one DB fetch.
+            var gearNameBySerial: [String: String] = [:]
+            var resolvedDiverNameByIndex: [Int: String] = [:]
+            for idx in indices {
+                guard parsed.indices.contains(idx) else { continue }
+                let embedded = parsed[idx].diver?.trimmingCharacters(in: .whitespaces) ?? ""
+                if !embedded.isEmpty {
+                    resolvedDiverNameByIndex[idx] = embedded
+                } else if let serial = parsed[idx].serial?.trimmingCharacters(in: .whitespaces), !serial.isEmpty {
+                    if let cached = gearNameBySerial[serial] {
+                        resolvedDiverNameByIndex[idx] = cached
+                    } else {
+                        let name = resolveGearDiverName(forSerial: serial, in: modelContext)
+                        gearNameBySerial[serial] = name
+                        resolvedDiverNameByIndex[idx] = name
+                    }
+                } else {
+                    resolvedDiverNameByIndex[idx] = ""
+                }
+            }
+
+            // Find the highest existing dive number per diver so imported dives without one
+            // continue their own diver's sequence independently. Build the set of unique diver
+            // names that need auto-numbering, then query each bucket's max once before the loop.
+            // Dives that already carry a number from the source file are skipped entirely.
+            let diverNamesNeedingNumbers: Set<String> = Set(indices.compactMap { idx -> String? in
+                guard parsed.indices.contains(idx), parsed[idx].diveNumber == nil else { return nil }
+                return resolvedDiverNameByIndex[idx] ?? ""
+            })
+            var nextAutoNumberByDiver: [String: Int] = [:]
+            for diverName in diverNamesNeedingNumbers {
+                let targetName = diverName
+                var diverDescriptor = FetchDescriptor<Dive>(
+                    predicate: #Predicate<Dive> { dive in
+                        dive.diveNumber != nil && dive.diverName == targetName
+                    },
+                    sortBy: [SortDescriptor(\Dive.diveNumber, order: .reverse)]
+                )
+                diverDescriptor.fetchLimit = 1
+                let highest = (try? modelContext.fetch(diverDescriptor).first?.diveNumber) ?? 0
+                nextAutoNumberByDiver[diverName] = highest + 1
+            }
+
+            // The catalogue, indexed once for the whole import: a sighting carrying its species
+            // (BlueDive XML) is linked to that species, created when missing unless Import Species
+            // is off; any other sighting to the existing species known by its name (never to a
+            // new one).
+            let speciesResolver = SpeciesImportResolver(context: modelContext, allowsCreation: createsSpecies)
+
+            var batch = 0
+            for index in indices {
+                guard parsed.indices.contains(index) else { continue }
+                var autoNumber: Int? = nil
+                if parsed[index].diveNumber == nil {
+                    let diverName = resolvedDiverNameByIndex[index] ?? ""
+                    let current = nextAutoNumberByDiver[diverName] ?? 1
+                    autoNumber = current
+                    nextAutoNumberByDiver[diverName] = current + 1
+                }
+                insertParsedDive(parsed[index], assignedDiveNumber: autoNumber, overrideDiverName: resolvedDiverNameByIndex[index], fileName: fileName, speciesResolver: speciesResolver, snapshotByID: &snapshotByID, snapshotByMatchKey: &snapshotByMatchKey, resolvedGearByID: &resolvedGearByID)
+                batch += 1
+                importProgressCurrent = batch
+                if batch % 25 == 0 {
+                    try? await Task.sleep(nanoseconds: 2_000_000)
+                }
+            }
+            importProgressCurrent = indices.count
+            // Thumbnails for the images of the species the file carried (made off the main actor).
+            await SpeciesXMLImport.addMissingThumbnails(to: speciesResolver.created.map(\.species))
+            do {
+                try modelContext.save()
+                // Species created from the file also take the sightings already in the logbook
+                // that are not in the catalogue and were recorded under one of their names, as
+                // the species catalogue import does; then the ones not linked to iNaturalist are
+                // looked up in the background when lookups are on. The dives and species are
+                // saved at this point: a failure here only undoes these links (Marine Life →
+                // Build Catalogue from Sightings makes them later), so it is logged, not shown
+                // as a failed import.
+                if !speciesResolver.created.isEmpty {
+                    if await speciesResolver.linkUnlinkedSightings() > 0 {
+                        do {
+                            try modelContext.save()
+                        } catch {
+                            modelContext.rollback()
+                            BlueDiveApp.logger.error("❌ Linking existing sightings to imported species failed: \(error.localizedDescription)")
+                        }
+                    }
+                    INaturalistUpdater.updateInBackground(speciesResolver.created.map(\.species), in: modelContext)
+                }
+                if UserDefaults.standard.bool(forKey: "notificationsEnabled"),
+                   UserDefaults.standard.object(forKey: "milestoneNotifications") as? Bool ?? false {
+                    let totalDives = (try? modelContext.fetchCount(FetchDescriptor<Dive>())) ?? 0
+                    NotificationManager.shared.notifyMilestoneAchieved(totalDives: totalDives)
+                }
+            } catch {
+                importError = .saveFailed(error)
+                showErrorAlert = true
+            }
+        }
+    }
+
+    @MainActor
+    func findDuplicateMatches(in parsed: [BlueDiveGlobalData]) -> [DuplicateImportMatch] {
+        // Every dive, read once (`dives` filters the store's latest delivery on each access).
+        let dives = self.dives
+        // Build lookup structures once so per-dive matching is O(1) instead of O(N).
+        // divesByIdentifierLowercased: lowercased for case-insensitive O(1) lookup. One-to-many because
+        // multiple existing dives can share the same identifier (e.g. after a prior double-import or
+        // MacDive sequential IDs colliding across devices). Best match chosen by temporal proximity.
+        var divesByIdentifierLowercased: [String: [Dive]] = [:]
+        for d in dives {
+            let id = (d.identifier ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty else { continue }
+            divesByIdentifierLowercased[id.lowercased(), default: []].append(d)
+        }
+        // Bucket existing dives by UTC minute; bucket radius is kept in sync with dateTolerance.
+        let divesByMinute: [Int: [Dive]] = Dictionary(grouping: dives) {
+            Int($0.timestamp.timeIntervalSince1970 / 60)
+        }
+        // Keyed by SwiftData record id (lowercased) — distinct from Dive.identifier (per-dive
+        // computer ID). This is the permanent primary matcher for BLE/manual dives, whose
+        // identifier is nil by design (no dive computer assigns them one). The exporter writes
+        // <id> = dive.id.uuidString into every BlueDive XML, and Path A matches incoming.recordID
+        // against this dict. Not a temporary shim — do not collapse into divesByIdentifierLowercased.
+        let divesByRecordID: [String: Dive] = Dictionary(
+            dives.map { ($0.id.uuidString.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first } // defensive — SwiftData PKs are globally unique
+        )
+        // Pre-normalized serial keyed by Dive.id — avoids re-normalizing on every candidate
+        // inside the identifier loop and heuristic filter. Sentinel serials are excluded
+        // (normalizedComputerSerial returns nil for them) so absent means sentinel-or-nil.
+        let normalizedSerialByDiveID: [UUID: String] = Dictionary(
+            dives.compactMap { d in
+                guard let s = d.computerSerialNumber?.normalizedComputerSerial() else { return nil }
+                return (d.id, s)
+            },
+            uniquingKeysWith: { first, _ in first } // defensive — SwiftData PKs are globally unique
+        )
+        // Keyed by serial (lowercased) → fingerprint → Dive.
+        // Reuses normalizedSerialByDiveID to avoid a second normalisation pass. Sentinel serials
+        // are excluded. Used by Path B when the UUID fast-exit misses (e.g. cross-device export/import).
+        let divesBySerialFingerprint: [String: [Data: Dive]] = {
+            var dict: [String: [Data: Dive]] = [:]
+            for d in dives {
+                guard let serial = normalizedSerialByDiveID[d.id],
+                      let fp = d.fingerprintData,
+                      !fp.isEmpty else { continue }
+                dict[serial, default: [:]][fp] = d
+            }
+            return dict
+        }()
+
+        var matches: [DuplicateImportMatch] = []
+        var consumedExistingIDs = Set<UUID>()
+        for (index, dive) in parsed.enumerated() {
+            guard let (existing, reason) = findExistingDuplicate(
+                for: dive,
+                excluding: consumedExistingIDs,
+                divesByIdentifierLowercased: divesByIdentifierLowercased,
+                divesByMinute: divesByMinute,
+                divesByRecordID: divesByRecordID,
+                divesBySerialFingerprint: divesBySerialFingerprint,
+                normalizedSerialByDiveID: normalizedSerialByDiveID
+            ) else { continue }
+            consumedExistingIDs.insert(existing.id)
+            matches.append(DuplicateImportMatch(
+                parsedIndex: index,
+                incomingDate: dive.date,
+                incomingSiteName: dive.site?.name ?? "",
+                incomingMaxDepth: dive.maxDepth,
+                incomingDuration: dive.duration / 60,
+                incomingDistanceUnit: dive.distanceFormat,
+                existing: existing,
+                reason: reason
+            ))
+        }
+        return matches
+    }
+
+    @MainActor
+    private func findExistingDuplicate(
+        for incoming: BlueDiveGlobalData,
+        excluding consumed: Set<UUID>,
+        divesByIdentifierLowercased: [String: [Dive]],
+        divesByMinute: [Int: [Dive]],
+        divesByRecordID: [String: Dive],
+        divesBySerialFingerprint: [String: [Data: Dive]],
+        normalizedSerialByDiveID: [UUID: String]
+    ) -> (Dive, DuplicateMatchReason)? {
+        let trimmedID = (incoming.identifier ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // MARK: BlueDive UUID fast-exit (Path A)
+        // Matches on <id> (the SwiftData UUID exported by BlueDiveXMLExporter) — distinct from
+        // <identifier> (computer-assigned ID). recordID is only populated by BlueDiveXMLParser;
+        // MacDive and UDDF parsers pass nil, so this block is naturally skipped for external imports.
+        // No sourceImport gate needed — recordID being non-nil is the definitive BlueDive XML signal.
+        //
+        // Note: DB rows created during the session window where Dive.init wrote identifier = id.uuidString
+        // (a since-reverted change) will emit both <id> = UUID and <identifier> = UUID. Path A matches
+        // on recordID first, so these rows still resolve correctly. No migration needed.
+        if let rid = incoming.recordID {
+            let loweredID = rid.lowercased()
+            let byRecordID = divesByRecordID[loweredID].flatMap { consumed.contains($0.id) ? nil : $0 }
+            if let match = byRecordID {
+                return (match, .sameRecord)
+            }
+        }
+
+        // MARK: BlueDive UUID legacy fast-exit (Path A-L)
+        // Old-format BlueDive XML (no <id> tag) wrote dive.id.uuidString into <identifier> as a
+        // fallback. When the identifier is a UUID, look it up in the same divesByRecordID dict as
+        // Path A — same PK, same evidence class, no profile check needed. Symmetric with Path A:
+        // new-format → A (UUID from <id>), old-format → A-L (UUID from <identifier>), then B.
+        // UUID(uuidString:) returns nil for MacDive sequential IDs ("42") and UDDF keys — safe.
+        if incoming.recordID == nil, UUID(uuidString: trimmedID) != nil {
+            let loweredID = trimmedID.lowercased()
+            let byRecordID = divesByRecordID[loweredID].flatMap { consumed.contains($0.id) ? nil : $0 }
+            if let match = byRecordID {
+                return (match, .sameRecordLegacy)
+            }
+        }
+
+        // Profile tolerances — shared by Path B, the identifier path, and the heuristic.
+        // BlueDiveGlobalData.duration is seconds; Dive.duration is stored in minutes (floor).
+        let depthToleranceMeters = 1.0
+        let durationToleranceMin = 2
+        let incomingDurationMin = incoming.duration / 60
+        let incomingDepthMeters = depthInMeters(incoming.maxDepth, unit: incoming.distanceFormat)
+
+        // MARK: Serial + fingerprint match (Path B)
+        // Not gated on sourceImport: any file (BlueDive, UDDF, re-exported) carrying serial +
+        // fingerprint benefits from this high-confidence path.
+        // Fires when the local DB holds a dive with the same serial+fingerprint but a different
+        // SwiftData id — e.g. a BLE-synced dive exported and re-imported on another device.
+        // Profile sanity (depth ±1m, duration ±2min) guards against fingerprint reuse after a
+        // firmware reset — a documented risk where firmware updates recycle fingerprint values for
+        // genuinely different dives. A recycled fingerprint always has a different profile; a
+        // genuine re-import always passes regardless of clock drift. On mismatch, fall through so
+        // the identifier/heuristic paths can still attempt a match.
+        if let serialKey = (incoming.serial ?? "").normalizedComputerSerial(),
+           let fp = incoming.fingerprintData, !fp.isEmpty,
+           let match = divesBySerialFingerprint[serialKey]?[fp],
+           !consumed.contains(match.id) {
+            let matchDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
+            if abs(matchDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
+               abs(match.duration - incomingDurationMin) <= durationToleranceMin {
+                return (match, .sameComputerAndFingerprint)
+            }
+            // Profile mismatch — suspected recycled fingerprint after firmware reset. Fall through.
+        }
+
+        // Tracks dives proven to belong to a different computer via identifier path.
+        // Prevents the heuristic path from re-matching a dive already ruled out by serial mismatch
+        // or a failed profile sanity check. Scoped per call so other incoming dives can still claim them.
+        var identifierRejectedIDs = Set<UUID>()
+
+        let dateTolerance: TimeInterval = 180
+
+        let incomingSiteName = (incoming.site?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let incomingSerial = (incoming.serial ?? "").normalizedComputerSerial() ?? ""
+        let incomingDiverName = (incoming.diver ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // MARK: Identifier path
+        // Computer UID survives unit changes and edits; lookup is O(1) via the pre-lowercased
+        // dict. Skipped entirely when incoming has no date (nil-date .min is non-deterministic).
+        // UUID identifiers from old-format BlueDive XML are intercepted by Path A-L above,
+        // so trimmedID here is always a non-UUID computer ID (MacDive "42", UDDF keys, etc.).
+        if !trimmedID.isEmpty, let incomingDate = incoming.date {
+            let loweredID = trimmedID.lowercased()
+            let idCandidates = divesByIdentifierLowercased[loweredID] ?? []
+
+            // H2: try all candidates in temporal order, not just the nearest one.
+            // A later candidate may have a better serial match even if the nearest one is rejected.
+            // M5: deterministic tiebreak on UUID string when two candidates are equidistant.
+            let sortedCandidates = idCandidates
+                .filter { !consumed.contains($0.id) }
+                .sorted { lhs, rhs in
+                    let dl = abs(lhs.timestamp.timeIntervalSince(incomingDate))
+                    let dr = abs(rhs.timestamp.timeIntervalSince(incomingDate))
+                    if dl != dr { return dl < dr }
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+
+            for match in sortedCandidates {
+                let existingSerial = normalizedSerialByDiveID[match.id] ?? ""
+                let bothSerialsMatch = !incomingSerial.isEmpty && !existingSerial.isEmpty && incomingSerial == existingSerial
+                // When both serials are confirmed equal, allow 24 h of clock drift / timezone
+                // ambiguity. Otherwise tighten to 2 h to reduce cross-diver false positives
+                // (MacDive uses sequential numbers like "42" as identifiers).
+                let dateLimit: TimeInterval = bothSerialsMatch ? deduplicationHighConfidenceWindow : deduplicationLowConfidenceWindow
+                let deltaT = abs(match.timestamp.timeIntervalSince(incomingDate))
+
+                // Candidates are sorted nearest-first, but dateLimit varies per candidate
+                // (a later candidate may have bothSerialsMatch and a larger window), so
+                // skip rather than break.
+                guard deltaT < dateLimit else { continue }
+
+                // Diver name discriminator: different name on a shared identifier means a
+                // different person's dive — reject and block the heuristic path.
+                // Skipped when both serials confirm the same physical device: serial identity
+                // is stronger evidence than a name string, which can legitimately differ across
+                // devices after a rename or different profile preferences on each device.
+                let existingDiverName = match.diverName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !bothSerialsMatch,
+                   !incomingDiverName.isEmpty, !existingDiverName.isEmpty,
+                   existingDiverName.compare(incomingDiverName, options: [.caseInsensitive, .diacriticInsensitive]) != .orderedSame {
+                    identifierRejectedIDs.insert(match.id)
+                    continue
+                }
+
+                let atLeastOneSerial = !incomingSerial.isEmpty || !existingSerial.isEmpty
+                let serialsCompatible = incomingSerial.isEmpty || existingSerial.isEmpty || incomingSerial == existingSerial
+
+                if atLeastOneSerial && serialsCompatible {
+                    if deltaT <= dateTolerance && bothSerialsMatch {
+                        // Both serials confirmed equal and within heuristic date window — maximum
+                        // confidence. Trust identifier + serial directly; no profile check needed.
+                        return (match, .sameComputerDiveID)
+                    }
+                    // Outside the heuristic window, or serials not both confirmed: require depth +
+                    // duration sanity before declaring .sameIdentifierAndProfile. Guards against firmware
+                    // resets that recycle dive IDs — even within a short time window.
+                    let existingDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
+                    if abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
+                       abs(match.duration - incomingDurationMin) <= durationToleranceMin {
+                        return (match, .sameIdentifierAndProfile)
+                    }
+                    // Profile validation failed — proven wrong dive despite matching identifier+serial.
+                    // Block the heuristic from re-matching this candidate.
+                    identifierRejectedIDs.insert(match.id)
+                } else if !serialsCompatible {
+                    // Hard serial mismatch — proven different computer.
+                    // Block the heuristic and continue to try the next identifier candidate.
+                    identifierRejectedIDs.insert(match.id)
+                }
+                // Both serials empty: fall through; heuristic will validate on profile.
+            }
+        }
+
+        // MARK: Heuristic path
+        // Fallback for files without identifiers (older MacDive exports, manual logs).
+        // Depth is normalised to metres so a metric re-import of an imperial dive still matches.
+        // 180 s (3 min) tolerates user-edited timestamps / clock-drift corrections while being
+        // narrow enough that two genuinely separate dives (minimum surface interval >> 3 min)
+        // cannot collide even at the same site with the same computer.
+        guard let date = incoming.date else { return nil }
+
+        // Bucket radius must cover the full dateTolerance window; kept in sync automatically.
+        let minuteKey = Int(date.timeIntervalSince1970 / 60)
+        let bucketRadius = Int(ceil(dateTolerance / 60))
+        let candidates = (minuteKey - bucketRadius ... minuteKey + bucketRadius).flatMap { divesByMinute[$0] ?? [] }
+
+        // When both sides have a non-empty site name, require them to match — avoids false
+        // positives for back-to-back resort/training dives with similar profiles.
+        // M5: deterministic tiebreak on UUID string when two candidates are equidistant.
+        let match = candidates
+            .filter { existing in
+                guard !identifierRejectedIDs.contains(existing.id) else { return false }
+                guard !consumed.contains(existing.id) else { return false }
+                guard abs(existing.timestamp.timeIntervalSince(date)) <= dateTolerance else { return false }
+                guard abs(existing.duration - incomingDurationMin) <= durationToleranceMin else { return false }
+                let existingDepthMeters = depthInMeters(existing.maxDepth, unit: existing.importDistanceUnit)
+                guard abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters else { return false }
+                let existingSiteName = existing.siteName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !incomingSiteName.isEmpty, !existingSiteName.isEmpty,
+                   existingSiteName.compare(incomingSiteName,
+                                           options: [.caseInsensitive, .diacriticInsensitive]) != .orderedSame {
+                    return false
+                }
+                // Serial discriminator: when both sides carry a serial number they must match.
+                // Prevents a buddy's simultaneous dive (different computer) from being flagged
+                // as a duplicate when profiles overlap and neither side has a site name.
+                let existingSerial = normalizedSerialByDiveID[existing.id] ?? ""
+                if !incomingSerial.isEmpty, !existingSerial.isEmpty, incomingSerial != existingSerial {
+                    return false
+                }
+                // Diver name discriminator: when both sides carry a diver name they must match.
+                // Prevents a dive partner's simultaneous dive from being flagged as a duplicate
+                // when profiles overlap and neither serial nor site name is available.
+                // Guard is intentionally "both non-empty AND differ": if either side has no diver
+                // name (e.g. a dive imported from an older MacDive export that omitted diver info),
+                // the check is skipped to preserve backward compatibility with pre-name records.
+                // The residual risk — a false positive when profiles overlap and one side has no
+                // name — is accepted as lower than missing duplicates for all legacy imports.
+                let existingDiverName = existing.diverName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !incomingDiverName.isEmpty, !existingDiverName.isEmpty,
+                   existingDiverName.compare(incomingDiverName, options: [.caseInsensitive, .diacriticInsensitive]) != .orderedSame {
+                    return false
+                }
+                return true
+            }
+            .min { lhs, rhs in
+                let dl = abs(lhs.timestamp.timeIntervalSince(date))
+                let dr = abs(rhs.timestamp.timeIntervalSince(date))
+                if dl != dr { return dl < dr }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+
+        if let match { return (match, .sameDateAndProfile) }
+        return nil
+    }
+
+    private func depthInMeters(_ value: Double, unit: String) -> Double {
+        unit.lowercased() == "feet" ? value / 3.28084 : value
+    }
+
+    // MARK: - MacDive XML Import
+    
+    @MainActor
+    func insertParsedDive(_ diveData: BlueDiveGlobalData, assignedDiveNumber: Int? = nil, overrideDiverName: String? = nil, fileName: String, speciesResolver: SpeciesImportResolver, snapshotByID: inout [UUID: GearSnapshot], snapshotByMatchKey: inout [String: GearSnapshot], resolvedGearByID: inout [UUID: Gear]) {
+        // Convert MacDive samples to DiveProfilePoints
+        let profilePoints = diveData.samples.map { sample in
+            DiveProfilePoint(
+                time: sample.time / 60.0, // Convert seconds to minutes
+                depth: sample.depth,
+                temperature: sample.temperature,
+                tankPressure: sample.pressure,
+                tankPressures: sample.tankPressures,
+                ndl: sample.ndt != nil ? Double(sample.ndt!) : nil,
+                ceilingDepth: sample.ceilingDepth,
+                ceilingTime: sample.ceilingTime,
+                cns: sample.cns,
+                ppo2: sample.ppo2,
+                sensorPPO2: sample.sensorPPO2,
+                events: sample.events,
+                currentGas: sample.currentGas
+            )
+        }
+        
+        // Format buddies
+        let buddiesString = diveData.buddies.joined(separator: ", ")
+        
+        // Convert surface interval from seconds to string
+        // MacDive exports surfaceInterval in minutes (not seconds despite the field name)
+        let surfaceIntervalString: String
+        if let intervalMinutes = diveData.surfaceInterval, intervalMinutes > 0 {
+            let totalMinutes = intervalMinutes
+            let days    = totalMinutes / 1440  // 1440 minutes in a day
+            let hours   = (totalMinutes % 1440) / 60
+            let minutes = totalMinutes % 60
+            
+            if days > 0 {
+                surfaceIntervalString = "\(days)d \(hours)h \(String(format: "%02d", minutes))m"
+            } else {
+                surfaceIntervalString = "\(hours)h \(String(format: "%02d", minutes))m"
+            }
+        } else {
+            surfaceIntervalString = "0h 00m"
+        }
+        
+
+        
+        // Calculate average depth if not provided
+        let averageDepth = diveData.averageDepth ?? (profilePoints.isEmpty
+            ? 0.0
+            : profilePoints.reduce(0.0) { $0 + $1.depth } / Double(profilePoints.count))
+        
+        // Create the dive with all MacDive information
+        let newDive = Dive(
+            diveNumber: diveData.diveNumber ?? assignedDiveNumber,
+            identifier: diveData.identifier,
+            timestamp: diveData.date ?? Date(),
+            location: diveData.site?.location ?? "",
+            siteName: (diveData.site?.name).flatMap { $0.isEmpty ? nil : $0 } ?? NSLocalizedString("Unknown site", bundle: .forAppLanguage(), comment: "Fallback site name when an imported dive has no site name"),
+            diveTypes: diveData.types.isEmpty ? nil : diveData.types.joined(separator: ", "),
+            tags: diveData.tags,
+            computerName: diveData.computer ?? "",
+            computerSerialNumber: diveData.serial,
+            surfaceInterval: surfaceIntervalString,
+            diverName: overrideDiverName ?? diveData.diver?.trimmingCharacters(in: .whitespaces) ?? "",
+            buddies: buddiesString,
+            rating: diveData.rating ?? 0,
+            // MacDive uses 1-indexed repetitiveDive; BlueDive XML exports a boolean 0/1.
+            // Gate on isBlueDiveXMLImport — not recordID or sourceImport — because the new
+            // parser preserves the real sourceImport (e.g. "MacDive"), which would falsely
+            // trigger the 1-indexed path for BlueDive XML round-trips of MacDive-origin dives.
+            isRepetitiveDive: (!diveData.isBlueDiveXMLImport && diveData.sourceImport == "MacDive")
+                ? (diveData.repetitiveDive ?? 1) > 1
+                : (diveData.repetitiveDive ?? 0) > 0,
+            weights: diveData.weight,
+            weather: diveData.weather,
+            surfaceConditions: diveData.surfaceConditions,
+            current: diveData.current,
+            wind: diveData.wind,
+            windDirection: diveData.windDirection,
+            visibility: diveData.visibility,
+            entryType: diveData.entryType,
+            diveOperator: diveData.diveOperator,
+            diveMaster: diveData.diveMaster,
+            skipper: diveData.skipper,
+            boat: diveData.boat,
+            maxDepth: diveData.maxDepth,
+            averageDepth: averageDepth,
+            duration: diveData.duration / 60, // Convert seconds to minutes
+            waterTemperature: diveData.tempLow,
+            minTemperature: diveData.tempLow,
+            airTemperature: diveData.tempAir,
+            maxTemperature: diveData.tempHigh,
+            decompressionAlgorithm: diveData.decoModel,
+            cnsPercentage: diveData.cns,
+            isDecompressionDive: diveData.isDecompressionDive,
+            notes: diveData.notes ?? "",
+            importDistanceUnit: diveData.distanceFormat,
+            importTemperatureUnit: diveData.temperatureFormat,
+            importPressureUnit: diveData.pressureFormat,
+            importVolumeUnit: diveData.volumeFormat,
+            importWeightUnit: diveData.weightFormat,
+            sourceImport: diveData.sourceImport,
+            siteCountry: diveData.site?.country,
+            siteBodyOfWater: diveData.site?.bodyOfWater,
+            siteDifficulty: diveData.site?.difficulty,
+            siteWaterType: canonicalWaterType(diveData.site?.waterType),
+            siteAltitude: diveData.site?.altitude,
+            siteLatitude: diveData.site?.latitude,
+            siteLongitude: diveData.site?.longitude,
+            profileSamples: profilePoints
+        )
+        
+        // Exit GPS (BlueDive XML round-trip)
+        newDive.exitLatitude  = diveData.site?.exitLatitude
+        newDive.exitLongitude = diveData.site?.exitLongitude
+
+        // Deco stops (from BlueDive XML round-trip)
+        if !diveData.decoStops.isEmpty {
+            newDive.decoStops = diveData.decoStops
+        }
+
+        // Raw dive computer data (from BlueDive XML round-trip)
+        newDive.rawDiveComputerData = diveData.rawDiveComputerData
+        newDive.fingerprintData = diveData.fingerprintData
+
+        // ── Save tank data and gas mixes ────────────────────────────────────
+        // Priority: Use the new multi-tank array (diveData.tanks) if available,
+        // otherwise fall back to the legacy single-gas format (diveData.gases).
+        // This ensures backward compatibility while supporting the new format.
+        
+        if !diveData.tanks.isEmpty {
+            // Multi-tank format
+            var tanks: [TankData] = []
+            
+            for tank in diveData.tanks {
+                let o2Fraction = Double(tank.oxygen ?? 21) / 100.0
+                let heFraction = Double(tank.helium ?? 0) / 100.0
+                
+                let resolvedTankType: String? = tank.tankType ?? (tank.double ? "Twinset" : nil)
+                let tankData = TankData(
+                    id: UUID(uuidString: tank.id ?? "") ?? UUID(),
+                    o2: o2Fraction,
+                    he: heFraction,
+                    volume: tank.volume,
+                    startPressure: tank.startPressure,
+                    endPressure: tank.endPressure,
+                    workingPressure: tank.workingPressure,
+                    tankMaterial: tank.tankMaterial,
+                    tankType: resolvedTankType,
+                    usageStartTime: tank.usageStartTime,
+                    usageEndTime: tank.usageEndTime
+                )
+                tanks.append(tankData)
+            }
+            
+            newDive.tanks = tanks
+        } else if !diveData.gases.isEmpty {
+            // Legacy single-gas format
+            var tanks: [TankData] = []
+            
+            for gas in diveData.gases {
+                let o2Fraction = Double(gas.oxygen ?? 21) / 100.0
+                let heFraction = Double(gas.helium ?? 0) / 100.0
+                
+                let resolvedGasTankType: String? = gas.tankType ?? (gas.double ? "Twinset" : nil)
+                let tankData = TankData(
+                    o2: o2Fraction,
+                    he: heFraction,
+                    volume: gas.tankSize,
+                    startPressure: gas.pressureStart,
+                    endPressure: gas.pressureEnd,
+                    workingPressure: gas.workingPressure,
+                    tankMaterial: gas.tankMaterial,
+                    tankType: resolvedGasTankType
+                )
+                tanks.append(tankData)
+            }
+            
+            newDive.tanks = tanks
+        }
+        
+        modelContext.insert(newDive)
+
+        // Create gear items from MacDive gear list
+        var equipmentToAdd: [Gear] = []
+
+        for gearItem in diveData.gear {
+                // Map MacDive gear types to app categories
+                let rawType = gearItem.type ?? "other"
+                let category = mapMacDiveGearType(rawType)
+
+                // BlueDive XML stores fully-formed gear names (manufacturer already included).
+                // MacDive stores only the model — manufacturer must be prepended on first import.
+                // Gate on isBlueDiveXMLImport — not sourceImport — because the new parser
+                // preserves the real sourceImport value (e.g. "MacDive"), which would falsely
+                // skip the stored name for old-format BlueDive XML files of MacDive-origin gear.
+                let gearName: String
+                if diveData.isBlueDiveXMLImport {
+                    gearName = gearItem.name
+                } else if let manufacturer = gearItem.manufacturer, !manufacturer.isEmpty {
+                    gearName = "\(manufacturer) \(gearItem.name)"
+                } else {
+                    gearName = gearItem.name
+                }
+
+                // Priority 1: UUID match — O(1) snapshot lookup, Gear resolved lazily on demand.
+                // Priority 2: name + category + diver + serial — O(1) hash index, resolved lazily.
+                let matchedID: UUID?
+                if let gearID = gearItem.id, snapshotByID[gearID] != nil {
+                    matchedID = gearID
+                } else {
+                    let key = gearMatchKey(name: gearName, category: category, diverName: gearItem.diverName, serial: gearItem.serial)
+                    matchedID = snapshotByMatchKey[key]?.id
+                }
+
+                let existingGear: Gear?
+                if let mid = matchedID {
+                    if let cached = resolvedGearByID[mid] {
+                        existingGear = cached
+                    } else {
+                        let fetchID = mid
+                        let fetched = try? modelContext.fetch(FetchDescriptor<Gear>(predicate: #Predicate { $0.id == fetchID })).first
+                        resolvedGearByID[mid] = fetched
+                        existingGear = fetched
+                    }
+                } else {
+                    existingGear = nil
+                }
+
+                if let gear = existingGear {
+                    gear.syncServiceData(importedDate: gearItem.lastServiceDate, importedHistory: gearItem.serviceHistory)
+                    equipmentToAdd.append(gear)
+                } else {
+                    let newGear = Gear(
+                        id: gearItem.id ?? UUID(),
+                        name: gearName,
+                        category: category,
+                        manufacturer: gearItem.manufacturer,
+                        model: gearItem.model,
+                        serialNumber: gearItem.serial,
+                        datePurchased: gearItem.datePurchased ?? diveData.date ?? Date(),
+                        purchasePrice: gearItem.purchasePrice,
+                        currency: gearItem.currency,
+                        purchasedFrom: gearItem.purchasedFrom,
+                        weightContribution: gearItem.weightContribution ?? 0.0,
+                        weightContributionUnit: gearItem.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol,
+                        isInactive: gearItem.isInactive,
+                        diverName: gearItem.diverName,
+                        lastServiceDate: gearItem.lastServiceDate,
+                        nextServiceDue: gearItem.nextServiceDue,
+                        serviceHistory: gearItem.serviceHistory,
+                        gearNotes: gearItem.gearNotes
+                    )
+                    modelContext.insert(newGear)
+                    let snap = GearSnapshot(id: newGear.id, name: newGear.name, category: newGear.category, diverName: newGear.diverName, serialNumber: newGear.serialNumber)
+                    snapshotByID[newGear.id] = snap
+                    snapshotByMatchKey[gearMatchKey(name: newGear.name, category: newGear.category, diverName: newGear.diverName, serial: newGear.serialNumber)] = snap
+                    resolvedGearByID[newGear.id] = newGear
+                    equipmentToAdd.append(newGear)
+                }
+            }
+            
+        // Associate gear with dive
+        if newDive.usedGear == nil { newDive.usedGear = [] }
+        newDive.usedGear!.append(contentsOf: equipmentToAdd)
+
+        // Create marine life sightings from imported data, under their imported names. A
+        // sighting carrying its catalogue species (BlueDive XML) is linked to it: the species
+        // with its id, else one known by one of its names, else created from the file (complete
+        // BlueDive records) unless Import Species is off. Any other sighting is linked only when the catalogue knows its name
+        // (any of a species' names, ignoring case); an unknown name stays out of the catalogue
+        // (Marine Life → Build Catalogue from Sightings creates species on request).
+        for marineLifeData in diveData.marineLifeSeen {
+            let marineSight = MarineSight(
+                name: marineLifeData.name,
+                count: marineLifeData.count
+            )
+            if let carried = marineLifeData.species,
+               let species = speciesResolver.species(for: carried) {
+                marineSight.species = species
+            } else if let species = speciesResolver.existingSpecies(named: marineLifeData.name) {
+                marineSight.species = species
+            }
+            marineSight.dive = newDive
+            if newDive.seenFish == nil { newDive.seenFish = [] }
+            newDive.seenFish!.append(marineSight)
+            modelContext.insert(marineSight)
+        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    func mapMacDiveGearType(_ type: String) -> String {
+        // Resolves both our own English export keys and legacy French rawValues.
+        (GearCategory(exportKeyOrRawValue: type) ?? .other).rawValue
+    }
+
+    // MARK: - Merge Dives
+
+    /// Merges two dives into one. The earlier dive is kept as the base and
+    /// the later dive's samples are appended (offset by dive 1 duration + surface interval).
+    /// Dive order is resolved by `DiveMergeOrder.resolve`, shared with the confirmation dialog.
+    ///
+    /// Recalculated fields: maxDepth, averageDepth, duration, cns, tempAir, tempHigh, tempLow.
+    ///
+    /// Merged fields:
+    /// - Tanks: start pressure from the earlier dive, end pressure from the later dive (matched
+    ///   by index). Tanks used only by the later dive are appended, keeping their original index
+    ///   so the appended samples' `currentGas` still resolves. Usage-time windows are shifted
+    ///   onto the merged timeline, and a matched tank's window spans both dives.
+    /// - Decompression: `decoStops` concatenated, `isDecompressionDive` OR-ed,
+    ///   `decompressionAlgorithm` filled from the later dive only when the earlier dive has none.
+    /// - Exit GPS: taken from the later dive; entry GPS stays from the earlier dive.
+    ///
+    /// Note: the merged profile retains the surface interval, so duration, averageDepth and the
+    /// SAC/RMV divisor span the whole excursion rather than each dive's submerged time. The merge
+    /// confirmation dialog discloses this to the user.
+    ///
+    /// The later dive is deleted after merge.
+    func mergeDives(_ diveA: Dive, with diveB: Dive) {
+        // Determine which dive is earlier. Shared with the merge confirmation message via
+        // DiveMergeOrder so the dialog always names the dive that is actually deleted.
+        let (earlier, later) = DiveMergeOrder.resolve(diveA, diveB)
+
+        // --- Append samples from the later dive ---
+        var combinedSamples = earlier.profileSamples
+        let laterSamples = later.profileSamples
+
+        // Time offset = last sample time of earlier dive + surface interval of later dive
+        let earlierLastTime = combinedSamples.last?.time ?? Double(earlier.duration)
+
+        // Parse surface interval from the later dive (stored as display string like "1h 36m")
+        let surfaceMinutes = parseSurfaceIntervalMinutes(from: later.surfaceInterval) ?? 0
+
+        let timeOffset = earlierLastTime + Double(surfaceMinutes)
+
+        for sample in laterSamples {
+            combinedSamples.append(DiveProfilePoint(
+                time: sample.time + timeOffset,
+                depth: sample.depth,
+                temperature: sample.temperature,
+                tankPressure: sample.tankPressure,
+                tankPressures: sample.tankPressures,
+                ndl: sample.ndl,
+                ceilingDepth: sample.ceilingDepth,
+                ceilingTime: sample.ceilingTime,
+                // The per-sample CNS series is carried through as-is, not re-based onto
+                // the earlier dive's ending load — matching how depth and the deco data
+                // are handled here, since re-basing would fabricate values the dive
+                // computer never reported.
+                cns: sample.cns,
+                ppo2: sample.ppo2,
+                sensorPPO2: sample.sensorPPO2,
+                events: sample.events,
+                currentGas: sample.currentGas
+            ))
+        }
+        earlier.profileSamples = combinedSamples
+
+        // --- Recalculate maxDepth ---
+        let allDepths = combinedSamples.map(\.depth)
+        earlier.maxDepth = allDepths.max() ?? earlier.maxDepth
+
+        // --- Recalculate averageDepth (time-weighted) ---
+        if combinedSamples.count >= 2 {
+            var weightedSum = 0.0
+            for i in 1..<combinedSamples.count {
+                let dt = combinedSamples[i].time - combinedSamples[i - 1].time
+                let avgDepth = (combinedSamples[i].depth + combinedSamples[i - 1].depth) / 2.0
+                weightedSum += avgDepth * dt
+            }
+            let totalTime = (combinedSamples.last?.time ?? 0) - (combinedSamples.first?.time ?? 0)
+            if totalTime > 0 {
+                earlier.averageDepth = weightedSum / totalTime
+            }
+        }
+
+        // --- Recalculate duration ---
+        // Use the last sample time (which includes surface interval) converted to minutes
+        if let lastTime = combinedSamples.last?.time {
+            earlier.duration = Int(lastTime.rounded())
+        } else {
+            earlier.duration = earlier.duration + surfaceMinutes + later.duration
+        }
+
+        // --- CNS: sum both segments, capped at 100% ---
+        // Addition is conservative (ignores surface off-gassing) but correct when
+        // the dive computer reset its CNS counter between the two dives.
+        if let laterCNS = later.cnsPercentage {
+            earlier.cnsPercentage = min(100, (earlier.cnsPercentage ?? 0) + laterCNS)
+        }
+
+        // --- tempAir: keep from earlier dive (pre-dive measurement) ---
+        // Already preserved since we keep the earlier dive's data.
+
+        // --- tempHigh: max of both ---
+        if let laterHigh = later.maxTemperature {
+            earlier.maxTemperature = max(earlier.maxTemperature ?? laterHigh, laterHigh)
+        }
+
+        // --- tempLow: min of both ---
+        earlier.minTemperature = [earlier.minTemperature, later.minTemperature].compactMap { $0 }.min()
+
+        // --- Tank pressures: start from earlier dive, end from later dive ---
+        // Tanks are matched by index (tank 0 ↔ tank 0, etc.).
+        // Tanks in the earlier dive that have no counterpart in the later dive are unchanged.
+        // Tanks used only by the later dive (indices beyond the earlier dive's tank
+        // count) are appended in order, so each keeps its original index. That preserves
+        // the appended samples' `currentGas` indices without any remapping, allowing
+        // gas-switch events in the later portion to resolve to the correct gas name.
+        if !earlier.tanks.isEmpty {
+            var updatedTanks = earlier.tanks
+            let laterTanks = later.tanks
+            let matchedCount = updatedTanks.count
+            for i in 0..<matchedCount {
+                guard i < laterTanks.count else { break }
+                let tank = updatedTanks[i]
+                // The matched (index-aligned) tank is the same physical tank used across
+                // both dives, so its usage window must span the whole excursion: keep the
+                // earlier dive's start, and take the later dive's end shifted onto the merged
+                // timeline. A single [start, end] window cannot express the surface-interval
+                // gap between the two segments — spanning it keeps per-tank SAC/RMV from
+                // attributing both dives' gas to only the earlier dive's time and depth.
+                // A later `usageEndTime` of 0/nil ("no end recorded") maps to nil so SAC
+                // falls back to the merged dive end (the tank runs to the end of dive 2).
+                let laterEndRaw = laterTanks[i].usageEndTime ?? 0
+                let mergedUsageEnd: Double? = laterEndRaw > 0 ? laterTanks[i].usageEndTime! + timeOffset * 60.0 : nil
+                updatedTanks[i] = TankData(
+                    id: tank.id,
+                    o2: tank.o2,
+                    he: tank.he,
+                    volume: tank.volume,
+                    startPressure: tank.startPressure,
+                    endPressure: laterTanks[i].endPressure,
+                    workingPressure: tank.workingPressure,
+                    tankMaterial: tank.tankMaterial,
+                    tankType: tank.tankType,
+                    usageStartTime: tank.usageStartTime,
+                    usageEndTime: mergedUsageEnd
+                )
+            }
+            if laterTanks.count > matchedCount {
+                updatedTanks.append(contentsOf: laterTanks[matchedCount...].map { offsetTankUsage($0, byMinutes: timeOffset) })
+            }
+            earlier.tanks = updatedTanks
+        } else if !later.tanks.isEmpty {
+            // Earlier dive carried no tanks; adopt the later dive's tanks wholesale
+            // so its gas mixes and gas-switch events still resolve after the merge.
+            // Usage times are shifted onto the merged timeline (see offsetTankUsage).
+            earlier.tanks = later.tanks.map { offsetTankUsage($0, byMinutes: timeOffset) }
+        }
+
+        // --- Exit GPS: always taken from the later dive (nil if it has none) ---
+        // Entry GPS stays from the earlier dive.
+        earlier.exitLatitude  = later.exitLatitude
+        earlier.exitLongitude = later.exitLongitude
+
+        // --- Decompression data: preserve both dives' deco stops and flags ---
+        // Deco data lives in dedicated stored fields, not only in the per-sample
+        // `events`, so it must be merged explicitly or the combined dive loses the
+        // deco section (Gas tab gates on `isDecompressionDive && !decoStops.isEmpty`).
+        // `DecoStop.time` is a stop duration (not an absolute timestamp), so the two
+        // stop lists concatenate directly with no time offset.
+        earlier.decoStops = earlier.decoStops + later.decoStops
+        earlier.isDecompressionDive = earlier.isDecompressionDive || later.isDecompressionDive
+        if earlier.decompressionAlgorithm == nil {
+            earlier.decompressionAlgorithm = later.decompressionAlgorithm
+        }
+
+        // --- Photos: moved to the merged dive before the later dive is deleted (its delete
+        // would take its photo records, and their originals, with it). Their profile positions
+        // follow from their capture times on the merged timeline (DivePhoto.profileOffset).
+        for photo in later.photos ?? [] {
+            photo.attach(to: earlier)
+        }
+        if let laterLegacy = later.photosData, !laterLegacy.isEmpty {
+            earlier.photosData = (earlier.photosData ?? []) + laterLegacy
+            later.photosData = nil
+        }
+
+        // --- Marine life: the later dive's sightings join the merged dive (its delete would
+        // take them with it). The same critter on both dives — same species, or the same name
+        // (ignoring case) for sightings not in the catalogue — is combined into the earlier
+        // dive's sighting: it keeps its name, takes the larger quantity, and the species link
+        // when it had none.
+        for sight in later.seenFish ?? [] {
+            let laterName = SpeciesCatalog.key(sight.name)
+            let match = (earlier.seenFish ?? []).first { existing in
+                if let a = existing.species?.persistentModelID, let b = sight.species?.persistentModelID {
+                    return a == b
+                }
+                return SpeciesCatalog.key(existing.name) == laterName
+            }
+            if let match {
+                match.count = max(match.count, sight.count)
+                if match.species == nil { match.species = sight.species }
+                modelContext.delete(sight)
+            } else {
+                sight.dive = earlier
+            }
+        }
+
+        // --- Equipment: the later dive's gear is added to the merged dive (no duplicates).
+        var gear = earlier.usedGear ?? []
+        for item in later.usedGear ?? [] where !gear.contains(where: { $0.persistentModelID == item.persistentModelID }) {
+            gear.append(item)
+        }
+        earlier.usedGear = gear
+
+        // --- Delete the later dive ---
+        modelContext.delete(later)
+        try? modelContext.save()
+
+        // NOTE (DiveStore): we intentionally do NOT call store.commit(_:affects:) here.
+        // Deleting `later` and saving triggers a @Query re-delivery, which DiveDataFeeder (the
+        // sole @Query Dive owner) forwards to
+        // store.scheduleRebuild(...) — a full rebuild that drops the deleted dive and
+        // recomputes every summary (including `earlier`'s new depth/duration). Calling
+        // store.commit(earlier, affects: .list) here would be unsafe: store.dives still
+        // contains the just-deleted `later` at this point (the @Query has not re-delivered),
+        // so commit(.list) would rebuild summaries over a deleted SwiftData object.
+    }
+
+    /// Returns a copy of `tank` with its usage-time window (seconds into the dive) shifted
+    /// onto the merged timeline by `byMinutes`. Used when a later dive's tanks are carried
+    /// into the merged dive: the later dive's samples are offset by the same amount, so the
+    /// tank's usage window must move with them for per-tank SAC/RMV to stay accurate.
+    /// A `usageEndTime` of 0 (or nil) means "no end recorded" and is left untouched so it
+    /// keeps falling back to the dive end.
+    func offsetTankUsage(_ tank: TankData, byMinutes: Double) -> TankData {
+        let offsetSec = byMinutes * 60.0
+        let newStart = tank.usageStartTime.map { $0 + offsetSec }
+        let newEnd = (tank.usageEndTime ?? 0) > 0 ? tank.usageEndTime! + offsetSec : tank.usageEndTime
+        return TankData(
+            id: tank.id,
+            o2: tank.o2,
+            he: tank.he,
+            volume: tank.volume,
+            startPressure: tank.startPressure,
+            endPressure: tank.endPressure,
+            workingPressure: tank.workingPressure,
+            tankMaterial: tank.tankMaterial,
+            tankType: tank.tankType,
+            usageStartTime: newStart,
+            usageEndTime: newEnd
+        )
+    }
+
+    /// Parses a surface interval display string like "1h 36m" or "2d 1h 30m" into total minutes.
+    func parseSurfaceIntervalMinutes(from string: String) -> Int? {
+        guard !string.isEmpty, string != "0h 00m" else { return nil }
+        let patternWithDays = #/(\d+)d\s*(\d+)h\s*(\d+)m/#
+        if let match = string.firstMatch(of: patternWithDays) {
+            let days    = Int(match.output.1) ?? 0
+            let hours   = Int(match.output.2) ?? 0
+            let minutes = Int(match.output.3) ?? 0
+            let total = (days * 1440) + (hours * 60) + minutes
+            return total > 0 ? total : nil
+        }
+        let pattern = #/(\d+)h\s*(\d+)m/#
+        guard let match = string.firstMatch(of: pattern) else { return nil }
+        let hours   = Int(match.output.1) ?? 0
+        let minutes = Int(match.output.2) ?? 0
+        let total = hours * 60 + minutes
+        return total > 0 ? total : nil
+    }
+
+    func exportAllDivesToXML() {
+        guard !isExporting else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let fileName = "BlueDive_Export_\(formatter.string(from: Date())).bluedive"
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = fileName
+        panel.allowedContentTypes = [.blueDiveXML]
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            isExporting = true
+            exportProgressCurrent = 0
+            exportProgressTotal = 0
+            Task { @MainActor in
+                defer {
+                    isExporting = false
+                    exportProgressCurrent = 0
+                    exportProgressTotal = 0
+                }
+                let xml = await BlueDiveXMLExporter.generateXML(for: dives) { current, total in
+                    exportProgressCurrent = current
+                    exportProgressTotal = total
+                }
+                guard let data = xml.data(using: .utf8) else { return }
+                try? data.write(to: url)
+            }
+        }
+        #else
+        isExporting = true
+        exportProgressCurrent = 0
+        exportProgressTotal = 0
+        Task { @MainActor in
+            let xml = await BlueDiveXMLExporter.generateXML(for: dives) { current, total in
+                exportProgressCurrent = current
+                exportProgressTotal = total
+            }
+            guard let data = xml.data(using: .utf8) else {
+                isExporting = false
+                exportProgressCurrent = 0
+                exportProgressTotal = 0
+                return
+            }
+            exportDocument = ExportableFileDocument(data: data)
+            exportFileName = fileName
+            exportContentType = .blueDiveXML
+            showFileExporter = true
+            isExporting = false
+            exportProgressCurrent = 0
+            exportProgressTotal = 0
+        }
+        #endif
+    }
+
+    func exportAllDivesToUDDF() {
+        guard !isExporting else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let fileName = "BlueDive_Export_\(formatter.string(from: Date())).uddf"
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = fileName
+        panel.allowedContentTypes = [.uddf]
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            isExporting = true
+            exportProgressCurrent = 0
+            exportProgressTotal = 0
+            Task { @MainActor in
+                defer {
+                    isExporting = false
+                    exportProgressCurrent = 0
+                    exportProgressTotal = 0
+                }
+                let uddf = await BlueDiveUDDFExporter.generateUDDF(for: dives) { current, total in
+                    exportProgressCurrent = current
+                    exportProgressTotal = total
+                }
+                guard let data = uddf.data(using: .utf8) else { return }
+                try? data.write(to: url)
+            }
+        }
+        #else
+        isExporting = true
+        exportProgressCurrent = 0
+        exportProgressTotal = 0
+        Task { @MainActor in
+            let uddf = await BlueDiveUDDFExporter.generateUDDF(for: dives) { current, total in
+                exportProgressCurrent = current
+                exportProgressTotal = total
+            }
+            guard let data = uddf.data(using: .utf8) else {
+                isExporting = false
+                exportProgressCurrent = 0
+                exportProgressTotal = 0
+                return
+            }
+            exportDocument = ExportableFileDocument(data: data)
+            exportFileName = fileName
+            exportContentType = .uddf
+            showFileExporter = true
+            isExporting = false
+            exportProgressCurrent = 0
+            exportProgressTotal = 0
+        }
+        #endif
+    }
+
+}

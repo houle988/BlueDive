@@ -73,98 +73,180 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            ConditionRow(
-                icon: "thermometer.medium",
-                color: .orange,
-                label: "Surface Temp.",
-                value: dive.airTemperature.map {
-                    UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
-                } ?? "—"
-            )
-            ConditionRow(
-                icon: "thermometer.low",
-                color: .blue,
-                label: "Minimum Temperature",
-                value: dive.minTemperature.map { UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit) } ?? "—"
-            )
-            ConditionRow(
-                icon: "thermometer.high",
-                color: .red,
-                label: "Maximum Temp.",
-                value: dive.maxTemperature.map {
-                    UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
-                } ?? "—"
-            )
-
-            // Always display Weather field
-            ConditionRow(icon: "cloud.sun", color: .yellow, label: "Weather",
-                        value: dive.weather.map { localizedWeather($0) } ?? "—")
-
-            // Always display Surface conditions field
-            ConditionRow(icon: "water.waves", color: .cyan, label: "Surface",
-                        value: dive.surfaceConditions.map { localizedSurface($0) } ?? "—")
-
-            // Always display Current field
-            ConditionRow(icon: "wind", color: .teal, label: "Current",
-                        value: dive.current.map { localizedCurrent($0) } ?? "—")
-
-            // Always display Visibility field
-            let depthUnit = prefs.depthUnit.symbol
-            if let visibility = dive.visibility {
-                let visibilityDisplay: String = {
-                    let trimmed = visibility.trimmingCharacters(in: .whitespaces)
-                    return Double(trimmed) != nil ? "\(trimmed) \(depthUnit)" : trimmed
-                }()
-                ConditionRow(
-                    icon: "eye",
-                    color: .green,
-                    label: "Visibility",
-                    value: visibilityDisplay
-                )
-            } else {
-                ConditionRow(
-                    icon: "eye",
-                    color: .green,
-                    label: "Visibility",
-                    value: "—"
-                )
+            #if os(macOS)
+            // The Mac window is wide enough for two columns: the air conditions (air
+            // temperature, weather, wind) on the left, the water conditions on the right. A
+            // Grid keeps each pair of rows aligned, while each column draws its own dividers
+            // and a vertical line separates them.
+            Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
+                GridRow {
+                    conditionsAirTempRow.detailGridCell(column: 0, row: 0)
+                    conditionsMinTempRow.detailGridCell(column: 1, row: 0)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    conditionsWeatherRow.detailGridCell(column: 0, row: 1)
+                    conditionsMaxTempRow.detailGridCell(column: 1, row: 1)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    conditionsWindRow.detailGridCell(column: 0, row: 2)
+                    conditionsSurfaceRow.detailGridCell(column: 1, row: 2)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    conditionsWindDirectionRow.detailGridCell(column: 0, row: 3)
+                    conditionsCurrentRow.detailGridCell(column: 1, row: 3)
+                }
+                GridRow {
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    detailColumnDivider
+                }
+                GridRow {
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    conditionsVisibilityRow.detailGridCell(column: 1, row: 4)
+                }
             }
+            .overlay {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.2))
+                    .frame(width: 1)
+            }
+            .accessibilityElement(children: .contain)
+            #else
+            // Same order as the macOS columns: air conditions, then water conditions.
+            conditionsAirTempRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsWeatherRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsWindRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsWindDirectionRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsMinTempRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsMaxTempRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsSurfaceRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsCurrentRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsVisibilityRow
+            #endif
         }
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
     }
 
-    private func localizedWeather(_ raw: String) -> String {
-        switch raw {
-        case "Sunny":    return NSLocalizedString("Sunny", bundle: .forAppLanguage(), comment: "")
-        case "Cloudy":   return NSLocalizedString("Cloudy", bundle: .forAppLanguage(), comment: "")
-        case "Overcast": return NSLocalizedString("Overcast", bundle: .forAppLanguage(), comment: "")
-        case "Rain":     return NSLocalizedString("Rain", bundle: .forAppLanguage(), comment: "")
-        case "Storm":    return NSLocalizedString("Storm", bundle: .forAppLanguage(), comment: "")
-        case "Variable": return NSLocalizedString("Variable", bundle: .forAppLanguage(), comment: "")
-        default:         return raw
-        }
+    private var conditionsAirTempRow: some View {
+        ConditionRow(
+            icon: "thermometer.medium",
+            color: .orange,
+            label: "Air Temp.",
+            value: dive.airTemperature.map {
+                UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
+            } ?? "—"
+        )
     }
 
-    private func localizedSurface(_ raw: String) -> String {
-        switch raw {
-        case "Calm":            return NSLocalizedString("Calm", bundle: .forAppLanguage(), comment: "")
-        case "Slightly choppy": return NSLocalizedString("Slightly choppy", bundle: .forAppLanguage(), comment: "")
-        case "Choppy":          return NSLocalizedString("Choppy", bundle: .forAppLanguage(), comment: "")
-        case "Heavy swell":     return NSLocalizedString("Heavy swell", bundle: .forAppLanguage(), comment: "")
-        default:                return raw
-        }
+    private var conditionsMinTempRow: some View {
+        ConditionRow(
+            icon: "thermometer.low",
+            color: .blue,
+            label: "Minimum Temperature",
+            value: dive.minTemperature.map { UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit) } ?? "—"
+        )
     }
 
-    private func localizedCurrent(_ raw: String) -> String {
-        switch raw {
-        case "None":        return NSLocalizedString("None", bundle: .forAppLanguage(), comment: "")
-        case "Weak":        return NSLocalizedString("Weak", bundle: .forAppLanguage(), comment: "")
-        case "Moderate":    return NSLocalizedString("Moderate", bundle: .forAppLanguage(), comment: "")
-        case "Strong":      return NSLocalizedString("Strong", bundle: .forAppLanguage(), comment: "")
-        case "Very strong": return NSLocalizedString("Very strong", bundle: .forAppLanguage(), comment: "")
-        default:            return raw
+    private var conditionsMaxTempRow: some View {
+        ConditionRow(
+            icon: "thermometer.high",
+            color: .red,
+            label: "Maximum Temp.",
+            value: dive.maxTemperature.map {
+                UserPreferences.shared.temperatureUnit.formatted($0, from: dive.storedTemperatureUnit)
+            } ?? "—"
+        )
+    }
+
+    // Weather
+    private var conditionsWeatherRow: some View {
+        ConditionRow(icon: "cloud.sun", color: .yellow, label: "Weather",
+                    value: dive.weather.map { DiveConditionOptions.localizedWeather($0) } ?? "—")
+    }
+
+    // Wind
+    private var conditionsWindRow: some View {
+        ConditionRow(icon: "wind", color: .mint, label: "Wind",
+                    value: dive.wind.map { DiveConditionOptions.localizedWind($0) } ?? "—")
+    }
+
+    // Wind direction
+    private var conditionsWindDirectionRow: some View {
+        ConditionRow(icon: "location.north", color: .indigo, label: "Wind Direction",
+                    value: dive.windDirection.map { DiveConditionOptions.localizedWindDirection($0) } ?? "—")
+    }
+
+    // Surface conditions
+    private var conditionsSurfaceRow: some View {
+        ConditionRow(icon: "water.waves", color: .cyan, label: "Surface",
+                    value: dive.surfaceConditions.map { DiveConditionOptions.localizedSurface($0) } ?? "—")
+    }
+
+    // Current
+    private var conditionsCurrentRow: some View {
+        ConditionRow(icon: "arrow.right.arrow.left", color: .teal, label: "Current",
+                    value: dive.current.map { DiveConditionOptions.localizedCurrent($0) } ?? "—")
+    }
+
+    // Visibility
+    @ViewBuilder
+    private var conditionsVisibilityRow: some View {
+        let depthUnit = prefs.depthUnit.symbol
+        if let visibility = dive.visibility {
+            let visibilityDisplay: String = {
+                let trimmed = visibility.trimmingCharacters(in: .whitespaces)
+                return Double(trimmed) != nil ? "\(trimmed) \(depthUnit)" : trimmed
+            }()
+            ConditionRow(
+                icon: "eye",
+                color: .green,
+                label: "Visibility",
+                value: visibilityDisplay
+            )
+        } else {
+            ConditionRow(
+                icon: "eye",
+                color: .green,
+                label: "Visibility",
+                value: "—"
+            )
         }
     }
 

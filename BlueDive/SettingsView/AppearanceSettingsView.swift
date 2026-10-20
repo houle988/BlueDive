@@ -11,44 +11,6 @@ struct AppearanceSettingsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 VStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Theme", systemImage: "circle.lefthalf.filled")
-                            .font(.subheadline)
-                            .foregroundStyle(.cyan)
-                        Picker("Theme", selection: $prefs.appearanceMode) {
-                            ForEach(AppearanceMode.allCases, id: \.self) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-
-                    if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                    } else {
-                        Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                    }
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal)
-
-                VStack(spacing: 12) {
                     HStack {
                         Label("Language", systemImage: "globe")
                             .font(.subheadline)
@@ -65,17 +27,63 @@ struct AppearanceSettingsView: View {
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    if ProcessInfo.processInfo.isiOSAppOnMac {
-                        Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
+                    #if os(macOS)
+                    Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #else
+                    Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #endif
+                    // Only relevant when iNaturalist lookups are on (off by default).
+                    if prefs.fetchTaxonomyOnline, prefs.taxonomyNameLanguage.isEmpty {
+                        Text("Species names from iNaturalist can be fetched in this language in Settings → Online Services → Update Species from iNaturalist.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal)
-                    } else {
-                        Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Theme", systemImage: "circle.lefthalf.filled")
+                            .font(.subheadline)
+                            .foregroundStyle(.cyan)
+                        Picker("Theme", selection: $prefs.appearanceMode) {
+                            ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                                Text(mode.label).tag(mode)
+                            }
+                        }
+                        .fullWidthSegmentedPicker()
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    #if os(macOS)
+                    Text("Choose System to follow your device's appearance (System Settings → Appearance), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #else
+                    Text("Choose System to follow your device's appearance (Settings → Display & Brightness), or override with Light or Dark. Switching from or to System will close Settings to apply the change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    #endif
                 }
                 .padding()
                 .background(
@@ -91,7 +99,7 @@ struct AppearanceSettingsView: View {
             .padding(.vertical)
         }
         .settingsGradientBackground()
-        .navigationTitle(Text(verbatim: NSLocalizedString("Appearance", bundle: .forAppLanguage(), value: "Appearance", comment: "")))
+        .navigationTitle(Text(verbatim: NSLocalizedString("Appearance & Language", bundle: .forAppLanguage(), value: "Appearance & Language", comment: "Title of the settings page for the theme and the in-app language")))
         .preferredColorScheme(prefs.appearanceMode.colorScheme)
         .onChange(of: prefs.appearanceMode) {
             if previousAppearance == .system || prefs.appearanceMode == .system {

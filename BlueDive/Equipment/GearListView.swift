@@ -1,0 +1,1632 @@
+import SwiftUI
+import SwiftData
+import UniformTypeIdentifiers
+#if canImport(AppKit)
+import AppKit
+#endif
+
+struct GearListView: View {
+    @Query(sort: \Gear.name) private var allGear: [Gear]
+    @Query(sort: \GearGroup.name) private var allGearGroups: [GearGroup]
+    @Query(sort: \TankTemplate.name) private var allTankTemplates: [TankTemplate]
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
+    @Environment(FileImportCoordinator.self) private var importCoordinator
+    @Environment(DiveStore.self) private var store
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
+
+    @State private var showAddGear = false
+    @State private var selectedGear: Gear?
+    /// Gear opened in the edit sheet from a row's context menu.
+    @State private var gearToEdit: Gear?
+    /// Gear awaiting confirmation after Delete was chosen in a row's context menu.
+    @State private var gearToDelete: Gear?
+    @State private var searchText = ""
+    /// Memoized category work for `filteredGear`, which runs several times per render: the
+    /// resolved category of each stored value and the search's category-name matches. A plain
+    /// reference read synchronously in the body (never a value set after rendering, which
+    /// would filter one keystroke late).
+    @State private var categoryCache = GearCategoryCache()
+    /// The service banner's X: hides it until the app is relaunched.
+    @State private var isServiceBannerDismissed = false
+    @State private var filterCategory: GearCategory?
+    @State private var showInactive = false
+    @State private var showFilterSheet = false
+    @State private var collapsedSections: Set<String> = []
+    #if os(macOS)
+    /// Whether the rows show their one-line version (wide window), reported by the rows; the
+    /// column header row is shown only then. Starts one-line: the main window opens maximized.
+    @State private var gearListLayout = OneLineRowsLayout()
+    #endif
+    @State private var showTankTemplates = false
+    @State private var showGearGroups = false
+    @State private var showImportPicker = false
+    @State private var importError: String?
+    @State private var showImportError = false
+    @State private var importedCount: Int = 0
+    @State private var importedGroupCount: Int = 0
+    @State private var importedTemplateCount: Int = 0
+    @State private var importedGroupMissingMemberCount: Int = 0
+    @State private var importedGearOnly = false
+    @State private var showImportSuccess = false
+    @State private var showNothingToImport = false
+    @State private var importedServiceDataOnly = false
+    @State private var pendingGearCSVData: Data?
+    @State private var pendingGearCSVFileName: String = ""
+    @State private var csvFormatOptions = ImportFormatOptions()
+    @State private var showGearCSVFormatPicker = false
+    @State private var isImporting = false
+    @State private var importProgressFileName: String = ""
+    // Gear import preview state (shared by XML and CSV paths)
+    @State private var showGearImportPreview = false
+    @State private var pendingGearXMLResult: GearXMLParser.GearParseResult?
+    @State private var pendingGearCSVItems: [GearXMLParser.ParsedGear]?
+    @State private var gearImportPreviewNew: [ImportPreviewItem] = []
+    @State private var gearImportPreviewDuplicates: [ImportPreviewItem] = []
+    @State private var gearPreviewFileName: String = ""
+    #if os(iOS)
+    @State private var showFileExporter = false
+    @State private var exportDocument: ExportableFileDocument?
+    @State private var exportFileName: String = ""
+    #endif
+
+    // MARK: - Computed Properties
+
+    // DiveStore's complete diver list (dives, gear, certifications, insurance), kept current
+    // by DiverSourcesFeeder — no local recomputation over every dive on each body pass.
+    private var uniqueDivers: [String] { store.cachedUniqueDivers }
+
+    /// Équipement filtré par recherche et catégorie
+    private var filteredGear: [Gear] {
+        var gear = allGear
+
+        // Filtre par statut actif/inactif
+        if !showInactive {
+            gear = gear.filter { !$0.isInactive }
+        }
+
+        // Filtre par plongeur
+        if !selectedDiver.isEmpty {
+            gear = gear.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver }
+        }
+
+        // Filtre par catégorie (resolved like the section titles: aliases and older
+        // export keys count as their category)
+        if let category = filterCategory {
+            gear = gear.filter { categoryCache.category(of: $0) == category }
+        }
+
+        // Filtre par recherche
+        if !searchText.isEmpty {
+            // The category is stored in English (or as an older export key / alias): also
+            // match its name in the app language, so "Premier étage" finds first stages.
+            // Resolved through `gearCategory`, as the section titles and the filter are.
+            let matchingCategories = categoryCache.categories(matching: searchText)
+            // Every field ignores accents as well as case ("regulateur" finds "Régulateur").
+            gear = gear.filter { item in
+                item.name.localizedStandardContains(searchText) ||
+                item.category.localizedStandardContains(searchText) ||
+                (categoryCache.category(of: item).map { matchingCategories.contains($0) } ?? false)
+            }
+        }
+
+        return gear
+    }
+    
+    /// Équipement groupé par catégorie
+    private var groupedGear: [(key: String, items: [Gear])] {
+        gearCategorySections(filteredGear, locale: locale) { categoryCache.category(of: $0) }
+    }
+
+    private var sortedCategories: [GearCategory] {
+        GearCategory.sorted(for: locale)
+    }
+
+    /// Équipement nécessitant un entretien — service due within 30 days or already past
+    private var gearNeedingService: [Gear] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let warningDate = calendar.date(byAdding: .day, value: 30, to: today) else {
+            return []
+        }
+        return allGear.filter { gear in
+            guard !gear.isInactive, let due = gear.nextServiceDue else { return false }
+            let serviceDay = calendar.startOfDay(for: due)
+            return serviceDay <= warningDate
+        }
+    }
+
+    /// Équipement dont l'entretien est déjà dû ou dépassé
+    private var gearOverdue: [Gear] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return allGear.filter { gear in
+            guard !gear.isInactive, let due = gear.nextServiceDue else { return false }
+            return calendar.startOfDay(for: due) <= today
+        }
+    }
+
+    private var xmlImportBaseMessage: String {
+        let gearPhrase: String
+        if importedCount == 0 {
+            gearPhrase = NSLocalizedString("0 gear items", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for zero gear items in the XML import success message.")
+        } else if importedCount == 1 {
+            gearPhrase = NSLocalizedString("1 gear item", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for one gear item in the XML import success message.")
+        } else {
+            gearPhrase = String(format: NSLocalizedString("%lld gear items", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for multiple gear items in the XML import success message."), importedCount)
+        }
+        let groupPhrase: String
+        if importedGroupCount == 0 {
+            groupPhrase = NSLocalizedString("0 groups", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for zero groups in the XML import success message.")
+        } else if importedGroupCount == 1 {
+            groupPhrase = NSLocalizedString("1 group", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for one group in the XML import success message.")
+        } else {
+            groupPhrase = String(format: NSLocalizedString("%lld groups", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for multiple groups in the XML import success message."), importedGroupCount)
+        }
+        let templatePhrase: String
+        if importedTemplateCount == 0 {
+            templatePhrase = NSLocalizedString("0 tank templates", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for zero tank templates in the XML import success message.")
+        } else if importedTemplateCount == 1 {
+            templatePhrase = NSLocalizedString("1 tank template", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for one tank template in the XML import success message.")
+        } else {
+            templatePhrase = String(format: NSLocalizedString("%lld tank templates", bundle: Bundle.forAppLanguage(), comment: "Noun phrase for multiple tank templates in the XML import success message."), importedTemplateCount)
+        }
+        return String(
+            format: NSLocalizedString("%1$@, %2$@, and %3$@ imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Sentence frame for the XML gear import success message. Arguments: gear noun phrase, group noun phrase, tank template noun phrase."),
+            gearPhrase, groupPhrase, templatePhrase
+        )
+    }
+
+    private var xmlImportWarning: String? {
+        guard importedGroupMissingMemberCount > 0 else { return nil }
+        return importedGroupMissingMemberCount == 1
+            ? NSLocalizedString("1 group member could not be matched and was skipped.", bundle: Bundle.forAppLanguage(), comment: "Warning when exactly one gear group member could not be matched and was skipped during import.")
+            : String(format: NSLocalizedString("%lld group members could not be matched and were skipped.", bundle: Bundle.forAppLanguage(), comment: "Warning when multiple gear group members could not be matched and were skipped during import."), importedGroupMissingMemberCount)
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        ZStack {
+            // Same gradient as the Dives tab (MainTabView draws the opaque background beneath).
+            AppBackground(opaque: false).ignoresSafeArea()
+            
+            withServiceBannerBar(contentSection)
+                .animation(.easeInOut(duration: 0.3), value: gearNeedingService.isEmpty)
+        }
+        .overlay {
+            if isImporting {
+                ZStack {
+                    Color.black.opacity(0.6).ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        ProgressView().scaleEffect(1.5)
+                        Text("Importing...")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        if !importProgressFileName.isEmpty {
+                            Text(verbatim: importProgressFileName)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    .padding(32)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: isImporting)
+        .navigationTitle("")
+        .sideStripNavigationBar()
+        .mainListSearchable(text: $searchText, prompt: Text("Search equipment..."))
+        .animation(.easeInOut(duration: 0.3), value: searchText)
+        .animation(.easeInOut(duration: 0.3), value: filterCategory)
+        .animation(.easeInOut(duration: 0.3), value: showInactive)
+        .toolbar { toolbarContent }
+        .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+        .onChange(of: selectedDiver) {
+            if let cat = filterCategory {
+                let relevant = selectedDiver.isEmpty ? allGear : allGear.filter { $0.diverName == selectedDiver }
+                if !relevant.contains(where: { categoryCache.category(of: $0) == cat }) {
+                    filterCategory = nil
+                }
+            }
+        }
+        .sheet(isPresented: $showAddGear) {
+            AddGearView()
+                .standardSheetPresentation()
+        }
+        .sheet(isPresented: $showFilterSheet) {
+            GearFilterSheet(
+                categories: filterCategoryChoices,
+                showsInactiveToggle: inactiveCount > 0 || showInactive,
+                activeFilterCount: activeFilterCount,
+                filterCategory: $filterCategory,
+                showInactive: $showInactive,
+                reset: resetFilters
+            )
+            .standardSheetPresentation()
+        }
+        .sheet(item: $selectedGear) { gear in
+            GearServiceView(gear: gear)
+                .standardSheetPresentation()
+        }
+        .sheet(item: $gearToEdit) { gear in
+            EditGearView(gear: gear)
+                .standardSheetPresentation()
+        }
+        // Every delete asks first — swipe (iOS .onDelete, macOS swipe action) and the
+        // right-click / long-press Delete — as tank templates and gear groups do.
+        .alert(
+            "Delete equipment?",
+            isPresented: Binding(
+                get: { gearToDelete != nil },
+                set: { if !$0 { gearToDelete = nil } }
+            ),
+            presenting: gearToDelete
+        ) { gear in
+            Button("Cancel", role: .cancel) { gearToDelete = nil }
+            Button("Delete", role: .destructive) {
+                // The gear may have been deleted on another device (iCloud) while the alert
+                // was open: marked deleted, or already detached from its context once that
+                // deletion was saved. Deleting or reading a deleted model can crash.
+                if !gear.isDeleted, gear.modelContext != nil { deleteGear(gear) }
+                gearToDelete = nil
+            }
+        } message: { gear in
+            Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), value: "Are you sure you want to delete \"%@\"? This action cannot be undone.", comment: "Delete confirmation alert message."), gear.isDeleted || gear.modelContext == nil ? "" : gear.name))
+        }
+        .sheet(isPresented: $showTankTemplates) {
+            TankTemplateListView()
+                .standardSheetPresentation()
+        }
+        .sheet(isPresented: $showGearGroups) {
+            GearGroupListView()
+                .standardSheetPresentation()
+        }
+        .sheet(isPresented: $showGearCSVFormatPicker) {
+            ImportFormatPickerView(
+                options: $csvFormatOptions,
+                fileType: .gearCSV,
+                fileName: pendingGearCSVFileName,
+                onConfirm: {
+                    showGearCSVFormatPicker = false
+                    importProgressFileName = pendingGearCSVFileName
+                    isImporting = true
+                    commitGearCSVImport()
+                },
+                onCancel: {
+                    showGearCSVFormatPicker = false
+                    pendingGearCSVData = nil
+                    pendingGearCSVFileName = ""
+                    importProgressFileName = ""
+                }
+            )
+            .standardSheetPresentation()
+        }
+        .sheet(isPresented: $showGearImportPreview) {
+            ImportPreviewSheet(
+                icon: "compass.drawing",
+                iconColor: .cyan,
+                newItems: gearImportPreviewNew,
+                duplicateItems: gearImportPreviewDuplicates,
+                fileName: gearPreviewFileName,
+                onImport: {
+                    if pendingGearXMLResult != nil {
+                        commitGearXMLImport()
+                    } else {
+                        commitGearCSVActualImport()
+                    }
+                },
+                onCancel: {
+                    showGearImportPreview = false
+                    pendingGearXMLResult = nil
+                    pendingGearCSVItems = nil
+                    gearImportPreviewNew = []
+                    gearImportPreviewDuplicates = []
+                }
+            )
+            .standardSheetPresentation()
+        }
+        .onChange(of: showGearImportPreview) { _, isShown in
+            if !isShown {
+                pendingGearXMLResult = nil
+                pendingGearCSVItems = nil
+                gearImportPreviewNew = []
+                gearImportPreviewDuplicates = []
+                gearPreviewFileName = ""
+            }
+        }
+        .fileImporter(
+            isPresented: $showImportPicker,
+            allowedContentTypes: [.xml, .commaSeparatedText],
+            allowsMultipleSelection: false
+        ) { result in
+            handleImportResult(result)
+        }
+        #if os(iOS)
+        .fileExporter(
+            isPresented: $showFileExporter,
+            document: exportDocument,
+            contentType: .blueDiveXML,
+            defaultFilename: exportFileName
+        ) { _ in
+            exportDocument = nil
+        }
+        #endif
+        .alert("Import Successful", isPresented: $showImportSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            // importedServiceDataOnly must be checked before importedGearOnly: on the CSV path
+            // both flags are true simultaneously when the only change was a service data sync.
+            if importedServiceDataOnly {
+                Text("Service records updated for existing gear.")
+            } else if importedGearOnly {
+                Text(verbatim: importedCount == 0
+                    ? NSLocalizedString("0 gear items imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown when a gear CSV import completes but all items already existed.")
+                    : importedCount == 1
+                    ? NSLocalizedString("1 gear item imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing exactly one gear item.")
+                    : String(format: NSLocalizedString("%lld gear items imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Success message shown after importing gear items from a MacDive CSV file."), importedCount))
+            } else if let warning = xmlImportWarning {
+                Text(verbatim: xmlImportBaseMessage + "\n" + warning)
+            } else {
+                Text(verbatim: xmlImportBaseMessage)
+            }
+        }
+        .alert("Nothing to Import", isPresented: $showNothingToImport) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("All gear, groups, and tank templates in the file already exist.")
+        }
+        .alert("Import error", isPresented: $showImportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(verbatim: importError ?? NSLocalizedString("An unknown error occurred.", bundle: Bundle.forAppLanguage(), comment: "Default error message shown in the import error alert when no specific error is available."))
+        }
+        .onAppear {
+            if let pending = importCoordinator.pendingGearXML {
+                importCoordinator.pendingGearXML = nil
+                handleGearXMLData(pending.data, fileName: pending.fileName)
+            }
+        }
+        .onChange(of: importCoordinator.pendingGearXML) { _, newValue in
+            guard let pending = newValue else { return }
+            importCoordinator.pendingGearXML = nil
+            handleGearXMLData(pending.data, fileName: pending.fileName)
+        }
+
+    }
+    
+    // MARK: - View Components
+    
+    /// Whether `contentSection` shows the gear list rather than an empty state
+    /// (`filteredGear` is a subset of `allGear`).
+    private var showsGearList: Bool {
+        !filteredGear.isEmpty
+    }
+
+    @ViewBuilder
+    private var contentSection: some View {
+        if allGear.isEmpty {
+            emptyStateView
+                .transition(.opacity)
+        } else if showsGearList {
+            gearList
+                .transition(.opacity)
+        } else if !selectedDiver.isEmpty && filterCategory == nil && searchText.isEmpty {
+            noGearForDiverView
+                .transition(.opacity)
+        } else {
+            noResultsView
+                .transition(.opacity)
+        }
+    }
+
+    private var emptyStateView: some View {
+        ContentUnavailableView(
+            "No Equipment",
+            systemImage: "wrench.and.screwdriver",
+            description: Text("Add your tanks, suits, and regulators to track their usage and maintenance.")
+        )
+    }
+
+    /// Not `ContentUnavailableView.search`, whose text is SwiftUI's own and follows the system
+    /// language, not the in-app language; worded as the Dives tab's "No dives found".
+    /// With the action that clears the filters when some are active, as on the Marine Life
+    /// tab (otherwise only the toolbar's filter button could clear them).
+    private var noResultsView: some View {
+        ContentUnavailableView {
+            Label("No equipment found", systemImage: "magnifyingglass")
+        } description: {
+            Text("Try other keywords or modify the filters.")
+        } actions: {
+            if activeFilterCount > 0 {
+                Button {
+                    withAnimation { resetFilters() }
+                } label: {
+                    Label("Clear filters", systemImage: "xmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.cyan)
+                }
+                .borderlessButton()
+            }
+        }
+    }
+
+    private var noGearForDiverView: some View {
+        NoEntriesForDiverView(
+            title: Text(verbatim: String(format: NSLocalizedString("No Equipment for %@", bundle: Bundle.forAppLanguage(), value: "No Equipment for %@", comment: "Empty-state title when the selected diver has no gear; %@ is the diver's name"), selectedDiver)),
+            description: Text(verbatim: String(format: NSLocalizedString("No equipment was found for %@.", bundle: Bundle.forAppLanguage(), value: "No equipment was found for %@.", comment: "Empty-state description when the selected diver has no gear; %@ is the diver's name"), selectedDiver))
+        )
+    }
+    
+    /// Banner colour: red when any gear is overdue, orange when only approaching.
+    private var bannerColor: Color {
+        gearOverdue.isEmpty ? .orange : .red
+    }
+
+    /// Pins the service banner above the content (the list or an empty state) as a bar: the
+    /// list still reaches the top and scrolls under the banner and the toolbar, with the system
+    /// scroll edge effect, so the top stays translucent as in the other tabs. On macOS the bar
+    /// sits above the list's pinned column labels (`pinnedColumnHeader`, a bar inside it).
+    @ViewBuilder
+    private func withServiceBannerBar<Content: View>(_ content: Content) -> some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            content.safeAreaBar(edge: .top, spacing: 0) {
+                serviceBannerBarContent
+            }
+        } else {
+            // No scroll edge effect before 26: the bar material keeps rows from showing
+            // through the translucent banner (as `pinnedColumnHeader` does), without
+            // extending under the toolbar.
+            content.safeAreaInset(edge: .top, spacing: 0) {
+                serviceBannerBarContent
+                    .background(.bar, ignoresSafeAreaEdges: [])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var serviceBannerBarContent: some View {
+        if !gearNeedingService.isEmpty && !isServiceBannerDismissed {
+            serviceAlertBanner
+                .padding(.vertical, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    /// Inset and rounded like the list's cards on macOS.
+    private var serviceAlertBanner: some View {
+        #if os(macOS)
+        let sideInset = MacListCard.margin
+        let cornerRadius = MacListCard.cornerRadius
+        #else
+        let sideInset: CGFloat = 16
+        let cornerRadius: CGFloat = 12
+        #endif
+        return HStack {
+            Image(systemName: gearOverdue.isEmpty ? "exclamationmark.triangle" : "xmark.shield")
+                .foregroundStyle(bannerColor)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Group {
+                    if gearOverdue.isEmpty {
+                        Text("Service Upcoming")
+                    } else {
+                        Text("Service Required")
+                    }
+                }
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                
+                bannerSubtitle
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isServiceBannerDismissed = true
+                }
+            } label: {
+                // A 44 pt tap target (at least: it grows with Dynamic Type). The negative padding
+                // keeps it from making the banner taller and keeps the glyph near the trailing edge.
+                Image(systemName: "xmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .borderlessButton()
+            .padding(.vertical, -6)
+            .padding(.trailing, -10)
+            .accessibilityLabel(Text("Dismiss Service Alert", comment: "Accessibility label of the X button that hides the Equipment tab's service banner until the app is relaunched"))
+        }
+        .padding()
+        // A shape background only fills the banner, not the safe area under the toolbar.
+        .background(bannerColor.opacity(0.15), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .padding(.horizontal, sideInset)
+    }
+
+    private var bannerSubtitle: Text {
+        let overdueCount = gearOverdue.count
+        let approachingCount = gearNeedingService.count - overdueCount
+        if overdueCount > 0 && approachingCount > 0 {
+            return Text("\(overdueCount) overdue") + Text(", ") + Text("\(approachingCount) due soon")
+        } else if overdueCount > 0 {
+            return Text("\(overdueCount) overdue")
+        } else {
+            return Text("\(approachingCount) due soon")
+        }
+    }
+    
+    private var gearList: some View {
+        List {
+            // Liste groupée
+            ForEach(groupedGear, id: \.key) { category, items in
+                Section(isExpanded: Binding(
+                    get: { !collapsedSections.contains(category) },
+                    set: { isExpanded in
+                        if isExpanded {
+                            collapsedSections.remove(category)
+                        } else {
+                            collapsedSections.insert(category)
+                        }
+                    }
+                )) {
+                    ForEach(items) { item in
+                        Button {
+                            selectedGear = item
+                        } label: {
+                            GearRow(gear: item)
+                        }
+                        .buttonStyle(.plain)
+                        // Same row background as the Dives tab (a card per section on macOS).
+                        .listRowBackground(Color.primary.opacity(0.07),
+                                           macFirst: item.id == items.first?.id,
+                                           macLast: item.id == items.last?.id)
+                        #if os(iOS)
+                        // iOS starts the separator at the row's first Text, after the icon: start
+                        // it at the row's leading edge, as in the Dives list.
+                        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                        #endif
+                        // Right-click (macOS) / long-press (iOS): the way to delete with a mouse
+                        // that cannot swipe; also opens or edits the item.
+                        .contextMenu {
+                            Button { selectedGear = item } label: {
+                                Label("View Details", systemImage: "eye")
+                            }
+                            Button { gearToEdit = item } label: {
+                                Label("Edit Equipment", systemImage: "pencil")
+                            }
+                            Divider()
+                            Button(role: .destructive) {
+                                gearToDelete = item
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        #if os(macOS)
+                        // macOS does not synthesize swipe-to-delete from .onDelete (iOS does): add it
+                        // explicitly, routed through the same handler as .onDelete
+                        // (requestDeleteGear: the "Delete equipment?" alert).
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                if let index = items.firstIndex(of: item) {
+                                    requestDeleteGear(items: items, at: IndexSet(integer: index))
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            .tint(.red)
+                        }
+                        #endif
+                    }
+                    .onDelete { indexSet in
+                        requestDeleteGear(items: items, at: indexSet)
+                    }
+                } header: {
+                    GearCategorySectionTitle(key: category, showsIcon: true)
+                    .font(.headline)
+                    .foregroundStyle(.cyan)
+                }
+            }
+        }
+        // .sidebar is required for Section(isExpanded:) collapse/expand to function
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        #if os(macOS)
+        // The rows are cards inset from the window's edges (see `MacListCard`).
+        .macCardListMargins()
+        // Column labels pinned above the list, once for all categories (the list is shown
+        // only when some gear matches; otherwise "No equipment found").
+        .pinnedColumnHeader(gearListLayout) { GearListColumnHeader() }
+        .environment(gearListLayout)
+        #endif
+        .refreshable {
+            try? modelContext.save()
+            NSUbiquitousKeyValueStore.default.synchronize()
+            try? await Task.sleep(for: .seconds(1.5))
+        }
+    }
+    
+    /// The categories offered in the filter sheet: those with gear the list can show for the
+    /// selected diver (inactive gear only while "show inactive" is on), in display order, plus
+    /// the selected one if it has none any more, so a filter left on it can still be seen and
+    /// cleared.
+    private var filterCategoryChoices: [GearCategory] {
+        let diverBase = allGear.filter { gear in
+            (showInactive || !gear.isInactive)
+                && (selectedDiver.isEmpty || gear.diverName.trimmingCharacters(in: .whitespaces) == selectedDiver)
+        }
+        let used = Set(diverBase.compactMap { categoryCache.category(of: $0) })
+        return sortedCategories.filter { used.contains($0) || $0 == filterCategory }
+    }
+
+    private func resetFilters() {
+        filterCategory = nil
+        showInactive = false
+    }
+
+    /// Category filter and "show inactive" (not the default view) in use.
+    private var activeFilterCount: Int {
+        (filterCategory == nil ? 0 : 1) + (showInactive ? 1 : 0)
+    }
+
+    /// Number of inactive gear items (the filter sheet offers "show inactive" only when > 0)
+    private var inactiveCount: Int {
+        allGear.filter { $0.isInactive }.count
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        MainWindowToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver) {
+            addGearButton
+            filterButton
+            gearMoreMenu
+        }
+    }
+
+    // Toolbar controls, laid out for each platform by `MainWindowToolbar` above.
+
+    /// Opens the filter sheet; orange with the number of active filters, as in the Dives and
+    /// Marine Life tabs.
+    private var filterButton: some View {
+        Button(action: { showFilterSheet = true }) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
+
+                if activeFilterCount > 0 {
+                    Text(verbatim: Double(activeFilterCount).localizedString(decimals: 0))
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.black)
+                        .padding(3)
+                        .background(Color.orange, in: Circle())
+                        .offset(x: 6, y: -6)
+                }
+            }
+        }
+        .accessibilityLabel(activeFilterCount == 0
+            ? Text("Filter equipment")
+            : Text(verbatim: String(format: NSLocalizedString("%d active filters", bundle: .forAppLanguage(), value: "%d active filters", comment: "Accessibility label for the filter button showing the number of active filters"), activeFilterCount))
+        )
+    }
+
+    private var addGearButton: some View {
+        Button {
+            showAddGear = true
+        } label: {
+            Image(systemName: "plus")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Add Equipment"))
+    }
+
+    private var gearMoreMenu: some View {
+        Menu {
+            Button(action: { showTankTemplates = true }) {
+                Label("Tank Templates", systemImage: "cylinder")
+            }
+            Button(action: { showGearGroups = true }) {
+                Label("Gear Groups", systemImage: "tray.2")
+            }
+            Divider()
+            Button {
+                exportGearToXML()
+            } label: {
+                Label("Export", systemImage: "square.and.arrow.up")
+            }
+            .disabled(allGear.isEmpty)
+            Button {
+                showImportPicker = true
+            } label: {
+                Label("Import", systemImage: "square.and.arrow.down")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("More"))
+    }
+
+    // MARK: - Actions
+    
+    /// Swipe-to-delete (iOS .onDelete and the macOS swipe action): asks through the
+    /// "Delete equipment?" alert instead of deleting at once. A swipe always passes a single
+    /// row (this list has no edit mode for multiple selection), so only the first offset is
+    /// used.
+    private func requestDeleteGear(items: [Gear], at offsets: IndexSet) {
+        guard let index = offsets.first, items.indices.contains(index) else { return }
+        gearToDelete = items[index]
+    }
+
+    /// Deletes one gear item once the "Delete equipment?" alert is confirmed.
+    private func deleteGear(_ gear: Gear) {
+        deleteGear(items: [gear], at: IndexSet(integer: 0))
+    }
+
+    private func deleteGear(items: [Gear], at offsets: IndexSet) {
+        withAnimation {
+            for index in offsets {
+                let itemToDelete = items[index]
+                NotificationManager.shared.cancelGearReminder(id: itemToDelete.id)
+                modelContext.delete(itemToDelete)
+            }
+            try? modelContext.save()
+        }
+    }
+
+    @MainActor
+    private func exportGearToXML() {
+        let xml = GearXMLExporter.generateXML(for: allGear, groups: allGearGroups, tankTemplates: allTankTemplates)
+        guard let data = xml.data(using: .utf8) else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        let datePart = formatter.string(from: Date())
+        let fileName = "BlueDive_Gear_\(datePart).bluedive"
+
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = fileName
+        panel.allowedContentTypes = [.blueDiveXML]
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? data.write(to: url)
+        }
+        #else
+        exportDocument = ExportableFileDocument(data: data)
+        exportFileName = fileName
+        showFileExporter = true
+        #endif
+    }
+
+    private func handleImportResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let accessing = url.startAccessingSecurityScopedResource()
+            let data: Data
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                if accessing { url.stopAccessingSecurityScopedResource() }
+                importError = error.localizedDescription
+                showImportError = true
+                return
+            }
+            if accessing { url.stopAccessingSecurityScopedResource() }
+
+            // ── CSV path: show weight-unit picker before importing ─────────────
+            if url.pathExtension.lowercased() == "csv" {
+                pendingGearCSVData = data
+                pendingGearCSVFileName = url.lastPathComponent
+                csvFormatOptions = ImportFormatOptions()
+                showGearCSVFormatPicker = true
+                return
+            }
+
+            // ── XML path: parse on background thread, then show preview ───────
+            let fileName = url.lastPathComponent
+            importProgressFileName = fileName
+            isImporting = true
+
+            Task {
+                do {
+                    let parsed: GearXMLParser.GearParseResult = try await withCheckedThrowingContinuation { continuation in
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            let parser = GearXMLParser()
+                            guard let result = parser.parse(data: data), !result.isEmpty else {
+                                continuation.resume(throwing: ImportError.parsingFailed)
+                                return
+                            }
+                            continuation.resume(returning: result)
+                        }
+                    }
+
+                    await MainActor.run {
+                        isImporting = false
+                        importProgressFileName = ""
+                        let (newGear, dupGear) = classifyGearItems(parsed.gearItems)
+
+                        let existingGroupIDs = Set(allGearGroups.map(\.id))
+                        let newGroups = parsed.gearGroups.filter { !existingGroupIDs.contains($0.id) }
+                        let dupGroups = parsed.gearGroups.filter { existingGroupIDs.contains($0.id) }
+
+                        let existingTemplateIDs = Set(allTankTemplates.map(\.id))
+                        let newTemplates = parsed.tankTemplates.filter { !existingTemplateIDs.contains($0.id) }
+                        let dupTemplates = parsed.tankTemplates.filter { existingTemplateIDs.contains($0.id) }
+
+                        // Nothing genuinely new: bypass the preview so service-data updates
+                        // on duplicate gear items are still committed.
+                        if newGear.isEmpty && newGroups.isEmpty && newTemplates.isEmpty {
+                            pendingGearXMLResult = parsed
+                            commitGearXMLImport()
+                            return
+                        }
+
+                        let bundle = Bundle.forAppLanguage()
+                        let groupLabel = NSLocalizedString("Gear Group", bundle: bundle, comment: "Type label for a gear group in the import preview detail")
+                        let templateLabel = NSLocalizedString("Tank Template", bundle: bundle, comment: "Type label for a tank template in the import preview detail")
+                        gearImportPreviewNew = makeGearPreviewItems(newGear)
+                            + newGroups.map { ImportPreviewItem(name: $0.name, detail: groupLabel) }
+                            + newTemplates.map { ImportPreviewItem(name: $0.name, detail: templateLabel) }
+                        gearImportPreviewDuplicates = makeGearPreviewItems(dupGear)
+                            + dupGroups.map { ImportPreviewItem(name: $0.name, detail: groupLabel) }
+                            + dupTemplates.map { ImportPreviewItem(name: $0.name, detail: templateLabel) }
+                        pendingGearXMLResult = parsed
+                        gearPreviewFileName = fileName
+                        showGearImportPreview = true
+                    }
+                } catch {
+                    await MainActor.run {
+                        isImporting = false
+                        importProgressFileName = ""
+                        importError = NSLocalizedString("No gear data found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports a gear XML file that contains no gear items, groups, or tank templates.")
+                        showImportError = true
+                    }
+                }
+            }
+
+        case .failure(let error):
+            importError = error.localizedDescription
+            showImportError = true
+        }
+    }
+
+    /// Processes a Gear XML payload delivered via file association (coordinator path).
+    /// Mirrors the XML branch of handleImportResult but accepts pre-loaded Data.
+    func handleGearXMLData(_ data: Data, fileName: String) {
+        guard !showGearImportPreview, !isImporting else { return }
+        importProgressFileName = fileName
+        isImporting = true
+
+        Task {
+            do {
+                let parsed: GearXMLParser.GearParseResult = try await withCheckedThrowingContinuation { continuation in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let parser = GearXMLParser()
+                        guard let result = parser.parse(data: data), !result.isEmpty else {
+                            continuation.resume(throwing: ImportError.parsingFailed)
+                            return
+                        }
+                        continuation.resume(returning: result)
+                    }
+                }
+
+                await MainActor.run {
+                    isImporting = false
+                    importProgressFileName = ""
+                    let (newGear, dupGear) = classifyGearItems(parsed.gearItems)
+
+                    let existingGroupIDs = Set(allGearGroups.map(\.id))
+                    let newGroups = parsed.gearGroups.filter { !existingGroupIDs.contains($0.id) }
+                    let dupGroups = parsed.gearGroups.filter { existingGroupIDs.contains($0.id) }
+
+                    let existingTemplateIDs = Set(allTankTemplates.map(\.id))
+                    let newTemplates = parsed.tankTemplates.filter { !existingTemplateIDs.contains($0.id) }
+                    let dupTemplates = parsed.tankTemplates.filter { existingTemplateIDs.contains($0.id) }
+
+                    if newGear.isEmpty && newGroups.isEmpty && newTemplates.isEmpty {
+                        pendingGearXMLResult = parsed
+                        commitGearXMLImport()
+                        return
+                    }
+
+                    let bundle = Bundle.forAppLanguage()
+                    let groupLabel = NSLocalizedString("Gear Group", bundle: bundle, comment: "Type label for a gear group in the import preview detail")
+                    let templateLabel = NSLocalizedString("Tank Template", bundle: bundle, comment: "Type label for a tank template in the import preview detail")
+                    gearImportPreviewNew = makeGearPreviewItems(newGear)
+                        + newGroups.map { ImportPreviewItem(name: $0.name, detail: groupLabel) }
+                        + newTemplates.map { ImportPreviewItem(name: $0.name, detail: templateLabel) }
+                    gearImportPreviewDuplicates = makeGearPreviewItems(dupGear)
+                        + dupGroups.map { ImportPreviewItem(name: $0.name, detail: groupLabel) }
+                        + dupTemplates.map { ImportPreviewItem(name: $0.name, detail: templateLabel) }
+                    pendingGearXMLResult = parsed
+                    gearPreviewFileName = fileName
+                    showGearImportPreview = true
+                }
+            } catch {
+                await MainActor.run {
+                    isImporting = false
+                    importProgressFileName = ""
+                    importError = NSLocalizedString("No gear data found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports a gear XML file that contains no gear items, groups, or tank templates.")
+                    showImportError = true
+                }
+            }
+        }
+    }
+
+    private func commitGearCSVImport() {
+        guard let data = pendingGearCSVData else { return }
+        pendingGearCSVData = nil
+        let fileName = pendingGearCSVFileName
+        pendingGearCSVFileName = ""
+        let diverName = ""
+        let weightFormat = csvFormatOptions.weightFormat
+
+        Task {
+            let items: [GearXMLParser.ParsedGear]? = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let csvParser = GearCSVParser()
+                    continuation.resume(returning: csvParser.parse(data: data, diverName: diverName, weightUnit: weightFormat))
+                }
+            }
+
+            await MainActor.run {
+                importProgressFileName = ""
+                isImporting = false
+
+                guard let items else {
+                    importError = NSLocalizedString("No gear data found in the selected file.", bundle: Bundle.forAppLanguage(), comment: "Error message when the user imports a gear XML file that contains no gear items, groups, or tank templates.")
+                    showImportError = true
+                    return
+                }
+                guard !items.isEmpty else {
+                    showNothingToImport = true
+                    return
+                }
+
+                let (newGear, dupGear) = classifyGearItems(items)
+                // No new gear items: bypass the preview so service-data updates
+                // on duplicates still get committed.
+                if newGear.isEmpty {
+                    pendingGearCSVItems = items
+                    commitGearCSVActualImport()
+                    return
+                }
+                gearImportPreviewNew = makeGearPreviewItems(newGear)
+                gearImportPreviewDuplicates = makeGearPreviewItems(dupGear)
+                pendingGearCSVItems = items
+                gearPreviewFileName = fileName
+                showGearImportPreview = true
+            }
+        }
+    }
+
+    /// Commits the pending gear CSV import after the user confirms the preview.
+    @MainActor
+    private func commitGearCSVActualImport() {
+        guard let items = pendingGearCSVItems else { return }
+        pendingGearCSVItems = nil
+        showGearImportPreview = false
+        gearImportPreviewNew = []
+        gearImportPreviewDuplicates = []
+
+        var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        let (count, anyGearUpdated) = insertGearItems(items, into: &gearByID)
+        try? modelContext.save()
+        importedCount = count
+        importedGroupCount = 0
+        importedTemplateCount = 0
+        importedGroupMissingMemberCount = 0
+        importedGearOnly = true
+        importedServiceDataOnly = count == 0 && anyGearUpdated
+        if count > 0 || anyGearUpdated {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                showImportSuccess = true
+            }
+        } else {
+            showNothingToImport = true
+        }
+    }
+
+    // MARK: - Gear Import Helpers
+
+    private func makeGearPreviewItems(_ items: [GearXMLParser.ParsedGear]) -> [ImportPreviewItem] {
+        let bundle = Bundle.forAppLanguage()
+        return items.map { item in
+            let category = GearCategory(exportKeyOrRawValue: item.category)?.localizedDisplayName(bundle: bundle)
+                ?? item.category
+            let detail = item.diverName.isEmpty ? category : "\(category) • \(item.diverName)"
+            return ImportPreviewItem(name: item.name, detail: detail)
+        }
+    }
+
+    /// Classifies gear items as new vs duplicate without inserting anything.
+    private func classifyGearItems(_ items: [GearXMLParser.ParsedGear]) -> (new: [GearXMLParser.ParsedGear], duplicates: [GearXMLParser.ParsedGear]) {
+        var gearByID = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        var new: [GearXMLParser.ParsedGear] = []
+        var duplicates: [GearXMLParser.ParsedGear] = []
+        for item in items {
+            if gearByID[item.id] != nil ||
+                gearByID.values.contains(where: { $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber) }) {
+                duplicates.append(item)
+            } else {
+                // Mirror insertGearItems: track accepted items so intra-file duplicates
+                // (same gear listed twice) are classified consistently with what commit will do.
+                let placeholder = Gear(
+                    id: item.id, name: item.name, category: item.category,
+                    manufacturer: item.manufacturer, model: item.model,
+                    serialNumber: item.serialNumber, datePurchased: item.datePurchased,
+                    purchasePrice: item.purchasePrice, currency: item.currency,
+                    purchasedFrom: item.purchasedFrom,
+                    weightContribution: item.weightContribution,
+                    weightContributionUnit: item.weightContributionUnit,
+                    isInactive: item.isInactive, diverName: item.diverName,
+                    lastServiceDate: item.lastServiceDate, nextServiceDue: item.nextServiceDue,
+                    serviceHistory: item.serviceHistory, gearNotes: item.gearNotes
+                )
+                gearByID[item.id] = placeholder
+                new.append(item)
+            }
+        }
+        return (new, duplicates)
+    }
+
+    /// Commits the pending gear XML import after the user confirms the preview.
+    @MainActor
+    private func commitGearXMLImport() {
+        guard let parsed = pendingGearXMLResult else { return }
+        pendingGearXMLResult = nil
+        showGearImportPreview = false
+        gearImportPreviewNew = []
+        gearImportPreviewDuplicates = []
+
+        var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        let (count, anyGearUpdated) = insertGearItems(parsed.gearItems, into: &gearByID)
+
+        // ── Gear Groups ───────────────────────────────────────────────────────
+        let existingGroupIDs = Set(allGearGroups.map(\.id))
+        var groupCount = 0
+        var missingMemberCount = 0
+        for parsedGroup in parsed.gearGroups {
+            guard !existingGroupIDs.contains(parsedGroup.id) else { continue }
+            let members = parsedGroup.gearIDs.compactMap { gearByID[$0] }
+            missingMemberCount += parsedGroup.gearIDs.count - members.count
+            let group = GearGroup(id: parsedGroup.id, name: parsedGroup.name, gear: members)
+            modelContext.insert(group)
+            groupCount += 1
+        }
+
+        // ── Tank Templates ────────────────────────────────────────────────────
+        let existingTemplateIDs = Set(allTankTemplates.map(\.id))
+        var templateCount = 0
+        for parsedTemplate in parsed.tankTemplates {
+            guard !existingTemplateIDs.contains(parsedTemplate.id) else { continue }
+            let template = TankTemplate(
+                id: parsedTemplate.id,
+                name: parsedTemplate.name,
+                volume: parsedTemplate.volume,
+                workingPressure: parsedTemplate.workingPressure,
+                volumeUnit: parsedTemplate.volumeUnit,
+                pressureUnit: parsedTemplate.pressureUnit,
+                material: parsedTemplate.material,
+                format: parsedTemplate.format,
+                manufacturer: parsedTemplate.manufacturer,
+                model: parsedTemplate.model
+            )
+            modelContext.insert(template)
+            templateCount += 1
+        }
+
+        try? modelContext.save()
+        importedCount = count
+        importedGroupCount = groupCount
+        importedTemplateCount = templateCount
+        importedGroupMissingMemberCount = missingMemberCount
+        importedGearOnly = false
+        importedServiceDataOnly = count == 0 && groupCount == 0 && templateCount == 0 && anyGearUpdated
+        if count == 0 && groupCount == 0 && templateCount == 0 && !anyGearUpdated {
+            showNothingToImport = true
+        } else {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                showImportSuccess = true
+            }
+        }
+    }
+
+    /// Inserts gear items not already present, updating `gearByID` after each insert
+    /// so subsequent lookups (e.g. group membership) see newly added items.
+    /// Returns the count of newly inserted items and whether any existing item had service data updated.
+    private func insertGearItems(_ items: [GearXMLParser.ParsedGear], into gearByID: inout [UUID: Gear]) -> (inserted: Int, anyUpdated: Bool) {
+        var count = 0
+        var anyUpdated = false
+        for item in items {
+            // Primary dedup: by UUID (same source device, same export).
+            if let existing = gearByID[item.id] {
+                if existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory) {
+                    anyUpdated = true
+                }
+                continue
+            }
+            // Secondary dedup: by name + category + diverName + serial — catches gear previously
+            // imported via a dive XML, which assigned a fresh UUID instead of the canonical one,
+            // and also handles CSV imports that always assign a fresh UUID.
+            if let existing = gearByID.values.first(where: {
+                $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
+            }) {
+                if existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory) {
+                    anyUpdated = true
+                }
+                gearByID[item.id] = existing
+                continue
+            }
+            let gear = Gear(
+                id: item.id,
+                name: item.name,
+                category: item.category,
+                manufacturer: item.manufacturer,
+                model: item.model,
+                serialNumber: item.serialNumber,
+                datePurchased: item.datePurchased,
+                purchasePrice: item.purchasePrice,
+                currency: item.currency,
+                purchasedFrom: item.purchasedFrom,
+                weightContribution: item.weightContribution,
+                weightContributionUnit: item.weightContributionUnit,
+                isInactive: item.isInactive,
+                diverName: item.diverName,
+                lastServiceDate: item.lastServiceDate,
+                nextServiceDue: item.nextServiceDue,
+                serviceHistory: item.serviceHistory,
+                gearNotes: item.gearNotes
+            )
+            modelContext.insert(gear)
+            gearByID[item.id] = gear
+            count += 1
+        }
+        return (inserted: count, anyUpdated: anyUpdated)
+    }
+}
+
+// MARK: - Gear Row
+
+struct GearRow: View {
+    let gear: Gear
+    #if os(macOS)
+    @Environment(\.locale) private var locale
+    @Environment(OneLineRowsLayout.self) private var oneLineLayout: OneLineRowsLayout?
+    #endif
+    
+    var body: some View {
+        #if os(macOS)
+        // The Mac window is wide: one line with every value in a fixed-width column so the
+        // rows line up, falling back to the stacked iOS row when the window is too narrow.
+        // Each version tells the list which one is shown, so its pinned column header is only
+        // there with one-line rows (`OneLineRowsLayout`), at their width.
+        ViewThatFits(in: .horizontal) {
+            wideRow
+                .reportsOneLine(true, to: oneLineLayout)
+                .reportsRowContentWidth(to: oneLineLayout)
+            stackedRow
+                .reportsOneLine(false, to: oneLineLayout)
+        }
+        #else
+        stackedRow
+        #endif
+    }
+
+    /// Icon, then name / weight + dives / diver on three lines, service indicator trailing.
+    private var stackedRow: some View {
+        HStack(spacing: 15) {
+            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory)
+            
+            // Informations
+            VStack(alignment: .leading, spacing: 4) {
+                nameLine
+                
+                gearDetails
+
+                if !gear.diverName.isEmpty {
+                    diverText
+                }
+            }
+
+            Spacer()
+
+            serviceIndicator
+        }
+        .padding(.vertical, 8)
+        // The whole row opens the item, including the empty space (a plain Button only responds
+        // where something is drawn).
+        .contentShape(Rectangle())
+    }
+
+    #if os(macOS)
+    /// One line (macOS): icon, name, manufacturer + model, weight, dives, diver, next service
+    /// date and service indicator, each in its own fixed-width column (`GearListColumns`, shared
+    /// with `GearListColumnHeader` so the labels stay over their values).
+    private var wideRow: some View {
+        HStack(spacing: GearListColumns.spacing) {
+            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory,
+                         size: GearListColumns.icon)
+
+            nameLine
+                .lineLimit(1)
+                .frame(minWidth: GearListColumns.name, idealWidth: GearListColumns.name,
+                       maxWidth: .infinity, alignment: .leading)
+
+            Text(verbatim: modelText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: GearListColumns.model, alignment: .leading)
+
+            // ZStack, not Group: a Group's frame applies to its children, so an empty value would
+            // drop the column and shift the ones before it.
+            ZStack {
+                if let weight = weightValue {
+                    Text(verbatim: weight)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .frame(width: GearListColumns.weight, alignment: .trailing)
+
+            divesLabel
+                .monospacedDigit()
+                .frame(width: GearListColumns.dives, alignment: .trailing)
+
+            diverText
+                .frame(width: GearListColumns.diver, alignment: .leading)
+
+            ZStack {
+                if let due = gear.nextServiceDue {
+                    Text(due, format: .dateTime.day().month().year().locale(locale))
+                        .font(.caption)
+                        .foregroundStyle(serviceIndicatorColor ?? .secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: GearListColumns.nextService, alignment: .leading)
+
+            ZStack { serviceIndicator }
+                .frame(width: GearListColumns.indicator, alignment: .leading)
+        }
+        .padding(.vertical, 8)
+        // Same natural width as the Dives and Documents rows: all lists switch together.
+        .oneLineRowWidth(columnsWidth: GearListColumns.rowWidth)
+        // The whole row opens the item, including the gaps between columns (a plain Button
+        // only responds where something is drawn).
+        .contentShape(Rectangle())
+    }
+
+    /// Manufacturer and model, e.g. "Shearwater Perdix 2" (empty when neither is set).
+    private var modelText: String {
+        [gear.manufacturer, gear.model]
+            .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// Formatted weight contribution, without the "•" separator of the stacked row; nil when 0.
+    private var weightValue: String? {
+        guard gear.weightContribution > 0 else { return nil }
+        let prefs = UserPreferences.shared
+        return prefs.weightUnit.formatted(gear.weightContribution,
+                                          from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? prefs.weightUnit.symbol))
+    }
+    #endif
+
+    /// Active/inactive dot and the gear name.
+    private var nameLine: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(gear.isInactive ? .red : .green)
+                .frame(width: 8, height: 8)
+                .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
+
+            Text(gear.name)
+                .font(.headline)
+                .foregroundStyle(gear.isInactive ? .secondary : .primary)
+        }
+    }
+
+    private var diverText: some View {
+        Text(gear.diverName)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+    }
+
+    /// Indicateur d'entretien — orange within 30 days, red when due/past
+    @ViewBuilder
+    private var serviceIndicator: some View {
+        if let indicatorColor = serviceIndicatorColor {
+            Image(systemName: "exclamationmark.circle")
+                .foregroundStyle(indicatorColor)
+                .font(.title3)
+                .accessibilityLabel(indicatorColor == .red ? Text("Service Overdue") : Text("Service Due Soon"))
+        }
+    }
+    
+    @ViewBuilder
+    private var gearDetails: some View {
+        HStack(spacing: 8) {
+            weightText
+            divesLabel
+        }
+    }
+
+    // Poids
+    @ViewBuilder
+    private var weightText: some View {
+        if gear.weightContribution > 0 {
+            Text("• \(UserPreferences.shared.weightUnit.formatted(gear.weightContribution, from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // Nombre de plongées
+    private var divesLabel: some View {
+        Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
+            .font(.caption)
+            .foregroundStyle(.cyan)
+    }
+    
+    /// Returns red if service is due/past, orange if within 30 days, nil otherwise.
+    private var serviceIndicatorColor: Color? {
+        guard let due = gear.nextServiceDue else { return nil }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let serviceDay = calendar.startOfDay(for: due)
+        if serviceDay <= today {
+            return .red
+        }
+        guard let warningDate = calendar.date(byAdding: .day, value: 30, to: today) else {
+            return nil
+        }
+        if serviceDay <= warningDate {
+            return .orange
+        }
+        return nil
+    }
+    
+}
+
+#if os(macOS)
+// MARK: - Equipment List Columns (macOS)
+
+/// Column widths of the one-line Equipment row on macOS, shared by `GearRow` and
+/// `GearListColumnHeader` so the header labels stay aligned with the values.
+enum GearListColumns {
+    static let spacing: CGFloat = 12
+    static let icon: CGFloat = 32
+    /// Minimum (and ideal) width of the flexible name column.
+    static let name: CGFloat = 160
+    static let model: CGFloat = 180
+    static let weight: CGFloat = 80
+    static let dives: CGFloat = 70
+    static let diver: CGFloat = 120
+    static let nextService: CGFloat = 120
+    static let indicator: CGFloat = 24
+
+    /// Width of the one-line row: every column plus the spacing between them (870 pt).
+    static let rowWidth: CGFloat = icon + name + model + weight + dives + diver + nextService
+        + indicator + spacing * 7
+}
+
+/// Column labels over the one-line Equipment rows (macOS), pinned above the list with
+/// `pinnedColumnHeader`, which shows them only while the rows are one-line (`OneLineRowsLayout`).
+struct GearListColumnHeader: View {
+    var body: some View {
+        ColumnHeaderRowContent {
+            HStack(spacing: GearListColumns.spacing) {
+                Color.clear.frame(width: GearListColumns.icon, height: 0)
+                Text("Name").columnHeaderLabel()
+                    .frame(minWidth: GearListColumns.name, idealWidth: GearListColumns.name,
+                           maxWidth: .infinity, alignment: .leading)
+                Text("Model").columnHeaderLabel()
+                    .frame(width: GearListColumns.model, alignment: .leading)
+                Text("Weight").columnHeaderLabel()
+                    .frame(width: GearListColumns.weight, alignment: .trailing)
+                Text("Dives").columnHeaderLabel()
+                    .frame(width: GearListColumns.dives, alignment: .trailing)
+                Text("Diver").columnHeaderLabel()
+                    .frame(width: GearListColumns.diver, alignment: .leading)
+                Text("Next Service").columnHeaderLabel()
+                    .frame(width: GearListColumns.nextService, alignment: .leading)
+                Color.clear.frame(width: GearListColumns.indicator, height: 0)
+            }
+        }
+    }
+}
+#endif
+
+// MARK: - Equipment Filter Sheet
+
+/// The Equipment tab's filters, laid out like the Dives and Marine Life filter sheets (cards,
+/// a reset button at the top).
+struct GearFilterSheet: View {
+    /// Categories offered, in display order.
+    let categories: [GearCategory]
+    /// "Show inactive" is offered only when some gear is inactive (or it is on).
+    let showsInactiveToggle: Bool
+    let activeFilterCount: Int
+
+    @Binding var filterCategory: GearCategory?
+    @Binding var showInactive: Bool
+    let reset: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    resetSection
+                    if showsInactiveToggle {
+                        inactiveSection
+                    }
+                    categorySection
+                }
+                .padding()
+            }
+            .background(AppBackground().ignoresSafeArea())
+            .navigationTitle(NSLocalizedString("Filters", bundle: Bundle.forAppLanguage(), value: "Filters", comment: "Title of the filter sheet without sort"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.large)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Sections
+
+    private var inactiveSection: some View {
+        Toggle(isOn: $showInactive.animation()) {
+            HStack(spacing: 10) {
+                Image(systemName: "eye")
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                Text("Show Inactive Equipment")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+            }
+            .padding(.horizontal, 4)
+        }
+        .fullWidthSwitch()
+        .filterCardStyle()
+    }
+
+    private var categorySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            FilterSectionHeader(title: "Category", icon: "square.grid.2x2")
+
+            chipRow {
+                ModernFilterChip(
+                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), value: "All", comment: "Filter chip label for selecting all items"),
+                    isSelected: filterCategory == nil
+                ) {
+                    withAnimation { filterCategory = nil }
+                }
+
+                ForEach(categories) { category in
+                    ModernFilterChip(
+                        category.localizedName,
+                        isSelected: filterCategory == category
+                    ) {
+                        withAnimation { filterCategory = category }
+                    }
+                }
+            }
+        }
+        .filterCardStyle()
+    }
+
+    private var resetSection: some View {
+        Group {
+            if activeFilterCount > 0 {
+                Button(role: .destructive) {
+                    withAnimation { reset() }
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                            .font(.title3)
+                        Text(verbatim: resetButtonLabel)
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red.opacity(0.15))
+                    .foregroundStyle(.red)
+                    .cornerRadius(14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            }
+        }
+    }
+
+    private var resetButtonLabel: String {
+        activeFilterCount == 1
+            ? NSLocalizedString("Reset 1 filter", bundle: Bundle.forAppLanguage(), value: "Reset 1 filter", comment: "Reset button label when exactly one filter is active.")
+            : String(format: NSLocalizedString("Reset %lld filters", bundle: Bundle.forAppLanguage(), value: "Reset %lld filters", comment: "Reset button label showing the number of active filters (plural)."), activeFilterCount)
+    }
+
+    /// A row of filter chips, as in the other filter sheets. iOS: one line that scrolls
+    /// sideways, with an edge fade. macOS: the chips wrap onto as many lines as needed.
+    @ViewBuilder
+    private func chipRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        #if os(macOS)
+        WrappingChipLayout(spacing: 12) {
+            content()
+        }
+        .padding(.horizontal, 4)
+        #else
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                content()
+            }
+            .padding(.horizontal, 4)
+        }
+        .chipRowFade()
+        #endif
+    }
+}
+
+/// Memo for `GearListView`'s category work.
+@MainActor
+private final class GearCategoryCache {
+    /// `displayCategory(of:)` (lowercasing and scans of every case and alias) per stored
+    /// value: the result depends only on the stored string, and there are only a few distinct
+    /// ones.
+    private var resolved: [String: GearCategory?] = [:]
+    private var key: (text: String, language: AppLanguage)?
+    private var matches: Set<GearCategory> = []
+
+    func category(of gear: Gear) -> GearCategory? {
+        let stored = gear.category
+        if let cached = resolved[stored] { return cached }
+        let category = displayCategory(of: gear)
+        resolved[stored] = category
+        return category
+    }
+
+    /// The categories whose name in the app language contains `text`; recomputed only when
+    /// the text or the app language changes.
+    func categories(matching text: String) -> Set<GearCategory> {
+        let language = UserPreferences.shared.languageMode
+        if let key, key.text == text, key.language == language { return matches }
+        let bundle = Bundle.forAppLanguage()
+        matches = Set(GearCategory.allCases.filter {
+            // Ignores accents as well as case: "premier etage" finds "Premier étage".
+            $0.localizedDisplayName(bundle: bundle).localizedStandardContains(text)
+        })
+        key = (text, language)
+        return matches
+    }
+}

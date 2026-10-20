@@ -19,6 +19,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		0C3D6570307AD1A00034F4E1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 57EA9D422F42108A00486B7A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 57EA9D492F42108A00486B7A;
+			remoteInfo = BlueDive;
+		};
 		0CF0DA7F2FB24469008E0330 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 57EA9D422F42108A00486B7A /* Project object */;
@@ -43,6 +50,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0C3D6560307AD1A00034F4E1 /* BlueDiveTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BlueDiveTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C60FC712F89C6DC00C1F9A2 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		0C63B1752F8AC307005F2A89 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		0C63B1772F8AC326005F2A89 /* CONTRIBUTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTRIBUTING.md; sourceTree = "<group>"; };
@@ -71,6 +79,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		0C3D6561307AD1A00034F4E1 /* BlueDiveTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BlueDiveTests;
+			sourceTree = "<group>";
+		};
 		0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -90,6 +103,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		0C3D655D307AD1A00034F4E1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0CF0DA6F2FB24469008E0330 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -136,6 +156,7 @@
 				0C89AA672F49ECB100B7EEBE /* CLAUDE.md */,
 				57EA9D4C2F42108A00486B7A /* BlueDive */,
 				0CF0DA772FB24469008E0330 /* BlueDiveWidgetExtension */,
+				0C3D6561307AD1A00034F4E1 /* BlueDiveTests */,
 				0C89AA6A2F49EF2400B7EEBE /* Frameworks */,
 				57EA9D4B2F42108A00486B7A /* Products */,
 				0C03F8143058D732002739AC /* Recovered References */,
@@ -147,6 +168,7 @@
 			children = (
 				57EA9D4A2F42108A00486B7A /* BlueDive.app */,
 				0CF0DA722FB24469008E0330 /* BlueDiveWidgetExtensionExtension.appex */,
+				0C3D6560307AD1A00034F4E1 /* BlueDiveTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -154,6 +176,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0C3D655F307AD1A00034F4E1 /* BlueDiveTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0C3D6564307AD1A00034F4E1 /* Build configuration list for PBXNativeTarget "BlueDiveTests" */;
+			buildPhases = (
+				0C3D655C307AD1A00034F4E1 /* Sources */,
+				0C3D655D307AD1A00034F4E1 /* Frameworks */,
+				0C3D655E307AD1A00034F4E1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0C3D6571307AD1A00034F4E1 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0C3D6561307AD1A00034F4E1 /* BlueDiveTests */,
+			);
+			name = BlueDiveTests;
+			packageProductDependencies = (
+			);
+			productName = BlueDiveTests;
+			productReference = 0C3D6560307AD1A00034F4E1 /* BlueDiveTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		0CF0DA712FB24469008E0330 /* BlueDiveWidgetExtensionExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 0CF0DA852FB24469008E0330 /* Build configuration list for PBXNativeTarget "BlueDiveWidgetExtensionExtension" */;
@@ -209,9 +254,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2640;
-				LastUpgradeCheck = 2700;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2710;
 				TargetAttributes = {
+					0C3D655F307AD1A00034F4E1 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 57EA9D492F42108A00486B7A;
+					};
 					0CF0DA712FB24469008E0330 = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
@@ -243,11 +292,19 @@
 			targets = (
 				57EA9D492F42108A00486B7A /* BlueDive */,
 				0CF0DA712FB24469008E0330 /* BlueDiveWidgetExtensionExtension */,
+				0C3D655F307AD1A00034F4E1 /* BlueDiveTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		0C3D655E307AD1A00034F4E1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0CF0DA702FB24469008E0330 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -269,6 +326,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0C3D655C307AD1A00034F4E1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0CF0DA6E2FB24469008E0330 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -286,6 +350,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		0C3D6571307AD1A00034F4E1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 57EA9D492F42108A00486B7A /* BlueDive */;
+			targetProxy = 0C3D6570307AD1A00034F4E1 /* PBXContainerItemProxy */;
+		};
 		0CF0DA802FB24469008E0330 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 0CF0DA712FB24469008E0330 /* BlueDiveWidgetExtensionExtension */;
@@ -294,6 +363,56 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0C3D6565307AD1A00034F4E1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HZRGUPAG89;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.BlueDiveTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BlueDive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BlueDive";
+			};
+			name = Debug;
+		};
+		0C3D6566307AD1A00034F4E1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HZRGUPAG89;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.BlueDiveTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BlueDive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BlueDive";
+			};
+			name = Release;
+		};
 		0CF0DA832FB24469008E0330 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -301,7 +420,8 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = BlueDiveWidgetExtension/BlueDiveWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 133;
+				CURRENT_PROJECT_VERSION = 151;
+				ENABLE_APP_SANDBOX = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueDiveWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BlueDiveWidgetExtension;
@@ -312,13 +432,15 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.14;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -336,7 +458,8 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = BlueDiveWidgetExtension/BlueDiveWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 133;
+				CURRENT_PROJECT_VERSION = 151;
+				ENABLE_APP_SANDBOX = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueDiveWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BlueDiveWidgetExtension;
@@ -347,13 +470,15 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.14;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -373,7 +498,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = BlueDive/BlueDive.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 133;
+				CURRENT_PROJECT_VERSION = 151;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -411,15 +536,15 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.14;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -440,7 +565,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = BlueDive/BlueDive.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 133;
+				CURRENT_PROJECT_VERSION = 151;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -478,15 +603,15 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.14;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bluedive.universal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -626,6 +751,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0C3D6564307AD1A00034F4E1 /* Build configuration list for PBXNativeTarget "BlueDiveTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C3D6565307AD1A00034F4E1 /* Debug */,
+				0C3D6566307AD1A00034F4E1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		0CF0DA852FB24469008E0330 /* Build configuration list for PBXNativeTarget "BlueDiveWidgetExtensionExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -668,7 +802,7 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/houle988/libdc-swift";
 			requirement = {
-				branch = main;
+				branch = working;
 				kind = branch;
 			};
 		};

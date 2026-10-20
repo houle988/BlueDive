@@ -165,9 +165,6 @@
     },
     "UDDF Document" : {
       "shouldTranslate" : false
-    },
-    "Zip Archive" : {
-      "shouldTranslate" : false
     }
   },
   "version" : "1.0"

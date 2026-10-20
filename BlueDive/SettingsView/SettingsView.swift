@@ -303,6 +303,23 @@ enum AppearanceMode: String, CaseIterable {
         }
     }
 
+    /// Same text as `label`, as a `String` for places that build text, such as the
+    /// Settings row detail.
+    var displayName: String {
+        switch self {
+        case .system: return NSLocalizedString("System", bundle: .forAppLanguage(), value: "System", comment: "Theme option that follows the device appearance")
+        case .light:  return NSLocalizedString("Light", bundle: .forAppLanguage(), value: "Light", comment: "Theme option: always light")
+        case .dark:   return NSLocalizedString("Dark", bundle: .forAppLanguage(), value: "Dark", comment: "Theme option: always dark")
+        }
+    }
+
+    /// The theme actually shown: for System, Light or Dark according to `colorScheme`,
+    /// the scheme currently in effect (pass the view's `@Environment(\.colorScheme)`).
+    func effective(in colorScheme: ColorScheme) -> AppearanceMode {
+        guard self == .system else { return self }
+        return colorScheme == .dark ? .dark : .light
+    }
+
     var colorScheme: ColorScheme? {
         switch self {
         case .system: return nil
@@ -335,6 +352,18 @@ enum AppLanguage: String, CaseIterable {
         }
     }
 
+    /// The language the app actually shows: for System, the localization the system chose
+    /// from the device's languages (or BlueDive's per-app language setting); English when
+    /// none of them is available in BlueDive. Matches by language code only, which assumes
+    /// one case per language; compare full identifiers if a second regional variant is added.
+    var effective: AppLanguage {
+        guard self == .system else { return self }
+        let resolved = Bundle.main.preferredLocalizations.first.map { Locale(identifier: $0).language.languageCode }
+        return AppLanguage.allCases.first { language in
+            language != .system && Locale(identifier: language.rawValue).language.languageCode == resolved
+        } ?? .english
+    }
+
     var locale: Locale? {
         switch self {
         case .system: return nil
@@ -357,7 +386,7 @@ class UserPreferences {
         didSet {
             UserDefaults.standard.set(depthUnit.rawValue, forKey: "depthUnit")
             // Write the widget-facing key so the widget reflects the correct unit
-            // even before ContentView.updateWidgetDiveData() runs.
+            // even before DiveStore.updateWidgetDiveData(dives:) runs.
             UserDefaults(suiteName: "group.app.bluedive.universal")?
                 .set(depthUnit == .feet ? "feet" : "meters", forKey: "depthUnit")
             WidgetCenter.shared.reloadTimelines(ofKind: "DiverStatsWidget")
@@ -396,6 +425,71 @@ class UserPreferences {
     var hideClearedDecoStops: Bool {
         didSet { UserDefaults.standard.set(hideClearedDecoStops, forKey: "hideClearedDecoStops") }
     }
+    /// When true, the dive profile chart shows a thumbnail for each photo taken during the
+    /// dive, at its capture time. On by default. No App Group write: the widget renders no chart.
+    var showPhotosOnProfile: Bool {
+        didSet { UserDefaults.standard.set(showPhotosOnProfile, forKey: "showPhotosOnProfile") }
+    }
+    /// When true, the dive detail view shows the Samples tab (raw dive computer data).
+    /// Off by default: the tab is a diagnostic view and a long table is slow to render.
+    /// No App Group write: the widget does not show dive detail tabs.
+    var showSamplesTab: Bool {
+        didSet { UserDefaults.standard.set(showSamplesTab, forKey: "showSamplesTab") }
+    }
+    /// When true, Edit Conditions offers a Fetch Weather button, and the Bluetooth sync results
+    /// offer to fetch the weather for downloaded dives with GPS coordinates; both send the
+    /// dive's GPS coordinates and date to Open-Meteo, only when the user chooses Fetch Weather.
+    /// Off by default: nothing leaves the device unless the user opts in. No App Group write:
+    /// the widget shows no weather.
+    var fetchWeatherOnline: Bool {
+        didSet {
+            UserDefaults.standard.set(fetchWeatherOnline, forKey: "fetchWeatherOnline")
+            // Turning it on anywhere answers the one-time launch question, so turning it off
+            // later (or Reset to Defaults) does not bring that question back.
+            if fetchWeatherOnline { UserDefaults.standard.set(true, forKey: "onlineServicesPromptShown") }
+        }
+    }
+    /// When true, species can be looked up on iNaturalist (taxonomy, common names, Wikipedia
+    /// summary, a Creative Commons photo); only the species name is sent. Off by default.
+    /// No App Group write: the widget shows no species.
+    var fetchTaxonomyOnline: Bool {
+        didSet {
+            UserDefaults.standard.set(fetchTaxonomyOnline, forKey: "fetchTaxonomyOnline")
+            // Turning it on anywhere answers the one-time launch question, as for the weather.
+            if fetchTaxonomyOnline { UserDefaults.standard.set(true, forKey: "taxonomyPromptShown") }
+        }
+    }
+    /// Language of the common names fetched from iNaturalist and shown for linked species: a
+    /// two-letter code, or "" to follow the app language (`INaturalistService.nameLanguageCode`).
+    var taxonomyNameLanguage: String {
+        didSet { UserDefaults.standard.set(taxonomyNameLanguage, forKey: "taxonomyNameLanguage") }
+    }
+    /// When true, linking a species to iNaturalist makes iNaturalist's common name its name and
+    /// keeps the name it had as another name (`INaturalistUpdater.apply`). On by default.
+    var useINaturalistCommonNames: Bool {
+        didSet { UserDefaults.standard.set(useINaturalistCommonNames, forKey: "useINaturalistCommonNames") }
+    }
+    /// When true, a species whose default iNaturalist photo is not Creative Commons gets the
+    /// taxon's first Creative Commons photo instead (`INaturalistService.chosenPhoto`); the lookup
+    /// previews that photo. On by default.
+    var useAlternativeINaturalistPhoto: Bool {
+        didSet { UserDefaults.standard.set(useAlternativeINaturalistPhoto, forKey: "useAlternativeINaturalistPhoto") }
+    }
+    /// When true, the dive list search also matches dive notes, through a query on the store
+    /// (DiveStore's Notes Search section). Off by default: few people need it, and with it off the search
+    /// costs nothing more. No App Group write: the widget does not search.
+    var searchDiveNotes: Bool {
+        didSet { UserDefaults.standard.set(searchDiveNotes, forKey: "searchDiveNotes") }
+    }
+    #if os(macOS)
+    /// When true, the main dive list shows the profile chart of the selected dive above the
+    /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
+    /// list has no chart and a click opens the dive. On by default.
+    /// No App Group write: the widget does not show the dive list.
+    var showDiveListProfilePreview: Bool {
+        didSet { UserDefaults.standard.set(showDiveListProfilePreview, forKey: "showDiveListProfilePreview") }
+    }
+    #endif
 
     init() {
         self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "meters") ?? .meters
@@ -408,6 +502,19 @@ class UserPreferences {
         // bool(forKey:) returns false when the key is absent, which is exactly the required
         // OFF default — no registerDefaults entry needed.
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
+        self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
+        self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
+        // On by default: an absent key reads as true.
+        self.showPhotosOnProfile = UserDefaults.standard.object(forKey: "showPhotosOnProfile") as? Bool ?? true
+        self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
+        self.fetchTaxonomyOnline = UserDefaults.standard.bool(forKey: "fetchTaxonomyOnline")
+        self.taxonomyNameLanguage = UserDefaults.standard.string(forKey: "taxonomyNameLanguage") ?? ""
+        self.useINaturalistCommonNames = UserDefaults.standard.object(forKey: "useINaturalistCommonNames") as? Bool ?? true
+        self.useAlternativeINaturalistPhoto = UserDefaults.standard.object(forKey: "useAlternativeINaturalistPhoto") as? Bool ?? true
+        #if os(macOS)
+        // On by default: an absent key reads as true.
+        self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
+        #endif
         // Seed shared container after self is fully initialised (required by @Observable)
         let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
         shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
@@ -424,6 +531,18 @@ class UserPreferences {
         appearanceMode  = .system
         languageMode    = .system
         hideClearedDecoStops = false
+        showSamplesTab = false
+        searchDiveNotes = false
+        showPhotosOnProfile = true
+        fetchWeatherOnline = false
+        fetchTaxonomyOnline = false
+        taxonomyNameLanguage = ""
+        useINaturalistCommonNames = true
+        useAlternativeINaturalistPhoto = true
+        #if os(macOS)
+        showDiveListProfilePreview = true
+        #endif
+        SharedChartLineVisibility.shared.value = ChartLineVisibility()
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
         UserDefaults.standard.set(false, forKey: "filterUnusedTanks")
@@ -436,6 +555,7 @@ class UserPreferences {
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var prefs = UserPreferences.shared
     @State private var showingAboutSheet = false
     @State private var showWelcomeWizard = false
@@ -443,16 +563,27 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            groupedList {
                 Section {
                     NavigationLink {
                         AppearanceSettingsView(onNeedsRootDismiss: { dismiss() })
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
-                        SettingsListRow(title: "Appearance", icon: "paintbrush", color: .pink)
+                        // The detail shows the language in use, written in its own language
+                        // (e.g. "Deutsch"), so the row is recognisable to someone who does not
+                        // read the app's current language, followed by the theme in use. For
+                        // System, both show what the device resolves to rather than "System".
+                        SettingsListRow(
+                            title: "Appearance & Language",
+                            icon: "paintbrush",
+                            color: .pink,
+                            detail: "\(prefs.languageMode.effective.displayName) · \(prefs.appearanceMode.effective(in: colorScheme).displayName)"
+                        )
                     }
 
                     NavigationLink {
                         UnitsSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(
                             title: "Units of Measure",
@@ -464,36 +595,49 @@ struct SettingsView: View {
 
                     NavigationLink {
                         BluetoothSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Bluetooth Import", icon: "antenna.radiowaves.left.and.right", color: .blue)
                     }
 
                     NavigationLink {
                         NotificationsSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Notifications", icon: "bell", color: .purple)
                     }
 
                     NavigationLink {
                         DiveSequenceSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Dive Sequence", icon: "arrow.triangle.2.circlepath", color: .indigo)
                     }
 
                     NavigationLink {
                         DiveProfileSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Dive Profile", icon: "chart.xyaxis.line", color: .green)
                     }
 
                     NavigationLink {
                         ICloudSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "iCloud", icon: "icloud", color: .cyan)
                     }
 
                     NavigationLink {
+                        OnlineServicesSettingsView(closeSettings: { dismiss() })
+                            .closeSheetButtonOnMac { dismiss() }
+                    } label: {
+                        SettingsListRow(title: "Online Services", icon: "globe", color: .mint)
+                    }
+
+                    NavigationLink {
                         DataManagementSettingsView()
+                            .closeSheetButtonOnMac { dismiss() }
                     } label: {
                         SettingsListRow(title: "Data Management", icon: "externaldrive", color: .red)
                     }
@@ -504,16 +648,19 @@ struct SettingsView: View {
                         SettingsListRow(title: "About BlueDive", icon: "water.waves", color: .cyan)
                     }
                     .foregroundStyle(.primary)
+                    .listRowButton()
 
                     Button { showDisclaimer = true } label: {
                         SettingsListRow(title: "Disclaimer", icon: "exclamationmark.triangle", color: .orange)
                     }
                     .foregroundStyle(.primary)
+                    .listRowButton()
 
                     Button { showWelcomeWizard = true } label: {
                         SettingsListRow(title: "Welcome Tour", icon: "hand.wave", color: .orange)
                     }
                     .foregroundStyle(.primary)
+                    .listRowButton()
 
                     Button {
                         dismiss()
@@ -525,14 +672,12 @@ struct SettingsView: View {
                         SettingsListRow(title: "Intro Animation", icon: "play.circle", color: .teal)
                     }
                     .foregroundStyle(.primary)
+                    .listRowButton()
                 }
             }
             .navigationTitle("Settings")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
-            #endif
-            #if os(macOS)
-            .frame(minWidth: 400, idealWidth: 480, maxWidth: 600, minHeight: 500, idealHeight: 580, maxHeight: 780)
             #endif
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .toolbar {
@@ -543,15 +688,11 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingAboutSheet) {
                 AboutView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showDisclaimer) {
                 DisclaimerView(isReview: true)
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             #if os(iOS)
             .fullScreenCover(isPresented: $showWelcomeWizard) {
@@ -560,9 +701,7 @@ struct SettingsView: View {
             #else
             .sheet(isPresented: $showWelcomeWizard) {
                 WelcomeWizardView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             #endif
         }
@@ -667,6 +806,7 @@ struct ModernToggleRow: View {
 
             Toggle(title, isOn: $isOn)
                 .labelsHidden()
+                .fullWidthSwitch()
         }
         .padding()
         .background(

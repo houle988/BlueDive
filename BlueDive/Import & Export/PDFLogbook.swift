@@ -1,0 +1,1582 @@
+import Foundation
+import SwiftUI
+import CoreText
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
+// MARK: - PDF Logbook
+
+struct PDFDiveLogbook {
+
+    // MARK: - Colours
+
+    private static let bgDark       = CGColor(red: 1.0,  green: 1.0,  blue: 1.0,  alpha: 1.0)
+    private static let bgCard       = CGColor(red: 0.96, green: 0.97, blue: 0.98, alpha: 1.0)
+    private static let accentCyan   = CGColor(red: 0.0,  green: 0.55, blue: 0.67, alpha: 1.0)
+    private static let accentOrange = CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: 1.0)
+    private static let accentGreen  = CGColor(red: 0.13, green: 0.58, blue: 0.23, alpha: 1.0)
+    private static let accentRed    = CGColor(red: 0.80, green: 0.18, blue: 0.18, alpha: 1.0)
+    private static let accentPink   = CGColor(red: 0.78, green: 0.22, blue: 0.42, alpha: 1.0)
+    private static let accentPurple = CGColor(red: 0.42, green: 0.28, blue: 0.78, alpha: 1.0)
+    private static let accentYellow = CGColor(red: 0.72, green: 0.56, blue: 0.0,  alpha: 1.0)
+    private static let accentBlue   = CGColor(red: 0.16, green: 0.33, blue: 0.78, alpha: 1.0)
+    private static let accentTeal   = CGColor(red: 0.08, green: 0.52, blue: 0.50, alpha: 1.0)
+    private static let textWhite    = CGColor(red: 0.10, green: 0.10, blue: 0.14, alpha: 1.0)
+    private static let textGray     = CGColor(red: 0.13, green: 0.14, blue: 0.18, alpha: 1.0)
+    private static let textMuted    = CGColor(red: 0.58, green: 0.61, blue: 0.66, alpha: 1.0)
+    private static let divider      = CGColor(red: 0.84, green: 0.86, blue: 0.90, alpha: 1.0)
+
+    // MARK: - Localization Helper
+
+    /// Uses the in-app language override bundle so PDF text matches the user's
+    /// chosen language even when it differs from the OS language.
+    private static var loc: Bundle { Bundle.forAppLanguage() }
+
+    /// Localizes a stored condition value with a `DiveConditionOptions` localizer (where the
+    /// literal keys live); "—" when the value is missing or empty.
+    private static func localizedCondition(_ value: String?, _ localize: @MainActor (String) -> String) -> String {
+        guard let value, !value.isEmpty else { return "—" }
+        return localize(value)
+    }
+
+    /// Localizes a stored tank type value using literal keys.
+    private static func localizedTankType(_ value: String?) -> String {
+        guard let value = value, !value.isEmpty else { return NSLocalizedString("Single tank", bundle: loc, comment: "") }
+        switch value {
+        case "Single tank":  return NSLocalizedString("Single tank", bundle: loc, comment: "")
+        case "Twinset":      return NSLocalizedString("Twinset", bundle: loc, comment: "")
+        case "Sidemount":    return NSLocalizedString("Sidemount", bundle: loc, comment: "")
+        case "Pony":         return NSLocalizedString("Pony", bundle: loc, comment: "")
+        case "Rebreather":   return NSLocalizedString("Rebreather", bundle: loc, comment: "")
+        case "Other":        return NSLocalizedString("Other", bundle: loc, comment: "")
+        default:             return value
+        }
+    }
+
+    /// Localizes a stored site difficulty value (1–10) into "Number — Description".
+    private static func localizedDifficulty(_ value: String?) -> String {
+        guard let value = value, !value.isEmpty else { return "—" }
+        let scale: [(level: Int, label: String)] = [
+            (1, "Very Easy"),
+            (2, "Easy"),
+            (3, "Easy-Moderate"),
+            (4, "Moderate"),
+            (5, "Moderate"),
+            (6, "Moderate-Challenging"),
+            (7, "Challenging"),
+            (8, "Very Challenging"),
+            (9, "Expert"),
+            (10, "Extreme")
+        ]
+        if let n = Int(value), let match = scale.first(where: { $0.level == n }) {
+            let localized = NSLocalizedString(match.label, bundle: loc, comment: "")
+            return "\(n) — \(localized)"
+        }
+        if let match = scale.first(where: { $0.label == value }) {
+            let localized = NSLocalizedString(match.label, bundle: loc, comment: "")
+            return "\(match.level) — \(localized)"
+        }
+        return value
+    }
+
+    /// Localizes a stored tank material value using literal keys.
+    private static func localizedTankMaterial(_ value: String?) -> String {
+        guard let value = value, !value.isEmpty else { return "" }
+        switch value {
+        case "Steel":           return NSLocalizedString("Steel", bundle: loc, comment: "")
+        case "Galvanized Steel": return NSLocalizedString("Galvanized Steel", bundle: loc, comment: "")
+        case "Aluminium":       return NSLocalizedString("Aluminium", bundle: loc, comment: "")
+        case "Carbon":          return NSLocalizedString("Carbon", bundle: loc, comment: "")
+        default:                return value
+        }
+    }
+
+    // MARK: - Fonts
+
+    private static func font(size: CGFloat) -> CTFont {
+        CTFontCreateWithName("HelveticaNeue" as CFString, size, nil)
+    }
+    private static func boldFont(size: CGFloat) -> CTFont {
+        CTFontCreateWithName("HelveticaNeue-Bold" as CFString, size, nil)
+    }
+    private static func mediumFont(size: CGFloat) -> CTFont {
+        CTFontCreateWithName("HelveticaNeue-Medium" as CFString, size, nil)
+    }
+    private static func lightFont(size: CGFloat) -> CTFont {
+        CTFontCreateWithName("HelveticaNeue-Light" as CFString, size, nil)
+    }
+
+    // MARK: - Field Grid (shared layout for info/stats/tanks cards)
+
+    private typealias Field = (label: String, value: String, color: CGColor)
+
+    /// Returns the natural card height for a given field count and column count.
+    private static func fieldGridHeight(fieldCount: Int, columns: Int) -> CGFloat {
+        let titleH: CGFloat = 14
+        let lineH: CGFloat = 18
+        let padBottom: CGFloat = 6
+        let dataRows = Int(ceil(Double(fieldCount) / Double(columns)))
+        return CGFloat(dataRows) * lineH + titleH + padBottom
+    }
+
+    /// Draws a card with a title and a grid of labelled fields.
+    /// Returns the Y position below the card.
+    private static func drawFieldGrid(
+        ctx: CGContext,
+        title: String,
+        titleColor: CGColor,
+        fields: [Field],
+        columns: Int,
+        x: CGFloat,
+        y: CGFloat,
+        width: CGFloat,
+        minHeight: CGFloat = 0
+    ) -> CGFloat {
+        let titleH: CGFloat = 14
+        let lineH: CGFloat = 18
+        let padBottom: CGFloat = 6
+
+        let dataRows = Int(ceil(Double(fields.count) / Double(columns)))
+        let naturalH = CGFloat(dataRows) * lineH + titleH + padBottom
+        let cardH = max(naturalH, minHeight)
+        let cardRect = CGRect(x: x, y: y - cardH, width: width, height: cardH)
+        drawRoundedRect(ctx: ctx, rect: cardRect, radius: 8, fill: bgCard)
+        drawCardBorder(ctx: ctx, rect: cardRect, radius: 8)
+
+        drawSectionTitle(ctx: ctx, title: title, x: x + 10, y: y - (titleH / 2) - 3, color: titleColor)
+
+        let columnWidth = (width - 16) / CGFloat(columns)
+        let startY = y - titleH - 1
+        let dotSize: CGFloat = 2.5
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byTruncatingTail
+
+        for (index, field) in fields.enumerated() {
+            let row = index / columns
+            let col = index % columns
+            let sx = x + 10 + CGFloat(col) * columnWidth
+            let sy = startY - CGFloat(row) * lineH
+
+            // Coloured dot
+            ctx.setFillColor(field.color)
+            ctx.fillEllipse(in: CGRect(x: sx, y: sy - 4, width: dotSize, height: dotSize))
+
+            // Label
+            let labelAttrs: [NSAttributedString.Key: Any] = [
+                .font: font(size: 5),
+                .foregroundColor: platformColor(textGray),
+                .paragraphStyle: paragraphStyle
+            ]
+            let labelRect = CGRect(x: sx + 5, y: sy - 7.5, width: columnWidth - 8, height: 7)
+            let labelStr = NSAttributedString(string: field.label.uppercased(), attributes: labelAttrs)
+            drawWrappedText(labelStr, in: ctx, rect: labelRect)
+
+            // Value (auto-shrinks to fit)
+            var fontSize: CGFloat = 7.0
+            let minFontSize: CGFloat = 5.0
+            let maxTextWidth = columnWidth - 8
+
+            var valAttrs: [NSAttributedString.Key: Any] = [
+                .font: mediumFont(size: fontSize),
+                .foregroundColor: platformColor(textWhite),
+                .paragraphStyle: paragraphStyle
+            ]
+            var textWidth = (field.value as NSString).size(withAttributes: valAttrs).width
+            while textWidth > maxTextWidth && fontSize > minFontSize {
+                fontSize -= 0.5
+                valAttrs[.font] = mediumFont(size: fontSize)
+                textWidth = (field.value as NSString).size(withAttributes: valAttrs).width
+            }
+
+            let valRect = CGRect(x: sx + 5, y: sy - 16, width: maxTextWidth, height: 9)
+            let valStr = NSAttributedString(string: field.value, attributes: valAttrs)
+            drawWrappedText(valStr, in: ctx, rect: valRect)
+        }
+
+        return y - cardH
+    }
+
+    // MARK: - Generate PDF
+
+    static func generatePDF(for dive: Dive, allDives: [Dive]) -> Data? {
+        let pageWidth: CGFloat = 612
+        let pageHeight: CGFloat = 792
+        let margin: CGFloat = 24
+        let contentWidth = pageWidth - margin * 2
+
+        let pdfData = NSMutableData()
+        var mediaBox = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+
+        guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
+              let ctx = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+            return nil
+        }
+
+        let prefs = UserPreferences.shared
+        let depthSymbol = prefs.depthUnit.symbol
+        let pressSymbol = prefs.pressureUnit.symbol
+        let tempUnit = prefs.temperatureUnit
+
+        ctx.beginPage(mediaBox: &mediaBox)
+        drawPageBackground(ctx: ctx, width: pageWidth, height: pageHeight)
+
+        var y = pageHeight - margin
+
+        // Header
+        y = drawHeader(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: y, width: contentWidth)
+
+        // Dive Information + Site Details (side by side, equal height)
+        y -= 6
+        let infoGap: CGFloat = 6
+        let infoWidth = contentWidth * 0.38
+        let siteDetailWidth = contentWidth - infoWidth - infoGap
+        let siteDetailX = margin + infoWidth + infoGap
+        let topSectionMinH = max(fieldGridHeight(fieldCount: 8, columns: 2),
+                                 fieldGridHeight(fieldCount: 15, columns: 3))
+        let infoY = drawDiveInfo(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: y, width: infoWidth, tempUnit: tempUnit, minHeight: topSectionMinH)
+        let siteDetailY = drawSiteDetails(ctx: ctx, dive: dive, x: siteDetailX, y: y, width: siteDetailWidth, minHeight: topSectionMinH)
+        y = min(infoY, siteDetailY)
+
+        // Dive Profile Chart (only if samples exist)
+        if !dive.profileSamples.isEmpty {
+            y -= 6
+            y = drawDiveProfile(ctx: ctx, dive: dive, x: margin, y: y, width: contentWidth, depthSymbol: depthSymbol)
+        }
+
+        // Dive Statistics + Tanks + Deco (three columns, equal height)
+        y -= 6
+        let gap: CGFloat = 6
+        let statsWidth = contentWidth * 0.36
+        let tanksWidth = contentWidth * 0.34
+        let decoWidth = contentWidth - statsWidth - tanksWidth - gap * 2
+        let tanksX = margin + statsWidth + gap
+        let decoX = tanksX + tanksWidth + gap
+
+        // Pre-calculate field counts to enforce equal card heights
+        let statsFieldCount = 8   // always 8 fields, 3 columns
+        // Single tank uses original 6-field/2-col layout; multiple tanks use 1-field compact layout
+        let tanksFieldCount = dive.tanks.count > 1 ? dive.tanks.count : 6
+        let tanksColumns    = dive.tanks.count > 1 ? 1 : 2
+        let decoStopCount = (dive.isDecompressionDive && !dive.decoStops.isEmpty) ? dive.decoStops.count : 0
+        let decoFieldCount = 4 + decoStopCount   // 4 base + deco stops
+
+        let statsH = fieldGridHeight(fieldCount: statsFieldCount, columns: 3)
+        let tanksH = fieldGridHeight(fieldCount: tanksFieldCount, columns: tanksColumns)
+        let decoH  = fieldGridHeight(fieldCount: decoFieldCount, columns: 2)
+        let sectionMinH = max(statsH, max(tanksH, decoH))
+
+        let statsY = drawDiveStatistics(ctx: ctx, dive: dive, x: margin, y: y, width: statsWidth,
+                                        depthSymbol: depthSymbol, minHeight: sectionMinH)
+        let tanksY = drawTanksSection(ctx: ctx, dive: dive, x: tanksX, y: y, width: tanksWidth,
+                                      pressSymbol: pressSymbol, minHeight: sectionMinH)
+        let decoY = drawDecoSection(ctx: ctx, dive: dive, x: decoX, y: y, width: decoWidth, minHeight: sectionMinH)
+        y = min(statsY, min(tanksY, decoY))
+
+        // Equipment (skip if none)
+        let hasGear = !(dive.usedGear ?? []).isEmpty
+        if hasGear {
+            y -= 6
+            y = drawEquipmentSection(ctx: ctx, dive: dive, x: margin, y: y, width: contentWidth)
+        }
+
+        // Notes
+        y -= 6
+        let footerY = margin + 62
+        y = drawNotesSection(ctx: ctx, dive: dive, x: margin, y: y, width: contentWidth, footerY: footerY)
+
+        // Footer
+        drawBrandedFooter(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: margin - 4, width: contentWidth, pageWidth: pageWidth)
+
+        ctx.endPage()
+        ctx.closePDF()
+
+        return pdfData as Data
+    }
+
+    // MARK: - Page Background
+
+    private static func drawPageBackground(ctx: CGContext, width: CGFloat, height: CGFloat) {
+        ctx.setFillColor(bgDark)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+        // Top gradient bar
+        ctx.saveGState()
+        let barH: CGFloat = 3
+        let colors = [accentCyan, accentBlue, accentPurple] as CFArray
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.5, 1]) {
+            ctx.clip(to: CGRect(x: 0, y: height - barH, width: width, height: barH))
+            ctx.drawLinearGradient(gradient, start: CGPoint(x: 0, y: height), end: CGPoint(x: width, y: height), options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    // MARK: - Header
+
+    private static func drawHeader(ctx: CGContext, dive: Dive, allDives: [Dive], x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+        var curY = y - 2
+
+        // App icon
+        let logoSize: CGFloat = 26
+        if let logoImage = loadAppIcon() {
+            let logoRect = CGRect(x: x, y: curY - logoSize + 4, width: logoSize, height: logoSize)
+            ctx.saveGState()
+            let clipPath = CGPath(roundedRect: logoRect, cornerWidth: 5, cornerHeight: 5, transform: nil)
+            ctx.addPath(clipPath)
+            ctx.clip()
+            ctx.draw(logoImage, in: logoRect)
+            ctx.restoreGState()
+        }
+
+        // App name
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: boldFont(size: 17),
+            .foregroundColor: platformColor(accentCyan)
+        ]
+        drawText("BLUEDIVE", attrs: titleAttrs, in: ctx, at: CGPoint(x: x + logoSize + 8, y: curY - 19))
+
+        // Subtitle
+        let subAttrs: [NSAttributedString.Key: Any] = [
+            .font: lightFont(size: 7.5),
+            .foregroundColor: platformColor(textGray)
+        ]
+        drawText(NSLocalizedString("DIVE LOGBOOK", bundle: loc, comment: ""), attrs: subAttrs, in: ctx, at: CGPoint(x: x + logoSize + 8, y: curY - 4))
+
+        // Dive number badge (right-aligned)
+        let diveNum = dive.diveNumber ?? (allDives.count - (allDives.firstIndex(where: { $0.id == dive.id }) ?? 0))
+        let badgeText = String(format: NSLocalizedString("DIVE #%lld", bundle: loc, comment: ""), diveNum)
+
+        let badgeAttrs: [NSAttributedString.Key: Any] = [
+            .font: boldFont(size: 11),
+            .foregroundColor: platformColor(accentCyan)
+        ]
+        let badgeStr = NSAttributedString(string: badgeText, attributes: badgeAttrs)
+        let badgeW = badgeStr.size().width + 16
+        let badgeX = x + width - badgeW
+
+        let isRated = dive.rating > 0
+        let badgeH: CGFloat = isRated ? 18 : 20
+        let badgeY: CGFloat = isRated ? (curY - 12) : (curY - 19)
+        let textY: CGFloat = isRated ? (curY - 8) : (curY - 14)
+
+        let badgeRect = CGRect(x: badgeX, y: badgeY, width: badgeW, height: badgeH)
+        drawRoundedRect(ctx: ctx, rect: badgeRect, radius: 6, fill: CGColor(red: 0.0, green: 0.55, blue: 0.67, alpha: 0.08))
+
+        ctx.saveGState()
+        ctx.setStrokeColor(CGColor(red: 0.0, green: 0.55, blue: 0.67, alpha: 0.25))
+        ctx.setLineWidth(0.6)
+        ctx.addPath(CGPath(roundedRect: badgeRect, cornerWidth: 6, cornerHeight: 6, transform: nil))
+        ctx.strokePath()
+        ctx.restoreGState()
+
+        drawText(badgeText, attrs: badgeAttrs, in: ctx, at: CGPoint(x: badgeX + 8, y: textY))
+
+        // Rating stars
+        if isRated {
+            let starY = curY - 24
+            let starSize: CGFloat = 8
+            let starSpacing: CGFloat = 1.5
+
+            #if os(macOS)
+            let starFont = NSFont.systemFont(ofSize: starSize)
+            #else
+            let starFont = UIFont.systemFont(ofSize: starSize)
+            #endif
+
+            let totalStarsWidth = (starSize * 5) + (starSpacing * 4)
+            let startX = badgeX + ((badgeW - totalStarsWidth) / 2)
+
+            let starAttrs: [NSAttributedString.Key: Any] = [
+                .font: starFont,
+                .foregroundColor: platformColor(accentYellow)
+            ]
+            let emptyStarAttrs: [NSAttributedString.Key: Any] = [
+                .font: starFont,
+                .foregroundColor: platformColor(textMuted)
+            ]
+            for i in 0..<5 {
+                let sx = startX + CGFloat(i) * (starSize + starSpacing)
+                let attrs = i < dive.rating ? starAttrs : emptyStarAttrs
+                drawText("★", attrs: attrs, in: ctx, at: CGPoint(x: sx, y: starY))
+            }
+        }
+
+        curY -= 28
+
+        // Gradient separator
+        ctx.saveGState()
+        let lineRect = CGRect(x: x, y: curY, width: width, height: 1)
+        let lineColors = [
+            accentCyan.copy(alpha: 0.6) ?? accentCyan,
+            accentBlue.copy(alpha: 0.3) ?? accentBlue,
+            accentPurple.copy(alpha: 0.0) ?? accentPurple
+        ] as CFArray
+        if let lineGrad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: lineColors, locations: [0, 0.5, 1]) {
+            ctx.clip(to: lineRect)
+            ctx.drawLinearGradient(lineGrad, start: CGPoint(x: x, y: curY), end: CGPoint(x: x + width, y: curY), options: [])
+        }
+        ctx.restoreGState()
+
+        curY -= 2
+        return curY
+    }
+
+    // MARK: - Dive Information
+
+    private static func drawDiveInfo(ctx: CGContext, dive: Dive, allDives: [Dive], x: CGFloat, y: CGFloat, width: CGFloat, tempUnit: TemperatureUnit, minHeight: CGFloat = 0) -> CGFloat {
+        let appLocale = UserPreferences.shared.languageMode.locale ?? .current
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.locale = appLocale
+        let dateStr = dateFormatter.string(from: dive.timestamp)
+
+        let timeFormatter = DateFormatter()
+        timeFormatter.timeStyle = .short
+        timeFormatter.locale = appLocale
+        let timeStr = timeFormatter.string(from: dive.timestamp)
+
+        let airTempStr: String = dive.displayAirTemperature.map {
+            "\(Int($0.rounded()))\(tempUnit.symbol)"
+        } ?? "—"
+
+        // Find the trip this dive belongs to
+        let tripStr: String = {
+            let trips = TripBuilder.buildTrips(from: allDives)
+            if let trip = trips.first(where: { $0.dives.contains(where: { $0.id == dive.id }) }) {
+                return trip.name
+            }
+            return "—"
+        }()
+
+        let fields: [Field] = [
+            (NSLocalizedString("Date", bundle: loc, comment: ""),        dateStr,       accentCyan),
+            (NSLocalizedString("Time", bundle: loc, comment: ""),        timeStr,       accentCyan),
+            (NSLocalizedString("Max Temp", bundle: loc, comment: ""),    dive.displayMaxTemperature.map { "\(Int($0.rounded()))\(tempUnit.symbol)" } ?? "—", accentRed),
+            (NSLocalizedString("Min Temp", bundle: loc, comment: ""),    dive.displayMinTemperature.map { "\(Int($0.rounded()))\(tempUnit.symbol)" } ?? "—", accentBlue),
+            (NSLocalizedString("Air Temp", bundle: loc, comment: ""),    airTempStr,    accentOrange),
+            (NSLocalizedString("Entry Type", bundle: loc, comment: ""),    dive.entryType ?? "—",   accentPurple),
+            (NSLocalizedString("Dive Type", bundle: loc, comment: ""),   dive.primaryDiveType ?? "—", accentPurple),
+            (NSLocalizedString("Trip", bundle: loc, comment: ""),        tripStr,       accentTeal),
+        ]
+
+        return drawFieldGrid(ctx: ctx, title: NSLocalizedString("DIVE INFORMATION", bundle: loc, comment: ""), titleColor: accentCyan,
+                             fields: fields, columns: 2, x: x, y: y, width: width, minHeight: minHeight)
+    }
+
+    // MARK: - Site Details
+
+    private static func drawSiteDetails(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat, minHeight: CGFloat = 0) -> CGFloat {
+        let prefs = UserPreferences.shared
+        let siteStr = dive.siteName.isEmpty ? "—" : dive.siteName
+
+        let locationStr: String = {
+            let loc = dive.location.trimmingCharacters(in: .whitespacesAndNewlines)
+            if loc.isEmpty || loc == "Inconnu" || loc == NSLocalizedString("Unknown", bundle: Self.loc, comment: "") { return "—" }
+            return loc
+        }()
+
+        let countryStr: String = {
+            if let country = dive.siteCountry, !country.isEmpty {
+                return country
+            }
+            return "—"
+        }()
+
+        let visStr: String = {
+            guard let v = dive.visibility, !v.isEmpty else { return "—" }
+            let trimmed = v.trimmingCharacters(in: .whitespaces)
+            if Double(trimmed) != nil { return "\(trimmed) \(prefs.depthUnit.symbol)" }
+            return trimmed
+        }()
+
+        let gpsStr: String = {
+            guard let lat = dive.siteLatitude, let lon = dive.siteLongitude else { return "—" }
+            return String(format: "%.6f, %.6f", lat, lon)
+        }()
+
+        let gpsExitStr: String = {
+            guard let lat = dive.exitLatitude, let lon = dive.exitLongitude else { return "—" }
+            return String(format: "%.6f, %.6f", lat, lon)
+        }()
+
+        let altStr: String = {
+            guard let alt = dive.displaySiteAltitude else { return "—" }
+            return alt.localizedString(decimals: 0) + " \(prefs.depthUnit.symbol)"
+        }()
+
+        let fields: [Field] = [
+            (NSLocalizedString("Site", bundle: loc, comment: ""),          siteStr,                                    accentGreen),
+            (NSLocalizedString("Location", bundle: loc, comment: ""),      locationStr,                                accentOrange),
+            (NSLocalizedString("Country", bundle: loc, comment: ""),       countryStr,                                 accentPurple),
+            (NSLocalizedString("Visibility", bundle: loc, comment: ""),    visStr,                                     accentCyan),
+            (NSLocalizedString("Weather", bundle: loc, comment: ""),       localizedCondition(dive.weather, { DiveConditionOptions.localizedWeather($0) }), accentYellow),
+            (NSLocalizedString("Conditions", bundle: loc, comment: ""),    localizedCondition(dive.surfaceConditions, { DiveConditionOptions.localizedSurface($0) }), accentBlue),
+            (NSLocalizedString("Current", bundle: loc, comment: ""),       localizedCondition(dive.current, { DiveConditionOptions.localizedCurrent($0) }), accentTeal),
+            (NSLocalizedString("Wind", bundle: loc, value: "Wind", comment: ""),          localizedCondition(dive.wind, { DiveConditionOptions.localizedWind($0) }), accentTeal),
+            (NSLocalizedString("Wind Direction", bundle: loc, value: "Wind Direction", comment: ""), localizedCondition(dive.windDirection, { DiveConditionOptions.localizedWindDirection($0) }), accentBlue),
+            (NSLocalizedString("Environment", bundle: loc, comment: ""),   localizedWaterType(dive.siteWaterType),     accentCyan),
+            (NSLocalizedString("Body of Water", bundle: loc, comment: ""), dive.siteBodyOfWater ?? "—",                accentBlue),
+            (NSLocalizedString("Difficulty", bundle: loc, comment: ""),     localizedDifficulty(dive.siteDifficulty),   accentPurple),
+            (NSLocalizedString("GPS Entry", bundle: loc, comment: ""),      gpsStr,                                     accentGreen),
+            (NSLocalizedString("GPS Exit", bundle: loc, comment: ""),      gpsExitStr,                                 accentTeal),
+            (NSLocalizedString("Altitude", bundle: loc, comment: ""),      altStr,                                     accentOrange),
+        ]
+
+        return drawFieldGrid(ctx: ctx, title: NSLocalizedString("SITE DETAILS", bundle: loc, comment: ""), titleColor: accentGreen,
+                             fields: fields, columns: 3, x: x, y: y, width: width, minHeight: minHeight)
+    }
+
+    // MARK: - Dive Profile Chart
+
+    private static func drawDiveProfile(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat, depthSymbol: String) -> CGFloat {
+        let chartH: CGFloat = 115
+        let titleH: CGFloat = 16
+        let padBottom: CGFloat = 8
+        let cardH = chartH + titleH + padBottom
+        let cardRect = CGRect(x: x, y: y - cardH, width: width, height: cardH)
+        drawRoundedRect(ctx: ctx, rect: cardRect, radius: 8, fill: bgCard)
+        drawCardBorder(ctx: ctx, rect: cardRect, radius: 8)
+
+        drawSectionTitle(ctx: ctx, title: NSLocalizedString("DIVE PROFILE", bundle: loc, comment: ""), x: x + 10, y: y - 11, color: accentCyan)
+        let chartX = x + 36
+        let chartW = width - 48
+        let chartBottom = y - cardH + padBottom + 4
+        let chartTop = y - titleH - 6
+        // Reserve space below the profile for the deepest-point label
+        let labelPadBottom: CGFloat = 10
+        let profileBottom = chartBottom + labelPadBottom
+
+        let samples = dive.profileSamples
+        guard samples.count >= 2 else {
+            let noData: [NSAttributedString.Key: Any] = [
+                .font: font(size: 9),
+                .foregroundColor: platformColor(textMuted)
+            ]
+            drawText(NSLocalizedString("No profile data available", bundle: loc, comment: ""), attrs: noData, in: ctx,
+                     at: CGPoint(x: chartX + chartW / 2 - 50, y: profileBottom + (chartTop - profileBottom) / 2))
+            return y - cardH
+        }
+
+        let maxDepth = max(samples.map(\.depth).max() ?? 1, 0.001)
+        let maxTime = max(samples.last?.time ?? 1, 0.001)
+
+        // Horizontal grid lines + depth labels (use profileBottom so grid stays above label zone)
+        ctx.setStrokeColor(CGColor(red: 0.78, green: 0.80, blue: 0.84, alpha: 0.6))
+        ctx.setLineWidth(0.3)
+        for i in 0...4 {
+            let gy = profileBottom + (chartTop - profileBottom) * CGFloat(i) / 4.0
+            ctx.move(to: CGPoint(x: chartX, y: gy))
+            ctx.addLine(to: CGPoint(x: chartX + chartW, y: gy))
+            ctx.strokePath()
+
+            let depthVal = maxDepth * Double(4 - i) / 4.0
+            let label = dive.displayDepth(depthVal).localizedString(decimals: 0)
+            let labelAttrs: [NSAttributedString.Key: Any] = [
+                .font: font(size: 5.5),
+                .foregroundColor: platformColor(textMuted)
+            ]
+            drawText(label, attrs: labelAttrs, in: ctx, at: CGPoint(x: x + 10, y: gy - 3))
+        }
+
+        // Time axis labels (stay at original chartBottom)
+        for i in 0...5 {
+            let timeVal = maxTime * Double(i) / 5.0
+            let tx = chartX + chartW * CGFloat(i) / 5.0
+            let label = String(format: "%.0f", timeVal)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font(size: 5.5),
+                .foregroundColor: platformColor(textMuted)
+            ]
+            drawText(label, attrs: attrs, in: ctx, at: CGPoint(x: tx - 3, y: chartBottom - 10))
+        }
+
+        // Axis unit labels
+        let unitAttrs: [NSAttributedString.Key: Any] = [
+            .font: font(size: 5),
+            .foregroundColor: platformColor(textMuted)
+        ]
+        drawText(depthSymbol, attrs: unitAttrs, in: ctx, at: CGPoint(x: x + 8, y: chartTop + 4))
+        drawText(NSLocalizedString("min", bundle: loc, comment: ""), attrs: unitAttrs, in: ctx, at: CGPoint(x: chartX + chartW + 2, y: chartBottom - 10))
+
+        // Computed once and threaded through the overlay, diamonds and legend below —
+        // each is an O(n) scan over the dive's samples, no need to repeat it three times
+        // for a single PDF export.
+        let decoBlocksForChart = decoBlocks(for: dive)
+        let decoStopsForChart = mandatoryDecoStopPoints(for: dive)
+
+        // Decompression band — drawn before the depth curve so the profile line, the
+        // max-depth pill and the gas markers all stay crisp on top of the translucent band.
+        // The mandatory-stop diamonds are drawn separately, after the depth curve (below).
+        drawDecoOverlay(ctx: ctx, dive: dive, blocks: decoBlocksForChart, chartX: chartX, chartW: chartW,
+                        chartTop: chartTop, profileBottom: profileBottom,
+                        maxDepth: maxDepth, maxTime: maxTime)
+        drawDecoLegend(ctx: ctx, dive: dive, blocks: decoBlocksForChart, stops: decoStopsForChart, x: x, y: y, width: width)
+
+        // Profile line (maps depth using profileBottom so deepest point stays above label zone)
+        ctx.setStrokeColor(accentCyan)
+        ctx.setLineWidth(1.4)
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        for (i, sample) in samples.enumerated() {
+            let sx = chartX + chartW * CGFloat(sample.time / maxTime)
+            let sy = chartTop - (chartTop - profileBottom) * CGFloat(sample.depth / maxDepth)
+            if i == 0 { ctx.move(to: CGPoint(x: sx, y: sy)) }
+            else { ctx.addLine(to: CGPoint(x: sx, y: sy)) }
+        }
+        ctx.strokePath()
+
+        // Max depth marker (label goes below the line, in the reserved space above the time axis)
+        if let deepest = samples.max(by: { $0.depth < $1.depth }) {
+            let dx = chartX + chartW * CGFloat(deepest.time / maxTime)
+            let dy = chartTop - (chartTop - profileBottom) * CGFloat(deepest.depth / maxDepth)
+            ctx.setFillColor(CGColor(red: 0.0, green: 0.55, blue: 0.67, alpha: 0.15))
+            ctx.fillEllipse(in: CGRect(x: dx - 4, y: dy - 4, width: 8, height: 8))
+            ctx.setFillColor(accentCyan)
+            ctx.fillEllipse(in: CGRect(x: dx - 2, y: dy - 2, width: 4, height: 4))
+            let depthLabel = dive.displayDepth(deepest.depth).localizedString(decimals: 1) + " \(depthSymbol)"
+            let markerAttrs: [NSAttributedString.Key: Any] = [
+                .font: boldFont(size: 5.5),
+                .foregroundColor: platformColor(accentCyan)
+            ]
+            let labelSize = (depthLabel as NSString).size(withAttributes: markerAttrs)
+            // Position label below the marker in the reserved padding zone
+            let labelY = dy - labelSize.height - 4
+            // Keep label to the right, but flip left if it would overflow the chart
+            let labelX = (dx + 4 + labelSize.width + 6 > chartX + chartW) ? dx - labelSize.width - 8 : dx + 4
+            // Background pill behind the label for readability
+            let pillPadH: CGFloat = 3
+            let pillPadV: CGFloat = 1.5
+            let pillRect = CGRect(x: labelX - pillPadH, y: labelY - pillPadV,
+                                  width: labelSize.width + pillPadH * 2, height: labelSize.height + pillPadV * 2)
+            drawRoundedRect(ctx: ctx, rect: pillRect, radius: 3, fill: bgCard)
+            ctx.saveGState()
+            ctx.setStrokeColor(CGColor(red: 0.0, green: 0.55, blue: 0.67, alpha: 0.3))
+            ctx.setLineWidth(0.4)
+            ctx.addPath(CGPath(roundedRect: pillRect, cornerWidth: 3, cornerHeight: 3, transform: nil))
+            ctx.strokePath()
+            ctx.restoreGState()
+            drawText(depthLabel, attrs: markerAttrs, in: ctx, at: CGPoint(x: labelX, y: labelY))
+        }
+
+        // Gas change markers — purple dot + "G1", "G2"... label above each switch
+        let gasSwitches = samples
+            .filter { $0.events.contains(.gasChange) }
+            .sorted { $0.time < $1.time }
+        for (index, sample) in gasSwitches.enumerated() {
+            let gx = chartX + chartW * CGFloat(sample.time / maxTime)
+            let gy = chartTop - (chartTop - profileBottom) * CGFloat(sample.depth / maxDepth)
+            let dotR: CGFloat = 3.5
+            // Halo
+            ctx.setFillColor(CGColor(red: 0.42, green: 0.28, blue: 0.78, alpha: 0.18))
+            ctx.fillEllipse(in: CGRect(x: gx - dotR * 1.6, y: gy - dotR * 1.6, width: dotR * 3.2, height: dotR * 3.2))
+            // Solid dot
+            ctx.setFillColor(accentPurple)
+            ctx.fillEllipse(in: CGRect(x: gx - dotR, y: gy - dotR, width: dotR * 2, height: dotR * 2))
+            // "G{n}" label above the dot
+            let gasLabel = "G\(index + 1)"
+            let gasAttrs: [NSAttributedString.Key: Any] = [
+                .font: boldFont(size: 5),
+                .foregroundColor: platformColor(accentPurple)
+            ]
+            let labelW = (gasLabel as NSString).size(withAttributes: gasAttrs).width
+            drawText(gasLabel, attrs: gasAttrs, in: ctx, at: CGPoint(x: gx - labelW / 2, y: gy + dotR + 2))
+        }
+
+        // Mandatory-stop diamonds go on top of the depth curve, drawn last.
+        drawDecoStopDiamonds(ctx: ctx, stops: decoStopsForChart, chartX: chartX, chartW: chartW,
+                             chartTop: chartTop, profileBottom: profileBottom,
+                             maxDepth: maxDepth, maxTime: maxTime)
+
+        return y - cardH
+    }
+
+    // MARK: - Deco Overlay (profile chart)
+
+    /// Contiguous time ranges during which the dive computer reported a deco obligation.
+    /// Two consecutive deco samples are merged into the same block when their time gap
+    /// is ≤ 3 minutes (well above any normal sample interval).
+    private static func decoBlocks(for dive: Dive) -> [(start: Double, end: Double)] {
+        let times = dive.profileSamples
+            .filter { $0.events.contains(.decoStop) }
+            .map { $0.time }
+            .sorted()
+        guard !times.isEmpty else { return [] }
+
+        var blocks: [(start: Double, end: Double)] = []
+        var blockStart = times[0]
+        var blockEnd   = times[0]
+
+        for i in 1..<times.count {
+            if times[i] - blockEnd <= 3.0 {
+                blockEnd = times[i]
+            } else {
+                blocks.append((start: blockStart, end: blockEnd))
+                blockStart = times[i]
+                blockEnd   = times[i]
+            }
+        }
+        blocks.append((start: blockStart, end: blockEnd))
+        return blocks
+    }
+
+    /// For each mandatory deco stop (type == 2) in `dive.decoStops`, interpolates the
+    /// exact time at which the depth profile crosses `stop.depth` during the deco phase,
+    /// so the marker sits exactly on the profile line at the planned stop depth.
+    /// Falls back to the deco sample whose depth is closest to `stop.depth` when the
+    /// profile does not cross it between consecutive samples.
+    ///
+    /// Algorithm is intentionally identical to the in-app chart's `mandatoryDecoStopPoints`
+    /// (deepest-first, 2-minute lookback, advancing `searchFloorTime`) so the PDF markers
+    /// land at the same times as the on-screen diamonds.
+    ///
+    /// Returns the depth in the dive's RAW STORED UNIT, not the display unit: this chart's
+    /// y-axis is built from unconverted `sample.depth` values, so running the result through
+    /// `displayProfileDepth(_:)` would scale it by the display factor and misplace the marker
+    /// on every dive whose stored unit differs from the user's display unit.
+    private static func mandatoryDecoStopPoints(for dive: Dive) -> [(time: Double, depth: Double)] {
+        // Process deepest-first so each stop anchors below the previous one.
+        let stops = dive.decoStops
+            .filter { $0.type == 2 }
+            .sorted { $0.depth > $1.depth }
+        guard !stops.isEmpty else { return [] }
+
+        let allSamples = dive.profileSamples
+        let decoSamples = allSamples
+            .filter { $0.events.contains(.decoStop) }
+            .sorted { $0.time < $1.time }
+        guard !decoSamples.isEmpty else { return [] }
+
+        // Search from a 2-minute lookback before the first deco sample (some computers emit
+        // .decoStop only after passing the stop depth) through to the end of the dive, so
+        // stops that are only physically reached after the obligation clears still resolve
+        // onto the real ascent line. The loop takes the FIRST ascending crossing at or after
+        // searchFloorTime, so dives that cross inside the obligation window are unaffected.
+        let decoWindowStart = (decoSamples.first?.time ?? 0) - 2.0
+        let decoWindowEnd   = allSamples.map(\.time).max() ?? (decoSamples.last?.time ?? 0)
+        let windowSamples = allSamples
+            .filter { $0.time >= decoWindowStart && $0.time <= decoWindowEnd }
+            .sorted { $0.time < $1.time }
+
+        // DecoStop.depth is always metres; sample.depth is in the stored unit. This is a
+        // geometry conversion needed to compare the two, not a display conversion.
+        let isFeet = dive.importDistanceUnit == "feet"
+        var result: [(time: Double, depth: Double)] = []
+        var searchFloorTime = -Double.greatestFiniteMagnitude
+
+        for stop in stops {
+            let stopInStoredUnit = isFeet ? stop.depth * 3.28084 : stop.depth
+            var crossTime: Double? = nil
+            if windowSamples.count >= 2 {
+                for i in 0..<(windowSamples.count - 1) {
+                    let a = windowSamples[i], b = windowSamples[i + 1]
+                    guard a.time >= searchFloorTime else { continue }
+                    guard a.depth > stopInStoredUnit && b.depth <= stopInStoredUnit else { continue }
+                    let denom = b.depth - a.depth
+                    guard denom != 0 else { continue }
+                    crossTime = a.time + ((stopInStoredUnit - a.depth) / denom) * (b.time - a.time)
+                    break
+                }
+            }
+            // Fall back: deco-event sample whose depth is closest to the stop depth
+            if crossTime == nil {
+                crossTime = decoSamples
+                    .filter { $0.time >= searchFloorTime }
+                    .min(by: { abs($0.depth - stopInStoredUnit) < abs($1.depth - stopInStoredUnit) })?.time
+            }
+            guard let time = crossTime else { continue }
+            searchFloorTime = time
+            result.append((time: time, depth: stopInStoredUnit))
+        }
+        // Post-resolution filter only, for the same reason as the two in-app copies
+        // (StaticChartLayer.mandatoryDecoStopPoints and buildDecoStopCache in
+        // UnifiedDiveChartFixed.swift): the deepest-first loop advances searchFloorTime to
+        // each resolved crossing, so a `continue` inside it would move every shallower
+        // stop. All three copies must carry this filter or the PDF and the screen disagree.
+        // Filtering here covers both the diamonds and drawDecoLegend's "Mandatory stop"
+        // entry, since both read this one result array.
+        guard UserPreferences.shared.hideClearedDecoStops,
+              let cutoff = decoObligationEndTime(in: allSamples) else { return result }
+        return result.filter { $0.time <= cutoff }
+    }
+
+    /// Draws the decompression visualization behind the depth curve: either a stepped
+    /// ceiling band (computers that report a per-sample ceiling) or full-height obligation
+    /// columns (older computers that only report discrete deco-stop events), plus a diamond
+    /// at each mandatory stop.
+    ///
+    /// `maxDepth` and all depths fed to `yFor` are RAW STORED values — this chart's axis is
+    /// built from unconverted `sample.depth`, and `ProfileSample.ceilingDepth` is stored in
+    /// the same unit, so no display conversion may be applied here.
+    private static func drawDecoOverlay(ctx: CGContext, dive: Dive, blocks: [(start: Double, end: Double)],
+                                        chartX: CGFloat, chartW: CGFloat,
+                                        chartTop: CGFloat, profileBottom: CGFloat,
+                                        maxDepth: Double, maxTime: Double) {
+        // Importer order is not guaranteed sorted, and the step polygon below needs
+        // monotonically increasing x to build valid horizontal/vertical segments.
+        let samples = dive.profileSamples.sorted { $0.time < $1.time }
+        guard samples.count >= 2 else { return }
+
+        func xFor(_ t: Double) -> CGFloat {
+            chartX + chartW * CGFloat(min(max(t, 0), maxTime) / maxTime)
+        }
+        func yFor(_ rawDepth: Double) -> CGFloat {
+            chartTop - (chartTop - profileBottom) * CGFloat(min(max(rawDepth, 0), maxDepth) / maxDepth)
+        }
+
+        let plotRect = CGRect(x: chartX, y: profileBottom, width: chartW, height: chartTop - profileBottom)
+        // Gated on > 0, not just non-nil: the Bluetooth/libdc path passes its per-sample
+        // ceiling through ungated (unlike Subsurface/Garmin, which already exclude a
+        // reported-but-zero ceiling), so a non-nil 0 must still read as "no obligation".
+        let hasCeilingData = samples.contains { ($0.ceilingDepth ?? 0) > 0 }
+
+        if hasCeilingData {
+            // Build the step polygon by hand: a ceiling holds at the last reported value
+            // until the computer reports a new one, so each sample contributes a horizontal
+            // "hold" to the next sample's time followed by a vertical step. Raw CGContext
+            // has no equivalent of Swift Charts' .interpolationMethod(.stepEnd).
+            var stepPoints: [CGPoint] = []
+            for (i, sample) in samples.enumerated() {
+                let sy = yFor(sample.ceilingDepth ?? 0)
+                stepPoints.append(CGPoint(x: xFor(sample.time), y: sy))
+                if i + 1 < samples.count {
+                    stepPoints.append(CGPoint(x: xFor(samples[i + 1].time), y: sy))
+                }
+            }
+
+            if stepPoints.count >= 2 {
+                ctx.saveGState()
+                ctx.clip(to: plotRect)
+
+                // Band fill from the surface gridline down to the ceiling. Samples with no
+                // obligation sit at depth 0 (== chartTop), so the band self-collapses there.
+                let fillPath = CGMutablePath()
+                fillPath.move(to: CGPoint(x: stepPoints[0].x, y: chartTop))
+                for point in stepPoints { fillPath.addLine(to: point) }
+                fillPath.addLine(to: CGPoint(x: stepPoints[stepPoints.count - 1].x, y: chartTop))
+                fillPath.closeSubpath()
+                ctx.addPath(fillPath)
+                ctx.setFillColor(CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: 0.30))
+                ctx.fillPath()
+
+                // Solid boundary line, skipping any segment that lies entirely on the
+                // zero-ceiling baseline: unlike the in-app chart, the depth-0 gridline is
+                // inside the visible card here, so stroking it would paint a spurious solid
+                // orange rule across the full chart width outside the obligation window.
+                let baselineEpsilon: CGFloat = 0.01
+                let linePath = CGMutablePath()
+                var penDown = false
+                for i in 0..<(stepPoints.count - 1) {
+                    let a = stepPoints[i], b = stepPoints[i + 1]
+                    if abs(a.y - chartTop) < baselineEpsilon && abs(b.y - chartTop) < baselineEpsilon {
+                        penDown = false
+                        continue
+                    }
+                    if !penDown {
+                        linePath.move(to: a)
+                        penDown = true
+                    }
+                    linePath.addLine(to: b)
+                }
+                if !linePath.isEmpty {
+                    ctx.addPath(linePath)
+                    ctx.setStrokeColor(accentOrange)
+                    ctx.setLineWidth(1.0)
+                    ctx.strokePath()
+                }
+                ctx.restoreGState()
+            }
+        } else {
+            // Legacy dives report only discrete deco-stop events, with no ceiling depth to
+            // plot — shade the whole chart height across each obligation window instead.
+            if !blocks.isEmpty {
+                ctx.saveGState()
+                ctx.clip(to: plotRect)
+                ctx.setFillColor(CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: 0.18))
+                for block in blocks {
+                    let bx = xFor(block.start)
+                    // Minimum width so a single-sample block stays visible instead of
+                    // collapsing to a zero-width rect.
+                    let bw = max(xFor(block.end) - bx, 1.5)
+                    ctx.fill(CGRect(x: bx, y: profileBottom, width: bw, height: chartTop - profileBottom))
+                }
+                ctx.restoreGState()
+            }
+        }
+    }
+
+    /// Mandatory-stop diamonds, styled like the gas-change markers. Drawn separately from
+    /// `drawDecoOverlay` and called AFTER the depth-curve stroke (unlike the band, which stays
+    /// behind it): the diamonds mark a specific point on the profile line and must sit on top
+    /// of it, not be paved over by it — matching the in-app chart, where the equivalent marks
+    /// are likewise drawn after the depth trace. No text label: space is tight and the exact
+    /// depth/time is already listed in the DECO INFO card.
+    private static func drawDecoStopDiamonds(ctx: CGContext, stops: [(time: Double, depth: Double)],
+                                             chartX: CGFloat, chartW: CGFloat,
+                                             chartTop: CGFloat, profileBottom: CGFloat,
+                                             maxDepth: Double, maxTime: Double) {
+        func xFor(_ t: Double) -> CGFloat {
+            chartX + chartW * CGFloat(min(max(t, 0), maxTime) / maxTime)
+        }
+        func yFor(_ rawDepth: Double) -> CGFloat {
+            chartTop - (chartTop - profileBottom) * CGFloat(min(max(rawDepth, 0), maxDepth) / maxDepth)
+        }
+        // xFor/yFor clamp the diamond's CENTRE into the plot rect, but the 5pt halo can
+        // still bleed a point or two past the edge for a stop resolved near the start/end
+        // of the dive or at the very top/bottom of the depth range — clip like the band.
+        let plotRect = CGRect(x: chartX, y: profileBottom, width: chartW, height: chartTop - profileBottom)
+        ctx.saveGState()
+        ctx.clip(to: plotRect)
+        for point in stops {
+            let center = CGPoint(x: xFor(point.time), y: yFor(point.depth))
+            fillDiamond(ctx: ctx, center: center, radius: 5.0,
+                        color: CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: 0.18))
+            fillDiamond(ctx: ctx, center: center, radius: 3.0, color: accentOrange)
+        }
+        ctx.restoreGState()
+    }
+
+    /// Small right-aligned deco legend drawn inline on the "DIVE PROFILE" title row.
+    /// Kept on the existing row rather than given its own so `cardH` does not grow, which
+    /// would eat into the notes section — the only variable-height element on the page.
+    private static func drawDecoLegend(ctx: CGContext, dive: Dive, blocks: [(start: Double, end: Double)],
+                                       stops: [(time: Double, depth: Double)], x: CGFloat, y: CGFloat, width: CGFloat) {
+        // Gated on > 0 to match drawDecoOverlay's hasCeilingData — otherwise the legend
+        // could advertise "Deco ceiling" for a dive whose ceiling never rendered.
+        let hasCeilingData = dive.profileSamples.contains { ($0.ceilingDepth ?? 0) > 0 }
+        let hasBand  = hasCeilingData || !blocks.isEmpty
+        let hasStops = !stops.isEmpty
+        let hasGas   = dive.profileSamples.contains { $0.events.contains(.gasChange) }
+        guard hasBand || hasStops || hasGas else { return }
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font(size: 5.5),
+            .foregroundColor: platformColor(textMuted)
+        ]
+        let bandLabel = hasCeilingData
+            ? NSLocalizedString("Deco ceiling", bundle: loc, comment: "")
+            : NSLocalizedString("Deco obligation", bundle: loc, comment: "")
+        let stopLabel = NSLocalizedString("Mandatory stop", bundle: loc, comment: "")
+        // Reuses the in-app chart's exact legend wording/key (UnifiedDiveChartFixed.swift's
+        // legendGasChange) so both surfaces read identically and no new translation is needed.
+        let gasLabel = NSLocalizedString("Gas switch", bundle: loc, comment: "")
+
+        let swatchW: CGFloat = 8
+        let swatchH: CGFloat = 4.5
+        let diamondR: CGFloat = 2.6
+        let dotR: CGFloat = 2.6
+        let gap: CGFloat = 3
+        let itemGap: CGFloat = 8
+
+        var totalW: CGFloat = 0
+        if hasBand {
+            totalW += swatchW + gap + (bandLabel as NSString).size(withAttributes: attrs).width
+        }
+        if hasBand && (hasStops || hasGas) { totalW += itemGap }
+        if hasStops {
+            totalW += diamondR * 2 + gap + (stopLabel as NSString).size(withAttributes: attrs).width
+        }
+        if hasStops && hasGas { totalW += itemGap }
+        if hasGas {
+            totalW += dotR * 2 + gap + (gasLabel as NSString).size(withAttributes: attrs).width
+        }
+
+        // Bail out rather than overlap the section title when the translated labels are too
+        // long for the remaining width (fr-CA is the longest of the supported languages).
+        let titleW = (NSLocalizedString("DIVE PROFILE", bundle: loc, comment: "") as NSString)
+            .size(withAttributes: [.font: boldFont(size: 7.5)]).width
+        var cx = x + width - 10 - totalW
+        guard cx >= x + 16 + titleW + 10 else { return }
+
+        let baseline = y - 12
+
+        if hasBand {
+            let swatchRect = CGRect(x: cx, y: baseline, width: swatchW, height: swatchH)
+            // Matches the actual band alpha for each case (0.30 ceiling / 0.18 legacy) so
+            // the legend key isn't a different shade than what's drawn on the chart.
+            ctx.setFillColor(CGColor(red: 0.82, green: 0.42, blue: 0.05, alpha: hasCeilingData ? 0.30 : 0.18))
+            ctx.fill(swatchRect)
+            ctx.saveGState()
+            ctx.setStrokeColor(accentOrange)
+            ctx.setLineWidth(0.4)
+            ctx.stroke(swatchRect)
+            ctx.restoreGState()
+            cx += swatchW + gap
+            drawText(bandLabel, attrs: attrs, in: ctx, at: CGPoint(x: cx, y: baseline))
+            cx += (bandLabel as NSString).size(withAttributes: attrs).width
+            if hasStops || hasGas { cx += itemGap }
+        }
+
+        if hasStops {
+            fillDiamond(ctx: ctx, center: CGPoint(x: cx + diamondR, y: baseline + swatchH / 2),
+                        radius: diamondR, color: accentOrange)
+            cx += diamondR * 2 + gap
+            drawText(stopLabel, attrs: attrs, in: ctx, at: CGPoint(x: cx, y: baseline))
+            cx += (stopLabel as NSString).size(withAttributes: attrs).width
+            if hasGas { cx += itemGap }
+        }
+
+        if hasGas {
+            // Matches the profile chart's own gas-switch marker colour (accentPurple) rather
+            // than the in-app chart's brown — the two charts already use different colours
+            // for this marker, so the legend follows its own chart's swatch, not the other's.
+            let dotCenter = CGPoint(x: cx + dotR, y: baseline + swatchH / 2)
+            ctx.setFillColor(accentPurple)
+            ctx.fillEllipse(in: CGRect(x: dotCenter.x - dotR, y: dotCenter.y - dotR, width: dotR * 2, height: dotR * 2))
+            cx += dotR * 2 + gap
+            drawText(gasLabel, attrs: attrs, in: ctx, at: CGPoint(x: cx, y: baseline))
+        }
+    }
+
+    /// Fills an axis-aligned diamond (rotated square) centred on `center`.
+    private static func fillDiamond(ctx: CGContext, center: CGPoint, radius: CGFloat, color: CGColor) {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: center.x, y: center.y + radius))
+        path.addLine(to: CGPoint(x: center.x + radius, y: center.y))
+        path.addLine(to: CGPoint(x: center.x, y: center.y - radius))
+        path.addLine(to: CGPoint(x: center.x - radius, y: center.y))
+        path.closeSubpath()
+        ctx.addPath(path)
+        ctx.setFillColor(color)
+        ctx.fillPath()
+    }
+
+    // MARK: - Dive Statistics
+
+    private static func drawDiveStatistics(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat,
+                                           depthSymbol: String, minHeight: CGFloat = 0) -> CGFloat {
+        let maxDepthStr = dive.displayMaxDepth.localizedString(decimals: 1) + " \(depthSymbol)"
+        let avgDepthStr = dive.displayAverageDepth.localizedString(decimals: 1) + " \(depthSymbol)"
+        let durationStr = dive.formattedDuration
+        let rmvStr = dive.formattedRMV
+
+        let siStr: String = {
+            let raw = dive.surfaceInterval.trimmingCharacters(in: .whitespacesAndNewlines)
+            if raw.isEmpty || raw == "0h 00m" || raw == "0" { return "—" }
+            return raw
+        }()
+
+        let computerStr = dive.computerName.isEmpty ? "—" : dive.computerName
+        let weightsStr: String = dive.weights.map {
+            UserPreferences.shared.weightUnit.formatted($0, from: dive.storedWeightUnit)
+        } ?? "—"
+        let serialStr = dive.computerSerialNumber.flatMap { $0.isEmpty ? nil : $0.uppercased() } ?? "—"
+
+        let fields: [Field] = [
+            (NSLocalizedString("Max Depth", bundle: loc, comment: ""),        maxDepthStr,   accentBlue),
+            (NSLocalizedString("Average Depth", bundle: loc, comment: ""),    avgDepthStr,   accentCyan),
+            (NSLocalizedString("Duration", bundle: loc, comment: ""),         durationStr,   accentGreen),
+            (NSLocalizedString("RMV Rate", bundle: loc, comment: ""),         rmvStr,        accentPink),
+            (NSLocalizedString("Surface Interval", bundle: loc, comment: ""), siStr,         accentYellow),
+            (NSLocalizedString("Weights", bundle: loc, comment: ""),          weightsStr,    textGray),
+            (NSLocalizedString("Computer", bundle: loc, comment: ""),         computerStr,   accentBlue),
+            (NSLocalizedString("Serial", bundle: loc, comment: ""),           serialStr,     accentTeal),
+        ]
+
+        return drawFieldGrid(ctx: ctx, title: NSLocalizedString("DIVE STATISTICS", bundle: loc, comment: ""), titleColor: accentCyan,
+                             fields: fields, columns: 3, x: x, y: y, width: width, minHeight: minHeight)
+    }
+
+    // MARK: - Tanks
+
+    private static func gasString(for tank: TankData) -> String {
+        tank.gasDisplayName()
+    }
+
+    private static func drawTanksSection(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat,
+                                         pressSymbol: String, minHeight: CGFloat = 0) -> CGFloat {
+        let tanks = dive.tanks
+
+        var allRows: [Field] = []
+
+        if tanks.count > 1 {
+            // Multiple tanks: one compact line per tank ("Type · Gas · Volume · Start→End")
+            for (index, tank) in tanks.enumerated() {
+                let tankLabel = String(format: NSLocalizedString("Tank %lld", bundle: loc, comment: ""), index + 1)
+
+                let volStr: String = tank.volume.map { dive.formattedVolume($0, workingPressureRaw: tank.workingPressure) } ?? ""
+
+                let pressStr: String = {
+                    guard let sp = tank.startPressure else { return "" }
+                    guard let ep = tank.endPressure else { return dive.formattedPressure(sp) }
+                    return "\(dive.displayPressure(sp).localizedString(decimals: 0))→\(dive.displayPressure(ep).localizedString(decimals: 0)) \(pressSymbol)"
+                }()
+
+                var components = [localizedTankType(tank.tankType), gasString(for: tank)]
+                if !volStr.isEmpty { components.append(volStr) }
+                if !pressStr.isEmpty { components.append(pressStr) }
+
+                allRows.append((tankLabel, components.joined(separator: " · "), accentBlue))
+            }
+
+            return drawFieldGrid(ctx: ctx, title: NSLocalizedString("TANKS", bundle: loc, comment: ""), titleColor: accentBlue,
+                                 fields: allRows, columns: 1, x: x, y: y, width: width, minHeight: minHeight)
+        }
+
+        // Single tank (or empty): original 6-field / 2-column layout
+        if tanks.isEmpty {
+            allRows.append((NSLocalizedString("Tank", bundle: loc, comment: ""), "—", accentBlue))
+            allRows.append((NSLocalizedString("Gas", bundle: loc, comment: ""), "—", accentPurple))
+            allRows.append((NSLocalizedString("Volume", bundle: loc, comment: ""), "—", accentCyan))
+            allRows.append((NSLocalizedString("Start", bundle: loc, comment: ""), "—", accentGreen))
+            allRows.append((NSLocalizedString("End", bundle: loc, comment: ""), "—", accentOrange))
+            allRows.append((NSLocalizedString("Used", bundle: loc, comment: ""), "—", accentRed))
+        } else {
+            let tank = tanks[0]
+            let typeStr = localizedTankType(tank.tankType)
+            let materialStr = localizedTankMaterial(tank.tankMaterial)
+            let headerValue = materialStr.isEmpty ? typeStr : "\(typeStr) · \(materialStr)"
+            allRows.append((NSLocalizedString("Tank", bundle: loc, comment: ""), headerValue, accentBlue))
+
+            allRows.append((NSLocalizedString("Gas", bundle: loc, comment: ""), gasString(for: tank), accentPurple))
+
+            let volStr: String = {
+                guard let vol = tank.volume else { return "—" }
+                return dive.formattedVolume(vol, workingPressureRaw: tank.workingPressure)
+            }()
+            allRows.append((NSLocalizedString("Volume", bundle: loc, comment: ""), volStr, accentCyan))
+
+            let startStr: String = {
+                guard let sp = tank.startPressure else { return "—" }
+                return dive.formattedPressure(sp)
+            }()
+            allRows.append((NSLocalizedString("Start", bundle: loc, comment: ""), startStr, accentGreen))
+
+            let endStr: String = {
+                guard let ep = tank.endPressure else { return "—" }
+                return dive.formattedPressure(ep)
+            }()
+            allRows.append((NSLocalizedString("End", bundle: loc, comment: ""), endStr, accentOrange))
+
+            let consumedStr: String = {
+                guard let sp = tank.startPressure, let ep = tank.endPressure, sp > ep else { return "—" }
+                let delta = dive.displayPressure(sp) - dive.displayPressure(ep)
+                return delta.localizedString(decimals: 0) + " \(pressSymbol)"
+            }()
+            allRows.append((NSLocalizedString("Used", bundle: loc, comment: ""), consumedStr, accentRed))
+        }
+
+        return drawFieldGrid(ctx: ctx, title: NSLocalizedString("TANKS", bundle: loc, comment: ""), titleColor: accentBlue,
+                             fields: allRows, columns: 2, x: x, y: y, width: width, minHeight: minHeight)
+    }
+
+    // MARK: - Deco Information
+
+    private static func drawDecoSection(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat, minHeight: CGFloat = 0) -> CGFloat {
+        // Algorithm (strip GF values since they are shown separately in GF Low/High)
+        let algoStr: String = {
+            guard let raw = dive.decompressionAlgorithm, !raw.isEmpty else { return "—" }
+            let pattern = #"\s*GF\s*\d+/\d+"#
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return raw }
+            let ns = raw as NSString
+            let cleaned = regex.stringByReplacingMatches(in: raw, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+                .trimmingCharacters(in: .whitespaces)
+            return cleaned.isEmpty ? raw : cleaned
+        }()
+
+        // GF values extracted from the raw algorithm string (e.g. "ZHL-16C GF 40/85")
+        let gfStr: String = {
+            guard let raw = dive.decompressionAlgorithm, !raw.isEmpty else { return "—" }
+            let pattern = #"GF\s*(\d+)/(\d+)"#
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return "—" }
+            let ns = raw as NSString
+            let results = regex.matches(in: raw, range: NSRange(location: 0, length: ns.length))
+            guard let match = results.first, match.numberOfRanges == 3 else { return "—" }
+            let low = ns.substring(with: match.range(at: 1))
+            let high = ns.substring(with: match.range(at: 2))
+            return "\(low)/\(high)"
+        }()
+
+        // CNS
+        let cnsStr: String = {
+            guard let cns = dive.cnsPercentage else { return "—" }
+            return cns.localizedString(decimals: 1) + "%"
+        }()
+
+        // Deco type
+        let decoTypeStr: String = dive.isDecompressionDive
+            ? NSLocalizedString("Deco dive", bundle: loc, comment: "")
+            : NSLocalizedString("No-deco", bundle: loc, comment: "")
+        let decoTypeColor: CGColor = dive.isDecompressionDive ? accentOrange : accentGreen
+
+        var fields: [Field] = [
+            (NSLocalizedString("Algorithm", bundle: loc, comment: ""),  algoStr,      accentCyan),
+            (NSLocalizedString("GF Low/High", bundle: loc, comment: ""), gfStr,       accentPurple),
+            (NSLocalizedString("CNS O₂", bundle: loc, comment: ""),     cnsStr,       accentYellow),
+            (NSLocalizedString("Dive Type", bundle: loc, comment: ""),  decoTypeStr,  decoTypeColor),
+        ]
+
+        // Add deco stops if present
+        if dive.isDecompressionDive && !dive.decoStops.isEmpty {
+            for stop in dive.decoStops {
+                // DecoStop.depth is always metres (see Dive.swift), whatever the dive's importDistanceUnit.
+                let depthLabel = UserPreferences.shared.depthUnit.convert(stop.depth).localizedString(decimals: 0) + " \(UserPreferences.shared.depthUnit.symbol)"
+
+                let timeLabel: String = {
+                    let m = Int(stop.time) / 60
+                    let s = Int(stop.time) % 60
+                    if m > 0 { return s > 0 ? "\(m) min \(s) s" : "\(m) min" }
+                    return "\(s) s"
+                }()
+
+                let typeLabel: String = {
+                    switch stop.type {
+                    case 1: return NSLocalizedString("Safety Stop", bundle: loc, comment: "")
+                    case 2: return NSLocalizedString("Deco Stop", bundle: loc, comment: "")
+                    case 3: return NSLocalizedString("Deep Stop", bundle: loc, comment: "")
+                    default: return NSLocalizedString("NDL", bundle: loc, comment: "")
+                    }
+                }()
+
+                fields.append((typeLabel, "\(depthLabel) · \(timeLabel)", accentOrange))
+            }
+        }
+
+        return drawFieldGrid(ctx: ctx, title: NSLocalizedString("DECO INFO", bundle: loc, comment: ""), titleColor: accentPurple,
+                             fields: fields, columns: 2, x: x, y: y, width: width, minHeight: minHeight)
+    }
+
+    // MARK: - Equipment
+
+    private static func drawEquipmentSection(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+        let gearList = dive.usedGear ?? []
+        guard !gearList.isEmpty else { return y }
+
+        let titleH: CGFloat = 14
+        let lineH: CGFloat = 11
+        let padBottom: CGFloat = 6
+
+        let cols = 4
+        let dataRows = Int(ceil(Double(gearList.count) / Double(cols)))
+        let cardH = CGFloat(dataRows) * lineH + titleH + padBottom
+        let cardRect = CGRect(x: x, y: y - cardH, width: width, height: cardH)
+
+        drawRoundedRect(ctx: ctx, rect: cardRect, radius: 8, fill: bgCard)
+        drawCardBorder(ctx: ctx, rect: cardRect, radius: 8)
+
+        drawSectionTitle(ctx: ctx, title: NSLocalizedString("EQUIPMENT USED", bundle: loc, comment: ""), x: x + 10, y: y - (titleH / 2) - 3, color: accentOrange)
+
+        let columnWidth = (width - 20) / CGFloat(cols)
+        let startY = y - titleH - 1
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byTruncatingTail
+
+        let fontSize: CGFloat = 5.5
+        let dotSize: CGFloat = 2.5
+
+        for (i, gear) in gearList.enumerated() {
+            let row = i / cols
+            let col = i % cols
+            let gx = x + 12 + CGFloat(col) * columnWidth
+            let gy = startY - CGFloat(row) * lineH
+
+            let chipColor = gearChipColor(for: gear.category)
+
+            ctx.setFillColor(chipColor)
+            ctx.fillEllipse(in: CGRect(x: gx, y: gy - 4, width: dotSize, height: dotSize))
+
+            let nameAttrs: [NSAttributedString.Key: Any] = [
+                .font: mediumFont(size: fontSize),
+                .foregroundColor: platformColor(textWhite),
+                .paragraphStyle: paragraphStyle
+            ]
+
+            let textRect = CGRect(x: gx + 5, y: gy - 7.5, width: columnWidth - 8, height: 8)
+            let attrStr = NSAttributedString(string: gear.name, attributes: nameAttrs)
+            drawWrappedText(attrStr, in: ctx, rect: textRect)
+        }
+
+        return y - cardH
+    }
+
+    // MARK: - Notes
+
+    private static func drawNotesSection(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat, footerY: CGFloat) -> CGFloat {
+        let notes = dive.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayNotes = notes.isEmpty ? NSLocalizedString("No notes", bundle: loc, comment: "") : notes
+
+        let titleH: CGFloat = 14
+        let padBottom: CGFloat = 6
+        let maxCardH = y - footerY - 4
+
+        guard maxCardH > 25 else { return y }
+
+        let textAreaWidth = width - 20
+        let textAreaMaxHeight = maxCardH - titleH - padBottom
+
+        var currentFontSize: CGFloat = 7.5
+        let minFontSize: CGFloat = 4.5
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 0.5
+        paragraphStyle.lineBreakMode = .byWordWrapping
+
+        func measureHeight(for size: CGFloat, text: String) -> CGFloat {
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font(size: size),
+                .paragraphStyle: paragraphStyle
+            ]
+            let attrStr = NSAttributedString(string: text, attributes: attrs)
+            let framesetter = CTFramesetterCreateWithAttributedString(attrStr as CFAttributedString)
+            let constraints = CGSize(width: textAreaWidth, height: CGFloat.greatestFiniteMagnitude)
+            let suggestedSize = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRangeMake(0, 0), nil, constraints, nil)
+            return suggestedSize.height
+        }
+
+        var textH = measureHeight(for: currentFontSize, text: displayNotes)
+
+        while textH > textAreaMaxHeight && currentFontSize > minFontSize {
+            currentFontSize -= 0.5
+            textH = measureHeight(for: currentFontSize, text: displayNotes)
+        }
+
+        let finalDrawingHeight = min(textH, textAreaMaxHeight)
+        let cardH = min(finalDrawingHeight + titleH + padBottom, maxCardH)
+        let cardRect = CGRect(x: x, y: y - cardH, width: width, height: cardH)
+
+        drawRoundedRect(ctx: ctx, rect: cardRect, radius: 8, fill: bgCard)
+        drawCardBorder(ctx: ctx, rect: cardRect, radius: 8)
+
+        drawSectionTitle(ctx: ctx, title: NSLocalizedString("NOTES", bundle: loc, comment: ""), x: x + 10, y: y - 10, color: textGray)
+
+        let textColor = notes.isEmpty ? textMuted : textWhite
+        let textAttrs: [NSAttributedString.Key: Any] = [
+            .font: font(size: currentFontSize),
+            .foregroundColor: platformColor(textColor),
+            .paragraphStyle: paragraphStyle
+        ]
+        let attrStr = NSAttributedString(string: displayNotes, attributes: textAttrs)
+        let textDrawingRect = CGRect(x: x + 10, y: y - cardH + padBottom, width: textAreaWidth, height: finalDrawingHeight)
+        drawWrappedText(attrStr, in: ctx, rect: textDrawingRect)
+
+        return y - cardH
+    }
+
+    // MARK: - Footer (signatures + branding)
+
+    private static func drawBrandedFooter(ctx: CGContext, dive: Dive, allDives: [Dive], x: CGFloat, y: CGFloat, width: CGFloat, pageWidth: CGFloat) {
+        // Brand bar at the bottom
+        let brandH: CGFloat = 20
+        let brandY = y
+
+        ctx.saveGState()
+        let bgColors = [
+            CGColor(red: 0.95, green: 0.96, blue: 0.97, alpha: 1.0),
+            bgDark
+        ] as CFArray
+        let brandRect = CGRect(x: 0, y: brandY, width: pageWidth, height: brandH)
+        if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: bgColors, locations: [0, 1]) {
+            ctx.clip(to: brandRect)
+            ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: brandY), end: CGPoint(x: 0, y: brandY + brandH), options: [])
+        }
+        ctx.restoreGState()
+
+        // Logo
+        let logoSize: CGFloat = 12
+        let logoX = x
+        let logoY = brandY + (brandH - logoSize) / 2
+        if let logoImage = loadAppIcon() {
+            let logoRect = CGRect(x: logoX, y: logoY, width: logoSize, height: logoSize)
+            ctx.saveGState()
+            let clipPath = CGPath(roundedRect: logoRect, cornerWidth: 2, cornerHeight: 2, transform: nil)
+            ctx.addPath(clipPath)
+            ctx.clip()
+            ctx.draw(logoImage, in: logoRect)
+            ctx.restoreGState()
+        }
+
+        let brandAttrs: [NSAttributedString.Key: Any] = [
+            .font: boldFont(size: 6.5),
+            .foregroundColor: platformColor(accentCyan)
+        ]
+        drawText("BlueDive", attrs: brandAttrs, in: ctx, at: CGPoint(x: logoX + logoSize + 4, y: brandY + brandH / 2 - 3))
+
+        // "Generated by" (right-aligned)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.locale = UserPreferences.shared.languageMode.locale ?? .current
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        let genStr = String(format: NSLocalizedString("Generated by BlueDive %@ (%@) — %@", bundle: loc, comment: ""), appVersion, buildNumber, dateFormatter.string(from: Date()))
+        let genAttrs: [NSAttributedString.Key: Any] = [
+            .font: font(size: 5),
+            .foregroundColor: platformColor(textMuted)
+        ]
+        let genStrNS = NSAttributedString(string: genStr, attributes: genAttrs)
+        let genWidth = genStrNS.size().width
+        drawText(genStr, attrs: genAttrs, in: ctx, at: CGPoint(x: x + width - genWidth, y: brandY + brandH / 2 - 3))
+
+        // Signature section
+        let sigTop = brandY + brandH + 4
+        let sigH: CGFloat = 36
+        let colGap: CGFloat = 12
+        let cols = 4
+        let colW = (width - colGap * CGFloat(cols - 1)) / CGFloat(cols)
+
+        // Separator line
+        ctx.setStrokeColor(divider)
+        ctx.setLineWidth(0.4)
+        ctx.move(to: CGPoint(x: x, y: sigTop - 2))
+        ctx.addLine(to: CGPoint(x: x + width, y: sigTop - 2))
+        ctx.strokePath()
+
+        let diverName = dive.diverName.isEmpty ? NSLocalizedString("Solo Diver", bundle: loc, comment: "") : dive.diverName
+        let buddyRaw = dive.buddies.trimmingCharacters(in: .whitespacesAndNewlines)
+        let buddyName = buddyRaw.isEmpty ? NSLocalizedString("No buddy", bundle: loc, comment: "") : buddyRaw
+        let masterRaw = dive.diveMaster?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let masterName = masterRaw.isEmpty ? NSLocalizedString("No dive master", bundle: loc, comment: "") : masterRaw
+        let skipperRaw = dive.skipper?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let skipperName = skipperRaw.isEmpty ? NSLocalizedString("No skipper", bundle: loc, comment: "") : skipperRaw
+
+        let sigColumns: [(label: String, name: String, placeholder: Bool)] = [
+            (NSLocalizedString("Diver", bundle: loc, comment: ""), diverName, dive.diverName.isEmpty),
+            (NSLocalizedString("Buddies", bundle: loc, comment: ""), buddyName, buddyRaw.isEmpty),
+            (NSLocalizedString("Dive Master", bundle: loc, comment: ""), masterName, masterRaw.isEmpty),
+            (NSLocalizedString("Skipper", bundle: loc, comment: ""), skipperName, skipperRaw.isEmpty),
+        ]
+
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font: font(size: 5),
+            .foregroundColor: platformColor(textGray)
+        ]
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byTruncatingTail
+
+        for (i, col) in sigColumns.enumerated() {
+            let cx = x + CGFloat(i) * (colW + colGap)
+            let lineWidth = colW
+
+            // Label
+            drawText(col.label.uppercased(), attrs: labelAttrs, in: ctx, at: CGPoint(x: cx, y: sigTop + sigH - 8))
+
+            // Name (auto-shrinks, lighter style for placeholders)
+            var fontSize: CGFloat = 7.5
+            let minFontSize: CGFloat = 5.0
+            let nameColor = col.placeholder ? textMuted : textWhite
+
+            func nameFont(_ size: CGFloat) -> CTFont {
+                col.placeholder ? lightFont(size: size) : mediumFont(size: size)
+            }
+
+            var nameAttrs: [NSAttributedString.Key: Any] = [
+                .font: nameFont(fontSize),
+                .foregroundColor: platformColor(nameColor),
+                .paragraphStyle: paragraphStyle
+            ]
+            var textWidth = (col.name as NSString).size(withAttributes: nameAttrs).width
+            while textWidth > lineWidth && fontSize > minFontSize {
+                fontSize -= 0.5
+                nameAttrs[.font] = nameFont(fontSize)
+                textWidth = (col.name as NSString).size(withAttributes: nameAttrs).width
+            }
+            drawText(col.name, attrs: nameAttrs, in: ctx, at: CGPoint(x: cx, y: sigTop + sigH - 18))
+
+            // Signature line
+            let lineY = sigTop + 4
+            ctx.setStrokeColor(textMuted)
+            ctx.setLineWidth(0.4)
+            ctx.move(to: CGPoint(x: cx, y: lineY))
+            ctx.addLine(to: CGPoint(x: cx + lineWidth, y: lineY))
+            ctx.strokePath()
+        }
+    }
+
+    // MARK: - Drawing Helpers
+
+    private static func drawRoundedRect(ctx: CGContext, rect: CGRect, radius: CGFloat, fill: CGColor) {
+        let path = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        ctx.addPath(path)
+        ctx.setFillColor(fill)
+        ctx.fillPath()
+    }
+
+    private static func drawCardBorder(ctx: CGContext, rect: CGRect, radius: CGFloat) {
+        ctx.saveGState()
+        ctx.setStrokeColor(CGColor(red: 0.78, green: 0.80, blue: 0.84, alpha: 0.6))
+        ctx.setLineWidth(0.5)
+        let path = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        ctx.addPath(path)
+        ctx.strokePath()
+        ctx.restoreGState()
+    }
+
+    private static func drawSectionTitle(ctx: CGContext, title: String, x: CGFloat, y: CGFloat, color: CGColor) {
+        ctx.setFillColor(color)
+        ctx.fill(CGRect(x: x, y: y - 2, width: 2.5, height: 9))
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: boldFont(size: 7.5),
+            .foregroundColor: platformColor(color)
+        ]
+        drawText(title, attrs: attrs, in: ctx, at: CGPoint(x: x + 6, y: y - 1))
+    }
+
+    private static func drawText(_ text: String, attrs: [NSAttributedString.Key: Any], in ctx: CGContext, at point: CGPoint) {
+        let str = NSAttributedString(string: text, attributes: attrs)
+        drawAttributedString(str, in: ctx, at: point)
+    }
+
+    private static func drawAttributedString(_ str: NSAttributedString, in ctx: CGContext, at point: CGPoint) {
+        let line = CTLineCreateWithAttributedString(str as CFAttributedString)
+        ctx.saveGState()
+        ctx.textPosition = point
+        CTLineDraw(line, ctx)
+        ctx.restoreGState()
+    }
+
+    private static func drawWrappedText(_ str: NSAttributedString, in ctx: CGContext, rect: CGRect) {
+        let framesetter = CTFramesetterCreateWithAttributedString(str as CFAttributedString)
+        let path = CGPath(rect: rect, transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
+        ctx.saveGState()
+        CTFrameDraw(frame, ctx)
+        ctx.restoreGState()
+    }
+
+    // MARK: - Asset Loading
+
+    private static func loadAppIcon() -> CGImage? {
+        #if os(macOS)
+        guard let nsImage = NSImage(named: "BlueDiveIcon") else { return nil }
+        var rect = CGRect(x: 0, y: 0, width: nsImage.size.width, height: nsImage.size.height)
+        return nsImage.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+        #else
+        guard let uiImage = UIImage(named: "BlueDiveIcon") else { return nil }
+        return uiImage.cgImage
+        #endif
+    }
+
+    // MARK: - Gear Colour Mapping
+
+    private static func gearChipColor(for category: String) -> CGColor {
+        guard let cat = GearCategory(exportKeyOrRawValue: category) else { return textGray }
+        switch cat {
+        case .suit, .drysuit, .underwear: return accentPurple
+        case .tank: return accentBlue
+        case .firstStage, .secondStage: return accentGreen
+        case .bcd, .wing, .backplate: return accentOrange
+        case .computer, .transmitter: return accentCyan
+        case .fins, .mask, .snorkel: return accentPink
+        case .weights: return textGray
+        case .light: return accentYellow
+        case .knife, .gloves: return accentRed
+        case .camera: return textGray
+        case .rebreather: return accentTeal
+        default: return textGray
+        }
+    }
+
+    // MARK: - Platform Colour Bridging
+
+    private static func platformColor(_ cgColor: CGColor) -> Any {
+        #if os(macOS)
+        return NSColor(cgColor: cgColor) ?? NSColor.black
+        #else
+        return UIColor(cgColor: cgColor)
+        #endif
+    }
+}

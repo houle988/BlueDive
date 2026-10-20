@@ -8,31 +8,37 @@
 
 ## Overview
 
-BlueDive is a modern, actively maintained dive log app designed as a full-featured alternative to other legacy dive log applications. Built natively with SwiftUI, it syncs seamlessly across all your Apple devices via iCloud and supports direct import from your dive computer over Bluetooth.
+BlueDive is a modern, actively maintained dive log app designed as a full-featured alternative to other legacy dive log applications. Built natively with SwiftUI, it syncs seamlessly across all your Apple devices via iCloud and supports direct import from your dive computer over Bluetooth. Version 2.0 brings a native Mac app that shares the iPhone and iPad interface and uses the extra width of the Mac window.
 
 ## Features
 
-- **Dive log** — Record and browse your full dive history with depth profiles, gas mixes, conditions, and photos
-- **Dive computer sync** — Import dives directly from your computer over Bluetooth via libdivecomputer
-- **iCloud sync** — Your logbook stays in sync across iPhone, iPad, and Mac automatically
-- **MacDive import** — Migrate your existing logbook from MacDive's XML export format
-- **UDDF export** — Export your dives in the Universal Dive Data Format for compatibility with other software
-- **Gear management** — Track your equipment, service history, and tank templates
-- **Trip organization** — Group dives by trip or destination
-- **Statistics & heatmap** — Visualize your diving history with charts and a calendar heatmap
-- **Certifications & insurance** — Store and export certification records and diving insurance details
-- **Marine life log** — Record species sightings per dive
-- **PDF logbook** — Generate a printable logbook PDF
-- **Localized** — Available in English (Canada), French (Canada), and German
-- **Widget** — Home Screen and Lock Screen widgets showing recent dive stats
+- **Dive log** — Record and browse your full dive history with depth profiles, gas mixes, conditions, photos, marine life, a decompression overlay with deco-stop markers, and an optional raw samples table
+- **Dive computer sync** — Import dives directly from your computer over Bluetooth via libdivecomputer, with an import cutoff date, fingerprint export/import, an optional weather lookup after download, and diagnostic logging with saveable trace files
+- **Native Mac app** — The same interface as on iPhone and iPad, with column-aligned lists and headers that stay visible, two-column detail layouts, and menu bar commands
+- **Multiple divers** — Keep several divers' logbooks in one database, filter every tab by diver, and move a dive to another diver
+- **iCloud sync** — Your logbook stays in sync across iPhone, iPad, and Mac automatically, including live updates of dives edited on another device
+- **Import** — MacDive XML, UDDF, Subsurface XML, Garmin FIT, BlueDive XML, and MacDive gear CSV; `Scripts/macdive_to_bluedive.py` migrates a MacDive SQLite database (dives, gear, certifications, and critters)
+- **Export** — UDDF, BlueDive XML, and a printable PDF logbook
+- **Dive photos** — Import photos with their EXIF/IPTC metadata, automatic dive matching, camera clock correction, and re-import without duplicates
+- **Marine life & species catalogue** — Record sightings from a species catalogue linked to iNaturalist (taxonomy, names, Creative Commons photos), detect species from photo keywords, and export or import the catalogue
+- **Online weather** — Fetch weather and wind conditions from Open-Meteo for one dive or for all dives
+- **Gear management** — Track your equipment, gear groups, tank templates, and service history
+- **Dive sequence** — Automatic dive renumbering, surface interval recalculation, and merging of dives
+- **Trips, map & statistics** — Group dives by trip, browse your dive sites on a map, and visualize your diving history with charts and a calendar heatmap
+- **Certifications & insurance** — Store, import, and export certification records and diving insurance details
+- **Reminders** — Notifications for upcoming gear service and for certification and insurance expiry
+- **Database backup** — Back up your full logbook as a zip archive
+- **Units, appearance & language** — Each dive keeps the units it was imported in and is shown in your preferred units; light/dark mode override; in-app language independent of the system
+- **Localized** — Available in English (Canada), French (Canada), German, and Dutch
+- **Widget** — Small and medium widgets showing recent dive stats, on the Home Screen and on the Mac desktop
 
 ## Requirements
 
-| Platform            | Minimum Version                  |
-| ------------------- | -------------------------------- |
-| iPhone              | iOS 18.6                         |
-| iPad                | iPadOS 18.6                      |
-| Mac (Apple Silicon) | macOS 15 (via Designed for iPad) |
+| Platform | Minimum Version     |
+| -------- | ------------------- |
+| iPhone   | iOS 18.6            |
+| iPad     | iPadOS 18.6         |
+| Mac      | macOS 15.6 (native) |
 
 ## Contributing
 
@@ -50,6 +56,9 @@ BlueDive welcomes contributions from developers and divers alike. See [CONTRIBUT
 
 - [libdivecomputer](https://github.com/houle988/libdivecomputer) — LGPL-2.1-or-later (BlueDive fork)
 - [libdc-swift](https://github.com/houle988/libdc-swift) — LGPL-2.1 (BlueDive fork)
+- [Garmin FIT Swift SDK](https://github.com/garmin/fit-swift-sdk) — Garmin FIT file decoding
+- [Open-Meteo](https://open-meteo.com) — Weather data
+- [iNaturalist](https://www.inaturalist.org) — Species taxonomy and photos
 
 ## Support the Project
 

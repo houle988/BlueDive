@@ -64,28 +64,19 @@ struct GasDensityCalculatorView: View {
                 depthSection
                 resultsSection
             }
+            .groupedFormStyleOnMac()
             .navigationTitle("Gas Density")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                #if os(iOS)
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showInfo = true } label: {
                         Image(systemName: "info")
                     }
                     .accessibilityLabel(Text("Information"))
                 }
-                #else
-                ToolbarItem(placement: .automatic) {
-                    Button { showInfo = true } label: {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.cyan)
-                    }
-                    .accessibilityLabel(Text("Information"))
-                }
-                #endif
                 #if os(iOS)
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -97,15 +88,11 @@ struct GasDensityCalculatorView: View {
             }
             .sheet(isPresented: $showInfo) {
                 infoSheet
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
             .sheet(isPresented: $showCalculatorWarning) {
                 CalculatorSafetyWarningView()
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.hidden)
+                    .standardSheetPresentation(dragIndicator: .hidden)
             }
             .onAppear {
                 if lastAcknowledgedCalculatorWarningVersion != appVersionBuild() {
@@ -126,7 +113,7 @@ struct GasDensityCalculatorView: View {
                 Text("Metric").tag(UnitMode.metric)
                 Text("Imperial").tag(UnitMode.imperial)
             } label: { EmptyView() }
-            .pickerStyle(.segmented)
+            .fullWidthSegmentedPicker()
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         }
     }
@@ -159,6 +146,7 @@ struct GasDensityCalculatorView: View {
         Section(header: Text("Depth")) {
             numberRow(unitMode == .metric ? "Depth (m)" : "Depth (ft)", text: $depthStr)
             Toggle("Seawater", isOn: $isSeawater)
+                .fullWidthSwitch()
             LabeledContent("Pressure") {
                 Text(verbatim: result.ata.localizedString(decimals: 2, minDecimals: 2) + " ATA")
                     .foregroundStyle(.secondary)

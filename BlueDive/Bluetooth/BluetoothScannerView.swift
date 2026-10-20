@@ -54,6 +54,20 @@ struct BluetoothScannerView: View {
     @State var importProgress: Double = 0
     @State var showingImportConfirmation = false
     @State var importSaveErrorMessage: String? = nil
+    /// Weather fetch after the import (see WeatherBatchFetcher).
+    @State var weatherFetchStatus: WeatherBatchFetchStatus?
+    @State var weatherFetchTask: Task<Void, Never>?
+    /// The weather question after a download, asked inline on the completed screen, not in an
+    /// alert: it would follow the Import alert while that one is still closing and could be
+    /// dropped.
+    @State var pendingWeatherFetch: PendingWeatherFetch?
+    @Environment(\.scenePhase) var scenePhase
+
+    /// Screen stays awake during a sync, and while the weather fetch runs after the import:
+    /// an auto-lock would suspend the app, fail the request and stop the run as if offline.
+    var preventsScreenLock: Bool {
+        syncState.isActive || (weatherFetchStatus?.isRunning ?? false)
+    }
     @State var connectedDeviceName: String?
     @State var downloadAllDives: Bool = false
     @AppStorage("filterUnusedTanks") var filterUnusedTanks: Bool = false
@@ -107,6 +121,9 @@ struct BluetoothScannerView: View {
     @State var cutoffFilteredCount: Int = 0
     /// The cutoff actually applied; nil when none was.
     @State var cutoffAppliedDate: Date?
+    /// The cutoff the download stopped at (older dives were never transferred); nil when the
+    /// download did not reach it.
+    @State var cutoffStopDate: Date?
 
     /// DatePicker binding for the import cutoff. Routing user interaction through this setter
     /// (rather than `$importCutoffDate`) is what distinguishes a hand-picked date from a
@@ -248,6 +265,7 @@ struct BluetoothScannerView: View {
                 checkForTargetDevice()
             }
             .onDisappear {
+                weatherFetchTask?.cancel()
                 stopScanning()
                 BLEDiagnosticSession.shared.stop()
                 bleManager.close(clearDevicePtr: true)
@@ -272,12 +290,18 @@ struct BluetoothScannerView: View {
                 #endif
             }
             #if os(iOS)
-            .onChange(of: syncState) { _, newState in
-                let shouldPreventLock = newState.isActive
-                // syncState is reassigned on every download-progress tick, so only write and log on a real change.
+            // iOS suspends a backgrounded app, failing the request in flight: stop the weather
+            // run cleanly instead (what was fetched is saved) rather than report "no connection".
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background, weatherFetchStatus?.isRunning == true {
+                    weatherFetchTask?.cancel()
+                }
+            }
+            // A Bool, so the handler runs only on a real change, not on every download-progress tick.
+            .onChange(of: preventsScreenLock) { _, shouldPreventLock in
                 guard UIApplication.shared.isIdleTimerDisabled != shouldPreventLock else { return }
                 UIApplication.shared.isIdleTimerDisabled = shouldPreventLock
-                Self.logger.debug("Screen lock \(shouldPreventLock ? "disabled" : "re-enabled") (syncState: \(String(describing: newState)))")
+                Self.logger.debug("Screen lock \(shouldPreventLock ? "disabled" : "re-enabled") (syncState: \(String(describing: syncState)))")
             }
             #endif
             // Not inside the #if os(iOS) gate above: dismiss-safety applies on every platform
@@ -285,7 +309,7 @@ struct BluetoothScannerView: View {
             // Write-guarded: `.downloading(current:total:)` is reassigned on every
             // libdivecomputer progress callback (many times per second), and every one of those
             // maps to the same Bool. Writing the binding unconditionally would invalidate the
-            // presenting ContentView — the app's single `@Query Dive` owner — on a hot path.
+            // presenting ContentView (the dive list) on a hot path.
             .onChange(of: syncState, initial: true) { _, newState in
                 let newValue = Self.isTeardownUnsafe(newState)
                 if isTeardownUnsafe != newValue {
@@ -368,15 +392,11 @@ struct BluetoothScannerView: View {
                         }
                     }
                 )
-                .presentationSizing(.page)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .standardSheetPresentation()
             }
             .sheet(isPresented: $showInfo) {
                 infoSheet
-                    .presentationSizing(.page)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .standardSheetPresentation()
             }
         }
         // ⚠️ Temporary — remove after testing delete feature - Add Dummy Dive computer to database

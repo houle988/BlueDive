@@ -154,6 +154,9 @@ extension BluetoothScannerView {
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
+                            // Explicit swipe buttons are coloured by the ambient tint on both
+                            // platforms; without this the root .tint(.cyan) turns Delete cyan.
+                            .tint(.red)
                         }
                         .contextMenu {
                             Button(role: .destructive) {
@@ -173,6 +176,7 @@ extension BluetoothScannerView {
 
             Section {
                 Toggle("Download All Dives", isOn: $downloadAllDives)
+                    .fullWidthSwitch()
             } footer: {
                 Text("Re-downloads all dives and merges matched ones. Tap ⓘ at the top right for details.")
             }
@@ -183,6 +187,7 @@ extension BluetoothScannerView {
             if downloadAllDives {
                 Section {
                     Toggle("Limit Import by Date", isOn: $importCutoffEnabled.animation(.easeInOut(duration: 0.2)))
+                        .fullWidthSwitch()
 
                     if importCutoffEnabled {
                         DatePicker(
@@ -194,12 +199,13 @@ extension BluetoothScannerView {
                         .adaptiveDatePickerStyle()
                     }
                 } footer: {
-                    Text("Dives recorded before this date are still transferred from the dive computer, then discarded — they are neither re-imported nor updated. This does not make the sync faster, and applies to this sync only.")
+                    Text("The sync stops at the first dive recorded before this date — older dives are not downloaded, so they are neither re-imported nor updated. Applies to this sync only.")
                 }
             }
 
             Section {
                 Toggle("Sync device clock", isOn: $syncDeviceClock)
+                    .fullWidthSwitch()
             } footer: {
                 Text("Automatically set the dive computer's clock to your device's current time and time zone after each sync.")
             }
@@ -224,6 +230,7 @@ extension BluetoothScannerView {
                         systemImage: "antenna.radiowaves.left.and.right"
                     )
                 }
+                .listRowButton()
             } footer: {
                 if knownDevices.isEmpty {
                     Text("No previously synced dive computers found. Tap to search for nearby Bluetooth devices.")
@@ -268,6 +275,11 @@ extension BluetoothScannerView {
                     } description: {
                         Text("Make sure your dive computer is turned on and in Bluetooth transfer mode.")
                     }
+                    #if os(macOS)
+                    // A macOS Form row sizes the view to its content and leading-aligns it;
+                    // fill the row so it is centred as on iOS (where it already fills).
+                    .frame(maxWidth: .infinity)
+                    #endif
                 } else {
                     ForEach(bleManager.discoveredPeripherals, id: \.identifier) { peripheral in
                         DeviceRow(
@@ -302,6 +314,7 @@ extension BluetoothScannerView {
             Section {
                 Toggle("Download All Dives", isOn: $downloadAllDives)
                     .disabled(true)
+                    .fullWidthSwitch()
             } footer: {
                 // The toggle is always disabled here, but the value it displays is NOT always
                 // false: connectToKnownDevice's scan fallback (and returning here after cancelling
@@ -326,6 +339,7 @@ extension BluetoothScannerView {
             Section {
                 Toggle("Limit Import by Date", isOn: $importCutoffEnabled.animation(.easeInOut(duration: 0.2)))
                     .disabled(syncState.isActive && syncState != .scanning)
+                    .fullWidthSwitch()
 
                 if importCutoffEnabled {
                     DatePicker(
@@ -357,19 +371,20 @@ extension BluetoothScannerView {
                 //   only hedge the user gets for the case where the control is armed but silently
                 //   inert.
                 if downloadAllDives {
-                    Text("Dives recorded before this date are still transferred from the dive computer, then discarded — they are neither re-imported nor updated. This does not make the sync faster, and applies to this sync only.")
+                    Text("The sync stops at the first dive recorded before this date — older dives are not downloaded, so they are neither re-imported nor updated. Applies to this sync only.")
                 } else {
                     // "the most recent dive in your logbook" rather than "your most recent logged
                     // dive": a never-synced computer has no Gear record tying it to a diver, so on
                     // this screen the default can only be narrowed as far as the active diver
                     // filter — it cannot promise to be the reader's own dive.
-                    Text("Dives recorded before this date are still transferred from the dive computer, then discarded instead of being added to your logbook — this does not make the sync faster. The date defaults to the most recent dive in your logbook, or one year ago if your logbook is empty, and applies to this sync only. Has no effect on a device you've already synced.")
+                    Text("The sync stops at the first dive recorded before this date — older dives are not downloaded or added to your logbook. The date defaults to the most recent dive in your logbook, or one year ago if your logbook is empty, and applies to this sync only. Has no effect on a device you've already synced.")
                 }
             }
 
             Section {
                 Toggle("Sync device clock", isOn: $syncDeviceClock)
                     .disabled(syncState.isActive && syncState != .scanning)
+                    .fullWidthSwitch()
             } footer: {
                 Text("Automatically set the dive computer's clock to your device's current time and time zone after each sync.")
             }
@@ -390,9 +405,7 @@ extension BluetoothScannerView {
                     }
                 }
             )
-            .presentationSizing(.page)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .standardSheetPresentation()
         }
     }
 
@@ -400,6 +413,17 @@ extension BluetoothScannerView {
 
     @ViewBuilder
     private func completedView(imported: Int, merged: Int, skipped: Int) -> some View {
+        // Laid out as before when everything fits; scrolls only when the counts, notes and
+        // weather status do not (small iPhone, landscape, large text), so Close stays reachable.
+        ViewThatFits(in: .vertical) {
+            completedContent(imported: imported, merged: merged, skipped: skipped)
+            ScrollView {
+                completedContent(imported: imported, merged: merged, skipped: skipped)
+            }
+        }
+    }
+
+    private func completedContent(imported: Int, merged: Int, skipped: Int) -> some View {
         VStack(spacing: 20) {
             Spacer()
 
@@ -467,6 +491,15 @@ extension BluetoothScannerView {
                     }
                 }
 
+                // The download ended at the import cutoff: say so, since the dives it skipped were
+                // never downloaded and so are not counted anywhere above.
+                if let cutoffStopDate {
+                    Text(verbatim: String(format: NSLocalizedString("The sync stopped at the first dive recorded before %@ — older dives were not downloaded.", bundle: .forAppLanguage(), value: "The sync stopped at the first dive recorded before %@ — older dives were not downloaded.", comment: "Note in the Bluetooth sync results when the download ended at the user's import cutoff date, so older dives were never transferred. %@ is the cutoff date."), cutoffStopDate.formatted(.dateTime.locale(locale).day().month(.wide).year())))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
                 // Surfaces the same partial-sync warning the pre-import confirmation alert shows —
                 // needed here specifically because that alert is skipped when the cutoff filters
                 // out every downloaded dive. `skipped == 0` is the gate that keeps this from ALSO
@@ -486,6 +519,12 @@ extension BluetoothScannerView {
                 }
             }
 
+            if let weatherFetchStatus {
+                weatherFetchStatusView(weatherFetchStatus)
+            } else if let pendingWeatherFetch {
+                weatherFetchConfirmationView(pendingWeatherFetch)
+            }
+
             Button("Close") {
                 dismiss()
             }
@@ -494,6 +533,39 @@ extension BluetoothScannerView {
             Spacer()
         }
         .padding()
+    }
+
+    /// The weather question after a download, asked inline rather than in an alert (see
+    /// pendingWeatherFetch). Ignoring it and closing the sheet fetches nothing.
+    private func weatherFetchConfirmationView(_ pending: PendingWeatherFetch) -> some View {
+        VStack(spacing: 8) {
+            Group {
+                if pending.ids.count == 1 {
+                    Text("Fetch the weather from Open-Meteo for the downloaded dive with GPS coordinates?", comment: "Question on the Bluetooth sync results when exactly one downloaded dive has GPS coordinates.")
+                } else {
+                    Text(verbatim: String(format: NSLocalizedString("Fetch the weather from Open-Meteo for %@ downloaded dives with GPS coordinates?", bundle: .forAppLanguage(), value: "Fetch the weather from Open-Meteo for %@ downloaded dives with GPS coordinates?", comment: "Question on the Bluetooth sync results after an import. %@ is the locale-formatted number of dives (2 or more)."), Double(pending.ids.count).localizedString(decimals: 0)))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            Button {
+                pendingWeatherFetch = nil
+                runWeatherFetch(for: pending.ids)
+            } label: {
+                Label("Fetch Weather", systemImage: "cloud.sun.rain")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    /// Progress, then result, of the weather fetch after the import. Closing the sheet is
+    /// always allowed and cancels the remaining requests.
+    private func weatherFetchStatusView(_ status: WeatherBatchFetchStatus) -> some View {
+        WeatherBatchFetchStatusView(
+            status: status,
+            laterHint: Text("Use Fetch Weather in Edit Conditions later.", comment: "Hint after the weather fetch after a Bluetooth import stopped early: the user can fetch the remaining dives manually.")
+        )
     }
 
     // MARK: - Error View
@@ -598,7 +670,6 @@ extension BluetoothScannerView {
         }
 
         if !(syncState.isActive && syncState != .scanning) {
-            #if os(iOS)
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showInfo = true
@@ -607,21 +678,10 @@ extension BluetoothScannerView {
                 }
                 .accessibilityLabel(Text("Information"))
             }
-            #else
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    showInfo = true
-                } label: {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.cyan)
-                }
-                .accessibilityLabel(Text("Information"))
-            }
-            #endif
         }
 
         if syncState == .scanning {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .sheetPrimaryAction) {
                 Button {
                     abandonScanSession()
                 } label: {
@@ -629,7 +689,7 @@ extension BluetoothScannerView {
                 }
             }
 
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .sheetPrimaryAction) {
                 Button {
                     stopScanning()
                     // Drop peripherals discovered by the previous scan so a rescan starts from a
@@ -704,13 +764,13 @@ extension BluetoothScannerView {
 
                         Text("Available when searching for new devices, and alongside Download All Dives for a known computer — the common cases where a dive computer sends its whole history. A never-synced computer has no sync bookmark, so it sends everything by default; that can mean hundreds of dives you already logged by hand or imported from another app. If a computer you've already synced turns out not to need a full re-download, the limit simply has nothing to do.")
 
-                        Text("Dives recorded before the date you choose are discarded after they arrive, instead of being added to your logbook. Every dive is still transferred from the computer, so the sync takes exactly as long — only your logbook stays clean. When re-downloading a known computer, older dives are also not refreshed with the computer's data.")
+                        Text("The sync stops at the first dive recorded before the date you choose, so older dives are never transferred from the computer — a computer holding hundreds of dives you already logged syncs in the time its new dives take. Those older dives are not added to your logbook and, when re-downloading a known computer, not refreshed with the computer's data.")
 
                         // Same wording caveat as the Search screen's footer: this paragraph covers
                         // both screens, and on the Search screen the owning diver is unknowable.
                         Text("The date defaults to the most recent dive in your logbook, or one year ago if your logbook is empty. The limit applies to a single sync and is never remembered: once a computer is known, the sync bookmark fetches only new dives on its own, so a saved date limit could silently hide dives later.")
 
-                        Text("The sync bookmark is saved even when every downloaded dive falls before your date, so the next sync still fetches only genuinely new dives.")
+                        Text("The sync bookmark is saved even when no dive on the computer is newer than your date, so the next sync still fetches only genuinely new dives.")
                             .foregroundStyle(.secondary)
                             .font(.callout)
                     }
@@ -819,9 +879,10 @@ extension BluetoothScannerView {
                 base = skipped == 1
                     ? NSLocalizedString("1 dive already present", bundle: bundle, comment: "Subtitle displayed when exactly one dive is already present in the logbook.")
                     : String(format: NSLocalizedString("%@ dives already present", bundle: bundle, value: "%@ dives already present", comment: "Subtitle showing the number of dives already present in the logbook. %@ is the locale-formatted dive count."), Double(skipped).localizedString(decimals: 0))
-            } else if imported > 0 && cutoffFilteredCount > 0 {
+            } else if imported > 0 && (cutoffFilteredCount > 0 || cutoffStopDate != nil) {
                 // "All dives have been imported" is only a true statement when nothing was held
-                // back. With a cutoff in play some downloaded dives were deliberately discarded,
+                // back. With a cutoff in play some dives were deliberately left out — discarded
+                // after download, or never downloaded because the sync stopped at the cutoff —
                 // so report the count that actually made it into the logbook instead. Both the
                 // singular and the plural reuse the same keys completedView's body uses, so the
                 // header and the body render an identical count identically.

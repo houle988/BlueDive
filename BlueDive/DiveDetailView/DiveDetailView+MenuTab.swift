@@ -1,10 +1,11 @@
 import SwiftUI
+import ImageIO
 import Charts
 import SwiftData
 import PhotosUI
 import UniformTypeIdentifiers
 
-// MARK: - Menu Tab (chart + twin tank checkbox + stats + info)
+// MARK: - Overview Tab (chart + twin tank checkbox + stats + info), Marine Life and Photos Tabs
 
 extension DiveDetailView {
 
@@ -25,9 +26,7 @@ extension DiveDetailView {
             depthProfileSection
             statsGrid
             diveInfoSection
-            photosSection
             equipmentSection
-            marineSightingsSection
             notesSection
         }
         .task(id: dive.id) {
@@ -100,7 +99,7 @@ extension DiveDetailView {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.cyan.opacity(0.2))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(Color.readableCyan)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
 
                 Text(dive.siteName)
@@ -117,7 +116,7 @@ extension DiveDetailView {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.green.opacity(0.2))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Color.readableGreen)
                             .clipShape(RoundedRectangle(cornerRadius: 4))
 
                         if !dive.surfaceInterval.isEmpty && dive.surfaceInterval != "0h 00m" {
@@ -127,22 +126,16 @@ extension DiveDetailView {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.orange.opacity(0.2))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.readableOrange)
                                 .clipShape(RoundedRectangle(cornerRadius: 4))
                         }
                     }
-                    #if os(iOS)
                     locationText
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(formattedTimestamp)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    #else
-                    (Text(verbatim: formattedTimestamp) + Text(" — ") + locationText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    #endif
                 }
                 Spacer()
                 RatingStarsView(rating: dive.rating)
@@ -452,14 +445,129 @@ extension DiveDetailView {
         ]
     }
 
+    /// The dive's photos in grid order: images still in the legacy `photosData` array first
+    /// (they were added before), then `DivePhoto` records by capture time (or time added).
+    var photoEntries: [DivePhotoEntry] {
+        // Legacy ids follow the image content, not its position: after a deletion the next
+        // photo moves into the same index and must not reuse the deleted one's id (the
+        // preview reloads, and shares, only when the id changes). Identical images get
+        // their occurrence number.
+        var occurrences: [Int: Int] = [:]
+        let legacy = (dive.photosData ?? []).enumerated().map { index, data in
+            let key = data.photoTaskID
+            let occurrence = occurrences[key, default: 0]
+            occurrences[key] = occurrence + 1
+            return DivePhotoEntry(id: "legacy-\(key)-\(occurrence)", source: .legacy(index))
+        }
+        let records = (dive.photos ?? []).sorted {
+            ($0.captureDate ?? $0.createdAt, $0.createdAt) < ($1.captureDate ?? $1.createdAt, $1.createdAt)
+        }
+        return legacy + records.map { DivePhotoEntry(id: $0.id.uuidString, source: .photo($0)) }
+    }
+
+    /// Bytes shown in the photo grid: the thumbnail for a photo record (nil while it has not
+    /// arrived from iCloud), the full image for a legacy photo (which has no thumbnail).
+    func tileData(for entry: DivePhotoEntry) -> Data? {
+        switch entry.source {
+        case .photo(let photo):
+            return photo.thumbnailBytes
+        case .legacy(let index):
+            guard let photos = dive.photosData, photos.indices.contains(index) else { return nil }
+            return photos[index]
+        }
+    }
+
+    /// Identity of a tile's image: the entry, whether its thumbnail has arrived (read from the
+    /// link only), so a thumbnail synced after its photo is decoded when it lands, and the
+    /// file's hash, so a photo replaced by a newer version (a re-import) is decoded again.
+    func tileKey(for entry: DivePhotoEntry) -> String {
+        switch entry.source {
+        case .photo(let photo): return "\(entry.id)|\(photo.thumbnail != nil)|\(photo.contentHash?.hashValue ?? 0)"
+        case .legacy: return entry.id
+        }
+    }
+
+    /// Full image bytes for the preview (the thumbnail while an iCloud photo is still downloading).
+    func fullImageData(for entry: DivePhotoEntry) -> Data {
+        switch entry.source {
+        case .photo(let photo):
+            return photo.previewBytes ?? Data()
+        case .legacy(let index):
+            guard let photos = dive.photosData, photos.indices.contains(index) else { return Data() }
+            return photos[index]
+        }
+    }
+
+    var hasLegacyPhotos: Bool { !(dive.photosData?.isEmpty ?? true) }
+
+    /// Photo grid columns: at least 2 (an iPhone), and more as the view widens (iPad, Mac),
+    /// keeping tiles about 200 pt wide. Derived from the view width the dive screen already tracks
+    /// (less the card's 16 pt padding inside and out), so the count is right on the first
+    /// layout and in the swipe preview too. The count changes only at a threshold, although
+    /// the card is redrawn as the width changes (e.g. during a macOS window resize).
+    var photoGridColumns: [GridItem] {
+        let gridWidth = max(0, viewWidth - 64)
+        let count = max(2, Int((gridWidth + 12) / 212))
+        return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
+    }
+
+    /// The species tagged on a photo, shown under its tile; nil for none (or a legacy photo,
+    /// which cannot be tagged).
+    func speciesCaption(for entry: DivePhotoEntry) -> String? {
+        guard case .photo(let photo) = entry.source else { return nil }
+        let names = (photo.species ?? []).map(\.displayName).sorted()
+        return names.isEmpty ? nil : names.joined(separator: ", ")
+    }
+
+    /// Why a photo has no marker on the dive profile; nil when it has one.
+    func profileNote(for entry: DivePhotoEntry) -> String? {
+        switch entry.source {
+        case .legacy:
+            return NSLocalizedString("Stored in the previous format: convert the dive's photos to place it on the profile.", bundle: .forAppLanguage(), value: "Stored in the previous format: convert the dive's photos to place it on the profile.", comment: "Photo viewer note for a legacy photo, which has no capture time or profile position")
+        case .photo(let photo):
+            guard photo.profileOffset(in: dive) == nil else { return nil }
+            guard let captured = photo.captureDate else {
+                return NSLocalizedString("No capture time in the file: not shown on the profile.", bundle: .forAppLanguage(), value: "No capture time in the file: not shown on the profile.", comment: "Photo viewer note: the image file has no EXIF capture time")
+            }
+            let date = captured.addingTimeInterval(photo.clockAdjustmentSeconds)
+                .formatted(.dateTime.day().month().year().hour().minute().second().locale(locale))
+            return String(format: NSLocalizedString("Taken on %@, outside this dive: not shown on the profile.", bundle: .forAppLanguage(), value: "Taken on %@, outside this dive: not shown on the profile.", comment: "Photo viewer note: the photo's capture time (date and time) is outside the dive"), date)
+        }
+    }
+
+    /// An import or conversion is writing to this dive: started here, or on another screen
+    /// (Settings → Convert, the batch import, another window).
+    var isImportingPhotosForThisDive: Bool {
+        importingPhotosDiveID == dive.persistentModelID || PhotoImporter.isBusy(dive.persistentModelID)
+    }
+
+    /// Legacy photos cannot be removed while a run (here or on another screen, e.g. Settings →
+    /// Convert) writes to the dive: a conversion has already read them and would bring a
+    /// removed one back as a record.
+    var legacyPhotosLocked: Bool {
+        importingPhotosDiveID != nil || PhotoImporter.isBusy(dive.persistentModelID)
+    }
+
     var photosSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let entries = photoEntries
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("Photos", systemImage: "photo")
                     .font(.headline)
                     .foregroundStyle(.pink)
                 Spacer()
-                if !(dive.photosData?.isEmpty ?? true) {
+                if isImportingPhotosForThisDive {
+                    if photoImportWaiting {
+                        Text("Waiting for another photo task to finish…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel(Text("Importing Photos"))
+                }
+                if !entries.isEmpty {
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isEditingPhotos.toggle()
@@ -468,7 +576,7 @@ extension DiveDetailView {
                         // Header HStack spacing is 8 pt, so this grows only 4 pt (half the
                         // gap) toward the adjacent Add menu and 12 pt leading into the empty
                         // Spacer. Vertically: 16 pt of card padding above, 12 pt to the photo
-                        // strip below. 40 × 44 pt.
+                        // grid below. 40 × 44 pt.
                         TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
                             Image(systemName: "minus.circle")
                                 .font(.title3)
@@ -499,69 +607,49 @@ extension DiveDetailView {
                     }
                 }
                 .buttonStyle(.plain)
+                .disabled(importingPhotosDiveID != nil || isImportingPhotosForThisDive)
                 .accessibilityLabel(Text("Add Photo"))
             }
 
-            if dive.photosData?.isEmpty ?? true {
+            if entries.isEmpty {
                 Text("No photo.")
                     .font(.caption)
                     .foregroundStyle(.gray)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
-                        ForEach(Array((dive.photosData ?? []).enumerated()), id: \.offset) { index, photoData in
-                            if let uiImage = PlatformImage(data: photoData) {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(platformImage: uiImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 150, height: 150)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            if !isEditingPhotos {
-                                                selectedPhotoForPreview = IdentifiablePhotoData(data: photoData, index: index)
-                                            }
-                                        }
-                                        .onLongPressGesture {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                isEditingPhotos.toggle()
-                                            }
-                                        }
-                                    if isEditingPhotos {
-                                        Button {
-                                            photoIndexToDelete = index
-                                            showDeletePhotoAlert = true
-                                        } label: {
-                                            // Badge sits at the photo's top-trailing corner,
-                                            // already 6 pt outside it. Grows 6 pt further
-                                            // trailing (the remaining half of the 12 pt gap to
-                                            // the next photo) and inward over the photo, whose
-                                            // own tap is disabled while editing. Not upward:
-                                            // the strip only has 4 pt of padding there and the
-                                            // section header's buttons are just above. 40 × 34 pt.
-                                            TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
-                                                Image(systemName: "minus.circle.fill")
-                                                    .font(.system(size: 18))
-                                                    .symbolRenderingMode(.palette)
-                                                    .foregroundStyle(.white, .red)
-                                            }
-                                        }
-                                        #if os(macOS)
-                                        .buttonStyle(.plain)
-                                        #endif
-                                        .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove Photo %lld", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes one photo, naming its position in the photo strip"), index + 1)))
-                                        .offset(x: 6, y: -6)
-                                        .transition(.scale.combined(with: .opacity))
-                                    }
+                // A grid, not a row: a dive can hold many photos. Lazy, so only the visible
+                // rows decode their thumbnails.
+                LazyVGrid(columns: photoGridColumns, alignment: .leading, spacing: 12) {
+                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                        // A photo whose thumbnail has not arrived from iCloud yet shows a
+                        // placeholder tile (never its original, CLAUDE.md).
+                        PhotoGridTile(
+                            imageKey: tileKey(for: entry),
+                            load: { tileData(for: entry) },
+                            caption: speciesCaption(for: entry),
+                            position: index + 1,
+                            total: entries.count,
+                            isEditing: isEditingPhotos,
+                            canRemove: !(entry.isLegacy && legacyPhotosLocked),
+                            onOpen: { selectedPhotoForPreview = IdentifiablePhotoData(index: index) },
+                            onToggleEditing: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isEditingPhotos.toggle()
                                 }
+                            },
+                            onRemove: {
+                                photoIDToDelete = entry.id
+                                showDeletePhotoAlert = true
                             }
-                        }
+                        )
                     }
-                    .padding(.vertical, 4)
                 }
+                // Room for the remove badges, which stick out above the first row.
+                .padding(.top, 6)
             }
-            Text("BlueDive is not a photo album — keep photos to the most relevant shots. Up to 10 can be selected per import. Large collections may slow down iCloud sync.")
+            if hasLegacyPhotos {
+                legacyPhotosNotice
+            }
+            Text("BlueDive is not a photo album — keep photos to the most relevant shots. Large collections may slow down iCloud sync.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -577,42 +665,48 @@ extension DiveDetailView {
             }
         }
         #endif
-        .alert("Remove Photo", isPresented: $showDeletePhotoAlert, presenting: photoIndexToDelete) { index in
+        .alert("Remove Photo", isPresented: $showDeletePhotoAlert, presenting: photoIDToDelete) { photoID in
             Button("Remove", role: .destructive) {
                 withAnimation {
-                    deletePhoto(at: index)
+                    deletePhoto(id: photoID)
                 }
-                if (dive.photosData?.isEmpty ?? true) {
+                if photoEntries.isEmpty {
                     isEditingPhotos = false
                 }
             }
-            Button("Cancel", role: .cancel) { photoIndexToDelete = nil }
+            Button("Cancel", role: .cancel) { photoIDToDelete = nil }
         } message: { _ in
             Text("Remove this photo from the dive?")
         }
         .sheet(item: $selectedPhotoForPreview) { item in
+            let entries = photoEntries
             PhotoPreviewSheet(
-                photos: Binding(
-                    get: { dive.photosData ?? [] },
-                    set: {
-                        dive.photosData = $0
-                        try? modelContext.save()
-                        store.commit(dive, affects: .rowBadges)
-                    }
-                ),
+                photoIDs: entries.map(\.id),
+                photoData: { index in entries.indices.contains(index) ? fullImageData(for: entries[index]) : Data() },
                 initialIndex: item.index,
-                onDelete: { index in
-                    deletePhoto(at: index)
-                    if dive.photosData?.isEmpty ?? true {
+                photoNote: { index in entries.indices.contains(index) ? profileNote(for: entries[index]) : nil },
+                photoRecord: { index in
+                    guard entries.indices.contains(index), case .photo(let photo) = entries[index].source else { return nil }
+                    return photo
+                },
+                canDelete: { index in
+                    entries.indices.contains(index) && !(entries[index].isLegacy && legacyPhotosLocked)
+                },
+                hasOriginal: { index in
+                    guard entries.indices.contains(index), case .photo(let photo) = entries[index].source else { return true }
+                    return photo.original != nil
+                },
+                onDelete: { photoID in
+                    deletePhoto(id: photoID)
+                    if photoEntries.isEmpty {
                         isEditingPhotos = false
                     }
                 }
             )
-            .presentationSizing(.page)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            .standardSheetPresentation()
         }
-        .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
+        // No selection limit; `.current` keeps the original file (no HEIC → JPEG transcoding).
+        .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotos, matching: .images, preferredItemEncoding: .current)
         .onChange(of: selectedPhotos) {
             Task {
                 await loadPhotos()
@@ -627,34 +721,114 @@ extension DiveDetailView {
                 await importPhotosFromFiles(result: result)
             }
         }
-        .alert("Photo Import Failed", isPresented: $showFileImportError) {
-            Button("OK", role: .cancel) { }
+        .alert("Convert Photos", isPresented: $showConvertLegacyPhotosAlert) {
+            Button("Convert") {
+                Task { await convertLegacyPhotos() }
+            }
+            Button("Cancel", role: .cancel) { }
         } message: {
-            Text("The selected photos could not be imported.")
+            Text("Each photo is stored as its own record, with a thumbnail and the capture time read from the image. The images themselves are not changed. Photos taken during the dive appear on the dive profile.")
         }
-        .alert("Import Limit Reached", isPresented: $showFileTruncationAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Only the first 10 photos were imported. Open the menu again to add more.")
+    }
+
+    /// The photo import's results and questions. Attached to the always-shown tab bar rather
+    /// than the Photos card, so an import that finishes (or asks) while another tab is open
+    /// still presents them.
+    func photoImportDialogs(_ content: some View) -> some View {
+        content
+            .alert("Photo Import Failed", isPresented: $showFileImportError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("The selected photos could not be imported.")
+            }
+            .alert("Photos Imported", isPresented: Binding(
+                get: { photoImportResult != nil },
+                set: { if !$0 { photoImportResult = nil } }
+            ), presenting: photoImportResult) { _ in
+                Button("OK", role: .cancel) { }
+            } message: { result in
+                Text(verbatim: ([
+                    String(format: NSLocalizedString("Imported: %@", bundle: .forAppLanguage(), value: "Imported: %@", comment: "Photo import summary line: photos added"), Double(result.imported).localizedString(decimals: 0))
+                ] + (result.updated > 0 ? [
+                    String(format: NSLocalizedString("Updated: %@", bundle: .forAppLanguage(), value: "Updated: %@", comment: "Photo import summary line: stored photos replaced by a newer version of the same shot, or given a new camera clock correction"), Double(result.updated).localizedString(decimals: 0))
+                ] : []) + (result.moved > 0 ? [
+                    String(format: NSLocalizedString("Moved from another dive: %@", bundle: .forAppLanguage(), value: "Moved from another dive: %@", comment: "Photo import summary line: stored photos moved to this dive by an Update"), Double(result.moved).localizedString(decimals: 0))
+                ] : []) + [
+                    String(format: NSLocalizedString("Already in BlueDive: %@", bundle: .forAppLanguage(), value: "Already in BlueDive: %@", comment: "Photo import summary line: files skipped because the same photo is already in BlueDive"), Double(result.duplicates).localizedString(decimals: 0))
+                ] + (result.olderSkipped > 0 ? [
+                    String(format: NSLocalizedString("Older versions: %@", bundle: .forAppLanguage(), value: "Older versions: %@", comment: "Photo import summary line (short, to fit a macOS alert): files skipped because BlueDive already has a newer version of the same shot"), Double(result.olderSkipped).localizedString(decimals: 0))
+                ] : []) + (result.skippedByUser > 0 ? [
+                    String(format: NSLocalizedString("Skipped: %@", bundle: .forAppLanguage(), value: "Skipped: %@", comment: "Photo import summary line: files the user chose to skip"), Double(result.skippedByUser).localizedString(decimals: 0))
+                ] : []) + [
+                    String(format: NSLocalizedString("Could not be read: %@", bundle: .forAppLanguage(), value: "Could not be read: %@", comment: "Photo import summary line: files that are not readable images"), Double(result.unreadable).localizedString(decimals: 0))
+                ] + (result.failedToSave > 0 ? [
+                    String(format: NSLocalizedString("Could not be saved: %@", bundle: .forAppLanguage(), value: "Could not be saved: %@", comment: "Photo import summary line: photos lost because saving to the database failed"), Double(result.failedToSave).localizedString(decimals: 0))
+                ] : []) + (result.legacyNotTrimmed ? [
+                    NSLocalizedString("The converted photos could not be removed from the previous format. Convert again to finish.", bundle: .forAppLanguage(), value: "The converted photos could not be removed from the previous format. Convert again to finish.", comment: "Photo conversion summary line: the records were saved but the old copies are still there")
+                ] : [])).joined(separator: "\n"))
+            }
+            .sheet(isPresented: Binding(
+                get: { !reimportQuestions.isEmpty },
+                set: { shown in
+                    // Closed without an answer (not by its buttons): every file is left out, so
+                    // the import finishes and the dive is not left busy.
+                    if !shown, reimportFirstPass != nil {
+                        startAnsweringReimportQuestions(reimportQuestions.map { ($0, .skip) })
+                    }
+                    if !shown { reimportQuestions = [] }
+                }
+            ), onDismiss: {
+                // The summary or species review, once the sheet has fully closed: presenting one
+                // while it is still closing can be dropped.
+                photoImportSession.decisionSheetOpen = false
+                if let pending = photoImportSession.pendingSummary {
+                    photoImportSession.pendingSummary = nil
+                    finishPhotoImport(pending.result, diveID: pending.diveID)
+                }
+            }) {
+                PhotoReimportSheet(questions: reimportQuestions) { answers in
+                    startAnsweringReimportQuestions(answers)
+                }
+                .standardSheetPresentation()
+            }
+            .sheet(isPresented: Binding(
+                get: { !speciesProposals.isEmpty },
+                set: { if !$0 { speciesProposals = [] } }
+            ), onDismiss: {
+                // The import's problems, once the species review is closed.
+                if let pending = pendingPhotoImportResult {
+                    pendingPhotoImportResult = nil
+                    photoImportResult = pending
+                }
+            }) {
+                SpeciesPhotoReviewSheet(proposals: speciesProposals, afterImport: true)
+                    .standardSheetPresentation()
+            }
+    }
+
+    /// Shown while the dive still has photos in the legacy storage format.
+    private var legacyPhotosNotice: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("Some photos use the previous storage format. Convert them to show their capture time and place them on the dive profile.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Button("Convert") {
+                showConvertLegacyPhotosAlert = true
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.pink)
+            .borderlessButton()
+            .disabled(importingPhotosDiveID != nil || isImportingPhotosForThisDive)
         }
     }
 
     @MainActor
     func loadPhotos() async {
         guard !selectedPhotos.isEmpty else { return }
-        let targetDiveID = dive.persistentModelID
-        for item in selectedPhotos {
-            guard dive.persistentModelID == targetDiveID else { break }
-            if let data = try? await item.loadTransferable(type: Data.self) {
-                if dive.photosData == nil {
-                    dive.photosData = []
-                }
-                dive.photosData?.append(data)
-            }
-        }
+        let items = selectedPhotos
         selectedPhotos.removeAll()
-        try? modelContext.save()
-        store.commit(dive, affects: .rowBadges)
+        await runPhotoImport(items.map { .pickerItem($0) })
     }
 
     @MainActor
@@ -663,47 +837,128 @@ extension DiveDetailView {
             showFileImportError = true
             return
         }
-        let capped = Array(urls.prefix(10))
-        let wasTruncated = urls.count > 10
-        // Capture the target dive before suspension so we can abort if the user
-        // navigates away while file I/O is in progress.
-        let targetDiveID = dive.persistentModelID
-        // Read files off the main thread to avoid blocking the UI
-        let datas: [Data] = await Task.detached(priority: .userInitiated) {
-            var results: [Data] = []
-            for url in capped {
-                guard url.startAccessingSecurityScopedResource() else { continue }
-                defer { url.stopAccessingSecurityScopedResource() }
-                if let data = try? Data(contentsOf: url) {
-                    results.append(data)
-                }
+        await runPhotoImport(urls.map { .file($0) })
+    }
+
+    /// Imports into the dive shown when the import started, even if the user moves to
+    /// another dive meanwhile. Files that may already be in BlueDive are asked about first.
+    @MainActor
+    func runPhotoImport(_ sources: [PhotoImporter.Source]) async {
+        guard !sources.isEmpty, importingPhotosDiveID == nil else { return }
+        let diveID = dive.persistentModelID
+        let container = modelContext.container
+        // Taken now, while the view is on screen: the import may end after it is gone.
+        let session = photoImportSession
+        importingPhotosDiveID = diveID
+        let result = await PhotoImporter.importPhotos(sources, toDiveWith: diveID, container: container,
+                                                      onWaiting: { photoImportWaiting = $0 })
+        commitPhotoChange(diveID: diveID)
+        guard result.questions.isEmpty else {
+            guard session.isShown else {
+                // The dive screen was left during the import: nobody can answer, so the files
+                // get their default answer (Keep both, or Skip for a copy of a file already in
+                // BlueDive): nothing replaced, moved or lost.
+                _ = await PhotoImporter.answer(result.questions.map { ($0, $0.defaultChoice) }, container: container)
+                commitPhotoChange(diveID: diveID)
+                importingPhotosDiveID = nil
+                return
             }
-            return results
-        }.value
-        // Abort if the user navigated to a different dive during the file read
-        guard dive.persistentModelID == targetDiveID else { return }
-        for data in datas {
-            if dive.photosData == nil {
-                dive.photosData = []
-            }
-            dive.photosData?.append(data)
-        }
-        // Surface an error if the picker succeeded but every file failed to read
-        if datas.isEmpty && !capped.isEmpty {
-            showFileImportError = true
+            // Kept busy until the questions are answered (Keep both and Update still import).
+            session.decisionSheetOpen = true
+            reimportFirstPass = result
+            reimportDiveID = diveID
+            reimportQuestions = result.questions
             return
         }
-        try? modelContext.save()
-        store.commit(dive, affects: .rowBadges)
-        if wasTruncated {
-            showFileTruncationAlert = true
+        importingPhotosDiveID = nil
+        finishPhotoImport(result, diveID: diveID)
+    }
+
+    /// Takes the pending questions' state at once (so a second call, e.g. the sheet's
+    /// dismissal after its button, does nothing), then carries out the answers and reports the
+    /// whole import.
+    @MainActor
+    func startAnsweringReimportQuestions(_ answers: [(question: PhotoImporter.ReimportQuestion, choice: PhotoImporter.ReimportChoice)]) {
+        guard let firstPass = reimportFirstPass, let diveID = reimportDiveID else { return }
+        reimportFirstPass = nil
+        reimportDiveID = nil
+        let session = photoImportSession
+        Task {
+            let result = await PhotoImporter.answer(answers, container: modelContext.container,
+                                                    onWaiting: { photoImportWaiting = $0 })
+            importingPhotosDiveID = nil
+            var summary = firstPass
+            summary.add(result)
+            commitPhotoChange(diveID: diveID)
+            // The dives photos were moved from (Update on another dive's photo).
+            for movedFrom in Set(result.movedFromDiveIDs) { commitPhotoChange(diveID: movedFrom) }
+            if session.decisionSheetOpen {
+                // Shown by the sheet's onDismiss.
+                session.pendingSummary = (summary, diveID)
+            } else {
+                finishPhotoImport(summary, diveID: diveID)
+            }
+        }
+    }
+
+    /// Offers the species named in the imported and updated photos, and reports problems.
+    @MainActor
+    func finishPhotoImport(_ result: PhotoImporter.Result, diveID: PersistentIdentifier) {
+        // Species named in the photos' captions or keywords: offered for confirmation.
+        let catalogue = (try? modelContext.fetch(FetchDescriptor<Species>())) ?? []
+        let proposals = SpeciesPhotoMatcher.proposals(
+            for: SpeciesPhotoMatcher.photos(withIDs: result.importedPhotoIDs + result.updatedPhotoIDs, in: modelContext),
+            catalogue: catalogue)
+        // Reported only while the same dive is shown.
+        guard dive.persistentModelID == diveID else { return }
+        let handled = result.imported + result.duplicates + result.updated + result.moved + result.olderSkipped + result.skippedByUser
+        let hasProblems = result.duplicates > 0 || result.unreadable > 0 || result.failedToSave > 0
+            || result.updated > 0 || result.moved > 0 || result.olderSkipped > 0 || result.skippedByUser > 0
+        if handled == 0 {
+            showFileImportError = true
+        } else if !proposals.isEmpty {
+            speciesProposals = proposals
+            if hasProblems { pendingPhotoImportResult = result }
+        } else if hasProblems {
+            photoImportResult = result
         }
     }
 
     @MainActor
-    func deletePhoto(at index: Int) {
-        guard dive.photosData?.indices.contains(index) == true else { return }
-        dive.photosData?.remove(at: index)
+    func convertLegacyPhotos() async {
+        guard importingPhotosDiveID == nil else { return }
+        let diveID = dive.persistentModelID
+        importingPhotosDiveID = diveID
+        let result = await PhotoImporter.convertLegacyPhotos(ofDiveWith: diveID, container: modelContext.container)
+        importingPhotosDiveID = nil
+        commitPhotoChange(diveID: diveID)
+        if let result, result.unreadable > 0 || result.failedToSave > 0 || result.legacyNotTrimmed,
+           dive.persistentModelID == diveID {
+            photoImportResult = result
+        }
+    }
+
+    /// Refreshes the dive list's photo badge for the dive the import wrote to, unless that
+    /// dive was deleted while the import ran.
+    @MainActor
+    private func commitPhotoChange(diveID: PersistentIdentifier) {
+        if let target = PhotoImporter.fetchDive(diveID, in: modelContext) {
+            store.commit(target, affects: .rowBadges)
+        }
+    }
+
+    @MainActor
+    func deletePhoto(id: String) {
+        guard let entry = photoEntries.first(where: { $0.id == id }) else { return }
+        switch entry.source {
+        case .photo(let photo):
+            modelContext.delete(photo)
+        case .legacy(let legacyIndex):
+            // A conversion running in the background has already read the legacy array and
+            // would bring the deleted photo back as a record.
+            guard !legacyPhotosLocked, dive.photosData?.indices.contains(legacyIndex) == true else { return }
+            dive.photosData?.remove(at: legacyIndex)
+        }
         try? modelContext.save()
         store.commit(dive, affects: .rowBadges)
     }
@@ -801,6 +1056,7 @@ extension DiveDetailView {
                     }
                 }
                 .accessibilityLabel(Text("Add Equipment"))
+                .borderlessButton()
             }
 
             if (dive.usedGear ?? []).isEmpty {
@@ -894,7 +1150,7 @@ extension DiveDetailView {
             HStack {
                 Label("Marine Life Seen", systemImage: "fish")
                     .font(.headline)
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(.orange)
                 Spacer()
                 if !(dive.seenFish ?? []).isEmpty {
                     Button {
@@ -907,7 +1163,7 @@ extension DiveDetailView {
                         TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
                             Image(systemName: "minus.circle")
                                 .font(.title3)
-                                .foregroundStyle(.cyan)
+                                .foregroundStyle(.orange)
                         }
                     }
                     .buttonStyle(.plain)
@@ -919,10 +1175,11 @@ extension DiveDetailView {
                     TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
                         Image(systemName: "plus.circle")
                             .font(.title3)
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(.orange)
                     }
                 }
                 .accessibilityLabel(Text("Add Marine Life"))
+                .borderlessButton()
             }
 
             if (dive.seenFish ?? []).isEmpty {
@@ -930,7 +1187,7 @@ extension DiveDetailView {
                     .font(.caption)
                     .foregroundStyle(.gray)
             } else {
-                fishScrollView
+                fishGrid
             }
         }
         .padding()
@@ -951,62 +1208,70 @@ extension DiveDetailView {
             }
             Button("Cancel", role: .cancel) { }
         } message: { fish in
-            Text("Remove \(fish.name) from this dive?")
+            Text("Remove \(fish.displayName) from this dive?")
         }
     }
 
-    var fishScrollView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 12) {
-                ForEach(dive.seenFish ?? []) { fish in
-                    ZStack(alignment: .topTrailing) {
-                        FishChipView(fish: fish)
-                            .contentShape(Rectangle())
-                            #if os(iOS)
-                            .onTapGesture {
-                                if !isEditingMarineLife {
-                                    fishToEdit = fish
-                                }
-                            }
-                            .onLongPressGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    isEditingMarineLife.toggle()
-                                }
-                            }
-                            #else
-                            .onTapGesture {
-                                if !isEditingMarineLife {
-                                    fishToEdit = fish
-                                }
-                            }
-                            #endif
-                        if isEditingMarineLife {
-                            Button {
-                                fishToDelete = fish
-                                showDeleteFishAlert = true
-                            } label: {
-                                // Same geometry as the photo badge: 6 pt trailing (half of the
-                                // 12 pt gap to the next chip), inward over the chip, and
-                                // nothing upward. 40 × 34 pt.
-                                TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
-                                    Image(systemName: "minus.circle.fill")
-                                        .font(.system(size: 18))
-                                        .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, .red)
-                                }
-                            }
-                            #if os(macOS)
-                            .buttonStyle(.plain)
-                            #endif
-                            .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), fish.name)))
-                            .offset(x: 6, y: -6)
-                            .transition(.scale.combined(with: .opacity))
+    var fishGrid: some View {
+        // A grid of photo-style tiles, with the Photos tab's columns: a dive can list many
+        // critters. Lazy, so only the visible tiles load their species image.
+        LazyVGrid(columns: photoGridColumns, alignment: .leading, spacing: 12) {
+            ForEach(dive.seenFish ?? []) { fish in
+                let species = openableSpecies(of: fish)
+                SightingGridTile(
+                    fish: fish,
+                    species: species,
+                    isEditing: isEditingMarineLife,
+                    onOpen: {
+                        // A linked sighting opens its species page (nothing in edit mode, where
+                        // only its remove badge acts; its quantity has its own menu). Only a
+                        // sighting not in the catalogue opens the sighting editor. Not in the
+                        // swipe preview.
+                        guard !isSlidePreview else { return }
+                        if let species {
+                            if !isEditingMarineLife { shownSpecies = species }
+                        } else {
+                            fishToEdit = fish
                         }
-                    }
-                }
+                    },
+                    onToggleEditing: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isEditingMarineLife.toggle()
+                        }
+                    },
+                    onRemove: {
+                        fishToDelete = fish
+                        showDeleteFishAlert = true
+                    },
+                    onSetQuantity: { setQuantity($0, of: fish) }
+                )
             }
-            .padding(.vertical, 4)
         }
+        // Room for the remove badges, which stick out above the first row.
+        .padding(.top, 6)
+    }
+
+    /// Changes a sighting's quantity from its tile (`MarineSight.setQuantity`: an exact count
+    /// stays when its range is chosen again).
+    func setQuantity(_ quantity: SightingQuantity, of fish: MarineSight) {
+        guard !isSlidePreview, fish.setQuantity(quantity) else { return }
+        try? modelContext.save()
+        store.commit(dive, affects: .rowBadges)
+    }
+
+    /// The catalogue species a sighting opens, unless it is not linked or its species was
+    /// deleted on another device and not merged yet (its attributes cannot be read).
+    func openableSpecies(of fish: MarineSight) -> Species? {
+        guard let species = fish.species, !species.isDeleted, species.modelContext != nil else { return nil }
+        return species
+    }
+
+    /// Dive numbers for the pages pushed from a species page (as Marine Life builds them).
+    /// Read only while a species page is shown.
+    var speciesPageNumberMap: [PersistentIdentifier: Int] {
+        let total = store.dives.count
+        return Dictionary(store.dives.enumerated().map { ($0.element.persistentModelID, total - $0.offset) },
+                          uniquingKeysWith: { first, _ in first })
     }
 
     // MARK: - All-Tanks Summary Helpers
@@ -1169,279 +1434,381 @@ extension DiveDetailView {
                 .font(.headline)
                 .foregroundStyle(.primary)
 
-            // Dive Number
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.orange.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "number")
-                        .foregroundStyle(.orange)
-                        .font(.system(size: 18))
+            #if os(macOS)
+            // The Mac window is wide enough for two columns of five rows. A Grid keeps
+            // each pair of rows aligned, while each column draws its own dividers and a
+            // vertical line separates the two columns.
+            Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
+                GridRow {
+                    diveInfoNumberRow.detailGridCell(column: 0, row: 0)
+                    diveInfoGuideRow.detailGridCell(column: 1, row: 0)
                 }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Dive #")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(verbatim: "\(dive.diveNumber ?? diveNumber)")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
                 }
-
-                Spacer()
+                GridRow {
+                    diveInfoDiverRow.detailGridCell(column: 0, row: 1)
+                    diveInfoCaptainRow.detailGridCell(column: 1, row: 1)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    diveInfoBuddiesRow.detailGridCell(column: 0, row: 2)
+                    diveInfoBoatRow.detailGridCell(column: 1, row: 2)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    diveInfoTypeRow.detailGridCell(column: 0, row: 3)
+                    diveInfoTagsRow.detailGridCell(column: 1, row: 3)
+                }
+                GridRow {
+                    detailColumnDivider
+                    detailColumnDivider
+                }
+                GridRow {
+                    diveInfoCenterRow.detailGridCell(column: 0, row: 4)
+                    diveInfoEntryTypeRow.detailGridCell(column: 1, row: 4)
+                }
             }
+            .overlay {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.2))
+                    .frame(width: 1)
+            }
+            .accessibilityElement(children: .contain)
+            #else
+            diveInfoNumberRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Diver Name
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.cyan.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person")
-                        .foregroundStyle(.cyan)
-                        .font(.system(size: 18))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Diver")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.diverName.isEmpty ? "—" : dive.diverName)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.diverName.isEmpty ? Color.secondary : Color.primary)
-                }
-
-                Spacer()
-            }
+            diveInfoDiverRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Buddies
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.green.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person.2")
-                        .foregroundStyle(.green)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Buddies")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-
-                    Text(dive.buddies.isEmpty ? "—" : dive.buddies)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.buddies.isEmpty ? Color.secondary : Color.primary)
-                }
-
-                Spacer()
-            }
+            diveInfoBuddiesRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Dive Type with multiple types support
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.purple.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: diveTypeIcon(for: dive.primaryDiveType ?? ""))
-                        .foregroundStyle(.purple)
-                        .font(.system(size: 18))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Dive Type")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-
-                    Text(dive.diveTypes ?? "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                }
-
-                Spacer()
-            }
+            diveInfoTypeRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Dive Operator
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "building.2")
-                        .foregroundStyle(.blue)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Dive Center")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.diveOperator?.isEmpty == false ? dive.diveOperator! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.diveOperator?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoCenterRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Dive Master
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.teal.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person.badge.shield.checkmark")
-                        .foregroundStyle(.teal)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Guide/Instructor")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.diveMaster?.isEmpty == false ? dive.diveMaster! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.diveMaster?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoGuideRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Skipper
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.indigo.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person.fill.turn.right")
-                        .foregroundStyle(.indigo)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Captain")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.skipper?.isEmpty == false ? dive.skipper! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.skipper?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoCaptainRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Boat
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.mint.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "ferry")
-                        .foregroundStyle(.mint)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Boat")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.boat?.isEmpty == false ? dive.boat! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.boat?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoBoatRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Tags
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.pink.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "tag")
-                        .foregroundStyle(.pink)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Tags")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.tags?.isEmpty == false ? dive.tags! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.tags?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoTagsRow
 
             Divider()
                 .background(.primary.opacity(0.2))
 
-            // Entry Type
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.yellow.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "arrow.down.to.line.circle")
-                        .foregroundStyle(.yellow)
-                        .font(.system(size: 16))
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Entry Type")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                    Text(dive.entryType?.isEmpty == false ? dive.entryType! : "—")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(dive.entryType?.isEmpty == false ? .primary : .secondary)
-                }
-
-                Spacer()
-            }
+            diveInfoEntryTypeRow
+            #endif
         }
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
     }
+
+    // Dive Number
+    private var diveInfoNumberRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.orange.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "number")
+                    .foregroundStyle(.orange)
+                    .font(.system(size: 18))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dive #")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(verbatim: "\(dive.diveNumber ?? diveNumber)")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Diver Name
+    private var diveInfoDiverRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.cyan.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "person")
+                    .foregroundStyle(.cyan)
+                    .font(.system(size: 18))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Diver")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.diverName.isEmpty ? "—" : dive.diverName)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.diverName.isEmpty ? Color.secondary : Color.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Buddies
+    private var diveInfoBuddiesRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "person.2")
+                    .foregroundStyle(.green)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Buddies")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+
+                Text(dive.buddies.isEmpty ? "—" : dive.buddies)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.buddies.isEmpty ? Color.secondary : Color.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Dive Type with multiple types support
+    private var diveInfoTypeRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.purple.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: diveTypeIcon(for: dive.primaryDiveType ?? ""))
+                    .foregroundStyle(.purple)
+                    .font(.system(size: 18))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dive Type")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+
+                Text(dive.diveTypes ?? "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Dive Operator
+    private var diveInfoCenterRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "building.2")
+                    .foregroundStyle(.blue)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dive Center")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.diveOperator?.isEmpty == false ? dive.diveOperator! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.diveOperator?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Dive Master
+    private var diveInfoGuideRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.teal.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "person.badge.shield.checkmark")
+                    .foregroundStyle(.teal)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Guide/Instructor")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.diveMaster?.isEmpty == false ? dive.diveMaster! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.diveMaster?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Skipper
+    private var diveInfoCaptainRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.indigo.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "person.fill.turn.right")
+                    .foregroundStyle(.indigo)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Captain")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.skipper?.isEmpty == false ? dive.skipper! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.skipper?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Boat
+    private var diveInfoBoatRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.mint.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "ferry")
+                    .foregroundStyle(.mint)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Boat")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.boat?.isEmpty == false ? dive.boat! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.boat?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Tags
+    private var diveInfoTagsRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.pink.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "tag")
+                    .foregroundStyle(.pink)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Tags")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.tags?.isEmpty == false ? dive.tags! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.tags?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // Entry Type
+    private var diveInfoEntryTypeRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.yellow.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "arrow.down.to.line.circle")
+                    .foregroundStyle(.yellow)
+                    .font(.system(size: 16))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Entry Type")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+                Text(dive.entryType?.isEmpty == false ? dive.entryType! : "—")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(dive.entryType?.isEmpty == false ? .primary : .secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    #if os(macOS)
+    /// Horizontal divider for one column of the two-column detail-card layouts (macOS only).
+    /// Wrapped in a VStack so the Divider is horizontal inside the Grid cell.
+    var detailColumnDivider: some View {
+        VStack {
+            Divider()
+                .background(.primary.opacity(0.2))
+        }
+    }
+
+    #endif
 
     // Helper pour obtenir l'icône selon le type de plongée
     func diveTypeIcon(for type: String) -> String {
@@ -1482,5 +1849,125 @@ extension DiveDetailView {
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
+    }
+}
+
+#if os(macOS)
+extension View {
+    /// One cell of a two-column detail-card `Grid` (macOS only): equal-width column, and
+    /// a VoiceOver sort priority that reads the whole left column (`column` 0) before the
+    /// right one (`column` 1), top to bottom — the same order as the single iOS column.
+    /// The Grid must be marked `.accessibilityElement(children: .contain)`.
+    func detailGridCell(column: Int, row: Int) -> some View {
+        frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilitySortPriority(Double(1000 * (2 - column) - row))
+    }
+}
+#endif
+
+/// One photo in a dive's photo grid: a 4:3 tile, the species tagged on it underneath, and the
+/// remove badge while editing. Its own struct so the grid's generated type stays shallow
+/// (see `TapTargetInset`).
+struct PhotoGridTile: View {
+    let imageKey: String
+    let load: () -> Data?
+    let caption: String?
+    let position: Int
+    let total: Int
+    let isEditing: Bool
+    let canRemove: Bool
+    let onOpen: () -> Void
+    let onToggleEditing: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Color.clear
+                .aspectRatio(4 / 3, contentMode: .fit)
+                .overlay { PhotoThumbnailTile(imageKey: imageKey, load: load) }
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if !isEditing { onOpen() }
+                }
+                .onLongPressGesture {
+                    onToggleEditing()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %@ of %@", bundle: .forAppLanguage(), value: "Photo %@ of %@", comment: "Announces the current photo's position while paging through photos (locale-formatted numbers)"), Double(position).localizedString(decimals: 0), Double(total).localizedString(decimals: 0))))
+                .accessibilityValue(Text(verbatim: caption ?? ""))
+                // Opens the viewer, except in edit mode (where only the remove badge acts).
+                .accessibilityAddTraits(isEditing ? [] : .isButton)
+                .accessibilityAction {
+                    if !isEditing { onOpen() }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if isEditing, canRemove {
+                        Button(action: onRemove) {
+                            // Badge sits at the tile's top-trailing corner, 6 pt outside it.
+                            // Grows 6 pt further trailing (half of the 12 pt gap to the next
+                            // tile) and inward over the tile, whose own tap is disabled while
+                            // editing. Not upward: the grid only has 6 pt above its first row,
+                            // under the section header's buttons. 40 × 34 pt.
+                            TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
+                                Image(systemName: "minus.circle.fill")
+                                    .font(.system(size: 18))
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(.white, .red)
+                            }
+                        }
+                        #if os(macOS)
+                        .buttonStyle(.plain)
+                        #endif
+                        .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove Photo %@", bundle: .forAppLanguage(), value: "Remove Photo %@", comment: "Accessibility label for a button that removes one photo, naming its position in the dive's photos (locale-formatted number)"), Double(position).localizedString(decimals: 0))))
+                        .offset(x: 6, y: -6)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+            if let caption {
+                Text(verbatim: caption)
+                    .font(.caption)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+/// A photo thumbnail tile: the image, decoded once per image off the main thread (not in the
+/// photos section's body, which re-renders on every edit-mode toggle or import progress), or a
+/// placeholder while there is none (a thumbnail not arrived from iCloud yet). A large image (a
+/// legacy photo has no thumbnail) is scaled down to the tile's size, not decoded in full.
+struct PhotoThumbnailTile: View {
+    let imageKey: String
+    let load: () -> Data?
+    @State private var image: PlatformImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(platformImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.secondary.opacity(0.15)
+                Image(systemName: "photo")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .task(id: imageKey) {
+            guard let data = load() else { image = nil; return }
+            let decoded = await Task.detached(priority: .userInitiated) { () -> PlatformImage? in
+                guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                      let thumbnail = PhotoMetadataReader.thumbnailJPEG(of: source, maxPixelSize: 450, quality: 0.85)
+                else { return PlatformImage(data: data) }
+                return PlatformImage(data: thumbnail)
+            }.value
+            guard !Task.isCancelled else { return }
+            image = decoded
+        }
     }
 }

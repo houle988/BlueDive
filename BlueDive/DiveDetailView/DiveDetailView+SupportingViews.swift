@@ -35,29 +35,183 @@ struct RatingStarsView: View {
     }
 }
 
-struct FishChipView: View {
+/// A sighting in the dive's Marine Life grid, laid out as a photo tile (`PhotoGridTile`): the
+/// linked species' image — a fish symbol for a sighting not in the catalogue or a species
+/// without an image — with the quantity as a bar at its bottom-leading corner, and the name
+/// shown for the sighting below. A tap calls `onOpen` (the dive decides: species page, or the
+/// sighting's editor); a long press toggles edit mode, where the remove badge appears.
+/// Outside edit mode the quantity is a menu that changes it in place (`onSetQuantity`).
+struct SightingGridTile: View {
     let fish: MarineSight
+    /// The linked species, if its page can be opened (resolved by the dive, as for the tap).
+    let species: Species?
+    let isEditing: Bool
+    let onOpen: () -> Void
+    let onToggleEditing: () -> Void
+    let onRemove: () -> Void
+    let onSetQuantity: (SightingQuantity) -> Void
+
+    private var quantity: SightingQuantity { SightingQuantity.from(count: fish.count) }
+
+    /// The quantity over the image, 6 pt from its corner: at least half the image's width,
+    /// growing with its text up to the image's width less the margins: a menu outside edit
+    /// mode (where only the remove badge acts).
+    @ViewBuilder
+    private func quantityControl(imageWidth: CGFloat) -> some View {
+        let minWidth = imageWidth / 2
+        let maxWidth = max(minWidth, imageWidth - 12)
+        if isEditing {
+            // Sized to its content, as the menu sizes it outside edit mode (same bar in both).
+            SightingQuantityCapsule(quantity: quantity, minWidth: minWidth, maxWidth: maxWidth, isTall: true)
+                .fixedSize()
+                .padding(6)
+        } else {
+            // The 6 pt around the bar, inside the image, is part of the tap target.
+            SightingQuantityMenu(quantity: quantity, padding: 6, minWidth: minWidth, maxWidth: maxWidth,
+                                 isTall: true, onSet: onSetQuantity)
+        }
+    }
 
     var body: some View {
-        VStack(spacing: 4) {
-            Text(fish.name)
-                .font(.subheadline)
-                .fontWeight(.bold)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 4) {
+                Color.clear
+                    .aspectRatio(4 / 3, contentMode: .fit)
+                    .overlay { SpeciesImageView(species: species, size: nil) }
+                    .overlay {
+                        // A bar half the image's width (wider when its text needs it), at the
+                        // bottom-leading corner.
+                        GeometryReader { proxy in
+                            quantityControl(imageWidth: proxy.size.width)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                Text(fish.displayName)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    // Two lines reserved, so every tile in a grid row has the same height.
+                    .lineLimit(2, reservesSpace: true)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { onOpen() }
+            .onLongPressGesture { onToggleEditing() }
+            // One VoiceOver element: the name, then the quantity and its range.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: fish.displayName))
+            .accessibilityValue(Text(verbatim: "\(quantity.label), \(quantity.rangeDescription)"))
+            .accessibilityHint(species != nil && !isEditing ? Text("Opens species details") : Text(verbatim: ""))
+            // In edit mode a linked sighting's tile does nothing (only its remove badge acts).
+            .accessibilityAddTraits(isEditing && species != nil ? [] : .isButton)
+            .accessibilityAction { onOpen() }
+            // Swipe up or down to change the quantity, as the menu does.
+            .accessibilityAdjustableAction { direction in
+                guard !isEditing else { return }
+                let options = SightingQuantity.allCases
+                guard let index = options.firstIndex(of: quantity) else { return }
+                switch direction {
+                case .increment where index < options.count - 1: onSetQuantity(options[index + 1])
+                case .decrement where index > 0: onSetQuantity(options[index - 1])
+                default: break
+                }
+            }
 
-            Text(SightingQuantity.from(count: fish.count).label)
-                .font(.caption)
-                .fontWeight(.bold)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(Color.cyan.opacity(0.2))
-                .clipShape(Capsule())
+            if isEditing {
+                Button(action: onRemove) {
+                    // Same geometry as the photo badge: 6 pt trailing (half of the 12 pt gap
+                    // to the next tile), inward over the tile, and nothing upward. 40 × 34 pt.
+                    TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 18))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .red)
+                    }
+                }
+                #if os(macOS)
+                .buttonStyle(.plain)
+                #endif
+                .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), fish.displayName)))
+                .offset(x: 6, y: -6)
+                .transition(.scale.combined(with: .opacity))
+            }
         }
-        .frame(maxWidth: 140)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.1)))
+    }
+}
+
+/// A sighting's quantity as a solid capsule ("Few"), readable over an image: compact,
+/// sized to its text (list rows), or — a dive's tile — `isTall` (1.5 times the compact height)
+/// and at least `minWidth` wide, the text centred. With `maxWidth`, the capsule grows with its
+/// text up to that width, then the text shrinks (to 80 %) rather than run past it — the
+/// largest accessibility text sizes on a narrow tile.
+struct SightingQuantityCapsule: View {
+    let quantity: SightingQuantity
+    var minWidth: CGFloat?
+    var maxWidth: CGFloat?
+    var isTall = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    // A solid fill that follows the appearance: white with dark text in light mode, near-black
+    // with white text in dark mode. Opaque, so every box looks the same whatever image is
+    // behind it (a translucent glass took on each photo's colour); a hairline edge keeps it
+    // apart from a background of the same tone.
+    private var isDark: Bool { colorScheme == .dark }
+    private var textColor: Color { isDark ? .white : .black }
+    private var fill: Color { isDark ? Color(white: 0.12) : .white }
+    private var edge: Color { isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.12) }
+    /// Compact: 3 pt above and below the text (about 22 pt high); tall: about 33 pt.
+    private var verticalPadding: CGFloat { isTall ? 8.5 : 3 }
+
+    var body: some View {
+        Text(quantity.label)
+            .font(.caption)
+            .fontWeight(.bold)
+            .lineLimit(1)
+            .minimumScaleFactor(maxWidth == nil ? 1 : 0.8)
+            .padding(.horizontal, 7)
+            .padding(.vertical, verticalPadding)
+            .frame(minWidth: minWidth, maxWidth: maxWidth)
+            .foregroundStyle(textColor)
+            .background {
+                Capsule()
+                    .fill(fill)
+                    .overlay(Capsule().strokeBorder(edge, lineWidth: 1))
+            }
+    }
+}
+
+/// A sighting's quantity capsule that opens a menu of the four ranges, each with its range on
+/// the same line ("Few · 2 to 10", as the ranges read in the sighting editor; one line reads
+/// the same on every platform). `padding` around the capsule is part of the tap target.
+struct SightingQuantityMenu: View {
+    let quantity: SightingQuantity
+    var padding: CGFloat = 0
+    /// The tile's bar (`SightingQuantityCapsule.minWidth`, `maxWidth`, `isTall`).
+    var minWidth: CGFloat?
+    var maxWidth: CGFloat?
+    var isTall = false
+    let onSet: (SightingQuantity) -> Void
+
+    var body: some View {
+        Menu {
+            Picker("Quantity", selection: Binding(get: { quantity }, set: { onSet($0) })) {
+                ForEach(SightingQuantity.allCases, id: \.self) { option in
+                    Text(verbatim: "\(option.label) · \(option.rangeDescription)").tag(option)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            SightingQuantityCapsule(quantity: quantity, minWidth: minWidth, maxWidth: maxWidth, isTall: isTall)
+                .padding(padding)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        // The current quantity and its range (a label set by the row replaces the capsule's text).
+        .accessibilityValue(Text(verbatim: "\(quantity.label), \(quantity.rangeDescription)"))
     }
 }
 
@@ -141,530 +295,6 @@ struct DetailCard: View {
         .padding(.vertical, 10)
         .background(Color.primary.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 15))
-    }
-}
-
-// MARK: - Add Fish View
-
-struct AddFishView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(DiveStore.self) private var store
-    @Bindable var dive: Dive
-    let fishNames: [String]
-
-    @State private var fishName = ""
-    @State private var quantity = SightingQuantity.single
-    @State private var showSuggestions = false
-    @FocusState private var isNameFocused: Bool
-
-    private var nameSuggestions: [String] {
-        guard !fishName.isEmpty else { return [] }
-        return fishNames.filter {
-            $0.localizedCaseInsensitiveContains(fishName) && $0.lowercased() != fishName.lowercased()
-        }
-    }
-
-    private var isValidFish: Bool {
-        !fishName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Icon header
-                        VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(.cyan.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: "fish.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(.cyan)
-                            }
-                            Text("Marine Life Information")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.top, 20)
-
-                        // Form fields
-                        VStack(spacing: 16) {
-                            // Marine Life name field
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Marine Life name")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
-                                ZStack(alignment: .trailing) {
-                                    TextField("Marine Life name", text: $fishName)
-                                        .autocorrectionDisabled()
-                                        .platformTextInputAutocapitalization(.words)
-                                        .textFieldStyle(.plain)
-                                        .padding(10)
-                                        .padding(.trailing, fishName.isEmpty ? 10 : 32)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .fill(Color.primary.opacity(0.06))
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.cyan.opacity(fishName.isEmpty ? 0 : 0.4), lineWidth: 1)
-                                        )
-                                        .focused($isNameFocused)
-                                        .onChange(of: fishName) {
-                                            showSuggestions = isNameFocused && !nameSuggestions.isEmpty
-                                        }
-                                        .onChange(of: isNameFocused) {
-                                            if isNameFocused {
-                                                showSuggestions = !nameSuggestions.isEmpty
-                                            } else {
-                                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                                    showSuggestions = false
-                                                }
-                                            }
-                                        }
-                                    if !fishName.isEmpty {
-                                        Button {
-                                            fishName = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                                .clearButtonTapTarget()
-                                                .accessibilityLabel(Text("Clear"))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 8)
-                                    }
-                                }
-                                if showSuggestions && !nameSuggestions.isEmpty {
-                                    VStack(alignment: .leading, spacing: 0) {
-                                        ForEach(nameSuggestions.prefix(4), id: \.self) { suggestion in
-                                            Button {
-                                                fishName = suggestion
-                                                showSuggestions = false
-                                            } label: {
-                                                HStack(spacing: 8) {
-                                                    Image(systemName: "magnifyingglass")
-                                                        .font(.caption2)
-                                                        .foregroundStyle(.secondary)
-                                                    Text(suggestion)
-                                                        .foregroundStyle(.cyan)
-                                                        .lineLimit(1)
-                                                }
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.vertical, 6)
-                                                .padding(.horizontal, 10)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.primary.opacity(0.06))
-                                    )
-                                }
-                            }
-
-                            // Quantity picker
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Quantity")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                                    ForEach(SightingQuantity.allCases, id: \.self) { q in
-                                        Button {
-                                            quantity = q
-                                        } label: {
-                                            VStack(spacing: 3) {
-                                                Text(q.label)
-                                                    .font(.subheadline)
-                                                    .fontWeight(.semibold)
-                                                Text(q.rangeDescription)
-                                                    .font(.caption2)
-                                                    .foregroundStyle(quantity == q ? .cyan.opacity(0.8) : .secondary)
-                                            }
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .fill(quantity == q ? Color.cyan.opacity(0.18) : Color.primary.opacity(0.06))
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .stroke(quantity == q ? Color.cyan : Color.clear, lineWidth: 1.5)
-                                            )
-                                            .foregroundStyle(quantity == q ? .cyan : .primary)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        // Live preview
-                        if !fishName.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Overview")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal)
-
-                                HStack {
-                                    Spacer()
-                                    FishPreviewChip(name: fishName, quantity: quantity)
-                                        .scaleEffect(1.1)
-                                    Spacer()
-                                }
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.primary.opacity(0.04))
-                                )
-                                .padding(.horizontal)
-                            }
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        }
-                    }
-                }
-
-                Divider()
-                    .overlay(Color.primary.opacity(0.08))
-
-                // Bottom buttons
-                HStack {
-                    Button("Cancel") { dismiss() }
-                        .keyboardShortcut(.escape, modifiers: [])
-
-                    Spacer()
-
-                    Button {
-                        addFish()
-                    } label: {
-                        Text("Add")
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(isValidFish ? .cyan : .cyan.opacity(0.3))
-                            )
-                            .foregroundStyle(isValidFish ? .black : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!isValidFish)
-                }
-                .padding()
-            }
-            .background(Color.platformBackground.ignoresSafeArea())
-            .navigationTitle("New Marine Life")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-
-        }
-        #if os(macOS)
-        .frame(width: 380, height: 400)
-        #endif
-    }
-
-    @MainActor
-    private func addFish() {
-        let trimmedName = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newFish = MarineSight(name: trimmedName, count: quantity.rawValue)
-
-        // Établir la relation bidirectionnelle
-        newFish.dive = dive
-
-        // Insérer dans le contexte SwiftData
-        modelContext.insert(newFish)
-
-        // Sauvegarder les changements
-        try? modelContext.save()
-        store.commit(dive, affects: .rowBadges)
-
-        dismiss()
-    }
-}
-
-// MARK: - Edit Fish View
-
-struct EditFishView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(DiveStore.self) private var store
-    @Bindable var fish: MarineSight
-    let fishNames: [String]
-
-    @State private var fishName: String
-    @State private var quantity: SightingQuantity
-    @State private var showSuggestions = false
-    @FocusState private var isNameFocused: Bool
-
-    init(fish: MarineSight, fishNames: [String] = []) {
-        self.fish = fish
-        self.fishNames = fishNames
-        _fishName = State(initialValue: fish.name)
-        _quantity = State(initialValue: SightingQuantity.from(count: fish.count))
-    }
-
-    private var nameSuggestions: [String] {
-        guard !fishName.isEmpty else { return [] }
-        return fishNames.filter {
-            $0.localizedCaseInsensitiveContains(fishName) && $0.lowercased() != fishName.lowercased()
-        }
-    }
-
-    private var isValidFish: Bool {
-        !fishName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Icon header
-                        VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(.cyan.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: "fish.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(.cyan)
-                            }
-                            Text("Marine Life Information")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.top, 20)
-
-                        // Form fields
-                        VStack(spacing: 16) {
-                            // Marine Life name field
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Marine Life name")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
-                                ZStack(alignment: .trailing) {
-                                    TextField("Marine Life name", text: $fishName)
-                                        .autocorrectionDisabled()
-                                        .platformTextInputAutocapitalization(.words)
-                                        .textFieldStyle(.plain)
-                                        .padding(10)
-                                        .padding(.trailing, fishName.isEmpty ? 10 : 32)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .fill(Color.primary.opacity(0.06))
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.cyan.opacity(fishName.isEmpty ? 0 : 0.4), lineWidth: 1)
-                                        )
-                                        .focused($isNameFocused)
-                                        .onChange(of: fishName) {
-                                            showSuggestions = isNameFocused && !nameSuggestions.isEmpty
-                                        }
-                                        .onChange(of: isNameFocused) {
-                                            if isNameFocused {
-                                                showSuggestions = !nameSuggestions.isEmpty
-                                            } else {
-                                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                                    showSuggestions = false
-                                                }
-                                            }
-                                        }
-                                    if !fishName.isEmpty {
-                                        Button {
-                                            fishName = ""
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                                .clearButtonTapTarget()
-                                                .accessibilityLabel(Text("Clear"))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 8)
-                                    }
-                                }
-                                if showSuggestions && !nameSuggestions.isEmpty {
-                                    VStack(alignment: .leading, spacing: 0) {
-                                        ForEach(nameSuggestions.prefix(4), id: \.self) { suggestion in
-                                            Button {
-                                                fishName = suggestion
-                                                showSuggestions = false
-                                            } label: {
-                                                HStack(spacing: 8) {
-                                                    Image(systemName: "magnifyingglass")
-                                                        .font(.caption2)
-                                                        .foregroundStyle(.secondary)
-                                                    Text(suggestion)
-                                                        .foregroundStyle(.cyan)
-                                                        .lineLimit(1)
-                                                }
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.vertical, 6)
-                                                .padding(.horizontal, 10)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.primary.opacity(0.06))
-                                    )
-                                }
-                            }
-
-                            // Quantity picker
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Quantity")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                                    ForEach(SightingQuantity.allCases, id: \.self) { q in
-                                        Button {
-                                            quantity = q
-                                        } label: {
-                                            VStack(spacing: 3) {
-                                                Text(q.label)
-                                                    .font(.subheadline)
-                                                    .fontWeight(.semibold)
-                                                Text(q.rangeDescription)
-                                                    .font(.caption2)
-                                                    .foregroundStyle(quantity == q ? .cyan.opacity(0.8) : .secondary)
-                                            }
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .fill(quantity == q ? Color.cyan.opacity(0.18) : Color.primary.opacity(0.06))
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .stroke(quantity == q ? Color.cyan : Color.clear, lineWidth: 1.5)
-                                            )
-                                            .foregroundStyle(quantity == q ? .cyan : .primary)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        // Live preview
-                        if !fishName.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Overview")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal)
-
-                                HStack {
-                                    Spacer()
-                                    FishPreviewChip(name: fishName, quantity: quantity)
-                                        .scaleEffect(1.1)
-                                    Spacer()
-                                }
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.primary.opacity(0.04))
-                                )
-                                .padding(.horizontal)
-                            }
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        }
-                    }
-                }
-
-                Divider()
-                    .overlay(Color.primary.opacity(0.08))
-
-                // Bottom buttons
-                HStack {
-                    Button("Cancel") { dismiss() }
-                        .keyboardShortcut(.escape, modifiers: [])
-
-                    Spacer()
-
-                    Button {
-                        saveFish()
-                    } label: {
-                        Text("Save")
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(isValidFish ? .cyan : .cyan.opacity(0.3))
-                            )
-                            .foregroundStyle(isValidFish ? .black : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!isValidFish)
-                }
-                .padding()
-            }
-            .background(Color.platformBackground.ignoresSafeArea())
-            .navigationTitle("Edit Marine Life")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-        }
-        #if os(macOS)
-        .frame(width: 380, height: 400)
-        #endif
-    }
-
-    @MainActor
-    private func saveFish() {
-        fish.name = fishName.trimmingCharacters(in: .whitespacesAndNewlines)
-        fish.count = quantity.rawValue
-        try? modelContext.save()
-        if let fishDive = fish.dive {
-            store.commit(fishDive, affects: .rowBadges)
-        } else {
-            // fish.dive is orphaned (shouldn't happen); full rebuild covers badges + filter options.
-            store.commitListRebuild()
-        }
-        dismiss()
-    }
-}
-
-// MARK: - Fish Preview Chip
-
-struct FishPreviewChip: View {
-    let name: String
-    let quantity: SightingQuantity
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(name)
-                .font(.subheadline)
-                .fontWeight(.bold)
-
-            Text(quantity.label)
-                .font(.caption)
-                .fontWeight(.bold)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 4)
-                .background(Color.cyan.opacity(0.2))
-                .clipShape(Capsule())
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(Color.cyan.opacity(0.2)))
     }
 }
 
@@ -793,7 +423,7 @@ struct AddGearToDiveView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.platformBackground.ignoresSafeArea()
+                AppBackground().ignoresSafeArea()
 
                 if availableGear.isEmpty {
                     emptyStateView
@@ -810,13 +440,10 @@ struct AddGearToDiveView: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundStyle(.orange)
+                    .confirmationActionForeground(.orange)
                 }
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 400, minHeight: 350)
-        #endif
     }
 
     private var emptyStateView: some View {
@@ -838,7 +465,7 @@ struct AddGearToDiveView: View {
     }
 
     private var gearList: some View {
-        List {
+        groupedList {
             ForEach(groupedAvailableGear, id: \.key) { category, items in
                 Section {
                     ForEach(items) { gear in
@@ -897,6 +524,7 @@ struct AddGearToDiveView: View {
                             }
                         }
                         .listRowBackground(Color.primary.opacity(0.05))
+                        .listRowButton()
                     }
                 } header: {
                     Text(GearCategory(rawValue: category)?.localizedName ?? LocalizedStringKey(category))
@@ -984,7 +612,7 @@ struct MenuTextField: View {
             Image(systemName: icon)
                 .foregroundStyle(color)
                 .frame(width: 24)
-            TextField(label, text: $text)
+            formTextField(label, text: $text)
                 .foregroundStyle(.primary)
             if !text.isEmpty {
                 Button {
@@ -1024,7 +652,7 @@ struct AutocompleteMenuTextField: View {
                 Image(systemName: icon)
                     .foregroundStyle(color)
                     .frame(width: 24)
-                TextField(label, text: $text)
+                formTextField(label, text: $text)
                     .foregroundStyle(.primary)
                     .focused($isFocused)
                     .onChange(of: text) {
@@ -1069,6 +697,9 @@ struct AutocompleteMenuTextField: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 3)
                         .padding(.leading, 36)
+                        // The whole suggestion responds, not only its text (a plain Button only responds
+                        // where something is drawn).
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -1111,7 +742,7 @@ struct SiteSearchField: View {
                 Image(systemName: selectedSite == nil ? "magnifyingglass" : "checkmark.circle.fill")
                     .foregroundStyle(.orange)
                     .frame(width: 24)
-                TextField("Search sites…", text: $searchText)
+                formTextField("Search sites…", text: $searchText)
                     .foregroundStyle(.primary)
                     .autocorrectionDisabled()
                     .focused($isFocused)
@@ -1198,62 +829,15 @@ struct SiteSearchField: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
             .padding(.horizontal, 10)
+            // The whole suggestion responds, not only its text (a plain Button only responds
+            // where something is drawn).
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 }
 
 
-// MARK: - FlowLayout for macOS
-
-#if os(macOS)
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        var totalHeight: CGFloat = 0
-        var totalWidth: CGFloat = 0
-
-        var lineWidth: CGFloat = 0
-        var lineHeight: CGFloat = 0
-
-        for size in sizes {
-            if lineWidth + size.width > proposal.width ?? 0 {
-                totalHeight += lineHeight + spacing
-                lineWidth = size.width
-                lineHeight = size.height
-            } else {
-                lineWidth += size.width + spacing
-                lineHeight = max(lineHeight, size.height)
-            }
-            totalWidth = max(totalWidth, lineWidth)
-        }
-        totalHeight += lineHeight
-
-        return CGSize(width: totalWidth, height: totalHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var point = bounds.origin
-        var lineHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-
-            if point.x + size.width > bounds.maxX {
-                point.x = bounds.origin.x
-                point.y += lineHeight + spacing
-                lineHeight = 0
-            }
-
-            subview.place(at: point, proposal: .unspecified)
-            point.x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-        }
-    }
-}
-#endif
 
 // MARK: - Array Extension
 
@@ -1340,96 +924,274 @@ struct PhotoTransferable: Transferable {
 
 struct IdentifiablePhotoData: Identifiable {
     let id = UUID()
-    let data: Data
+    /// Index of the photo to open; the preview loads its bytes itself.
     let index: Int
+}
+
+/// One photo in a dive's photo grid: a `DivePhoto` record, or an image still stored in the
+/// legacy `Dive.photosData` array (until the user converts it).
+struct DivePhotoEntry: Identifiable {
+    enum Source {
+        case photo(DivePhoto)
+        case legacy(Int)
+    }
+    let id: String
+    let source: Source
+
+    var isLegacy: Bool {
+        if case .legacy = source { return true }
+        return false
+    }
 }
 
 // MARK: - Photo Preview Sheet
 
 struct PhotoPreviewSheet: View {
-    @Binding var photos: [Data]
+    /// One identifier per photo, in display order (the count of photos).
+    let photoIDs: [String]
+    /// Loads the bytes of the photo at an index. Called only for the photo being shown (and
+    /// when it is shared or saved), so a dive with many photos never loads them all at once.
+    let photoData: (Int) -> Data
     let initialIndex: Int
-    let onDelete: (Int) -> Void
+    /// A line shown under the photo at an index (e.g. why it is not on the dive profile).
+    let photoNote: (Int) -> String?
+    /// The photo record at an index, when it can be tagged with species (nil for a legacy
+    /// photo, or where tagging is not offered).
+    let photoRecord: (Int) -> DivePhoto?
+    /// Removes the photo with an id (from `photoIDs`); nil hides the Remove button (e.g. a
+    /// species gallery). An id, not an index: an import still running can add photos that
+    /// sort ahead of the shown one while the confirmation is open.
+    let onDelete: ((String) -> Void)?
+    /// Whether the photo at an index can be removed now (the Remove button is disabled otherwise).
+    let canDelete: (Int) -> Bool
+    /// Whether the photo's original is here. While it is still downloading from iCloud the
+    /// viewer shows the thumbnail and Share / Save As are disabled — the thumbnail is never
+    /// handed out as the photo — and the page reloads when the original arrives.
+    let hasOriginal: (Int) -> Bool
+    /// A species whose name under the photo does not open its page: the viewer was opened
+    /// from that species' own page, which is then one step back.
+    let speciesPageShown: PersistentIdentifier?
     @Environment(\.dismiss) private var dismiss
+    @Environment(DiveStore.self) private var store
     @State private var currentIndex: Int
+    /// The species whose page is pushed from the names under the photo.
+    @State private var shownSpecies: Species?
     @State private var showDeleteAlert = false
+    /// The photo the Remove confirmation is about, taken when the button is tapped.
+    @State private var deleteTargetID: String?
+    @State private var taggingPhoto: DivePhoto?
     @State private var shareThumbnail: PlatformImage?
-    @State private var isPageSeeded: Bool
     @State private var cachedExportName: String
     @State private var cachedShareItem: PhotoTransferable?
     @State private var sessionTempFileURLs: Set<URL> = []
     @State private var isPreparingShare = false
 
-    init(photos: Binding<[Data]>, initialIndex: Int, onDelete: @escaping (Int) -> Void) {
-        self._photos = photos
+    init(photoIDs: [String], photoData: @escaping (Int) -> Data, initialIndex: Int,
+         photoNote: @escaping (Int) -> String? = { _ in nil },
+         photoRecord: @escaping (Int) -> DivePhoto? = { _ in nil },
+         canDelete: @escaping (Int) -> Bool = { _ in true },
+         hasOriginal: @escaping (Int) -> Bool = { _ in true },
+         speciesPageShown: PersistentIdentifier? = nil,
+         onDelete: ((String) -> Void)?) {
+        self.speciesPageShown = speciesPageShown
+        self.canDelete = canDelete
+        self.hasOriginal = hasOriginal
+        self.photoIDs = photoIDs
+        self.photoData = photoData
+        self.photoNote = photoNote
+        self.photoRecord = photoRecord
         self.initialIndex = initialIndex
         self.onDelete = onDelete
         self._currentIndex = State(initialValue: initialIndex)
-        // No seeding needed when starting at page 0; UIPageViewController
-        // naturally initialises at its own page 0.
-        self._isPageSeeded = State(initialValue: initialIndex == 0)
         // Seed the export name at construction time so the first body render
         // already has a valid filename — avoids an empty-name SharePreview.
         let exportPrefix = NSLocalizedString("BlueDive Photo", bundle: Bundle.forAppLanguage(), comment: "Prefix for exported photo filenames shown in share sheet and save dialog")
         self._cachedExportName = State(initialValue: "\(exportPrefix) \(PhotoPreviewSheet.exportDateFormatter.string(from: Date()))")
     }
 
-    // Returns nil when photos is empty so callers never subscript into an empty array.
+    /// The species on the photo, each opening its page (pushed in this viewer, Back returns
+    /// to the photo); the species whose page opened the viewer is shown as plain text.
+    @ViewBuilder
+    private func speciesLinks(_ species: [Species]) -> some View {
+        ForEach(species) { item in
+            let label = Label {
+                Text(verbatim: item.displayName)
+            } icon: {
+                Image(systemName: "fish.fill")
+                    .foregroundStyle(.orange)
+            }
+            .font(.caption.weight(.semibold))
+            if item.persistentModelID == speciesPageShown {
+                label
+            } else {
+                Button {
+                    shownSpecies = item
+                } label: {
+                    HStack(spacing: 4) {
+                        label
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                    // A comfortable tap target around the small caption text.
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .borderlessButton()
+                .foregroundStyle(.primary)
+                .accessibilityHint(Text("Opens species details"))
+            }
+        }
+    }
+
+    /// Dive numbers for the pages pushed from a species page (as Marine Life builds them).
+    /// Read only while a species page is shown (when the viewer redraws then).
+    private var diveNumberMap: [PersistentIdentifier: Int] {
+        let total = store.dives.count
+        return Dictionary(store.dives.enumerated().map { ($0.element.persistentModelID, total - $0.offset) },
+                          uniquingKeysWith: { first, _ in first })
+    }
+
+    // Returns nil when photos is empty so callers never subscript into an empty array,
+    // and while the original is still downloading (only the original is exported).
     private var currentPhoto: Data? {
-        guard !photos.isEmpty else { return nil }
-        return photos[min(currentIndex, photos.count - 1)]
+        guard !photoIDs.isEmpty else { return nil }
+        let index = min(currentIndex, photoIDs.count - 1)
+        guard hasOriginal(index) else { return nil }
+        return photoData(index)
+    }
+
+    /// Page identity: the photo, whether its original is here, so the page reloads (from the
+    /// thumbnail to the original) when the original arrives from iCloud, and the file's hash,
+    /// so a photo replaced by a newer version (a re-import) reloads too.
+    private func pageID(_ index: Int) -> String {
+        "\(photoIDs[index])|\(hasOriginal(index))|\(photoRecord(index)?.contentHash?.hashValue ?? 0)"
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if photos.isEmpty {
-                    Color.platformBackground.ignoresSafeArea()
+                if photoIDs.isEmpty {
+                    AppBackground().ignoresSafeArea()
                 } else {
-                    TabView(selection: $currentIndex) {
-                        ForEach(photos.indices, id: \.self) { index in
-                            PhotoPageView(data: photos[index], index: index, total: photos.count)
-                                .tag(index)
+                    // A paging scroll view, on every platform: it opens directly on the tapped
+                    // photo (a paging TabView opened between two pages and had to be nudged
+                    // into place, which showed as a short slide). Swipe on a touch screen or
+                    // trackpad, or use the Previous / Next buttons.
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: 0) {
+                            ForEach(photoIDs.indices, id: \.self) { index in
+                                PhotoPageView(photoID: pageID(index), load: { photoData(index) }, index: index, total: photoIDs.count,
+                                              isCurrent: index == currentIndex)
+                                    .containerRelativeFrame([.horizontal, .vertical])
+                                    .id(index)
+                            }
                         }
+                        .scrollTargetLayout()
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .opacity(isPageSeeded ? 1 : 0)
-                    .animation(.easeIn(duration: 0.15), value: isPageSeeded)
+                    .scrollTargetBehavior(.paging)
+                    .scrollIndicators(.hidden)
+                    // Centre anchor: the current photo changes once the next page fills most
+                    // of the screen, not as soon as it peeks in during a swipe that may be
+                    // cancelled.
+                    .scrollPosition(id: Binding(
+                        get: { currentIndex },
+                        set: { if let index = $0 { currentIndex = index } }
+                    ), anchor: .center)
                 }
             }
-            .background(Color.platformBackground.ignoresSafeArea())
+            .background(AppBackground().ignoresSafeArea())
+            .overlay(alignment: .bottom) {
+                if !photoIDs.isEmpty {
+                    let index = min(currentIndex, photoIDs.count - 1)
+                    let species = (photoRecord(index)?.species ?? []).sorted { $0.displayName < $1.displayName }
+                    let note = photoNote(index)
+                    if !species.isEmpty || note != nil {
+                        VStack(spacing: 4) {
+                            if !species.isEmpty {
+                                // Side by side when they fit, else one per line.
+                                ViewThatFits(in: .horizontal) {
+                                    HStack(spacing: 16) { speciesLinks(species) }
+                                    VStack(spacing: 6) { speciesLinks(species) }
+                                }
+                            }
+                            if let note {
+                                Text(verbatim: note)
+                                    .font(.caption)
+                            }
+                        }
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .padding()
+                    }
+                }
+            }
+            .sheet(item: $taggingPhoto) { photo in
+                PhotoSpeciesTagSheet(photo: photo)
+                    .standardSheetPresentation()
+            }
+            .navigationDestination(item: $shownSpecies) { species in
+                SpeciesDetailView(species: species, numberMap: diveNumberMap)
+                    .closeSheetButtonOnMac { dismiss() }
+                    // No "View Dives with This Critter" here (inherited from the Marine Life tab;
+                    // on macOS the sheet root already clears it, on iOS this does).
+                    .environment(\.showDiveList, nil)
+            }
             .toolbar {
-                if photos.count > 1 {
+                if photoIDs.count > 1 {
                     ToolbarItem(placement: .bottomBar) {
                         Button {
-                            currentIndex -= 1
+                            // Animated here only: a swipe sets the index itself, mid-swipe.
+                            withAnimation { currentIndex -= 1 }
                         } label: {
                             Label("Previous Photo", systemImage: "chevron.left")
                         }
                         .disabled(currentIndex == 0)
                     }
                     ToolbarItem(placement: .bottomBar) {
-                        Text(verbatim: "\(currentIndex + 1) / \(photos.count)")
+                        Text(verbatim: "\(Double(currentIndex + 1).localizedString(decimals: 0)) / \(Double(photoIDs.count).localizedString(decimals: 0))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
                     ToolbarItem(placement: .bottomBar) {
                         Button {
-                            currentIndex += 1
+                            withAnimation { currentIndex += 1 }
                         } label: {
                             Label("Next Photo", systemImage: "chevron.right")
                         }
-                        .disabled(currentIndex == photos.count - 1)
+                        .disabled(currentIndex == photoIDs.count - 1)
                     }
                 }
             }
             .toolbar {
-                #if os(iOS)
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
+                if !photoIDs.isEmpty, let record = photoRecord(min(currentIndex, photoIDs.count - 1)) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            taggingPhoto = record
+                        } label: {
+                            Image(systemName: "fish")
+                        }
+                        .accessibilityLabel(Text("Species on This Photo"))
+                    }
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    #if os(macOS)
+                    // macOS saves the photo straight to disk through a save panel.
+                    Button {
+                        savePhotoToDisk()
+                    } label: {
+                        Label("Save As", systemImage: "square.and.arrow.down")
+                    }
+                    // `hasOriginal` reads the link only; `currentPhoto` would load the original.
+                    .disabled(photoIDs.isEmpty || !hasOriginal(min(currentIndex, photoIDs.count - 1)))
+                    #else
                     if let shareItem = cachedShareItem {
                         let name = cachedExportName
                         if let thumbnail = shareThumbnail {
@@ -1452,45 +1214,28 @@ struct PhotoPreviewSheet: View {
                         // standard dimmed-disabled visual treatment.
                         Button(action: {}) { shareButtonLabel }.disabled(true)
                     }
+                    #endif
                 }
-                ToolbarItem(placement: .destructiveAction) {
-                    Button(role: .destructive) {
-                        showDeleteAlert = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundStyle(.red)
-                    }
-                    .disabled(photos.isEmpty)
-                    .accessibilityLabel(Text("Remove Photo"))
-                }
-                #else
-                ToolbarItem(placement: .cancellationAction) {
-                    HStack(spacing: 8) {
-                        Button {
-                            savePhotoToDisk()
-                        } label: {
-                            Label("Save As", systemImage: "square.and.arrow.down")
-                        }
-                        .disabled(photos.isEmpty)
-                        Button {
+                if onDelete != nil {
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button(role: .destructive) {
+                            guard !photoIDs.isEmpty else { return }
+                            deleteTargetID = photoIDs[min(currentIndex, photoIDs.count - 1)]
                             showDeleteAlert = true
                         } label: {
-                            Text("Delete")
+                            Image(systemName: "trash")
                                 .foregroundStyle(.red)
                         }
-                        .disabled(photos.isEmpty)
+                        .disabled(photoIDs.isEmpty || !canDelete(min(currentIndex, photoIDs.count - 1)))
+                        .accessibilityLabel(Text("Remove Photo"))
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(.primary)
-                }
-                #endif
             }
             .alert("Remove Photo", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) {
-                    onDelete(currentIndex)
-                    // onChange(of: photos.count) handles both index clamping and dismissal
+                    if let deleteTargetID { onDelete?(deleteTargetID) }
+                    deleteTargetID = nil
+                    // onChange(of: photoIDs.count) handles both index clamping and dismissal
                     // when count reaches zero (covers in-app delete AND external iCloud sync).
                 }
                 Button("Cancel", role: .cancel) { }
@@ -1498,12 +1243,6 @@ struct PhotoPreviewSheet: View {
                 Text("Remove this photo from the dive?")
             }
             .task(id: thumbnailTaskID) {
-                // The id-level sentinel (thumbnailTaskID returns 0 while !isPageSeeded)
-                // suppresses index-change re-fires during the seed dance, but .task(id:)
-                // always fires once on first appear regardless of id value. This guard
-                // makes that initial fire a no-op so the decode runs exactly once —
-                // after isPageSeeded becomes true and the id flips to the real photoTaskID.
-                guard isPageSeeded else { return }
                 // Snapshot the export filename once per photo change so the ShareLink
                 // item name is stable across body re-renders within the same photo.
                 let name = exportFileName
@@ -1515,7 +1254,13 @@ struct PhotoPreviewSheet: View {
                 // shareThumbnail IS cleared so the SharePreview image updates correctly.
                 isPreparingShare = true
                 shareThumbnail = nil
-                guard let data = currentPhoto else { isPreparingShare = false; return }
+                guard let data = currentPhoto else {
+                    // Nothing to share yet (the original is downloading): no share item, so
+                    // the button is the disabled placeholder, never the previous photo.
+                    cachedShareItem = nil
+                    isPreparingShare = false
+                    return
+                }
                 // Build the share item and thumbnail in one detached pass — the same
                 // CGImageSource is reused for type detection and thumbnail decode,
                 // so HEIC photos are parsed only once, fully off the main thread.
@@ -1550,40 +1295,13 @@ struct PhotoPreviewSheet: View {
                 // two path-construction sites cannot silently diverge.
                 sessionTempFileURLs.insert(shareItem.tempFileURL())
             }
-            .onChange(of: photos.count) { _, newCount in
+            .onChange(of: photoIDs.count) { _, newCount in
                 if newCount == 0 {
                     // Covers both in-app delete-of-last and external iCloud sync emptying the array.
                     dismiss()
                 } else {
                     currentIndex = min(currentIndex, newCount - 1)
                 }
-            }
-            .task {
-                guard !isPageSeeded else { return }
-                // A single photo has no neighbour to visit; no offset mis-alignment occurs.
-                guard photos.count > 1 else { isPageSeeded = true; return }
-                let target = currentIndex   // always > 0 here (isPageSeeded == false iff initialIndex > 0)
-                // Safety net: if the invariant above ever weakens, avoid setting index to -1.
-                guard target > 0 else { isPageSeeded = true; return }
-                #if os(iOS)
-                // UIPageViewController's scroll view is initialised at an incorrect offset
-                // when the selection is non-zero, placing it visually between two pages.
-                // Seeding with one instant step to a neighbour and back forces it to
-                // re-commit to the correct offset.
-                // defer ensures setAnimationsEnabled(true) is restored even when this task
-                // is cancelled mid-sleep. try? converts CancellationError to nil so execution
-                // continues normally; defer fires on the closure's normal return.
-                defer { UIView.setAnimationsEnabled(true) }
-                UIView.setAnimationsEnabled(false)
-                currentIndex = target - 1
-                // Task.sleep reliably waits past a full display-link cycle (~16 ms at 60 fps),
-                // unlike Task.yield() which only reschedules without guaranteeing a UIKit layout commit.
-                try? await Task.sleep(nanoseconds: 33_000_000)
-                // Re-clamp in case photos shrank while sleeping (e.g., concurrent iCloud sync).
-                currentIndex = photos.isEmpty ? 0 : min(target, photos.count - 1)
-                try? await Task.sleep(nanoseconds: 33_000_000)
-                #endif
-                isPageSeeded = true
             }
             .onDisappear {
                 // Remove only the temp files this session predicted (one per photo navigated to).
@@ -1607,14 +1325,8 @@ struct PhotoPreviewSheet: View {
     }()
 
     private var thumbnailTaskID: Int {
-        // Return a stable sentinel while the seed dance is in progress so that the
-        // two currentIndex writes (target-1 then target) don't each fire the thumbnail
-        // task and launch redundant Task.detached decodes for the neighbour photo.
-        // The decode runs exactly once when isPageSeeded becomes true — the .task(id:)
-        // mechanism fires twice (id=0 on first appear, real id after seeding), but the
-        // body guard at the top of the task neutralizes the id=0 fire as a no-op.
-        guard isPageSeeded else { return 0 }
-        return currentPhoto?.photoTaskID ?? 0
+        guard !photoIDs.isEmpty else { return 0 }
+        return pageID(min(currentIndex, photoIDs.count - 1)).hashValue
     }
 
     private var exportFileName: String {
@@ -1647,9 +1359,15 @@ struct PhotoPreviewSheet: View {
 // MARK: - Photo Page View
 
 private struct PhotoPageView: View {
-    let data: Data
+    let photoID: String
+    /// Reads the photo's bytes when the page appears (not when it is created).
+    let load: () -> Data
     let index: Int
     let total: Int
+    /// The photo the viewer shows. Its image is kept when it disappears behind a pushed page
+    /// (a species page), so Back shows it at once instead of a spinner (it is still read and
+    /// decoded again, when the page reappears).
+    let isCurrent: Bool
     @State private var image: PlatformImage?
 
     var body: some View {
@@ -1661,21 +1379,27 @@ private struct PhotoPageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %lld of %lld", bundle: .forAppLanguage(), comment: "Announces the current photo's position while paging through a dive's photos"), index + 1, total)))
+                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %@ of %@", bundle: .forAppLanguage(), value: "Photo %@ of %@", comment: "Announces the current photo's position while paging through photos (locale-formatted numbers)"), Double(index + 1).localizedString(decimals: 0), Double(total).localizedString(decimals: 0))))
             } else {
                 ZStack {
-                    Color.platformBackground.ignoresSafeArea()
+                    AppBackground().ignoresSafeArea()
                     ProgressView()
                 }
             }
         }
-        .task(id: data.photoTaskID) {
-            let d = data
+        .task(id: photoID) {
+            let d = load()
             let decoded = await Task.detached(priority: .userInitiated) {
                 PlatformImage(data: d)
             }.value
             guard !Task.isCancelled else { return }
             image = decoded
+        }
+        // A page scrolled away keeps its state in the viewer's lazy stack: release its
+        // full-size image (the task decodes it again when the page comes back). By then the
+        // current photo has moved on, so the shown photo is never released this way.
+        .onDisappear {
+            if !isCurrent { image = nil }
         }
     }
 }

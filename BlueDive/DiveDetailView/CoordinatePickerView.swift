@@ -177,10 +177,10 @@ struct CoordinatePickerView: View {
                     // disabled below — `.disabled()` only dims a Button's default tint,
                     // not an explicit `.foregroundStyle()` override. Tie the colour to the
                     // same condition so a disabled Save always looks disabled.
-                    .foregroundStyle(canSave ? .blue : .secondary)
+                    .confirmationActionForeground(canSave ? .blue : .secondary)
                     .disabled(!canSave)
                 }
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItem(placement: .sheetPrimaryAction) {
                     Menu {
                         Section("Map Style") {
                             Button {
@@ -204,6 +204,7 @@ struct CoordinatePickerView: View {
                             .foregroundStyle(.cyan)
                     }
                     .accessibilityLabel(Text("Map Style"))
+                    .toolbarMenuIndicatorHiddenOnMac()
                 }
             }
             .alert("Replace Coordinates", isPresented: $showOverwriteConfirm) {

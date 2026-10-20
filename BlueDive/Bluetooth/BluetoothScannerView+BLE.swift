@@ -32,6 +32,7 @@ extension BluetoothScannerView {
     func clearCutoffResults() {
         cutoffFilteredCount = 0
         cutoffAppliedDate = nil
+        cutoffStopDate = nil
     }
 
     /// Fully exits the search flow and disarms both halves of the full-history configuration —
@@ -396,6 +397,9 @@ extension BluetoothScannerView {
             bluetoothManager: bleManager,
             syncClock: syncDeviceClock,
             useFingerprint: !downloadAllDives,
+            // The library stops at the first dive recorded before the cutoff, so older dives
+            // are never transferred over BLE.
+            stopBefore: effectiveCutoff,
             onProgress: { current, total in
                 DispatchQueue.main.async {
                     // current/total are libdivecomputer transfer bytes — used for the progress bar.
@@ -423,9 +427,11 @@ extension BluetoothScannerView {
                     DispatchQueue.main.async {
                         Self.logger.info("Retrieval successful: \(viewModel.dives.count) dives")
 
-                        // Filtering happens AFTER download — every dive still transfers over
-                        // BLE, this only keeps the logbook clean.
+                        // The library already stopped at the first dive before the cutoff, so this
+                        // filter is only a safety net: it drops an older-dated dive that arrived
+                        // before the stop (e.g. one recorded after a dive-computer clock reset).
                         let cutoff = effectiveCutoff
+                        self.cutoffStopDate = viewModel.stoppedAtCutoff ? cutoff : nil
 
                         let downloaded = viewModel.dives
                         let kept: [DiveData]
@@ -470,7 +476,12 @@ extension BluetoothScannerView {
                             // here, but persistFingerprintRecord's own guard (no cached fingerprint
                             // under the library's key) makes it a harmless no-op rather than
                             // persisting anything incorrect.
-                            if !downloaded.isEmpty {
+                            //
+                            // A cutoff stop is the other case: when the newest dive on the device is
+                            // already before the cutoff, nothing is downloaded, but the library saved
+                            // that dive as the watermark — mirror it too, or the next sync would
+                            // download back to the cutoff again.
+                            if !downloaded.isEmpty || cutoff != nil {
                                 self.persistFingerprintRecord(for: self.selectedDevice)
                             }
                             self.selectedDevice = nil

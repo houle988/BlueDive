@@ -1,3 +1,5 @@
+import SwiftData
+
 // MARK: - Sync State
 
 /// Possible Bluetooth sync states
@@ -18,4 +20,12 @@ enum BluetoothSyncState: Equatable {
             return true
         }
     }
+}
+
+// MARK: - Weather Fetch After Import
+
+/// Dives awaiting the weather question after a download, by persistent ID (not @Model
+/// references, which must not be held in @State).
+struct PendingWeatherFetch: Equatable {
+    var ids: [PersistentIdentifier]
 }

@@ -1,0 +1,2174 @@
+import SwiftUI
+import SwiftData
+import UniformTypeIdentifiers
+#if canImport(AppKit)
+import AppKit
+#endif
+
+// MARK: - Import Target
+
+private enum ImportTarget {
+    case certifications, insurance
+}
+
+// MARK: - Document Section Filter
+
+enum DocumentSection: String, CaseIterable, Identifiable {
+    case all = "All"
+    case certifications = "Certifications"
+    case insurance = "Insurances"
+
+    var id: String { rawValue }
+}
+
+// MARK: - Documents View
+
+struct DocumentsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
+    @Environment(FileImportCoordinator.self) private var importCoordinator
+    @Environment(DiveStore.self) private var store
+    @Query(sort: \Certification.issueDate, order: .reverse) private var certifications: [Certification]
+    @Query(sort: \DivingInsurance.endDate, order: .reverse) private var insurances: [DivingInsurance]
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
+    var onClose: (() -> Void)? = nil
+
+    // MARK: - Appearance
+    @State private var emptyAppeared = false
+    @State private var selectedSection: DocumentSection
+
+    // MARK: - Collapse State (namespaced: "cert:" prefix for orgs, "ins:" prefix for insurers)
+    @State private var collapsedSections: Set<String> = []
+    #if os(macOS)
+    /// Whether the document rows show their one-line version (wide window), reported by the
+    /// rows; the column header rows are shown only then. Starts one-line: the main window opens
+    /// maximized.
+    @State private var documentsLayout = OneLineRowsLayout()
+    #endif
+
+    // MARK: - Certification State
+    @State private var showAddCertification = false
+    @State private var selectedCertification: Certification?
+    @State private var certificationToDelete: Certification?
+    @State private var showDeleteCertConfirmation = false
+    @State private var showEditCertificationFor: Certification?
+
+    // MARK: - Insurance State
+    @State private var showAddInsurance = false
+    @State private var selectedInsurance: DivingInsurance?
+    @State private var insuranceToDelete: DivingInsurance?
+    @State private var showDeleteInsuranceConfirmation = false
+    @State private var showEditInsuranceFor: DivingInsurance?
+
+    // MARK: - Import / Export State
+    @State private var importTarget: ImportTarget = .certifications
+    @State private var showImportPicker = false
+    @State private var importError: String?
+    @State private var showImportError = false
+    @State private var importedCount: Int = 0
+    @State private var importSuccessTarget: ImportTarget = .certifications
+    @State private var showImportSuccess = false
+    // Import preview state
+    @State private var showImportPreview = false
+    @State private var pendingCertImport: [CertificationXMLParser.ParsedCertification] = []
+    @State private var pendingInsuranceImport: [InsuranceXMLParser.ParsedInsurance] = []
+    @State private var importPreviewNew: [ImportPreviewItem] = []
+    @State private var importPreviewDuplicates: [ImportPreviewItem] = []
+    @State private var importPreviewFileName: String = ""
+    @State private var exportError: String?
+    @State private var showExportError = false
+    #if os(iOS)
+    @State private var showFileExporter = false
+    @State private var exportDocument: ExportableFileDocument?
+    @State private var exportFileName: String = ""
+    #endif
+
+    init(initialSection: DocumentSection = .all, onClose: (() -> Void)? = nil) {
+        self.onClose = onClose
+        self._selectedSection = State(initialValue: initialSection)
+    }
+
+    // MARK: - Computed Properties
+
+    // DiveStore's complete diver list (dives, gear, certifications, insurance), kept current
+    // by DiverSourcesFeeder — no local recomputation over every dive on each body pass.
+    private var uniqueDivers: [String] { store.cachedUniqueDivers }
+
+    private var filteredCertifications: [Certification] {
+        DiverFilter.apply(selectedDiver, to: certifications)
+    }
+
+    private var filteredInsurances: [DivingInsurance] {
+        DiverFilter.apply(selectedDiver, to: insurances)
+    }
+
+    private var groupedCertifications: [(key: String, value: [Certification])] {
+        let grouped = Dictionary(grouping: filteredCertifications.filter { !$0.isExpired }, by: { $0.organization })
+        let knownOrder = CertificationOrganization.allCases.map(\.rawValue)
+        return grouped.sorted { a, b in
+            let ai = knownOrder.firstIndex(of: a.key) ?? Int.max
+            let bi = knownOrder.firstIndex(of: b.key) ?? Int.max
+            return ai < bi
+        }
+    }
+
+    private var groupedInsurances: [(key: String, value: [DivingInsurance])] {
+        let grouped = Dictionary(grouping: filteredInsurances.filter { !$0.isExpired }, by: {
+            $0.insurerName.trimmingCharacters(in: .whitespaces)
+        })
+        return grouped.sorted { a, b in
+            if a.key.isEmpty != b.key.isEmpty { return b.key.isEmpty }
+            return a.key.localizedCaseInsensitiveCompare(b.key) == .orderedAscending
+        }
+    }
+
+    private var certExpired: [Certification] { filteredCertifications.filter { $0.isExpired } }
+    private var insuranceExpired: [DivingInsurance] { filteredInsurances.filter { $0.isExpired } }
+    private var certExpiringSoon: [Certification] { filteredCertifications.filter { $0.isExpiringSoon } }
+    private var insuranceExpiringSoon: [DivingInsurance] { filteredInsurances.filter { $0.isExpiringSoon } }
+
+    private var importSuccessMessage: String {
+        if importSuccessTarget == .certifications {
+            return importedCount == 1
+                ? NSLocalizedString("1 certification imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Alert message shown after importing exactly one certification.")
+                : String(format: NSLocalizedString("%lld certifications imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Alert message shown after a successful certification XML import."), importedCount)
+        } else {
+            return importedCount == 1
+                ? NSLocalizedString("1 insurance record imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Alert message shown after importing exactly one insurance record from XML.")
+                : String(format: NSLocalizedString("%lld insurance records imported successfully.", bundle: Bundle.forAppLanguage(), comment: "Alert message shown after importing multiple insurance records from XML."), importedCount)
+        }
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if certifications.isEmpty && insurances.isEmpty {
+                    ScrollView { bothEmptyStateView }
+                } else if !selectedDiver.isEmpty && filteredCertifications.isEmpty && filteredInsurances.isEmpty {
+                    NoEntriesForDiverView(
+                        title: Text(verbatim: String(format: NSLocalizedString("No Documents for %@", bundle: Bundle.forAppLanguage(), value: "No Documents for %@", comment: "Empty-state title when the selected diver has no certifications or insurance; %@ is the diver's name"), selectedDiver)),
+                        description: Text(verbatim: String(format: NSLocalizedString("No certifications or insurance were found for %@.", bundle: Bundle.forAppLanguage(), value: "No certifications or insurance were found for %@.", comment: "Empty-state description when the selected diver has no certifications or insurance; %@ is the diver's name"), selectedDiver))
+                    ) {
+                        VStack(spacing: 12) {
+                            AddDocumentButton(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
+                            AddDocumentButton(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }
+                        }
+                        .padding(.horizontal, 40)
+                    }
+                } else {
+                    List {
+                        // Expired alerts (shown first — most urgent)
+                        if selectedSection != .insurance && !certExpired.isEmpty {
+                            Section {
+                                certExpiredAlertSection
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                        }
+
+                        if selectedSection != .certifications && !insuranceExpired.isEmpty {
+                            Section {
+                                insuranceExpiredAlertSection
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                        }
+
+                        // Expiring soon alerts
+                        if selectedSection != .insurance && !certExpiringSoon.isEmpty {
+                            Section {
+                                certExpiryAlertSection
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                        }
+
+                        if selectedSection != .certifications && !insuranceExpiringSoon.isEmpty {
+                            Section {
+                                insuranceExpiryAlertSection
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                        }
+
+                        // ── CERTIFICATIONS DOMAIN ─────────────────────────────────
+                        if selectedSection != .insurance && !certifications.isEmpty && (selectedSection == .certifications || filteredCertifications.isEmpty || !groupedCertifications.isEmpty) {
+                            if selectedSection == .all {
+                                Section {
+                                    DomainHeaderRow(
+                                        title: "Certifications",
+                                        icon: "graduationcap",
+                                        color: .cyan
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 6, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+                            }
+
+                            if filteredCertifications.isEmpty {
+                                Section {
+                                    InlineDomainEmptyRow(
+                                        systemImage: "graduationcap",
+                                        message: "No certifications for the selected diver."
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+                                AddDocumentSection(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
+                            } else if !groupedCertifications.isEmpty {
+                                ForEach(groupedCertifications, id: \.key) { agency, certs in
+                                    Section(isExpanded: sectionBinding("cert:" + agency)) {
+                                        #if os(macOS)
+                                        // Column labels as a row, so they share the rows' width,
+                                        // in "All" only: there certifications and insurance
+                                        // (different columns) share the list. A single filter
+                                        // pins them above the list instead (see the List).
+                                        if selectedSection == .all && documentsLayout.isOneLine {
+                                            CertificationColumnHeader()
+                                                .columnHeaderRow()
+                                        }
+                                        #endif
+                                        ForEach(certs) { cert in
+                                            certRow(cert, isFirst: cert.id == certs.first?.id, isLast: cert.id == certs.last?.id)
+                                        }
+                                    } header: {
+                                        Text(agency)
+                                            .font(.headline)
+                                            .foregroundStyle(CertificationOrganization(rawValue: agency)?.swiftUIColor ?? .gray)
+                                            .textCase(nil)
+                                    }
+                                }
+                            } else {
+                                Section {
+                                    InlineDomainEmptyRow(
+                                        systemImage: "checkmark.seal",
+                                        message: "All certifications have expired."
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+                            }
+                        }
+
+                        // ── INSURANCE DOMAIN ──────────────────────────────────────
+                        if selectedSection != .certifications && !insurances.isEmpty && (selectedSection == .insurance || filteredInsurances.isEmpty || !groupedInsurances.isEmpty) {
+                            if selectedSection == .all {
+                                Section {
+                                    DomainHeaderRow(
+                                        title: "Insurance",
+                                        icon: "shield",
+                                        color: .blue
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 6, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+                            }
+
+                            if filteredInsurances.isEmpty {
+                                Section {
+                                    InlineDomainEmptyRow(
+                                        systemImage: "shield",
+                                        message: "No insurance for the selected diver."
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+                                AddDocumentSection(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }
+                            } else if !groupedInsurances.isEmpty {
+                                ForEach(groupedInsurances, id: \.key) { insurer, policies in
+                                    let displayName = insurer.isEmpty
+                                        ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Fallback insurer group header when insurer name is blank.")
+                                        : insurer
+                                    Section(isExpanded: sectionBinding("ins:" + insurer)) {
+                                        #if os(macOS)
+                                        // Column labels as a row in "All" only; see the
+                                        // certification sections.
+                                        if selectedSection == .all && documentsLayout.isOneLine {
+                                            InsuranceColumnHeader()
+                                                .columnHeaderRow()
+                                        }
+                                        #endif
+                                        ForEach(policies) { insurance in
+                                            insuranceRow(insurance, isFirst: insurance.id == policies.first?.id, isLast: insurance.id == policies.last?.id)
+                                        }
+                                    } header: {
+                                        Text(displayName)
+                                            .font(.headline)
+                                            .foregroundStyle(.blue)
+                                            .textCase(nil)
+                                    }
+                                }
+                            } else {
+                                Section {
+                                    InlineDomainEmptyRow(
+                                        systemImage: "shield",
+                                        message: "All insurance records have expired."
+                                    )
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+                            }
+                        }
+
+                        // ── SECTION-SPECIFIC EMPTY STATES ─────────────────────────
+                        if selectedSection == .certifications && certifications.isEmpty {
+                            Section {
+                                InlineDomainEmptyRow(
+                                    systemImage: "graduationcap",
+                                    message: "No certifications"
+                                )
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 0, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+                            AddDocumentSection(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
+                        }
+
+                        if selectedSection == .insurance && insurances.isEmpty {
+                            Section {
+                                InlineDomainEmptyRow(
+                                    systemImage: "shield",
+                                    message: "No insurance recorded"
+                                )
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 0, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+                            AddDocumentSection(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }
+                        }
+                    }
+                    // .sidebar is required for Section(isExpanded:) collapse/expand to function
+                    .listStyle(.sidebar)
+                    #if os(macOS)
+                    // The rows are cards inset from the window's edges (see `MacListCard`).
+                    .macCardListMargins()
+                    // With the Certifications or Insurance filter the list shows one kind of row,
+                    // so its column labels are pinned above the list; not over an empty state.
+                    .pinnedColumnHeader(
+                        documentsLayout,
+                        isShown: (selectedSection == .certifications && !groupedCertifications.isEmpty)
+                            || (selectedSection == .insurance && !groupedInsurances.isEmpty)
+                    ) {
+                        if selectedSection == .insurance {
+                            InsuranceColumnHeader()
+                        } else {
+                            CertificationColumnHeader()
+                        }
+                    }
+                    #endif
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !(certifications.isEmpty && insurances.isEmpty) {
+                    Picker("", selection: $selectedSection) {
+                        ForEach(DocumentSection.allCases) { section in
+                            Text(LocalizedStringKey(section.rawValue)).tag(section)
+                        }
+                    }
+                    .fullWidthSegmentedPicker()
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 2)
+                    // No background of its own: the tab's gradient shows behind it, as behind the
+                    // Dives and Equipment search fields.
+                }
+            }
+            .sideStripNavigationBar()
+            // The tab's gradient, as on the Dives and Equipment tabs.
+            .background(AppBackground().ignoresSafeArea())
+            .scrollContentBackground(.hidden)
+            .diverFilterReset(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+            .refreshable {
+                NSUbiquitousKeyValueStore.default.synchronize()
+                try? await Task.sleep(for: .seconds(1.5))
+            }
+            .toolbar {
+                if let onClose {
+                    ToolbarItem(placement: .cancellationAction) {
+                        closeToolbarButton { onClose() }
+                    }
+                    // In a sheet (from Diver Profile): the diver filter only, no app-wide buttons.
+                    DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                    #if os(macOS)
+                    // One ToolbarItemGroup so macOS shares a single glass capsule, as the iOS
+                    // navigation bar does. In a sheet macOS would draw a .primaryAction item as
+                    // the sheet's accent-filled default button, so it uses .sheetPrimaryAction.
+                    ToolbarItemGroup(placement: .sheetPrimaryAction) {
+                        addDocumentMenu
+                            .toolbarMenuIndicatorHiddenOnMac()
+                        documentsMoreMenu
+                            .toolbarMenuIndicatorHiddenOnMac()
+                    }
+                    #else
+                    ToolbarItem(placement: .primaryAction) {
+                        addDocumentMenu
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        documentsMoreMenu
+                    }
+                    #endif
+                } else {
+                    MainWindowToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver) {
+                        addDocumentMenu
+                        documentsMoreMenu
+                    }
+                }
+            }
+            // --- Certification Sheets ---
+            .sheet(isPresented: $showAddCertification) {
+                AddCertificationView(prefilledDiverName: selectedDiver)
+                    .standardSheetPresentation()
+            }
+            .sheet(item: $selectedCertification) { cert in
+                CertificationDetailView(certification: cert, selectedCertification: $selectedCertification)
+                    .standardSheetPresentation()
+            }
+            .sheet(item: $showEditCertificationFor) { cert in
+                AddCertificationView(certificationToEdit: cert)
+                    .standardSheetPresentation()
+            }
+            .alert("Delete certification?", isPresented: $showDeleteCertConfirmation) {
+                Button("Cancel", role: .cancel) { certificationToDelete = nil }
+                Button("Delete", role: .destructive) {
+                    if let cert = certificationToDelete {
+                        NotificationManager.shared.cancelCertificationReminder(id: cert.id)
+                        modelContext.delete(cert)
+                        certificationToDelete = nil
+                    }
+                }
+            } message: {
+                if let cert = certificationToDelete {
+                    Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), comment: "Delete confirmation alert message."), cert.name))
+                }
+            }
+            // --- Insurance Sheets ---
+            .sheet(isPresented: $showAddInsurance) {
+                AddInsuranceView(prefilledDiverName: selectedDiver)
+                    .standardSheetPresentation()
+            }
+            .sheet(item: $selectedInsurance) { insurance in
+                InsuranceDetailView(insurance: insurance, selectedInsurance: $selectedInsurance)
+                    .standardSheetPresentation()
+            }
+            .sheet(item: $showEditInsuranceFor) { insurance in
+                AddInsuranceView(insuranceToEdit: insurance)
+                    .standardSheetPresentation()
+            }
+            .alert("Delete insurance?", isPresented: $showDeleteInsuranceConfirmation) {
+                Button("Cancel", role: .cancel) { insuranceToDelete = nil }
+                Button("Delete", role: .destructive) {
+                    if let insurance = insuranceToDelete {
+                        NotificationManager.shared.cancelInsuranceReminder(id: insurance.id)
+                        modelContext.delete(insurance)
+                        insuranceToDelete = nil
+                    }
+                }
+            } message: {
+                if let insurance = insuranceToDelete {
+                    Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), comment: "Delete confirmation alert message."), insurance.insurerName))
+                }
+            }
+            // --- Import Preview ---
+            .sheet(isPresented: $showImportPreview) {
+                ImportPreviewSheet(
+                    icon: importTarget == .certifications ? "rosette" : "shield",
+                    iconColor: importTarget == .certifications ? .blue : .teal,
+                    newItems: importPreviewNew,
+                    duplicateItems: importPreviewDuplicates,
+                    fileName: importPreviewFileName,
+                    onImport: { commitPendingImport() },
+                    onCancel: {
+                        showImportPreview = false
+                        pendingCertImport = []
+                        pendingInsuranceImport = []
+                    }
+                )
+                .standardSheetPresentation()
+            }
+            .onChange(of: showImportPreview) { _, isShown in
+                if !isShown {
+                    pendingCertImport = []
+                    pendingInsuranceImport = []
+                    importPreviewNew = []
+                    importPreviewDuplicates = []
+                    importPreviewFileName = ""
+                }
+            }
+            // --- Import / Export ---
+            .fileImporter(
+                isPresented: $showImportPicker,
+                allowedContentTypes: [.xml],
+                allowsMultipleSelection: false
+            ) { result in
+                handleImportResult(result)
+            }
+            #if os(iOS)
+            .fileExporter(
+                isPresented: $showFileExporter,
+                document: exportDocument,
+                contentType: .blueDiveXML,
+                defaultFilename: exportFileName
+            ) { _ in
+                exportDocument = nil
+            }
+            #endif
+        }
+        .alert("Import Successful", isPresented: $showImportSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(verbatim: importSuccessMessage)
+        }
+        .alert("Import Error", isPresented: $showImportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(verbatim: importError ?? NSLocalizedString("An unknown error occurred.", bundle: Bundle.forAppLanguage(), comment: "Default error message shown in the import error alert when no specific error is available."))
+        }
+        .alert("Export Error", isPresented: $showExportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(verbatim: exportError ?? NSLocalizedString("An unknown error occurred.", bundle: Bundle.forAppLanguage(), comment: "Default error message shown in the export error alert when no specific error is available."))
+        }
+        .onAppear {
+            // Always nil the coordinator payloads so they are never stranded.
+            // Only invoke the handler when no preview sheet is already active —
+            // if both arrive simultaneously the cert import runs first; the
+            // insurance payload is dropped (showImportPreview will be true).
+            if let pending = importCoordinator.pendingCertXML {
+                importCoordinator.pendingCertXML = nil
+                if !showImportPreview {
+                    importTarget = .certifications
+                    handleCertificationsImport(data: pending.data, fileName: pending.fileName)
+                }
+            }
+            if let pending = importCoordinator.pendingInsuranceXML {
+                importCoordinator.pendingInsuranceXML = nil
+                if !showImportPreview {
+                    importTarget = .insurance
+                    handleInsuranceImport(data: pending.data, fileName: pending.fileName)
+                }
+            }
+        }
+        .onChange(of: importCoordinator.pendingCertXML) { _, newValue in
+            guard let pending = newValue else { return }
+            importCoordinator.pendingCertXML = nil
+            guard !showImportPreview else { return }
+            importTarget = .certifications
+            handleCertificationsImport(data: pending.data, fileName: pending.fileName)
+        }
+        .onChange(of: importCoordinator.pendingInsuranceXML) { _, newValue in
+            guard let pending = newValue else { return }
+            importCoordinator.pendingInsuranceXML = nil
+            guard !showImportPreview else { return }
+            importTarget = .insurance
+            handleInsuranceImport(data: pending.data, fileName: pending.fileName)
+        }
+    }
+
+    // MARK: - Toolbar Controls
+    // Shared by the iOS and macOS toolbar layouts in `body`.
+
+    private var addDocumentMenu: some View {
+        Menu {
+            Button { showAddCertification = true } label: {
+                Label("Add Certification", systemImage: "graduationcap")
+            }
+            Button { showAddInsurance = true } label: {
+                Label("Add Insurance", systemImage: "shield")
+            }
+        } label: {
+            Image(systemName: "plus")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("Add Document"))
+    }
+
+    private var documentsMoreMenu: some View {
+        Menu {
+            Section("Certifications") {
+                Button {
+                    exportCertificationsToXML()
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .disabled(certifications.isEmpty)
+
+                Button {
+                    importTarget = .certifications
+                    showImportPicker = true
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+            }
+
+            Section("Insurance") {
+                Button {
+                    exportInsurancesToXML()
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .disabled(insurances.isEmpty)
+
+                Button {
+                    importTarget = .insurance
+                    showImportPicker = true
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .foregroundStyle(.cyan)
+        }
+        .accessibilityLabel(Text("More"))
+    }
+
+    // MARK: - Row Helpers
+
+    @ViewBuilder
+    private func certRow(_ cert: Certification, isFirst: Bool, isLast: Bool) -> some View {
+        Button { selectedCertification = cert } label: {
+            #if os(macOS)
+            // One line in a wide window, the stacked row otherwise (as on iOS); each version
+            // reports which one is shown, so the column header row comes and goes with them.
+            ViewThatFits(in: .horizontal) {
+                CertificationOneLineRow(certification: cert, showExpired: cert.isExpired)
+                    .reportsOneLine(true, to: documentsLayout)
+                    .reportsRowContentWidth(to: documentsLayout)
+                CertificationRow(certification: cert, showExpired: cert.isExpired)
+                    .reportsOneLine(false, to: documentsLayout)
+            }
+            #else
+            CertificationRow(certification: cert, showExpired: cert.isExpired)
+            #endif
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                certificationToDelete = cert
+                showDeleteCertConfirmation = true
+            } label: { Label("Delete", systemImage: "trash") }
+            // Explicit swipe buttons are coloured by the ambient tint on both platforms, so the
+            // root .tint(.cyan) would turn Delete cyan instead of the destructive red.
+            .tint(.red)
+        }
+        .contextMenu {
+            Button { selectedCertification = cert } label: {
+                Label("View Details", systemImage: "eye")
+            }
+            Button { showEditCertificationFor = cert } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Divider()
+            Button(role: .destructive) {
+                certificationToDelete = cert
+                showDeleteCertConfirmation = true
+            } label: { Label("Delete", systemImage: "trash") }
+        }
+        // Same row background as the Dives and Equipment tabs (a card per section on macOS).
+        .listRowBackground(Color.primary.opacity(0.07), macFirst: isFirst, macLast: isLast)
+        #if os(iOS)
+        // iOS starts the separator at the row's first Text, after the icon: start it at the
+        // row's leading edge, as in the Dives list.
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+        #endif
+    }
+
+    @ViewBuilder
+    private func insuranceRow(_ insurance: DivingInsurance, isFirst: Bool, isLast: Bool) -> some View {
+        Button { selectedInsurance = insurance } label: {
+            #if os(macOS)
+            // One line in a wide window, the stacked row otherwise (as on iOS); see certRow.
+            ViewThatFits(in: .horizontal) {
+                InsuranceOneLineRow(insurance: insurance, showExpired: insurance.isExpired)
+                    .reportsOneLine(true, to: documentsLayout)
+                    .reportsRowContentWidth(to: documentsLayout)
+                InsuranceRow(insurance: insurance, showExpired: insurance.isExpired)
+                    .reportsOneLine(false, to: documentsLayout)
+            }
+            #else
+            InsuranceRow(insurance: insurance, showExpired: insurance.isExpired)
+            #endif
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                insuranceToDelete = insurance
+                showDeleteInsuranceConfirmation = true
+            } label: { Label("Delete", systemImage: "trash") }
+            // Explicit swipe buttons are coloured by the ambient tint on both platforms, so the
+            // root .tint(.cyan) would turn Delete cyan instead of the destructive red.
+            .tint(.red)
+        }
+        .contextMenu {
+            Button { selectedInsurance = insurance } label: {
+                Label("View Details", systemImage: "eye")
+            }
+            Button { showEditInsuranceFor = insurance } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Divider()
+            Button(role: .destructive) {
+                insuranceToDelete = insurance
+                showDeleteInsuranceConfirmation = true
+            } label: { Label("Delete", systemImage: "trash") }
+        }
+        // Same row background as the Dives and Equipment tabs (a card per section on macOS).
+        .listRowBackground(Color.primary.opacity(0.07), macFirst: isFirst, macLast: isLast)
+        #if os(iOS)
+        // iOS starts the separator at the row's first Text, after the icon: start it at the
+        // row's leading edge, as in the Dives list.
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+        #endif
+    }
+
+    // MARK: - Section Binding Helper
+
+    private func sectionBinding(_ key: String) -> Binding<Bool> {
+        Binding(
+            get: { !collapsedSections.contains(key) },
+            set: { isExpanded in
+                if isExpanded { collapsedSections.remove(key) }
+                else { collapsedSections.insert(key) }
+            }
+        )
+    }
+
+    // MARK: - Expiry Alert Sections
+
+    private var certExpiredAlertSection: some View {
+        alertBannerSection(
+            headerIcon: "xmark.circle",
+            headerText: "Expired",
+            accentColor: .red,
+            domainTitle: "Certifications",
+            domainIcon: "graduationcap",
+            domainColor: .cyan,
+            items: certExpired,
+            name: \.name,
+            rowSubtitle: { _ in NSLocalizedString("Expired", bundle: Bundle.forAppLanguage(), comment: "Row subtitle for an expired document in the alert banner.") },
+            onTap: { selectedCertification = $0 }
+        )
+    }
+
+    private var insuranceExpiredAlertSection: some View {
+        alertBannerSection(
+            headerIcon: "xmark.circle",
+            headerText: "Expired",
+            accentColor: .red,
+            domainTitle: "Insurance",
+            domainIcon: "shield",
+            domainColor: .blue,
+            items: insuranceExpired,
+            name: \.insurerName,
+            rowSubtitle: { _ in NSLocalizedString("Expired", bundle: Bundle.forAppLanguage(), comment: "Row subtitle for an expired document in the alert banner.") },
+            onTap: { selectedInsurance = $0 }
+        )
+    }
+
+    private var certExpiryAlertSection: some View {
+        alertBannerSection(
+            headerIcon: "exclamationmark.triangle",
+            headerText: "Expiring Soon",
+            accentColor: .orange,
+            domainTitle: "Certifications",
+            domainIcon: "graduationcap",
+            domainColor: .cyan,
+            items: certExpiringSoon,
+            name: \.name,
+            rowSubtitle: { cert in
+                guard let days = cert.daysUntilExpiration else { return nil }
+                if days == 0 { return NSLocalizedString("Expires today", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label when the document expires today.") }
+                if days == 1 { return NSLocalizedString("Expires in 1 day", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section (exactly one day).") }
+                return String(format: NSLocalizedString("Expires in %lld days", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section (multiple days)."), days)
+            },
+            onTap: { selectedCertification = $0 }
+        )
+    }
+
+    private var insuranceExpiryAlertSection: some View {
+        alertBannerSection(
+            headerIcon: "exclamationmark.triangle",
+            headerText: "Expiring Soon",
+            accentColor: .orange,
+            domainTitle: "Insurance",
+            domainIcon: "shield",
+            domainColor: .blue,
+            items: insuranceExpiringSoon,
+            name: \.insurerName,
+            rowSubtitle: { insurance in
+                guard let days = insurance.daysUntilExpiration else { return nil }
+                if days == 0 { return NSLocalizedString("Expires today", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label when the document expires today.") }
+                if days == 1 { return NSLocalizedString("Expires in 1 day", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section (exactly one day).") }
+                return String(format: NSLocalizedString("Expires in %lld days", bundle: Bundle.forAppLanguage(), comment: "Expiry countdown label in the expiring-soon alert section (multiple days)."), days)
+            },
+            onTap: { selectedInsurance = $0 }
+        )
+    }
+
+    private func alertBannerSection<Item: Identifiable>(
+        headerIcon: String,
+        headerText: LocalizedStringKey,
+        accentColor: Color,
+        domainTitle: LocalizedStringKey,
+        domainIcon: String,
+        domainColor: Color,
+        items: [Item],
+        name: KeyPath<Item, String>,
+        rowSubtitle: @escaping (Item) -> String?,
+        onTap: @escaping (Item) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: headerIcon).foregroundStyle(accentColor).accessibilityHidden(true)
+                Text(headerText).font(.headline).foregroundStyle(.primary)
+                Spacer()
+                Label(domainTitle, systemImage: domainIcon)
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundStyle(domainColor)
+            }
+            ForEach(items) { item in
+                Button {
+                    onTap(item)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item[keyPath: name])
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.primary)
+                            if let subtitle = rowSubtitle(item) {
+                                Text(verbatim: subtitle)
+                                    .font(.caption)
+                                    .foregroundStyle(accentColor)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(accentColor.opacity(0.15)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 20).fill(.ultraThinMaterial))
+        #if os(iOS)
+        // macOS: the list itself is inset (`macCardListMargins()`), so the alert lines up with
+        // the cards without it.
+        .padding(.horizontal)
+        #endif
+    }
+
+    // MARK: - Both Empty State
+
+    private var bothEmptyStateView: some View {
+        VStack(spacing: 24) {
+            HStack(spacing: 20) {
+                Image(systemName: "graduationcap")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.cyan.opacity(0.5))
+                    .scaleEffect(emptyAppeared ? 1.0 : 0.5)
+                    .opacity(emptyAppeared ? 1.0 : 0.0)
+                    .accessibilityHidden(true)
+                Image(systemName: "shield")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.blue.opacity(0.5))
+                    .scaleEffect(emptyAppeared ? 1.0 : 0.5)
+                    .opacity(emptyAppeared ? 1.0 : 0.0)
+                    .accessibilityHidden(true)
+            }
+
+            Text("No Documents")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundStyle(.primary)
+                .opacity(emptyAppeared ? 1.0 : 0.0)
+                .offset(y: emptyAppeared ? 0 : 10)
+
+            Text("Add your certifications and insurance to track them here")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+                .opacity(emptyAppeared ? 1.0 : 0.0)
+                .offset(y: emptyAppeared ? 0 : 10)
+
+            VStack(spacing: 12) {
+                AddDocumentButton(label: "Add Certification", icon: "graduationcap", color: .cyan) { showAddCertification = true }
+                    .scaleEffect(emptyAppeared ? 1.0 : 0.8)
+                    .opacity(emptyAppeared ? 1.0 : 0.0)
+
+                AddDocumentButton(label: "Add Insurance", icon: "shield", color: .blue) { showAddInsurance = true }
+                    .scaleEffect(emptyAppeared ? 1.0 : 0.8)
+                    .opacity(emptyAppeared ? 1.0 : 0.0)
+            }
+            .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 80)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5)) { emptyAppeared = true }
+        }
+    }
+
+    // MARK: - Export
+
+    private static let exportDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private func exportCertificationsToXML() {
+        let xml = CertificationXMLExporter.generateXML(for: certifications)
+        guard let data = xml.data(using: .utf8) else { return }
+        let datePart = DocumentsView.exportDateFormatter.string(from: Date())
+        let fileName = "BlueDive_Certifications_\(datePart).bluedive"
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = fileName
+        panel.allowedContentTypes = [.blueDiveXML]
+        panel.canCreateDirectories = true
+        panel.begin { [self] response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try data.write(to: url)
+            } catch {
+                Task { @MainActor in
+                    self.exportError = error.localizedDescription
+                    self.showExportError = true
+                }
+            }
+        }
+        #else
+        exportDocument = ExportableFileDocument(data: data)
+        exportFileName = fileName
+        showFileExporter = true
+        #endif
+    }
+
+    private func exportInsurancesToXML() {
+        let xml = InsuranceXMLExporter.generateXML(for: insurances)
+        guard let data = xml.data(using: .utf8) else { return }
+        let datePart = DocumentsView.exportDateFormatter.string(from: Date())
+        let fileName = "BlueDive_Insurance_\(datePart).bluedive"
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = fileName
+        panel.allowedContentTypes = [.blueDiveXML]
+        panel.canCreateDirectories = true
+        panel.begin { [self] response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try data.write(to: url)
+            } catch {
+                Task { @MainActor in
+                    self.exportError = error.localizedDescription
+                    self.showExportError = true
+                }
+            }
+        }
+        #else
+        exportDocument = ExportableFileDocument(data: data)
+        exportFileName = fileName
+        showFileExporter = true
+        #endif
+    }
+
+    // MARK: - Import
+
+    private func handleImportResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                let fileName = url.lastPathComponent
+                if importTarget == .certifications {
+                    handleCertificationsImport(data: data, fileName: fileName)
+                } else {
+                    handleInsuranceImport(data: data, fileName: fileName)
+                }
+            } catch {
+                importError = error.localizedDescription
+                showImportError = true
+            }
+        case .failure(let error):
+            importError = error.localizedDescription
+            showImportError = true
+        }
+    }
+
+    private func handleCertificationsImport(data: Data, fileName: String) {
+        let parser = CertificationXMLParser()
+        guard let parsed = parser.parse(data: data), !parsed.isEmpty else {
+            importError = NSLocalizedString(
+                "No certifications found in the selected file.",
+                bundle: Bundle.forAppLanguage(),
+                comment: "Error message when the user imports an XML file that contains no certifications."
+            )
+            showImportError = true
+            return
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .none
+        dateFormatter.locale = locale
+
+        importPreviewNew = []
+        var newItems: [CertificationXMLParser.ParsedCertification] = []
+        var dupPreview: [ImportPreviewItem] = []
+
+        for item in parsed {
+            let isDuplicate = certifications.contains { existing in
+                existing.id == item.id ||
+                (!item.certificationNumber.isEmpty &&
+                 existing.certificationNumber == item.certificationNumber &&
+                 existing.organization == item.organization)
+            }
+            let orgDisplay = CertificationOrganization(rawValue: item.organization)?.localizedName ?? item.organization
+            let previewItem = ImportPreviewItem(
+                name: item.name,
+                detail: [orgDisplay, dateFormatter.string(from: item.issueDate)]
+                    .filter { !$0.isEmpty }.joined(separator: " • ")
+            )
+            if isDuplicate {
+                dupPreview.append(previewItem)
+            } else {
+                newItems.append(item)
+                importPreviewNew.append(previewItem)
+            }
+        }
+
+        guard !newItems.isEmpty else {
+            importError = NSLocalizedString(
+                "All records in the file are already imported.",
+                bundle: Bundle.forAppLanguage(),
+                comment: "Message when all records in the import file already exist in the database."
+            )
+            showImportError = true
+            return
+        }
+        pendingCertImport = newItems
+        importPreviewDuplicates = dupPreview
+        importPreviewFileName = fileName
+        showImportPreview = true
+    }
+
+    private func handleInsuranceImport(data: Data, fileName: String) {
+        let parser = InsuranceXMLParser()
+        guard let parsed = parser.parse(data: data), !parsed.isEmpty else {
+            importError = NSLocalizedString(
+                "No insurance records found in the selected file.",
+                bundle: Bundle.forAppLanguage(),
+                comment: "Error message when the user imports an XML file that contains no insurance records."
+            )
+            showImportError = true
+            return
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .none
+        dateFormatter.locale = locale
+
+        importPreviewNew = []
+        var newItems: [InsuranceXMLParser.ParsedInsurance] = []
+        var dupPreview: [ImportPreviewItem] = []
+
+        for item in parsed {
+            let isDuplicate = insurances.contains { existing in
+                existing.id == item.id ||
+                (!item.policyNumber.isEmpty &&
+                 existing.insurerName == item.insurerName &&
+                 existing.policyNumber == item.policyNumber) ||
+                // Natural-key fallback for files exported before <id> was added to the format:
+                // when both UUID and policyNumber are absent, match on insurer + diver + coverage type + date range.
+                // Truncate to seconds before comparing — manually-created records have nanosecond precision
+                // while XML round-tripped dates are truncated to seconds, so exact equality always fails.
+                (item.policyNumber.isEmpty &&
+                 existing.insurerName == item.insurerName &&
+                 existing.diverName == item.diverName &&
+                 existing.coverageType == item.coverageType &&
+                 Int(existing.startDate.timeIntervalSince1970) == Int(item.startDate.timeIntervalSince1970) &&
+                 Int(existing.endDate.timeIntervalSince1970) == Int(item.endDate.timeIntervalSince1970))
+            }
+            let detail = [
+                item.coverageType,
+                dateFormatter.string(from: item.startDate) + " – " + dateFormatter.string(from: item.endDate)
+            ].filter { !$0.isEmpty }.joined(separator: " • ")
+            let previewItem = ImportPreviewItem(name: item.insurerName, detail: detail)
+            if isDuplicate {
+                dupPreview.append(previewItem)
+            } else {
+                newItems.append(item)
+                importPreviewNew.append(previewItem)
+            }
+        }
+
+        guard !newItems.isEmpty else {
+            importError = NSLocalizedString(
+                "All records in the file are already imported.",
+                bundle: Bundle.forAppLanguage(),
+                comment: "Message when all records in the import file already exist in the database."
+            )
+            showImportError = true
+            return
+        }
+        pendingInsuranceImport = newItems
+        importPreviewDuplicates = dupPreview
+        importPreviewFileName = fileName
+        showImportPreview = true
+    }
+
+    private func commitPendingImport() {
+        if importTarget == .certifications {
+            guard !pendingCertImport.isEmpty else { return }
+        } else {
+            guard !pendingInsuranceImport.isEmpty else { return }
+        }
+        showImportPreview = false
+        if importTarget == .certifications {
+            commitCertImport()
+        } else {
+            commitInsuranceImport()
+        }
+    }
+
+    private func commitCertImport() {
+        var count = 0
+        for item in pendingCertImport {
+            let cert = Certification(
+                id: item.id,
+                name: item.name,
+                diverName: item.diverName,
+                organization: item.organization,
+                level: item.level,
+                certificationNumber: item.certificationNumber,
+                issueDate: item.issueDate,
+                expirationDate: item.expirationDate,
+                instructorName: item.instructorName,
+                instructorNumber: item.instructorNumber,
+                divingCentre: item.divingCentre,
+                notes: item.notes
+            )
+            modelContext.insert(cert)
+            if cert.expirationDate != nil {
+                cert.scheduleExpirationReminder()
+            }
+            count += 1
+        }
+        pendingCertImport = []
+        importPreviewNew = []
+        importPreviewDuplicates = []
+        try? modelContext.save()
+        importedCount = count
+        importSuccessTarget = .certifications
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            showImportSuccess = true
+        }
+    }
+
+    private func commitInsuranceImport() {
+        var count = 0
+        for item in pendingInsuranceImport {
+            let record = DivingInsurance(
+                id: item.id,
+                insurerName: item.insurerName,
+                diverName: item.diverName,
+                policyNumber: item.policyNumber,
+                coverageType: item.coverageType,
+                startDate: item.startDate,
+                endDate: item.endDate,
+                contactPhone: item.contactPhone,
+                contactEmail: item.contactEmail,
+                notes: item.notes
+            )
+            modelContext.insert(record)
+            record.scheduleExpirationReminder()
+            count += 1
+        }
+        pendingInsuranceImport = []
+        importPreviewNew = []
+        importPreviewDuplicates = []
+        try? modelContext.save()
+        importedCount = count
+        importSuccessTarget = .insurance
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            showImportSuccess = true
+        }
+    }
+}
+
+// MARK: - Documents List Row Types
+
+/// Each of these used to be a plain function on `DocumentsView` that inlined its
+/// HStack/Text/Image tree at every call site. `DocumentsView.body` combines up to 14
+/// static calls across them (spread over several conditionally-rendered `Section`s in one
+/// `List`) — the same class of bug that caused two confirmed `EXC_BAD_ACCESS` crashes
+/// elsewhere in this app (too many inlined view trees combined in one `some View`
+/// property overflow the stack during Swift's runtime value-witness copy, since neither a
+/// `List`/`Section` nor a plain computed-property boundary stops that accumulation — only
+/// a nominal `struct`'s own `body` does). Packaging these as nominal structs bounds each
+/// one's complexity at its own `body`.
+struct DomainHeaderRow: View {
+    let title: LocalizedStringKey
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(.primary)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct AddDocumentButton: View {
+    let label: LocalizedStringKey
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 12).fill(color))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct AddDocumentSection: View {
+    let label: LocalizedStringKey
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Section {
+            AddDocumentButton(label: label, icon: icon, color: color, action: action)
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: CardList.clearRowSideInset, bottom: 0, trailing: CardList.clearRowSideInset))
+    }
+}
+
+struct InlineDomainEmptyRow: View {
+    let systemImage: String
+    let message: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+                .font(.body)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Certification Row
+
+/// Stacked certification row (iOS, and macOS when the window is too narrow for the one-line
+/// row): icon, name / diver / level / number / dates, status dot. Plain list row like the Dives
+/// and Equipment tabs; the List draws the row background and separator.
+struct CertificationRow: View {
+    let certification: Certification
+    let showExpired: Bool
+    @Environment(\.locale) private var locale
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+
+    private var displayName: String { Self.displayName(of: certification) }
+
+    /// The certification name without a leading "<organization> - " (shared with the one-line
+    /// row on macOS).
+    static func displayName(of certification: Certification) -> String {
+        let prefix = certification.organization + " - "
+        if certification.name.hasPrefix(prefix) {
+            return String(certification.name.dropFirst(prefix.count))
+        }
+        return certification.name
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            CertificationIconView(organization: certification.organization, size: 44, fillOpacity: 0.2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayName)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                if !certification.diverName.isEmpty {
+                    Text(certification.diverName)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .fontWeight(.medium)
+                }
+
+                Group {
+                    if certification.level == "Other" {
+                        Text("Other")
+                    } else {
+                        Text(certification.level)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+                if !certification.certificationNumber.isEmpty {
+                    Label(certification.certificationNumber, systemImage: "number")
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                }
+
+                HStack(spacing: 8) {
+                    Label(formattedDate(certification.issueDate), systemImage: "calendar")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if let expiration = certification.expirationDate {
+                        Divider().frame(height: 12)
+                        Label(formattedDate(expiration), systemImage: "clock")
+                            .font(.caption)
+                            .foregroundStyle(showExpired ? .red : (certification.isExpiringSoon ? .orange : .secondary))
+                    }
+                }
+            }
+
+            Spacer()
+
+            Circle()
+                .fill(showExpired ? Color.red : (certification.isExpiringSoon ? Color.orange : Color.green))
+                .frame(width: 12, height: 12)
+                .accessibilityLabel(showExpired ? Text("Expired") : (certification.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
+        }
+        .padding(.vertical, 8)
+        // The whole row opens the certification (a plain Button only responds where something
+        // is drawn).
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Certification Detail View
+
+struct CertificationDetailView: View {
+    @Bindable var certification: Certification
+    @Binding var selectedCertification: Certification?
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+
+    private func formattedDate(_ date: Date, style: DateFormatter.Style = .medium) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = style
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+
+    @State private var showEditCertification = false
+    @State private var showDeleteConfirmation = false
+
+    /// The certification's label/value rows, in display order; empty optional fields are left out.
+    private var detailItems: [DetailRowItem] {
+        var items: [DetailRowItem] = []
+        if !certification.diverName.isEmpty {
+            items.append(DetailRowItem(id: "Diver Name", icon: "person.fill", title: "Diver Name", value: certification.diverName))
+        }
+        items.append(DetailRowItem(id: "Organization", icon: "building.2.fill", title: "Organization", value: certification.localizedOrganization))
+        items.append(DetailRowItem(id: "Level", icon: "star.fill", title: "Level", value: certification.level == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : certification.level))
+        items.append(DetailRowItem(id: "Number", icon: "number", title: "Number", value: certification.certificationNumber))
+        items.append(DetailRowItem(id: "Issue Date", icon: "calendar", title: "Issue Date", value: formattedDate(certification.issueDate, style: .long)))
+
+        if let expiration = certification.expirationDate {
+            items.append(DetailRowItem(id: "Expiration", icon: "clock", title: "Expiration", value: formattedDate(expiration, style: .long)))
+        }
+
+        if let instructor = certification.instructorName, !instructor.isEmpty {
+            items.append(DetailRowItem(id: "Instructor", icon: "person.fill", title: "Instructor", value: instructor))
+        }
+
+        if let instructorCertNum = certification.instructorNumber, !instructorCertNum.isEmpty {
+            items.append(DetailRowItem(id: "Instructor Number", icon: "number", title: "Instructor Number", value: instructorCertNum))
+        }
+
+        if let center = certification.divingCentre, !center.isEmpty {
+            items.append(DetailRowItem(id: "Diving Centre", icon: "building.2.fill", title: "Diving Centre", value: center))
+        }
+        return items
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        VStack(spacing: 10) {
+                            CertificationIconView(organization: certification.organization, size: 64, fillOpacity: 0.12)
+
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(certification.isExpired ? Color.red : (certification.isExpiringSoon ? Color.orange : Color.green))
+                                    .frame(width: 8, height: 8)
+                                Group {
+                                    if certification.isExpired {
+                                        Text("Expired")
+                                    } else if certification.isExpiringSoon {
+                                        Text("Expiring Soon")
+                                    } else {
+                                        Text("Active")
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(certification.isExpired ? .red : (certification.isExpiringSoon ? .orange : .green))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill((certification.isExpired ? Color.red : (certification.isExpiringSoon ? Color.orange : Color.green)).opacity(0.15))
+                            )
+                        }
+                        .padding(.top, 20)
+
+                        VStack(spacing: 16) {
+                            detailRowList(detailItems)
+
+                            if let notes = certification.notes, !notes.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Label("Notes", systemImage: "note.text")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Text(notes)
+                                        .font(.body)
+                                        .foregroundStyle(.primary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                                .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)))
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.bottom, 16)
+                }
+            }
+            // Same background as the dive detail and the tabs.
+            .background(AppBackground().ignoresSafeArea())
+            .navigationTitle(certification.name)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    closeToolbarButton { dismiss() }
+                        .keyboardShortcut(.escape, modifiers: [])
+                }
+                ToolbarItem(placement: .destructiveAction) {
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityLabel(Text("Delete Certification"))
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        showEditCertification = true
+                    } label: {
+                        Text("Edit").fontWeight(.semibold)
+                    }
+                    #if os(iOS)
+                    .buttonStyle(.borderedProminent)
+                    #endif
+                }
+            }
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .sheet(isPresented: $showEditCertification) {
+                AddCertificationView(certificationToEdit: certification)
+                    .standardSheetPresentation()
+            }
+            .alert("Delete certification?", isPresented: $showDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    NotificationManager.shared.cancelCertificationReminder(id: certification.id)
+                    selectedCertification = nil
+                    modelContext.delete(certification)
+                }
+            } message: {
+                Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), comment: "Delete confirmation alert message."), certification.name))
+            }
+        }
+    }
+}
+
+// MARK: - Detail Row
+
+struct DetailRow: View {
+    let icon: String
+    let title: LocalizedStringKey
+    let value: String
+
+    var body: some View {
+        HStack {
+            Label(title, systemImage: icon)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(width: 140, alignment: .leading)
+
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
+
+            Spacer()
+        }
+        // macOS: rows sit two per line in a Grid; stretch to the taller row of the pair.
+        .fillsAvailableHeightOnMac()
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)))
+    }
+}
+
+/// One label/value row of a certification or insurance detail sheet.
+struct DetailRowItem: Identifiable {
+    /// Stable identity within a sheet (the row's English title, which is unique per sheet).
+    let id: String
+    let icon: String
+    let title: LocalizedStringKey
+    let value: String
+}
+
+/// The detail rows of a certification or insurance sheet. iOS: one `DetailRow` per item,
+/// laid out by the enclosing VStack. macOS: two rows per line, filling left to right in
+/// the same order, in a Grid that gives both rows of a line the same height.
+@ViewBuilder
+func detailRowList(_ items: [DetailRowItem]) -> some View {
+    #if os(macOS)
+    Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+        ForEach(Array(stride(from: 0, to: items.count, by: 2)), id: \.self) { index in
+            GridRow {
+                DetailRow(icon: items[index].icon, title: items[index].title, value: items[index].value)
+                if index + 1 < items.count {
+                    DetailRow(icon: items[index + 1].icon, title: items[index + 1].title, value: items[index + 1].value)
+                } else {
+                    Color.clear
+                        .gridCellUnsizedAxes([.horizontal, .vertical])
+                }
+            }
+        }
+    }
+    #else
+    ForEach(items) { item in
+        DetailRow(icon: item.icon, title: item.title, value: item.value)
+    }
+    #endif
+}
+
+// MARK: - Add Certification View
+
+struct AddCertificationView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(DiveStore.self) private var store
+
+    @Query(sort: \Certification.issueDate) private var allCertifications: [Certification]
+
+    var certificationToEdit: Certification?
+    var prefilledDiverName: String = ""
+
+    private var isEditing: Bool { certificationToEdit != nil }
+
+    @State private var name: String = ""
+    @State private var diverName: String = ""
+    @State private var organization: String = "PADI"
+    @State private var level: String = ""
+    @State private var certificationNumber: String = ""
+    @State private var issueDate: Date = Date()
+    @State private var hasExpiration: Bool = false
+    @State private var expirationDate: Date = Date()
+    @State private var instructorName: String = ""
+    @State private var instructorNumber: String = ""
+    @State private var divingCentre: String = ""
+    @State private var notes: String = ""
+    @State private var nameManuallyEdited: Bool = false
+
+    // DiveStore's complete diver list (dives, gear, certifications, insurance).
+    private var diverNameSuggestions: [String] { store.cachedUniqueDivers }
+
+    private func certificationSuggestions(_ keyPath: KeyPath<Certification, String?>) -> [String] {
+        let editingID = certificationToEdit?.id
+        return Array(Set(
+            allCertifications
+                .filter { $0.id != editingID }
+                .compactMap { $0[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        )).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private var instructorNameSuggestions: [String] { certificationSuggestions(\.instructorName) }
+    private var instructorNumberSuggestions: [String] { certificationSuggestions(\.instructorNumber) }
+    private var divingCentreSuggestions: [String] { certificationSuggestions(\.divingCentre) }
+
+    private var autoGeneratedName: String {
+        guard !organization.isEmpty, !level.isEmpty, level != "Other" else { return "" }
+        return "\(organization) - \(level)"
+    }
+
+    private var selectedOrganization: CertificationOrganization {
+        CertificationOrganization(rawValue: organization) ?? .other
+    }
+
+    private var availableLevels: [String] {
+        selectedOrganization.levels
+    }
+
+    private var isValid: Bool {
+        !name.isEmpty && !organization.isEmpty && !level.isEmpty && !certificationNumber.isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        VStack(spacing: 10) {
+                            CertificationIconView(organization: organization, size: 64, fillOpacity: 0.12)
+                        }
+                        .padding(.top, 20)
+
+                        certificationSectionCard(title: "General Information", icon: "info.circle.fill", color: .cyan) {
+                            VStack(spacing: 14) {
+                                DiverAutocompleteField(
+                                    label: "Diver Name",
+                                    placeholder: "Diver Name (optional)",
+                                    text: $diverName,
+                                    suggestions: diverNameSuggestions
+                                )
+
+                                fullWidthPicker("Organization", selection: $organization) {
+                                    ForEach(CertificationOrganization.allCases) { org in
+                                        Text(verbatim: org.localizedName).tag(org.rawValue)
+                                    }
+                                }
+                                .onChange(of: organization) {
+                                    if !availableLevels.contains(level) {
+                                        level = ""
+                                    }
+                                    updateAutoName()
+                                }
+                                fullWidthPicker("Level", selection: $level) {
+                                    Text("Select a level").tag("")
+                                    ForEach(availableLevels, id: \.self) { lvl in
+                                        Text(verbatim: lvl == "Other" ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Certification level: other/custom") : lvl)
+                                            .tag(lvl)
+                                    }
+                                }
+                                .onChange(of: level) {
+                                    updateAutoName()
+                                }
+
+                                certificationTextField("Certification Name", text: $name)
+                                    .onChange(of: name) {
+                                        if name.isEmpty {
+                                            nameManuallyEdited = false
+                                        } else if name != autoGeneratedName {
+                                            nameManuallyEdited = true
+                                        }
+                                    }
+
+                                certificationTextField("Certification Number", text: $certificationNumber)
+                            }
+                        }
+
+                        certificationSectionCard(title: "Dates", icon: "calendar", color: .orange) {
+                            VStack(spacing: 14) {
+                                DatePicker("Issue Date", selection: $issueDate, displayedComponents: .date)
+                                    .adaptiveDatePickerStyle()
+                                    .foregroundStyle(.primary)
+
+                                Divider().overlay(Color.primary.opacity(0.06))
+
+                                Toggle("Has an expiration date", isOn: $hasExpiration.animation(.easeInOut(duration: 0.2)))
+                                    .foregroundStyle(.primary)
+                                    .fullWidthSwitch()
+
+                                if hasExpiration {
+                                    DatePicker("Expiration Date", selection: $expirationDate, displayedComponents: .date)
+                                        .adaptiveDatePickerStyle()
+                                        .foregroundStyle(.primary)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
+                            }
+                        }
+
+                        certificationSectionCard(title: "Additional information", icon: "text.quote", color: .purple) {
+                            VStack(spacing: 14) {
+                                DiverAutocompleteField(
+                                    label: "Instructor Name",
+                                    placeholder: "Instructor Name (optional)",
+                                    text: $instructorName,
+                                    suggestions: instructorNameSuggestions
+                                )
+
+                                DiverAutocompleteField(
+                                    label: "Instructor Number",
+                                    placeholder: "Instructor Number (optional)",
+                                    text: $instructorNumber,
+                                    suggestions: instructorNumberSuggestions
+                                )
+
+                                DiverAutocompleteField(
+                                    label: "Diving Centre",
+                                    placeholder: "Diving Centre (optional)",
+                                    text: $divingCentre,
+                                    suggestions: divingCentreSuggestions
+                                )
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Notes")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(.secondary)
+                                    TextEditor(text: $notes)
+                                        .scrollContentBackground(.hidden)
+                                        .frame(height: 80)
+                                        .padding(8)
+                                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
+                                        .overlay(alignment: .topLeading) {
+                                            if notes.isEmpty {
+                                                Text("Notes (optional)")
+                                                    #if os(iOS)
+                                                    .foregroundColor(Color(uiColor: .placeholderText))
+                                                    #else
+                                                    .foregroundColor(Color(nsColor: .placeholderTextColor))
+                                                    #endif
+                                                    .padding(.top, 12)
+                                                    .padding(.leading, 12)
+                                                    .allowsHitTesting(false)
+                                            }
+                                        }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.bottom, 16)
+                }
+            }
+            // Same background as the detail screens and the tabs.
+            .background(AppBackground().ignoresSafeArea())
+            .navigationTitle(isEditing ? LocalizedStringKey("Edit Certification") : LocalizedStringKey("New Certification"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .keyboardShortcut(.escape, modifiers: [])
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isEditing ? LocalizedStringKey("Save") : LocalizedStringKey("Add")) {
+                        saveCertification()
+                    }
+                    .disabled(!isValid)
+                    #if os(iOS)
+                    .buttonStyle(.borderedProminent)
+                    #endif
+                }
+            }
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .onAppear {
+                if let cert = certificationToEdit {
+                    name = cert.name
+                    diverName = cert.diverName
+                    organization = cert.organization
+                    level = cert.level
+                    certificationNumber = cert.certificationNumber
+                    issueDate = cert.issueDate
+                    hasExpiration = cert.expirationDate != nil
+                    expirationDate = cert.expirationDate ?? Date()
+                    instructorName = cert.instructorName ?? ""
+                    instructorNumber = cert.instructorNumber ?? ""
+                    divingCentre = cert.divingCentre ?? ""
+                    notes = cert.notes ?? ""
+                    nameManuallyEdited = true
+                } else if !prefilledDiverName.isEmpty {
+                    diverName = prefilledDiverName
+                }
+            }
+        }
+    }
+
+    // MARK: - Reusable Components
+
+    private func certificationSectionCard<Content: View>(title: LocalizedStringKey, icon: String, color: Color, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(color)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+            content()
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.06), lineWidth: 1))
+        .padding(.horizontal)
+    }
+
+    private func certificationTextField(_ label: LocalizedStringKey, placeholder: LocalizedStringKey? = nil, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+            HStack {
+                TextField(placeholder ?? label, text: text)
+                    .textFieldStyle(.plain)
+                if !text.wrappedValue.isEmpty {
+                    Button {
+                        text.wrappedValue = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
+        }
+    }
+
+
+    private func updateAutoName() {
+        if !nameManuallyEdited {
+            name = autoGeneratedName
+        }
+    }
+
+    private func saveCertification() {
+        if let cert = certificationToEdit {
+            cert.name = name.trimmingCharacters(in: .whitespaces)
+            cert.diverName = diverName.trimmingCharacters(in: .whitespaces)
+            cert.organization = organization.trimmingCharacters(in: .whitespaces)
+            cert.level = level.trimmingCharacters(in: .whitespaces)
+            cert.certificationNumber = certificationNumber.trimmingCharacters(in: .whitespaces)
+            cert.issueDate = issueDate
+            cert.expirationDate = hasExpiration ? expirationDate : nil
+            let trimmedInstructor = instructorName.trimmingCharacters(in: .whitespaces)
+            cert.instructorName = trimmedInstructor.isEmpty ? nil : trimmedInstructor
+            let trimmedInstructorNum = instructorNumber.trimmingCharacters(in: .whitespaces)
+            cert.instructorNumber = trimmedInstructorNum.isEmpty ? nil : trimmedInstructorNum
+            let trimmedDivingCenter = divingCentre.trimmingCharacters(in: .whitespaces)
+            cert.divingCentre = trimmedDivingCenter.isEmpty ? nil : trimmedDivingCenter
+            let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            cert.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
+            if hasExpiration {
+                cert.scheduleExpirationReminder()
+            } else {
+                NotificationManager.shared.cancelCertificationReminder(id: cert.id)
+            }
+        } else {
+            let trimmedInstructor = instructorName.trimmingCharacters(in: .whitespaces)
+            let trimmedInstructorNum = instructorNumber.trimmingCharacters(in: .whitespaces)
+            let trimmedDivingCenter = divingCentre.trimmingCharacters(in: .whitespaces)
+            let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            let newCert = Certification(
+                name: name.trimmingCharacters(in: .whitespaces),
+                diverName: diverName.trimmingCharacters(in: .whitespaces),
+                organization: organization.trimmingCharacters(in: .whitespaces),
+                level: level.trimmingCharacters(in: .whitespaces),
+                certificationNumber: certificationNumber.trimmingCharacters(in: .whitespaces),
+                issueDate: issueDate,
+                expirationDate: hasExpiration ? expirationDate : nil,
+                instructorName: trimmedInstructor.isEmpty ? nil : trimmedInstructor,
+                instructorNumber: trimmedInstructorNum.isEmpty ? nil : trimmedInstructorNum,
+                divingCentre: trimmedDivingCenter.isEmpty ? nil : trimmedDivingCenter,
+                notes: trimmedNotes.isEmpty ? nil : trimmedNotes
+            )
+            modelContext.insert(newCert)
+            if hasExpiration {
+                newCert.scheduleExpirationReminder()
+            }
+        }
+        dismiss()
+    }
+}
+
+#Preview {
+    DocumentsView()
+        .modelContainer(for: [Certification.self, DivingInsurance.self], inMemory: true)
+}
+
+#if os(macOS)
+// MARK: - Document One-Line Rows (macOS)
+
+/// Column widths of the one-line certification and insurance rows on macOS, shared by the rows
+/// and their column headers so the labels stay aligned with the values.
+enum DocumentListColumns {
+    static let spacing: CGFloat = 12
+    static let icon: CGFloat = 32
+    /// Minimum (and ideal) width of the flexible name / insurer column.
+    static let name: CGFloat = 180
+    static let diver: CGFloat = 120
+    static let detail: CGFloat = 140
+    static let number: CGFloat = 150
+    static let date: CGFloat = 120
+    static let status: CGFloat = 16
+
+    /// Width of the one-line rows: every column plus the spacing between them (962 pt).
+    static let rowWidth: CGFloat = icon + name + diver + detail + number + date * 2 + status
+        + spacing * 7
+}
+
+/// Medium date in the in-app language (as on the stacked rows).
+private func documentDate(_ date: Date, locale: Locale) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = locale
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .none
+    return formatter.string(from: date)
+}
+
+/// One line (macOS): icon, name, diver, level, number, issue and expiration dates, status dot,
+/// in `DocumentListColumns`. Same information and colours as `CertificationRow`.
+struct CertificationOneLineRow: View {
+    let certification: Certification
+    let showExpired: Bool
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        HStack(spacing: DocumentListColumns.spacing) {
+            CertificationIconView(organization: certification.organization,
+                                  size: DocumentListColumns.icon, fillOpacity: 0.2)
+
+            Text(CertificationRow.displayName(of: certification))
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(minWidth: DocumentListColumns.name, idealWidth: DocumentListColumns.name,
+                       maxWidth: .infinity, alignment: .leading)
+
+            Text(certification.diverName)
+                .font(.subheadline)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.diver, alignment: .leading)
+
+            Group {
+                if certification.level == "Other" {
+                    Text("Other")
+                } else {
+                    Text(certification.level)
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(width: DocumentListColumns.detail, alignment: .leading)
+
+            Text(certification.certificationNumber)
+                .font(.caption)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.number, alignment: .leading)
+
+            Text(documentDate(certification.issueDate, locale: locale))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.date, alignment: .leading)
+
+            // ZStack, not Group: a Group's frame applies to its children, so with no expiration
+            // date the column would vanish and shift the columns before it.
+            ZStack {
+                if let expiration = certification.expirationDate {
+                    Text(documentDate(expiration, locale: locale))
+                        .font(.caption)
+                        .foregroundStyle(showExpired ? .red : (certification.isExpiringSoon ? .orange : .secondary))
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: DocumentListColumns.date, alignment: .leading)
+
+            Circle()
+                .fill(showExpired ? Color.red : (certification.isExpiringSoon ? Color.orange : Color.green))
+                .frame(width: 12, height: 12)
+                .frame(width: DocumentListColumns.status)
+                .accessibilityLabel(showExpired ? Text("Expired") : (certification.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
+        }
+        .padding(.vertical, 8)
+        // Same natural width as the Dives and Equipment rows: all lists switch together.
+        .oneLineRowWidth(columnsWidth: DocumentListColumns.rowWidth)
+        .contentShape(Rectangle())
+    }
+}
+
+/// One line (macOS): icon, insurer, diver, coverage, policy number, start and end dates, status
+/// dot, in `DocumentListColumns`. Same information and colours as `InsuranceRow`.
+struct InsuranceOneLineRow: View {
+    let insurance: DivingInsurance
+    let showExpired: Bool
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        HStack(spacing: DocumentListColumns.spacing) {
+            InsuranceIconView(insurerName: insurance.insurerName, size: DocumentListColumns.icon,
+                              fallbackColor: insurance.statusColor, fillOpacity: 0.2)
+
+            Text(insurance.insurerName)
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(minWidth: DocumentListColumns.name, idealWidth: DocumentListColumns.name,
+                       maxWidth: .infinity, alignment: .leading)
+
+            Text(insurance.diverName)
+                .font(.subheadline)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.diver, alignment: .leading)
+
+            Text(insurance.coverageType)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.detail, alignment: .leading)
+
+            Text(insurance.policyNumber)
+                .font(.caption)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.number, alignment: .leading)
+
+            Text(documentDate(insurance.startDate, locale: locale))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.date, alignment: .leading)
+
+            Text(documentDate(insurance.endDate, locale: locale))
+                .font(.caption)
+                .foregroundStyle(showExpired ? .red : (insurance.isExpiringSoon ? .orange : .secondary))
+                .lineLimit(1)
+                .frame(width: DocumentListColumns.date, alignment: .leading)
+
+            Circle()
+                .fill(showExpired ? Color.red : (insurance.isExpiringSoon ? Color.orange : Color.blue))
+                .frame(width: 12, height: 12)
+                .frame(width: DocumentListColumns.status)
+                .accessibilityLabel(showExpired ? Text("Expired") : (insurance.isExpiringSoon ? Text("Expiring Soon") : Text("Active")))
+        }
+        .padding(.vertical, 8)
+        // Same natural width as the Dives and Equipment rows: all lists switch together.
+        .oneLineRowWidth(columnsWidth: DocumentListColumns.rowWidth)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Column labels over the one-line certification rows (macOS): a row in each section in "All",
+/// pinned above the list with the Certifications filter; shown only while the rows are one-line
+/// (`OneLineRowsLayout`).
+struct CertificationColumnHeader: View {
+    var body: some View {
+        ColumnHeaderRowContent {
+            HStack(spacing: DocumentListColumns.spacing) {
+                Color.clear.frame(width: DocumentListColumns.icon, height: 0)
+                Text("Name").columnHeaderLabel()
+                    .frame(minWidth: DocumentListColumns.name, idealWidth: DocumentListColumns.name,
+                           maxWidth: .infinity, alignment: .leading)
+                Text("Diver").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.diver, alignment: .leading)
+                Text("Level").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.detail, alignment: .leading)
+                Text("Certification Number").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.number, alignment: .leading)
+                Text("Issue Date").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.date, alignment: .leading)
+                Text("Expiration Date").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.date, alignment: .leading)
+                Color.clear.frame(width: DocumentListColumns.status, height: 0)
+            }
+        }
+    }
+}
+
+/// Column labels over the one-line insurance rows (macOS): a row in each section in "All",
+/// pinned above the list with the Insurance filter; shown only while the rows are one-line
+/// (`OneLineRowsLayout`).
+struct InsuranceColumnHeader: View {
+    var body: some View {
+        ColumnHeaderRowContent {
+            HStack(spacing: DocumentListColumns.spacing) {
+                Color.clear.frame(width: DocumentListColumns.icon, height: 0)
+                Text("Insurer").columnHeaderLabel()
+                    .frame(minWidth: DocumentListColumns.name, idealWidth: DocumentListColumns.name,
+                           maxWidth: .infinity, alignment: .leading)
+                Text("Diver").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.diver, alignment: .leading)
+                Text("Coverage Type").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.detail, alignment: .leading)
+                Text("Policy Number").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.number, alignment: .leading)
+                Text("Start Date").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.date, alignment: .leading)
+                Text("End Date").columnHeaderLabel()
+                    .frame(width: DocumentListColumns.date, alignment: .leading)
+                Color.clear.frame(width: DocumentListColumns.status, height: 0)
+            }
+        }
+    }
+}
+#endif
