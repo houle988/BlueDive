@@ -538,7 +538,8 @@ extension BluetoothScannerView {
         // is built (see below), so rawProfileSamples is an intermediate variable.
         let rawProfileSamples = Self.consolidateProfilePoints(diveData.profile)
 
-        // Calculate average depth from profile (time-weighted average)
+        // Average depth recorded by the computer, or the time-weighted profile average
+        // when the computer does not report one (resolved by LibDCSwift's GenericParser)
         let averageDepth: Double = diveData.avgDepth
 
         // Extract min/max temperatures from the profile

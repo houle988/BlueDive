@@ -1299,8 +1299,16 @@ extension ContentView {
         earlier.profileSamples = combinedSamples
 
         // --- Recalculate maxDepth ---
-        let allDepths = combinedSamples.map(\.depth)
-        earlier.maxDepth = allDepths.max() ?? earlier.maxDepth
+        // Deepest of the merged profile and both dives' stored maxima: a dive computer can
+        // record a maximum deeper than any logged sample (the peak fell between samples), and
+        // that recorded value must survive the merge. The later dive's stored maximum is only
+        // compared when both dives share a depth unit, as stored values are never converted.
+        var depthCandidates = combinedSamples.map(\.depth)
+        depthCandidates.append(earlier.maxDepth)
+        if later.importDistanceUnit == earlier.importDistanceUnit {
+            depthCandidates.append(later.maxDepth)
+        }
+        earlier.maxDepth = depthCandidates.max() ?? earlier.maxDepth
 
         // --- Recalculate averageDepth (time-weighted) ---
         if combinedSamples.count >= 2 {

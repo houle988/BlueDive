@@ -279,6 +279,11 @@ private struct StaticChartLayer: View, Equatable {
     let dive: Dive
     let visibility: ChartLineVisibility
     let xMax: Double
+    /// Depth, in the display unit, that sets the bottom of the chart: the dive's max depth, or
+    /// the deepest profile sample when that is deeper (a computer's recorded maximum can be a
+    /// little shallower than a sample, e.g. through rounding). Only the axis range and the
+    /// overlay scales use it; every sample still plots at its own recorded value.
+    let depthBase: Double
     let prefs: UserPreferences
     /// Hash of tanks' O₂ fractions — changes when gas mix is edited, allowing the
     /// Equatable check to detect tank mutations even though dive.id is stable.
@@ -312,7 +317,8 @@ private struct StaticChartLayer: View, Equatable {
         lhs.visibility.showNDL == rhs.visibility.showNDL &&
         lhs.visibility.showPPO2 == rhs.visibility.showPPO2 &&
         lhs.visibility.showDeco == rhs.visibility.showDeco &&
-        lhs.xMax == rhs.xMax
+        lhs.xMax == rhs.xMax &&
+        lhs.depthBase == rhs.depthBase
     }
 
     // MARK: - Right-axis tick positions
@@ -321,7 +327,7 @@ private struct StaticChartLayer: View, Equatable {
     /// lands on a gridline that already has a corresponding left depth label.
     /// Produces ~5 evenly-spaced negative values from 0 down to `yDomainMin`.
     private var depthAxisTicks: [Double] {
-        let base = dive.displayMaxDepth
+        let base = depthBase
         guard base > 0 else { return [0] }
         // Choose a round step size that gives roughly 4-6 ticks.
         let rawStep = base / 5.0
@@ -348,9 +354,9 @@ private struct StaticChartLayer: View, Equatable {
     private var rightAxisTicks: [Double] { depthAxisTicks }
 
     /// Fraction [0…1] for a given negated Y tick value, used by right-axis label builders.
-    /// fraction=0 at surface (y=0), fraction=1 at max depth (y=-displayMaxDepth).
+    /// fraction=0 at surface (y=0), fraction=1 at the chart depth (y=-depthBase).
     private func fraction(for y: Double) -> Double {
-        let base = dive.displayMaxDepth
+        let base = depthBase
         guard base > 0 else { return 0 }
         return (-y) / base
     }
@@ -455,7 +461,7 @@ private struct StaticChartLayer: View, Equatable {
     // surface (0) at top and max depth at bottom with no reversal tricks needed.
     // The 5% extra ensures the deepest line isn't clipped at the plot edge.
     private var yDomainMin: Double {
-        let base = dive.displayMaxDepth
+        let base = depthBase
         guard base > 0 else { return -1 }
         return -(base * 1.05)
     }
@@ -630,10 +636,10 @@ private struct StaticChartLayer: View, Equatable {
                 if let temp = sample.temperature {
                     let displayTemp = dive.displayProfileTemperature(temp)
                     // Map temperature onto the negated depth axis:
-                    // warmest temp → y = 0 (top), coldest temp → y = -displayMaxDepth (bottom)
+                    // warmest temp → y = 0 (top), coldest temp → y = -depthBase (bottom)
                     // (1 - normalised) flips the direction so high temp sits near the surface.
                     let normalised = ((displayTemp - axisMin) / axisRange).clamped(to: 0...1)
-                    let value = -dive.displayMaxDepth * (1.0 - normalised)
+                    let value = -depthBase * (1.0 - normalised)
                     LineMark(x: .value("Time", sample.time), y: .value("Temp.", value), series: .value("Sequence", "Temperature"))
                         .interpolationMethod(.catmullRom)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -681,7 +687,7 @@ private struct StaticChartLayer: View, Equatable {
                     ForEach(samplesForTank) { sample in
                         if let pressure = sample.tankPressures?[tankIdx] {
                             let displayPressure = dive.displayProfilePressure(pressure)
-                            let value = -dive.displayMaxDepth * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
+                            let value = -depthBase * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
                             LineMark(
                                 x: .value("Time", sample.time),
                                 y: .value("Press.", value),
@@ -704,7 +710,7 @@ private struct StaticChartLayer: View, Equatable {
                 ForEach(samplesWithPressure) { sample in
                     if let pressure = sample.tankPressure {
                         let displayPressure = dive.displayProfilePressure(pressure)
-                        let value = -dive.displayMaxDepth * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
+                        let value = -depthBase * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
                         LineMark(x: .value("Time", sample.time), y: .value("Press.", value), series: .value("Sequence", "Pressure"))
                             .interpolationMethod(.catmullRom)
                             .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -775,8 +781,8 @@ private struct StaticChartLayer: View, Equatable {
                     // NDL ≥ 100 min is capped at 99 so the line stays just below y=0
                     // (the top edge). Without this, min(ndl, 100)/100 = 1 → value = 0
                     // (surface line) and the yellow line is invisible. NDL 99 → near top,
-                    // NDL 0 → y = -displayMaxDepth (bottom).
-                    let value = -dive.displayMaxDepth * (1.0 - (min(ndl, 99.0) / 100.0))
+                    // NDL 0 → y = -depthBase (bottom).
+                    let value = -depthBase * (1.0 - (min(ndl, 99.0) / 100.0))
                     LineMark(x: .value("Time", sample.time), y: .value("NDL", value), series: .value("Sequence", "NDL"))
                         .interpolationMethod(.catmullRom)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -798,7 +804,7 @@ private struct StaticChartLayer: View, Equatable {
 
     @ChartContentBuilder
     private var ppo2Marks: some ChartContent {
-        let base = dive.displayMaxDepth
+        let base = depthBase
         let sensorIndices = chartSensorIndices
         if visibility.showPPO2 && base > 0 {
             if !sensorIndices.isEmpty {
@@ -1671,11 +1677,16 @@ struct UnifiedDiveChartOptimized: View {
             ? Double(dive.duration) / 60.0
             : Double(dive.duration)
         let xMax = max(lastSampleTime, storedDurationMinutes)
+        // The chart reaches the deeper of the stored max depth and the deepest sample, so no
+        // part of the profile is clipped when the computer's recorded maximum is shallower.
+        // The raw maximum is converted once; the conversion preserves order.
+        let deepestSampleDepth = dive.displayProfileDepth(dive.profileSamples.lazy.map(\.depth).max() ?? 0)
+        let depthBase = max(dive.displayMaxDepth, deepestSampleDepth)
 
         #if os(macOS)
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, heightRule: chartHeightRule)
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, heightRule: chartHeightRule)
         #else
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops)
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops)
         #endif
         return layer
             .equatable()
