@@ -886,7 +886,7 @@ enum PlatformTextInputAutocapitalizationType {
 /// Works on both iOS and macOS. The content type is specified at the call site.
 struct ExportableFileDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.data] }
-    static var writableContentTypes: [UTType] { [.zip, .data, .xml, .uddf, .pdf, .plainText, .blueDiveXML] }
+    static var writableContentTypes: [UTType] { [.zip, .data, .xml, .uddf, .pdf, .plainText, .commaSeparatedText, .blueDiveXML] }
 
     let data: Data
 

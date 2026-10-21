@@ -623,38 +623,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: isImporting)
         .animation(.linear(duration: 0.15), value: importProgressCurrent)
-        .overlay {
-            if isExporting {
-                ZStack {
-                    Color.black.opacity(0.6).ignoresSafeArea()
-                    VStack(spacing: 16) {
-                        if exportProgressTotal > 0 {
-                            ProgressView(value: Double(exportProgressCurrent), total: Double(exportProgressTotal))
-                                .progressViewStyle(.linear)
-                                .frame(width: 220)
-                            Text(String(format: NSLocalizedString("%@ of %@ dives exported", bundle: .forAppLanguage(), comment: "Progress label during dive export showing current and total count"),
-                                 Double(exportProgressCurrent).localizedString(decimals: 0),
-                                 Double(exportProgressTotal).localizedString(decimals: 0)))
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                                .monospacedDigit()
-                                .transaction { $0.animation = nil }
-                        } else {
-                            ProgressView().scaleEffect(1.5)
-                            Text("Exporting...")
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                        }
-                    }
-                    .padding(32)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-                }
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: isExporting)
-        .animation(.linear(duration: 0.15), value: exportProgressCurrent)
+        .exportProgressOverlay(isPresented: isExporting, current: exportProgressCurrent, total: exportProgressTotal)
         .onAppear {
             // DiveStore's caches are built and kept current by DiveDataFeeder (MainTabView).
             // Cold-launch: onOpenURL may fire before this view mounts, so check
