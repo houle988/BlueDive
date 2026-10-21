@@ -6254,7 +6254,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wird vor der Zuordnung zur Aufnahmezeit jedes Fotos addiert, z. B. +1 h, wenn die Kamera eine Stunde hinter dem Tauchcomputer lag."
+            "value" : "Wird vor der Zuordnung zur Aufnahmezeit jedes Fotos hinzugefügt, z. B. +1 h, wenn die Zeit der Kamera eine Stunde hinter der des Tauchcomputers lag."
           }
         },
         "es" : {
@@ -7488,7 +7488,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Art auch dem Tauchgang jedes Fotos hinzufügen"
+            "value" : "Art auch dem Tauchgang des jeweiligen Fotos hinzufügen"
           }
         },
         "es" : {
@@ -14337,7 +14337,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Konvertiere Fotos, die mit früheren Versionen von BlueDive hinzugefügt wurden: Jedes Foto erhält einen eigenen Eintrag mit Miniaturbild und Aufnahmezeit, und während eines Tauchgangs aufgenommene Fotos erscheinen in seinem Profil. Die Bilder selbst werden nicht verändert."
+            "value" : "Konvertiere Fotos, die mit früheren Versionen von BlueDive hinzugefügt wurden: Jedes Foto erhält einen eigenen Eintrag mit Miniaturbild und Aufnahmezeit, und während eines Tauchgangs aufgenommene Fotos erscheinen im entsprechenden Profil. Die Bilder selbst werden nicht verändert."
           }
         },
         "es" : {
@@ -43343,7 +43343,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kein lesbares Bild"
+            "value" : "Kein lesbares Foto"
           }
         },
         "es" : {
@@ -44334,7 +44334,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bei diesem Tauchgang"
+            "value" : "Während dieses Tauchgangs"
           }
         },
         "es" : {
@@ -68551,7 +68551,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wenn aktiviert, wird das Profildiagramm des ausgewählten Tauchgangs über der Tauchgangsliste angezeigt. Klicke auf einen Tauchgang, um ihn auszuwählen; doppelklicke darauf oder drücke den Zeilenschalter, um ihn zu öffnen. Ist die Option deaktiviert, öffnet ein Klick den Tauchgang."
+            "value" : "Wenn aktiviert, wird das Profildiagramm des ausgewählten Tauchgangs über der Tauchgangsliste angezeigt. Klicke auf einen Tauchgang, um ihn auszuwählen; doppelklicke darauf oder drücke die Eingabetaste, um ihn zu öffnen. Ist die Option deaktiviert, öffnet ein Klick den Tauchgang."
           }
         },
         "es" : {
