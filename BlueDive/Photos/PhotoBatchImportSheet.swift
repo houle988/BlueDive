@@ -393,7 +393,7 @@ struct PhotoBatchImportSheet: View {
             var scanned: [Row] = []
             for (index, url) in files.enumerated() {
                 if Task.isCancelled { return }
-                let file = await Task.detached(priority: .userInitiated) { ScannedPhotoFile.scan(url) }.value
+                let file = await PhotoMetadataReader.onImageQueue { ScannedPhotoFile.scan(url) }
                 scanned.append(Row(file: file))
                 phase = .scanning(done: index + 1, total: files.count)
             }

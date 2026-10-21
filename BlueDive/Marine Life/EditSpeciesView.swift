@@ -49,7 +49,15 @@ struct EditSpeciesView: View {
     @State private var thumbnailData: Data?
     @State private var imageAttribution: String?
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var showPhotosPicker = false
+    /// Picked images still being loaded and scaled down; Save waits for them.
+    @State private var imageLoads = 0
     @State private var showImageFileImporter = false
+    /// The dive photos "BlueDive Photos" offers, built when it is chosen; set, it presents the
+    /// picker (`sheet(item:)`, so the sheet gets this list, not the one of the last redraw).
+    @State private var photoCandidates: SpeciesPhotoCandidates?
+    /// The diver filter: "BlueDive Photos" offers only that diver's dive photos.
+    @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     /// Built once when the catalogue changes, so typing never scans the whole catalogue.
     @State private var nameIndex = SpeciesNameIndex()
     @State private var customCategories: [String] = []
@@ -147,16 +155,39 @@ struct EditSpeciesView: View {
                         imagePreview
                         Spacer()
                     }
-                    PhotosPicker(selection: $pickedPhoto, matching: .images, preferredItemEncoding: .current) {
-                        Label("Choose from Photos", systemImage: "photo.on.rectangle")
-                    }
-                    .listRowButton()
-                    Button {
-                        showImageFileImporter = true
+                    listRowMenu {
+                        Button {
+                            showPhotosPicker = true
+                        } label: {
+                            Label("Apple Photos", systemImage: "photo.on.rectangle")
+                        }
+                        Button {
+                            showImageFileImporter = true
+                        } label: {
+                            Label("Import from Files", systemImage: "folder")
+                        }
+                        // A new species has no linked photos or sightings yet; an existing one
+                        // always offers it (the sheet says when there is nothing to choose).
+                        if let species {
+                            Button {
+                                // Built when asked, not when the form opens: it walks the
+                                // species' sightings, and is then current when the sheet opens.
+                                guard !species.isDeleted, species.modelContext != nil else { return }
+                                photoCandidates = SpeciesPhotoCandidates(species: species, diver: selectedDiver)
+                            } label: {
+                                Label("BlueDive Photos", systemImage: "photo.stack")
+                            }
+                        }
                     } label: {
-                        Label("Choose a File", systemImage: "folder")
+                        if imageData == nil {
+                            Label("Choose Image", systemImage: "photo")
+                        } else {
+                            Label("Change Image", systemImage: "photo")
+                        }
                     }
-                    .listRowButton()
+                    // Not while a picked image is loading: it would replace what is chosen
+                    // or removed meanwhile when it finishes.
+                    .disabled(imageLoads > 0)
                     if imageData != nil {
                         Button(role: .destructive) {
                             imageData = nil
@@ -167,6 +198,7 @@ struct EditSpeciesView: View {
                             Label("Remove Image", systemImage: "trash")
                         }
                         .listRowButton()
+                        .disabled(imageLoads > 0)
                     }
                 } header: {
                     Text("Featured Image")
@@ -359,14 +391,16 @@ struct EditSpeciesView: View {
                         Text("Save")
                             .confirmationActionForeground(.orange)
                     }
-                    .disabled(!canSave)
+                    // Not while a picked image is still loading: it would be saved without it.
+                    .disabled(!canSave || imageLoads > 0)
                 }
             }
             .task(id: imageData?.photoTaskID ?? 0) {
                 let data = thumbnailData ?? imageData
                 guard let data else { previewImage = nil; return }
-                let decoded = await Task.detached(priority: .userInitiated) { PlatformImage(data: data) }.value
-                guard !Task.isCancelled else { return }
+                // At default QoS (ImageIO); nil: replaced by a newer image while waiting its turn.
+                guard let decoded = await PhotoMetadataReader.onImageQueueUnlessCancelled({ PlatformImage(data: data) }),
+                      !Task.isCancelled else { return }
                 previewImage = decoded
             }
             .task {
@@ -386,6 +420,17 @@ struct EditSpeciesView: View {
                 INaturalistLookupSheet(query: lookupQuery) { taxon in fill(from: taxon) }
                     .standardSheetPresentation()
             }
+            .sheet(item: $photoCandidates) { candidates in
+                SpeciesPhotoPickerSheet(candidates: candidates) { data in
+                    imageLoads += 1
+                    Task {
+                        defer { imageLoads -= 1 }
+                        await setImage(data)
+                    }
+                }
+                .standardSheetPresentation()
+            }
+            .photosPicker(isPresented: $showPhotosPicker, selection: $pickedPhoto, matching: .images, preferredItemEncoding: .current)
             .onChange(of: commonName) { updateDuplicate() }
             .onChange(of: newOtherName) { updateOtherNameConflict() }
             .onChange(of: scientificName) {
@@ -399,14 +444,19 @@ struct EditSpeciesView: View {
             }
             .onChange(of: pickedPhoto) { _, item in
                 guard let item else { return }
+                // Counted here, not in the task: Save is disabled before it can be tapped.
+                imageLoads += 1
                 Task {
+                    defer { imageLoads -= 1 }
                     if let data = try? await item.loadTransferable(type: Data.self) { await setImage(data) }
                     pickedPhoto = nil
                 }
             }
             .fileImporter(isPresented: $showImageFileImporter, allowedContentTypes: [.image]) { result in
                 guard case .success(let url) = result else { return }
+                imageLoads += 1
                 Task {
+                    defer { imageLoads -= 1 }
                     let data = await Task.detached(priority: .userInitiated) { () -> Data? in
                         let scoped = url.startAccessingSecurityScopedResource()
                         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -418,8 +468,18 @@ struct EditSpeciesView: View {
         }
     }
 
-    @ViewBuilder
+    /// The image, dimmed under a progress indicator while a picked image is loading (Save is
+    /// disabled meanwhile).
     private var imagePreview: some View {
+        previewContent
+            .opacity(imageLoads > 0 ? 0.4 : 1)
+            .overlay {
+                if imageLoads > 0 { ProgressView() }
+            }
+    }
+
+    @ViewBuilder
+    private var previewContent: some View {
         if let image = previewImage {
             Image(platformImage: image)
                 .resizable()
@@ -474,13 +534,16 @@ struct EditSpeciesView: View {
         }
     }
 
-    /// The user's own image: stored unchanged, with a thumbnail; no attribution.
+    /// The user's own image (Apple Photos, a file or a dive photo): stored as a copy scaled
+    /// down to 512 px on its longest side, the size of a dive photo thumbnail and close to
+    /// iNaturalist's medium photo, with no separate thumbnail; no attribution. The picked
+    /// image itself is only read, never changed.
     private func setImage(_ data: Data) async {
-        let info = await Task.detached(priority: .userInitiated) { PhotoMetadataReader.read(data) }.value
-        guard let info else { return }
-        imageData = data
-        // A thumbnail only when it is smaller than the image itself.
-        thumbnailData = (info.thumbnail?.count ?? .max) < data.count ? info.thumbnail : nil
+        let info = await PhotoMetadataReader.onImageQueue { PhotoMetadataReader.read(data) }
+        guard let info, let scaled = info.thumbnail else { return }
+        // An image already smaller than its 512 px copy is kept as it is.
+        imageData = scaled.count < data.count ? scaled : data
+        thumbnailData = nil
         imageAttribution = nil
         imageChanged = true
     }

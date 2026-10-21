@@ -53,8 +53,16 @@ struct SpeciesDetailView: View {
         return DiverFilter.apply(selectedDiver, to: all).sorted { $0.timestamp > $1.timestamp }
     }
 
+    /// The species' photos (diver filter applied, as the dives are: a photo of another diver's
+    /// dive is left out, a photo with no dive is kept), oldest first.
     private var photos: [DivePhoto] {
-        (species.photos ?? []).sorted { ($0.captureDate ?? $0.createdAt) < ($1.captureDate ?? $1.createdAt) }
+        (species.photos ?? []).filter { photo in
+            guard !selectedDiver.isEmpty, let dive = photo.dive else { return true }
+            // A dive deleted and merged reports no context; its photo is not this diver's.
+            guard !dive.isDeleted, dive.modelContext != nil else { return false }
+            return !DiverFilter.apply(selectedDiver, to: [dive]).isEmpty
+        }
+        .sorted { ($0.captureDate ?? $0.createdAt) < ($1.captureDate ?? $1.createdAt) }
     }
 
     /// The species was deleted or merged from another page of it higher in the stack (e.g.
@@ -512,7 +520,14 @@ struct SpeciesDetailView: View {
     private var photosGrid: some View {
         let photos = photos
         if photos.isEmpty {
-            Text("No photo of this species yet. Photos whose caption or keywords name this species can be linked when you import them or scan your photos.")
+            Group {
+                // With a diver chosen, the filter may hide other divers' photos.
+                if selectedDiver.isEmpty {
+                    Text("No photo of this species yet. Photos whose caption or keywords name this species can be linked when you import them or scan your photos.")
+                } else {
+                    Text("No photo of this species on this diver's dives.")
+                }
+            }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -775,7 +790,8 @@ struct SpeciesImageView: View {
                 return
             }
             let fillsTile = size == nil
-            let decoded = await Task.detached(priority: .userInitiated) { () -> PlatformImage? in
+            // Nil: the row or tile scrolled away while waiting for its turn (nothing decoded).
+            guard let decoded = await PhotoMetadataReader.onImageQueueUnlessCancelled({ () -> PlatformImage? in
                 // A tile: a large image (a user's own, kept without a thumbnail when it is
                 // smaller than one) is scaled down, as dive photo tiles are, not decoded in full.
                 if fillsTile, let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -783,8 +799,7 @@ struct SpeciesImageView: View {
                     return PlatformImage(data: thumbnail)
                 }
                 return PlatformImage(data: data)
-            }.value
-            guard !Task.isCancelled else { return }
+            }), !Task.isCancelled else { return }
             image = decoded
         }
     }

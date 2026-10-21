@@ -188,6 +188,46 @@ func fullWidthPicker<SelectionValue: Hashable, Content: View>(
     #endif
 }
 
+/// A `Menu` that acts as a whole `List`/`Form` row (e.g. "Change Image" with its image
+/// sources), drawn like a `listRowButton()` row: accent-coloured label, full width, no ⌄
+/// indicator. On macOS a Form `Menu` draws its label through the system control, which
+/// ignores a colour or button style set from outside (the label shows grey), so the label
+/// is coloured itself, as `SightingQuantityMenu` does. On iOS this returns the plain `Menu`
+/// itself (a function, not a wrapper view, so the iOS view tree is unchanged).
+@ViewBuilder
+func listRowMenu<Content: View, MenuLabel: View>(
+    @ViewBuilder content: () -> Content,
+    @ViewBuilder label: () -> MenuLabel
+) -> some View {
+    #if os(macOS)
+    Menu(content: content) {
+        ListRowMenuLabel(label: label())
+    }
+    .menuStyle(.button)
+    .buttonStyle(.plain)
+    .menuIndicator(.hidden)
+    #else
+    Menu(content: content, label: label)
+    #endif
+}
+
+#if os(macOS)
+/// `listRowMenu`'s label on macOS: accent-coloured, full width, dimmed while disabled as
+/// `ListRowButtonStyle` is (a label coloured itself does not dim by itself).
+private struct ListRowMenuLabel<Label: View>: View {
+    let label: Label
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        label
+            .foregroundStyle(.tint)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+#endif
+
 // MARK: - List row separator
 
 /// Lists whose rows are drawn as iOS-style cards (`listRowBackground(_:macFirst:macLast:)`).

@@ -1960,13 +1960,13 @@ struct PhotoThumbnailTile: View {
         }
         .task(id: imageKey) {
             guard let data = load() else { image = nil; return }
-            let decoded = await Task.detached(priority: .userInitiated) { () -> PlatformImage? in
+            // Nil: the tile scrolled away while waiting for its turn (nothing decoded).
+            guard let decoded = await PhotoMetadataReader.onImageQueueUnlessCancelled({ () -> PlatformImage? in
                 guard let source = CGImageSourceCreateWithData(data as CFData, nil),
                       let thumbnail = PhotoMetadataReader.thumbnailJPEG(of: source, maxPixelSize: 450, quality: 0.85)
                 else { return PlatformImage(data: data) }
                 return PlatformImage(data: thumbnail)
-            }.value
-            guard !Task.isCancelled else { return }
+            }), !Task.isCancelled else { return }
             image = decoded
         }
     }

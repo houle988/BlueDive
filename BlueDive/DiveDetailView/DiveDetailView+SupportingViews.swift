@@ -1263,8 +1263,9 @@ struct PhotoPreviewSheet: View {
                 }
                 // Build the share item and thumbnail in one detached pass — the same
                 // CGImageSource is reused for type detection and thumbnail decode,
-                // so HEIC photos are parsed only once, fully off the main thread.
-                let (thumbnail, shareItem): (PlatformImage?, PhotoTransferable) = await Task.detached(priority: .userInitiated) {
+                // so HEIC photos are parsed only once, fully off the main thread (at default
+                // QoS through onImageQueue: ImageIO waits on its own default-QoS threads).
+                let (thumbnail, shareItem): (PlatformImage?, PhotoTransferable) = await PhotoMetadataReader.onImageQueue {
                     let cfData = data as CFData
                     guard let source = CGImageSourceCreateWithData(cfData, nil) else {
                         // Source creation failed — fall back to magic-byte type detection, no thumbnail.
@@ -1284,7 +1285,7 @@ struct PhotoPreviewSheet: View {
                     #else
                     return (NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)), item)
                     #endif
-                }.value
+                }
                 guard !Task.isCancelled else { return }
                 cachedShareItem = shareItem
                 shareThumbnail = thumbnail
@@ -1389,10 +1390,11 @@ private struct PhotoPageView: View {
         }
         .task(id: photoID) {
             let d = load()
-            let decoded = await Task.detached(priority: .userInitiated) {
+            // At default QoS (ImageIO, often a HEIC original); nil: the page scrolled away
+            // while waiting for its turn (nothing decoded).
+            guard let decoded = await PhotoMetadataReader.onImageQueueUnlessCancelled({
                 PlatformImage(data: d)
-            }.value
-            guard !Task.isCancelled else { return }
+            }), !Task.isCancelled else { return }
             image = decoded
         }
         // A page scrolled away keeps its state in the viewer's lazy stack: release its

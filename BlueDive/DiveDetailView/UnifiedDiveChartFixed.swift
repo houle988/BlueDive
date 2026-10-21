@@ -1366,11 +1366,11 @@ struct UnifiedDiveChartOptimized: View {
             return (photo.id, minutes, dive.displayProfileDepth(sample.depth), photo.thumbnailBytes)
         }
         let thumbnails = placed.map { ($0.id, $0.thumbnail) }
-        let images = await Task.detached(priority: .userInitiated) {
+        // At default QoS (ImageIO); nil: cancelled while waiting for its turn (nothing decoded).
+        guard let images = await PhotoMetadataReader.onImageQueueUnlessCancelled({
             Dictionary(thumbnails.map { ($0.0, $0.1.flatMap { PlatformImage(data: $0) }) },
                        uniquingKeysWith: { first, _ in first })
-        }.value
-        guard !Task.isCancelled else { return }
+        }), !Task.isCancelled else { return }
         photoMarkers = placed.map { item in
             ProfilePhotoMarker(id: item.id, minutes: item.minutes, depth: item.depth, image: images[item.id] ?? nil)
         }

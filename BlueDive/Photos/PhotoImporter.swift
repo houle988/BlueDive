@@ -33,6 +33,26 @@ nonisolated struct PhotoFileInfo: Sendable {
 
 /// Reads capture date and IPTC text from image bytes with ImageIO, and creates the thumbnail
 /// and content hash. Never modifies the image.
+/// Limits how many `PhotoMetadataReader.onImageQueue` jobs run at once. A job over the limit
+/// waits suspended (no thread held), in arrival order.
+private actor ImageWorkGate {
+    private let limit: Int
+    private var running = 0
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int) { self.limit = limit }
+
+    func enter() async {
+        guard running >= limit else { running += 1; return }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    /// Hands the place to the next waiting job, if any (`running` then stays the same).
+    func leave() {
+        if waiting.isEmpty { running -= 1 } else { waiting.removeFirst().resume() }
+    }
+}
+
 nonisolated enum PhotoMetadataReader {
 
     /// Longest side of the stored thumbnail, in pixels.
@@ -113,10 +133,53 @@ nonisolated enum PhotoMetadataReader {
         return identity(from: properties, metadata: CGImageSourceCopyMetadataAtIndex(source, 0, nil))
     }
 
+    /// Runs ImageIO work (thumbnails, `read`) at default QoS and awaits it without blocking a
+    /// thread. ImageIO waits on its own default-QoS threads (HEIC decoding); Xcode reports that
+    /// wait as a priority inversion when the work runs higher. A detached task is raised to the
+    /// priority of the `.task` or button action awaiting it, whatever priority it was given, and
+    /// a dispatched block inherits its submitter's QoS unless `.enforceQoS` is set: so the work
+    /// is dispatched with `.enforceQoS` and awaited through a continuation, which raises nothing.
+    /// At most one job per core runs at a time (`ImageWorkGate`, awaited, not blocking), as on
+    /// Swift's thread pool: a global queue would start a thread for each job blocked in ImageIO
+    /// (a fast scroll through a photo grid), each decoding an image.
+    static func onImageQueue<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await imageWorkGate.enter()
+        let result = await runOnImageQueue(work)
+        await imageWorkGate.leave()
+        return result
+    }
+
+    /// `onImageQueue` for work only its caller wants (a tile's image): nil, without running
+    /// it, when the calling task was cancelled while waiting for its turn (the tile scrolled
+    /// away), so a fast scroll does not leave the visible tiles behind a backlog of others.
+    static func onImageQueueUnlessCancelled<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T? {
+        await imageWorkGate.enter()
+        guard !Task.isCancelled else {
+            await imageWorkGate.leave()
+            return nil
+        }
+        let result = await runOnImageQueue(work)
+        await imageWorkGate.leave()
+        return result
+    }
+
+    private static func runOnImageQueue<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { continuation in
+            imageWorkQueue.async(qos: .default, flags: .enforceQoS) { continuation.resume(returning: work()) }
+        }
+    }
+
+    private static let imageWorkQueue = DispatchQueue(label: "BlueDive.imageWork", qos: .default,
+                                                      attributes: .concurrent)
+    private static let imageWorkGate = ImageWorkGate(limit: max(2, ProcessInfo.processInfo.activeProcessorCount))
+
     /// A JPEG thumbnail of the image, oriented as displayed (longest side ≤ `maxPixelSize`).
     /// `usingEmbeddedPreview`: use the small preview stored in the file when it has one,
     /// without decoding the whole image (a quick scan); otherwise the thumbnail is made from
     /// the full image (sharper, for the stored thumbnail).
+    /// Call it (and `read`, which uses it) through `onImageQueue`, or from a task below default
+    /// priority (e.g. `.utility`, as the iNaturalist download does), never from a detached task
+    /// at default priority or above.
     static func thumbnailJPEG(of source: CGImageSource, maxPixelSize: Int, quality: Double,
                               usingEmbeddedPreview: Bool = false) -> Data? {
         let fromImageKey = usingEmbeddedPreview ? kCGImageSourceCreateThumbnailFromImageIfAbsent
@@ -878,11 +941,11 @@ enum PhotoImporter {
             guard let data = try? await item.loadTransferable(type: Data.self) else { return nil }
             raw = .data(data, filename: nil)
         }
-        return await Task.detached(priority: .userInitiated) { () -> (Data, String?, PhotoFileInfo)? in
+        return await PhotoMetadataReader.onImageQueue { () -> (Data, String?, PhotoFileInfo)? in
             guard let (data, filename) = load(raw),
                   let info = PhotoMetadataReader.read(data) else { return nil }
             return (data, filename, info)
-        }.value
+        }
     }
 
     /// Replaces the stored photo `photoID` (in `context`) with a newer version of the same
