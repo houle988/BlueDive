@@ -29,7 +29,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "BlueDive-dykkelogg"
           }
         },
@@ -95,7 +95,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Garmin FIT-aktivitet"
           }
         },
@@ -136,7 +136,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "BlueDive bruker Bluetooth til å koble til dykkecomputeren din."
           }
         },
@@ -177,8 +177,8 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "BlueDive bruker posisjonen din til å vise hvor du er på dykkekartet."
+            "state" : "translated",
+            "value" : "BlueDive bruker posisjonen din til å vise hvor du er på kartet."
           }
         },
         "nl" : {
@@ -211,7 +211,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Subsurface-dykkelogg"
           }
         },

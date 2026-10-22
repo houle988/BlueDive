@@ -29,7 +29,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "%@ t"
           }
         },
@@ -64,7 +64,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "%@ t %@ min"
           }
         },
@@ -99,7 +99,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "%@ min"
           }
         },
@@ -134,7 +134,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Alle dykkere"
           }
         },
@@ -177,7 +177,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Bluetooth-dykk"
           }
         },
@@ -212,7 +212,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Velg hvilken dykkers statistikk som skal vises."
           }
         },
@@ -247,7 +247,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Dager siden"
           }
         },
@@ -282,7 +282,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Dypeste"
           }
         },
@@ -318,7 +318,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Antall dykk"
           }
         },
@@ -353,7 +353,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Dykker"
           }
         },
@@ -388,7 +388,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Dykkerstatistikk"
           }
         },
@@ -424,7 +424,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Filtrer etter dykkernavn."
           }
         },
@@ -459,7 +459,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fra dykkecomputer"
           }
         },
@@ -495,7 +495,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Importer et dykk fra dykkecomputeren din via Bluetooth."
           }
         },
@@ -530,7 +530,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Logg manuelt"
           }
         },
@@ -565,7 +565,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Lengste"
           }
         },
@@ -600,7 +600,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Manuelt"
           }
         },
@@ -636,7 +636,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Manuelt dykk"
           }
         },
@@ -672,7 +672,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Logg raskt et nytt dykk manuelt."
           }
         },
@@ -707,7 +707,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Se den viktigste dykkerstatistikken din raskt."
           }
         },
@@ -743,7 +743,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Se totalt antall loggførte dykk raskt."
           }
         },
@@ -778,7 +778,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Totalt antall dykk"
           }
         },
@@ -813,7 +813,7 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Total tid"
           }
         },
