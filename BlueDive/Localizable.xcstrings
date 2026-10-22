@@ -47030,47 +47030,6 @@
         }
       }
     },
-    "PPO₂ (bar, 0–2 scale)" : {
-      "comment" : "Chart legend label for the PPO2 overlay line showing partial pressure of oxygen from 0 to 2 bar",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PPO₂ (bar, Skala 0–2)"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PPO₂ (bar, 0–2 scale)"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "PPO₂ (bar, escala 0–2)"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PPO₂ (bar, échelle 0–2)"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "PPO₂ (bar, skala 0–2)"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PPO₂ (bar, schaal 0–2)"
-          }
-        }
-      }
-    },
     "Preparing backup…" : {
       "comment" : "Database backup progress",
       "localizations" : {
@@ -50953,47 +50912,6 @@
         }
       }
     },
-    "S%ld PPO₂ (0–2 bar)" : {
-      "comment" : "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "S%ld PPO₂ (0–2 bar)"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "S%ld PPO₂ (0–2 bar)"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "S%ld PPO₂ (0–2 bar)"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "S%ld PPO₂ (0–2 bar)"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "S%ld PPO₂ (0–2 bar)"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "S%ld PPO₂ (0–2 bar)"
-          }
-        }
-      }
-    },
     "S%ld: " : {
       "comment" : "Tooltip label prefix for per-O2-sensor PPO2 in the dive chart; %ld = sensor number (1-based)",
       "localizations" : {
@@ -51031,6 +50949,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "S%ld: "
+          }
+        }
+      }
+    },
+    "S%lld PPO₂" : {
+      "comment" : "Chart legend: one O₂ sensor's PPO₂ range; the number is the sensor (1-based)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S%lld PPO₂"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "S%lld PPO₂"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S%lld PPO₂"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "S%lld PPO₂"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S%lld PPO₂"
           }
         }
       }

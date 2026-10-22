@@ -704,10 +704,10 @@ extension View {
 
 // MARK: - Wrapping Chip Layout
 
-#if os(macOS)
 /// Lays out chips left to right and wraps onto a new line when the next chip would not
-/// fit the proposed width (macOS filter sheet). Lines are separated by `spacing`, like
-/// the chips within a line.
+/// fit the proposed width (macOS filter sheet, and the dive profile legend's per-sensor and
+/// per-tank entries on both platforms). Lines are separated by `spacing`, like the chips
+/// within a line.
 struct WrappingChipLayout: Layout {
     var spacing: CGFloat
 
@@ -768,7 +768,6 @@ struct WrappingChipLayout: Layout {
         return rows
     }
 }
-#endif
 
 #if os(macOS)
 /// macOS wide-window density layouts: shows `wide` when the available width is at least

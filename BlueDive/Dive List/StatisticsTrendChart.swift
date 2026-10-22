@@ -545,11 +545,20 @@ struct StatisticsTrendChart: View {
                 }
             }
             .chartXAxis {
-                AxisMarks(values: monthCenters) { _ in
-                    // Centred under the month's point (the ticks are at month centres).
-                    AxisValueLabel(format: monthStyle.month(.abbreviated), anchor: .top)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.secondary)
+                AxisMarks(values: monthCenters) { value in
+                    // Centred under the month's point and the tooltip's cursor line (the
+                    // ticks are at month centres). Swift Charts starts a label at its tick
+                    // and rejects `anchor: .top`, so with no extra spacing
+                    // `CenteredOnAxisValue` shifts it back by half its width.
+                    AxisValueLabel(horizontalSpacing: 0) {
+                        if let month = value.as(Date.self) {
+                            CenteredOnAxisValue {
+                                Text(month, format: monthStyle.month(.abbreviated))
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             }
             .chartPlotStyle { plotArea in

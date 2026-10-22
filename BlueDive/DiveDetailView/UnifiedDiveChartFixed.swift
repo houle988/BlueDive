@@ -271,6 +271,86 @@ struct ToggleButton: View {
     }
 }
 
+// MARK: - Secondary axis scale
+
+/// Range and label spacing of the secondary (right-axis) metric, in its display unit.
+/// `lower` and `upper` are the metric values at the two ends of the plot; both are
+/// multiples of `step`, so every right-axis label shows a round value. The PDF logbook's
+/// profile uses the same rounding for its depth and time labels.
+struct SecondaryAxisScale {
+    let lower: Double
+    let upper: Double
+    let step: Double
+
+    var span: Double { upper - lower }
+
+    /// Values that get a right-axis label, from `lower` to `upper` in `step` increments.
+    var labelValues: [Double] {
+        guard step > 0, span > 0, (span / step).isFinite else { return [lower] }
+        let count = min(Int((span / step).rounded()), 50)
+        return (0...count).map { lower + Double($0) * step }
+    }
+
+    /// Decimals needed to show every multiple of `step` exactly (0.25 → 2, 0.5 → 1, 50 → 0).
+    var labelDecimals: Int {
+        var decimals = 0
+        var scaled = step
+        while decimals < 3, abs(scaled - scaled.rounded()) > 1e-9 {
+            scaled *= 10
+            decimals += 1
+        }
+        return decimals
+    }
+
+    /// Scale covering `low...high`, with both ends rounded outward to a round step chosen
+    /// to give about `targetIntervals` (by default five) intervals. `multipliers` are the allowed leading digits of the
+    /// step (`[1, 2, 5]` keeps whole values, `[1, 2, 2.5, 5]` also allows 25 bar or
+    /// 0.25 bar); `minimumStep` is the smallest step allowed (1 for whole degrees or
+    /// minutes). A flat series still spans one step. `topHeadroom` adds a step when the
+    /// highest value lands on the top of the scale (see below); pass false when `high`
+    /// is already padded. `targetIntervals` sets how many intervals the step aims for.
+    static func rounded(low: Double, high: Double,
+                        multipliers: [Double] = [1, 2, 2.5, 5],
+                        minimumStep: Double = 0,
+                        topHeadroom: Bool = true,
+                        targetIntervals: Double = 5) -> SecondaryAxisScale {
+        // A flat series (e.g. a pressure that never changed) gets a step sized from its
+        // value rather than from a zero span.
+        let span = high > low ? high - low : max(abs(high) * 0.2, 1.0)
+        let rawStep = max(span / max(targetIntervals, 1), minimumStep, 1e-6)
+        let magnitude = pow(10.0, floor(log10(rawStep)))
+        let normalised = rawStep / magnitude
+        let multiplier = multipliers.first { $0 >= normalised - 1e-9 } ?? 10
+        let step = max(multiplier * magnitude, minimumStep)
+        let lower = (low / step).rounded(.down) * step
+        var upper = (high / step).rounded(.up) * step
+        // The top of the scale is the plot's clipped top edge for pressure, temperature
+        // and NDL: when the highest value lands on (or just below) a round value, add one
+        // step so the trace is not drawn along that edge.
+        if topHeadroom, upper - high < step * 0.05 { upper += step }
+        if upper <= lower { upper = lower + step }
+        return SecondaryAxisScale(lower: lower, upper: upper, step: step)
+    }
+}
+
+// MARK: - Time-axis label centring
+
+/// Places its single subview so the subview's horizontal centre sits on this layout's
+/// leading edge. Used inside an x-axis `AxisValueLabel`, whose leading edge Swift Charts
+/// puts on the gridline, to centre the label under its line (the dive profile's time
+/// axis and the Statistics trend chart's months).
+struct CenteredOnAxisValue: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.first?.sizeThatFits(.unspecified) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let subview = subviews.first else { return }
+        let size = subview.sizeThatFits(.unspecified)
+        subview.place(at: CGPoint(x: bounds.minX - size.width / 2, y: bounds.minY), proposal: .unspecified)
+    }
+}
+
 // MARK: - Static Chart Layer (never re-renders on cursor move)
 
 /// Ce view contient uniquement les courbes — il est Equatable donc SwiftUI
@@ -321,62 +401,56 @@ private struct StaticChartLayer: View, Equatable {
         lhs.depthBase == rhs.depthBase
     }
 
-    // MARK: - Right-axis tick positions
+    // MARK: - Secondary axis scales
 
-    /// Mirrors the left depth axis tick positions so every right-axis label
-    /// lands on a gridline that already has a corresponding left depth label.
-    /// Produces ~5 evenly-spaced negative values from 0 down to `yDomainMin`.
-    private var depthAxisTicks: [Double] {
-        let base = depthBase
-        guard base > 0 else { return [0] }
-        // Choose a round step size that gives roughly 4-6 ticks.
-        let rawStep = base / 5.0
-        let magnitude = pow(10.0, floor(log10(rawStep)))
-        let normalised = rawStep / magnitude
-        let niceNormalised: Double
-        if      normalised < 1.5 { niceNormalised = 1.0 }
-        else if normalised < 3.5 { niceNormalised = 2.0 }
-        else if normalised < 7.5 { niceNormalised = 5.0 }
-        else                     { niceNormalised = 10.0 }
-        let step = niceNormalised * magnitude
+    // Each secondary metric's scale comes from the dive's own samples, in the display
+    // unit, rounded outward to a round step (see `SecondaryAxisScale.rounded`). The right
+    // axis labels those round values at their own heights, so a label always names the
+    // trace value at its height. The scales only position marks and labels; no sample
+    // value is altered.
 
-        var ticks: [Double] = []
-        var tick = 0.0
-        while tick <= base * 1.05 {
-            ticks.append(-tick)
-            tick += step
+    /// Pressure scale: the lowest to the highest reading across every tank the chart
+    /// draws (the per-tank pressures when there are several tanks, the single tank
+    /// pressure otherwise — the same samples `pressureMarks` plots), in the display unit.
+    /// Falls back to 0–300 bar, in the display unit, when the dive has no pressure samples.
+    /// The step is at least 10 bar (100 psi, 1 000 000 Pa), so a nearly flat trace — a short
+    /// dive or a tank barely breathed from — is not labelled in fractions of a bar.
+    /// `tankIndices` is computed once in `body` and shared with `pressureMarks`.
+    private func pressureAxis(tankIndices: [Int]) -> SecondaryAxisScale {
+        let minimumStep: Double
+        switch prefs.pressureUnit {
+        case .bar: minimumStep = 10
+        case .psi: minimumStep = 100
+        case .pa:  minimumStep = 1_000_000
         }
-        return ticks
+        var lo = Double.greatestFiniteMagnitude
+        var hi = -Double.greatestFiniteMagnitude
+        func include(_ raw: Double) {
+            let value = dive.displayProfilePressure(raw)
+            if value < lo { lo = value }
+            if value > hi { hi = value }
+        }
+        for sample in dive.profileSamples {
+            if tankIndices.count > 1 {
+                guard let pressures = sample.tankPressures else { continue }
+                for idx in tankIndices {
+                    if let raw = pressures[idx] { include(raw) }
+                }
+            } else if let raw = sample.tankPressure {
+                include(raw)
+            }
+        }
+        guard lo <= hi else {
+            return .rounded(low: 0, high: prefs.pressureUnit.convert(300, from: .bar), minimumStep: minimumStep)
+        }
+        return .rounded(low: lo, high: hi, minimumStep: minimumStep)
     }
 
-    /// The right axis reuses the exact same tick positions as the left depth axis so
-    /// every right-axis label sits on a gridline that already has a left depth label.
-    private var rightAxisTicks: [Double] { depthAxisTicks }
-
-    /// Fraction [0…1] for a given negated Y tick value, used by right-axis label builders.
-    /// fraction=0 at surface (y=0), fraction=1 at the chart depth (y=-depthBase).
-    private func fraction(for y: Double) -> Double {
-        let base = depthBase
-        guard base > 0 else { return 0 }
-        return (-y) / base
-    }
-
-    // MARK: - Right-axis label builders
-
-    /// Pressure label for a tick.  300 bar at surface (y=0), 0 bar at deepest (y=yDomainMin).
-    private func pressureLabel(for y: Double) -> String {
-        let maxDisplay = dive.displayPressure(300)
-        // fraction=0 at surface → full pressure; fraction=1 at depth → 0 pressure
-        let value = (1.0 - fraction(for: y)) * maxDisplay
-        return prefs.pressureUnit.formatted(value, from: prefs.pressureUnit)
-    }
-
-    /// Temperature axis bounds `(min, range)` in the user's display unit.
-    /// Derived from the dive's own temperature samples with padding so the trace is
-    /// never clamped — warm (> 30 °C) or unusually cold dives use the full vertical
-    /// range instead of flattening against a fixed cap. Falls back to a sensible
+    /// Temperature scale in whole degrees. Derived from the dive's own temperature samples
+    /// with padding (10 % of the span, at least 2°) so the trace never touches the plot
+    /// edges, then rounded outward to a step of 1, 2, 5 or 10 degrees. Falls back to a
     /// fixed range per unit when the dive has no temperature samples.
-    private var temperatureAxis: (min: Double, range: Double) {
+    private var temperatureAxis: SecondaryAxisScale {
         // Single allocation-free pass over the samples to find the display-unit
         // temperature extremes.
         var lo = Double.greatestFiniteMagnitude
@@ -389,62 +463,150 @@ private struct StaticChartLayer: View, Equatable {
         }
         guard lo <= hi else {
             switch prefs.temperatureUnit {
-            case .celsius:    return (-10.0, 40.0)
-            case .fahrenheit: return (14.0,  72.0)
-            case .kelvin:     return (263.15, 40.0)
+            case .celsius:    return .rounded(low: -10, high: 30, multipliers: [1, 2, 5], minimumStep: 1, topHeadroom: false)
+            case .fahrenheit: return .rounded(low: 14, high: 86, multipliers: [1, 2, 5], minimumStep: 1, topHeadroom: false)
+            case .kelvin:     return .rounded(low: 263, high: 303, multipliers: [1, 2, 5], minimumStep: 1, topHeadroom: false)
             }
         }
-        // Pad by 10 % of the span (at least 2°) so the line never touches the plot
-        // edges, then round to whole units for clean tick labels.
         let span = max(hi - lo, 1.0)
         let pad = max(span * 0.1, 2.0)
-        let axisMin = (lo - pad).rounded(.down)
-        let axisMax = (hi + pad).rounded(.up)
-        return (axisMin, axisMax - axisMin)
+        return .rounded(low: lo - pad, high: hi + pad, multipliers: [1, 2, 5], minimumStep: 1, topHeadroom: false)
     }
 
-    /// Temperature label for a tick.  Matches the encoding used in `temperatureMarks`.
-    /// `axis` is precomputed once in `body` and threaded in to avoid rescanning the
-    /// samples on every tick.
-    private func temperatureLabel(for y: Double, axis: (min: Double, range: Double)) -> String {
-        let (axisMin, axisRange) = axis
-        // Mirrors the mark formula: normalised = 1 - fraction → temp = axisMin + normalised * axisRange
-        // fraction=0 (y=0, top) → normalised=1 → warmest; fraction=1 (y=-base, bottom) → normalised=0 → coldest
-        let normalised = 1.0 - fraction(for: y)
-        let value = axisMin + normalised * axisRange
-        // One decimal so each label exactly describes its gridline position. The
-        // gridlines are shared with the depth axis, so they rarely fall on a whole
-        // degree; rounding to an integer would displace the label from the trace.
-        // Round to one decimal and normalise negative zero so a gridline just below
-        // 0° doesn't render as "-0.0°".
-        var display = (value * 10).rounded() / 10
-        if display == 0 { display = 0 }
-        return display.localizedString(decimals: 1, minDecimals: 1) + prefs.temperatureUnit.symbol
+    /// NDL scale in whole minutes: the lowest to the highest value `ndlMarks` plots
+    /// (0 while a deco stop is owed; readings capped at 99 as in `ndlMarks`). Falls back
+    /// to 0–100 min when the dive has no NDL samples.
+    /// `series` (`ndlSeriesSamples`) is computed once in `body` and shared with `ndlMarks`.
+    private func ndlAxis(series: [DiveProfilePoint]) -> SecondaryAxisScale {
+        var lo = Double.greatestFiniteMagnitude
+        var hi = -Double.greatestFiniteMagnitude
+        for sample in series {
+            guard let ndl = ndlPlotValue(for: sample) else { continue }
+            let value = min(ndl, ndlPlotCap)
+            if value < lo { lo = value }
+            if value > hi { hi = value }
+        }
+        guard lo <= hi else {
+            return .rounded(low: 0, high: 100, multipliers: [1, 2, 5], minimumStep: 1)
+        }
+        let scale = SecondaryAxisScale.rounded(low: lo, high: hi, multipliers: [1, 2, 5], minimumStep: 1)
+        // When the trace reaches the cap (99, readings above it included), the scale ends
+        // at the cap rather than at the rounded 100, so the capped line and its top label
+        // sit on the plot's top edge instead of just below it. The other labels keep their
+        // round values.
+        guard hi >= ndlPlotCap else { return scale }
+        return SecondaryAxisScale(lower: scale.lower, upper: ndlPlotCap, step: scale.step)
     }
 
-    /// NDL label for a tick.  100 min at surface (y=0), 0 min at deepest (y=yDomainMin).
-    private func ndlLabel(for y: Double) -> String {
-        let value = (1.0 - fraction(for: y)) * 100.0
-        return value.rounded().localizedString(decimals: 0) + "min"
+    /// PPO₂ scale: from 0 to the highest value `ppo2Marks` plots (every O₂ sensor when the
+    /// dive has per-sensor readings, the voted or computed PPO₂ otherwise), never below
+    /// 1.6 bar so a low-PPO₂ dive is still drawn against the usual working limits.
+    /// `sensorIndices` and `data` are computed once in `body` and shared with `ppo2Marks`.
+    private func ppo2Axis(sensorIndices: [Int], data: [(time: Double, ppo2: Double)]) -> SecondaryAxisScale {
+        var hi = 0.0
+        if !sensorIndices.isEmpty {
+            for sample in dive.profileSamples {
+                guard let readings = sample.sensorPPO2 else { continue }
+                for idx in sensorIndices {
+                    if let ppo2 = readings[idx], ppo2 > hi { hi = ppo2 }
+                }
+            }
+        } else {
+            for point in data where point.ppo2 > hi { hi = point.ppo2 }
+        }
+        return .rounded(low: 0, high: max(hi, ppo2AxisMinimumMax))
     }
 
-    private let ppo2AxisMax: Double = 2.0
+    /// Lowest top of the PPO₂ scale, in bar.
+    private let ppo2AxisMinimumMax: Double = 1.6
 
-    /// PPO₂ label for a tick. 0 bar at surface (y=0), 2.0 bar at deepest (y=yDomainMin).
-    private func ppo2Label(for y: Double) -> String {
-        let value = ppo2AxisMax * fraction(for: y)
-        return value.localizedString(decimals: 1, minDecimals: 1) + " bar"
+    /// PPO₂ is drawn from 0 at the surface line growing downward; the other metrics put
+    /// their highest value at the surface line.
+    private var secondaryAxisIncreasesDownward: Bool { visibility.showPPO2 }
+
+    /// Plot Y of a secondary-metric value: `scale.upper` at the surface line (y = 0) and
+    /// `scale.lower` at the chart depth (y = -depthBase), or the reverse when
+    /// `increasesDownward`. Values outside the scale are clamped to the plot.
+    private func plotY(_ value: Double, on scale: SecondaryAxisScale, increasesDownward: Bool = false) -> Double {
+        guard scale.span > 0 else { return 0 }
+        let normalised = ((value - scale.lower) / scale.span).clamped(to: 0...1)
+        return -depthBase * (increasesDownward ? normalised : 1.0 - normalised)
     }
+
+    /// Inverse of `plotY`: the metric value at a right-axis mark, snapped to the scale's
+    /// step so floating-point error never shows in a label.
+    private func secondaryValue(atY y: Double, on scale: SecondaryAxisScale) -> Double {
+        guard depthBase > 0 else { return scale.lower }
+        let fraction = (-y) / depthBase
+        let normalised = secondaryAxisIncreasesDownward ? fraction : 1.0 - fraction
+        let value = scale.lower + normalised * scale.span
+        var snapped = (value / scale.step).rounded() * scale.step
+        // Normalise negative zero so a label never reads "-0".
+        if snapped == 0 { snapped = 0 }
+        return snapped
+    }
+
+    /// Plot Y positions of the right-axis labels.
+    private func secondaryAxisMarks(_ scale: SecondaryAxisScale?) -> [Double] {
+        // With no depth (every sample at 0 m) all values would map to the same height.
+        guard let scale, depthBase > 0 else { return [] }
+        var values = scale.labelValues
+        if ndlIsRightAxisMetric, values.contains(where: { $0 >= ndlPlotCap }) {
+            // NDL is plotted up to `ndlPlotCap` (99 min), so the top label of a scale
+            // reaching it sits at the height of 99 and reads 99 (see `ndlTopLabel`). A label
+            // within half a step below it (98 on a 2-minute step) would crowd it, so it is
+            // left out.
+            values = values.map { min($0, ndlPlotCap) }
+            values.removeAll { $0 < ndlPlotCap && ndlPlotCap - $0 <= scale.step / 2 }
+        }
+        return values.map { plotY($0, on: scale, increasesDownward: secondaryAxisIncreasesDownward) }
+    }
+
+    /// True when NDL is the right axis's metric: shown, and not overridden by a metric
+    /// that comes first in `secondaryAxisLabel`'s order (PPO₂, pressure, temperature).
+    private var ndlIsRightAxisMetric: Bool {
+        visibility.showNDL && !visibility.showPPO2 && !visibility.showPressure && !visibility.showTemperature
+    }
+
+    /// Highest NDL the chart plots, in minutes: readings above it are drawn at this value,
+    /// as dive computers such as Shearwater display them.
+    private let ndlPlotCap: Double = 99
+
+    /// Text of the top NDL label when the scale reaches `ndlPlotCap` ("99min"), or nil
+    /// for an ordinary label. The top label is recognised by its position (the height of
+    /// the cap), not by its value: snapped to the step, 99 can round to 100 and the label
+    /// below it to 98.
+    private func ndlTopLabel(atY y: Double, scale: SecondaryAxisScale) -> String? {
+        guard scale.upper >= ndlPlotCap else { return nil }
+        let capY = plotY(ndlPlotCap, on: scale)
+        guard abs(y - capY) < max(depthBase, 1) * 1e-6 else { return nil }
+        return ndlPlotCap.localizedString(decimals: 0) + "min"
+    }
+
+    // MARK: - Right-axis label builders
 
     /// Right-axis label text for whichever secondary metric is active. The four metrics
     /// are mutually exclusive in the toggle UI, so only one branch is ever live — but this
     /// stays a plain value computation rather than branching inside the axis's ViewBuilder
     /// content, which is what keeps that content's view-tree shape stable across toggles.
-    private func secondaryAxisLabel(for y: Double, axis: (min: Double, range: Double)) -> String {
-        if visibility.showPPO2 { return ppo2Label(for: y) }
-        if visibility.showPressure { return pressureLabel(for: y) }
-        if visibility.showTemperature { return temperatureLabel(for: y, axis: axis) }
-        if visibility.showNDL { return ndlLabel(for: y) }
+    private func secondaryAxisLabel(for y: Double, scale: SecondaryAxisScale?) -> String {
+        guard let scale else { return "" }
+        let value = secondaryValue(atY: y, on: scale)
+        let decimals = scale.labelDecimals
+        if visibility.showPPO2 {
+            return value.localizedString(decimals: decimals, minDecimals: decimals) + " bar"
+        }
+        if visibility.showPressure {
+            return prefs.pressureUnit.formatted(value, from: prefs.pressureUnit, decimals: decimals)
+        }
+        if visibility.showTemperature {
+            return value.localizedString(decimals: decimals, minDecimals: decimals) + prefs.temperatureUnit.symbol
+        }
+        if visibility.showNDL {
+            // The top label names the plotted cap (99), not the rounded step above it.
+            if let top = ndlTopLabel(atY: y, scale: scale) { return top }
+            return value.localizedString(decimals: decimals) + "min"
+        }
         return ""
     }
 
@@ -467,26 +629,41 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     var body: some View {
-        // Compute the temperature axis once per render (only when the trace is shown),
-        // then thread it into the marks and every right-axis label so the sample scan
-        // runs a single time instead of once per axis tick.
-        let tempAxis = visibility.showTemperature ? temperatureAxis : (min: 0.0, range: 1.0)
+        // Compute each shown metric's scale once per render, then thread it into its marks
+        // and every right-axis label so the sample scan runs a single time instead of once
+        // per mark or axis label.
+        // PPO₂ sources, shared by its scale and its marks: the per-sensor readings, or else
+        // the voted or computed series (built only when there are no sensor readings).
+        let ppo2Sensors = visibility.showPPO2 ? chartSensorIndices : []
+        let ppo2Data = visibility.showPPO2 && ppo2Sensors.isEmpty ? ppo2RenderData : []
+        let ppo2Scale = visibility.showPPO2 ? ppo2Axis(sensorIndices: ppo2Sensors, data: ppo2Data) : nil
+        // Pressure and NDL sources, likewise shared by each scale and its marks.
+        let pressureTanks = visibility.showPressure ? chartTankIndices : []
+        let ndlSeries = visibility.showNDL ? ndlSeriesSamples : []
+        let pressureScale = visibility.showPressure ? pressureAxis(tankIndices: pressureTanks) : nil
+        let temperatureScale = visibility.showTemperature ? temperatureAxis : nil
+        let ndlScale = visibility.showNDL ? ndlAxis(series: ndlSeries) : nil
+        // Same order as `secondaryAxisLabel` and `secondaryAxisColor`.
+        let rightAxisScale = ppo2Scale ?? pressureScale ?? temperatureScale ?? ndlScale
         return Chart {
             legacyDecoBand
             depthMarks
             decoMarks
             gasChangeMarks
-            temperatureMarks(axis: tempAxis)
-            pressureMarks
-            ndlMarks
-            ppo2Marks
+            if let temperatureScale { temperatureMarks(scale: temperatureScale) }
+            if let pressureScale { pressureMarks(scale: pressureScale, tankIndices: pressureTanks) }
+            if let ndlScale { ndlMarks(scale: ndlScale, series: ndlSeries) }
+            if let ppo2Scale { ppo2Marks(scale: ppo2Scale, sensorIndices: ppo2Sensors, data: ppo2Data) }
         }
         // Explicit domain from yDomainMin (deepest, negative) to 0 (surface).
         // No automatic padding — the chart fills exactly to the data.
         .chartYScale(domain: yDomainMin...0)
         .chartXScale(domain: 0...xMax)
         .chartPlotStyle { plotArea in
-            plotArea.clipShape(Rectangle())
+            // Clip 1 pt outside the plot (half the 2 pt trace width), so a trace running
+            // along an edge — NDL at its 99 cap, the depth line at the surface — is drawn
+            // at full width instead of losing its outer half.
+            plotArea.clipShape(Rectangle().inset(by: -1))
         }
         .chartXAxis {
             AxisMarks(values: .automatic) { value in
@@ -495,13 +672,19 @@ private struct StaticChartLayer: View, Equatable {
                     // look) and black in light mode, so the grid stays visible on
                     // both dark and light chart backgrounds.
                     .foregroundStyle(Color.primary.opacity(0.2))
-                AxisValueLabel {
+                // Swift Charts starts each time label at its gridline (an `anchor: .top`
+                // is rejected as unsupported), so the label sits right of the line.
+                // With no extra spacing, `CenteredOnAxisValue` shifts it back by half its
+                // width so it is centred under the line.
+                AxisValueLabel(horizontalSpacing: 0) {
                     if let time = value.as(Double.self) {
-                        // "min" is the same in every app language (the "%lld min" key is
-                        // not translated); the number follows the region's formatting.
-                        Text(verbatim: time.localizedString(decimals: 0) + " min")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        CenteredOnAxisValue {
+                            // "min" is the same in every app language (the "%lld min" key
+                            // is not translated); the number follows the region's formatting.
+                            Text(verbatim: time.localizedString(decimals: 0) + " min")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -527,21 +710,31 @@ private struct StaticChartLayer: View, Equatable {
             }
 
             // ── Right axis: secondary metrics ──
-            if visibility.showPressure || visibility.showTemperature || visibility.showNDL || visibility.showPPO2 {
-                AxisMarks(position: .trailing, values: rightAxisTicks) { value in
-                    AxisGridLine().foregroundStyle(Color.clear)
-                    // A single structurally-stable Text, not a branching HStack: Swift Charts
-                    // does not redraw AxisValueLabel content when the active branch of an
-                    // if/switch inside it changes between updates (confirmed by direct
-                    // testing), which left the axis blank when switching between secondary
-                    // metrics until the whole AxisMarks was torn down and rebuilt. Computing
-                    // the string/colour as plain values keeps the view tree shape constant
-                    // across every toggle combination.
+            // The labels sit at the metric's own round values (`secondaryAxisMarks`), not
+            // on the depth gridlines, and carry no tick or gridline: a short tick beside a
+            // number reads as a minus sign. A small left-pointing triangle outline points each
+            // label at the height it names instead.
+            if let rightAxisScale {
+                AxisMarks(position: .trailing, values: secondaryAxisMarks(rightAxisScale)) { value in
+                    // A structurally-stable label, not a branching one: Swift Charts does not
+                    // redraw AxisValueLabel content when the active branch of an if/switch
+                    // inside it changes between updates (confirmed by direct testing), which
+                    // left the axis blank when switching between secondary metrics until the
+                    // whole AxisMarks was torn down and rebuilt. The triangle and text are always
+                    // present, and the string/colour are computed as plain values, so the view
+                    // tree shape stays constant across every toggle combination.
                     AxisValueLabel(anchor: .leading) {
                         if let depth = value.as(Double.self) {
-                            Text(secondaryAxisLabel(for: depth, axis: tempAxis))
-                                .font(.caption2)
-                                .foregroundStyle(secondaryAxisColor)
+                            HStack(spacing: 2) {
+                                Image(systemName: "arrowtriangle.left")
+                                    .imageScale(.small)
+                                    .fontWeight(.bold)
+                                    // Decorative: VoiceOver reads only the value.
+                                    .accessibilityHidden(true)
+                                Text(secondaryAxisLabel(for: depth, scale: rightAxisScale))
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(secondaryAxisColor)
                         }
                     }
                 }
@@ -628,23 +821,17 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private func temperatureMarks(axis: (min: Double, range: Double)) -> some ChartContent {
-        if visibility.showTemperature {
-            let samplesWithTemp = dive.profileSamples.filter { $0.temperature != nil }
-            let (axisMin, axisRange) = axis
-            ForEach(samplesWithTemp) { sample in
-                if let temp = sample.temperature {
-                    let displayTemp = dive.displayProfileTemperature(temp)
-                    // Map temperature onto the negated depth axis:
-                    // warmest temp → y = 0 (top), coldest temp → y = -depthBase (bottom)
-                    // (1 - normalised) flips the direction so high temp sits near the surface.
-                    let normalised = ((displayTemp - axisMin) / axisRange).clamped(to: 0...1)
-                    let value = -depthBase * (1.0 - normalised)
-                    LineMark(x: .value("Time", sample.time), y: .value("Temp.", value), series: .value("Sequence", "Temperature"))
-                        .interpolationMethod(.catmullRom)
-                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                        .foregroundStyle(Color.green)
-                }
+    private func temperatureMarks(scale: SecondaryAxisScale) -> some ChartContent {
+        let samplesWithTemp = dive.profileSamples.filter { $0.temperature != nil }
+        ForEach(samplesWithTemp) { sample in
+            if let temp = sample.temperature {
+                // Top of the scale (warmest) at the surface line, bottom (coldest) at the
+                // chart depth.
+                let value = plotY(dive.displayProfileTemperature(temp), on: scale)
+                LineMark(x: .value("Time", sample.time), y: .value("Temp.", value), series: .value("Sequence", "Temperature"))
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .foregroundStyle(Color.green)
             }
         }
     }
@@ -675,47 +862,41 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private var pressureMarks: some ChartContent {
-        if visibility.showPressure {
-            let tankIndices = chartTankIndices
-            let maxDisplayPressure = dive.displayPressure(300)
+    private func pressureMarks(scale: SecondaryAxisScale, tankIndices: [Int]) -> some ChartContent {
 
-            if tankIndices.count > 1 {
-                // Multi-tank: one line per tank index
-                ForEach(tankIndices, id: \.self) { tankIdx in
-                    let samplesForTank = dive.profileSamples.filter { $0.tankPressures?[tankIdx] != nil }
-                    ForEach(samplesForTank) { sample in
-                        if let pressure = sample.tankPressures?[tankIdx] {
-                            let displayPressure = dive.displayProfilePressure(pressure)
-                            let value = -depthBase * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
-                            LineMark(
-                                x: .value("Time", sample.time),
-                                y: .value("Press.", value),
-                                series: .value("Sequence", "Pressure-T\(tankIdx)")
-                            )
-                            .interpolationMethod(.catmullRom)
-                            .lineStyle(StrokeStyle(
-                                lineWidth: 2,
-                                lineCap: .round,
-                                lineJoin: .round,
-                                dash: pressureDash(forTankAt: tankIndices.firstIndex(of: tankIdx) ?? 0)
-                            ))
-                            .foregroundStyle(Color.red)
-                        }
+        if tankIndices.count > 1 {
+            // Multi-tank: one line per tank index
+            ForEach(tankIndices, id: \.self) { tankIdx in
+                let samplesForTank = dive.profileSamples.filter { $0.tankPressures?[tankIdx] != nil }
+                ForEach(samplesForTank) { sample in
+                    if let pressure = sample.tankPressures?[tankIdx] {
+                        let value = plotY(dive.displayProfilePressure(pressure), on: scale)
+                        LineMark(
+                            x: .value("Time", sample.time),
+                            y: .value("Press.", value),
+                            series: .value("Sequence", "Pressure-T\(tankIdx)")
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .lineStyle(StrokeStyle(
+                            lineWidth: 2,
+                            lineCap: .round,
+                            lineJoin: .round,
+                            dash: pressureDash(forTankAt: tankIndices.firstIndex(of: tankIdx) ?? 0)
+                        ))
+                        .foregroundStyle(Color.red)
                     }
                 }
-            } else {
-                // Single tank or old dive: use tankPressure
-                let samplesWithPressure = dive.profileSamples.filter { $0.tankPressure != nil }
-                ForEach(samplesWithPressure) { sample in
-                    if let pressure = sample.tankPressure {
-                        let displayPressure = dive.displayProfilePressure(pressure)
-                        let value = -depthBase * (1.0 - (displayPressure / maxDisplayPressure).clamped(to: 0...1))
-                        LineMark(x: .value("Time", sample.time), y: .value("Press.", value), series: .value("Sequence", "Pressure"))
-                            .interpolationMethod(.catmullRom)
-                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                            .foregroundStyle(Color.red)
-                    }
+            }
+        } else {
+            // Single tank or old dive: use tankPressure
+            let samplesWithPressure = dive.profileSamples.filter { $0.tankPressure != nil }
+            ForEach(samplesWithPressure) { sample in
+                if let pressure = sample.tankPressure {
+                    let value = plotY(dive.displayProfilePressure(pressure), on: scale)
+                    LineMark(x: .value("Time", sample.time), y: .value("Press.", value), series: .value("Sequence", "Pressure"))
+                        .interpolationMethod(.catmullRom)
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                        .foregroundStyle(Color.red)
                 }
             }
         }
@@ -774,20 +955,18 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private var ndlMarks: some ChartContent {
-        if visibility.showNDL {
-            ForEach(ndlSeriesSamples) { sample in
-                if let ndl = ndlPlotValue(for: sample) {
-                    // NDL ≥ 100 min is capped at 99 so the line stays just below y=0
-                    // (the top edge). Without this, min(ndl, 100)/100 = 1 → value = 0
-                    // (surface line) and the yellow line is invisible. NDL 99 → near top,
-                    // NDL 0 → y = -depthBase (bottom).
-                    let value = -depthBase * (1.0 - (min(ndl, 99.0) / 100.0))
-                    LineMark(x: .value("Time", sample.time), y: .value("NDL", value), series: .value("Sequence", "NDL"))
-                        .interpolationMethod(.catmullRom)
-                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                        .foregroundStyle(Color.ndlYellow)
-                }
+    private func ndlMarks(scale: SecondaryAxisScale, series: [DiveProfilePoint]) -> some ChartContent {
+        ForEach(series) { sample in
+            if let ndl = ndlPlotValue(for: sample) {
+                // Readings above 99 min are drawn at 99. When the trace reaches it, `ndlAxis`
+                // ends the scale there, so the capped line runs along the top edge (drawn at
+                // full width thanks to the plot's 1 pt clip outset).
+                // `ndlAxis` reads the same capped values.
+                let value = plotY(min(ndl, ndlPlotCap), on: scale)
+                LineMark(x: .value("Time", sample.time), y: .value("NDL", value), series: .value("Sequence", "NDL"))
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .foregroundStyle(Color.ndlYellow)
             }
         }
     }
@@ -803,17 +982,17 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private var ppo2Marks: some ChartContent {
+    private func ppo2Marks(scale: SecondaryAxisScale, sensorIndices: [Int],
+                           data: [(time: Double, ppo2: Double)]) -> some ChartContent {
         let base = depthBase
-        let sensorIndices = chartSensorIndices
-        if visibility.showPPO2 && base > 0 {
+        if base > 0 {
             if !sensorIndices.isEmpty {
                 // One line per physical O2 cell
                 ForEach(sensorIndices, id: \.self) { sensorIdx in
                     let samplesWithSensor = dive.profileSamples.filter { $0.sensorPPO2?[sensorIdx] != nil }
                     ForEach(samplesWithSensor) { sample in
                         if let ppo2 = sample.sensorPPO2?[sensorIdx] {
-                            let y = -(base * (ppo2 / ppo2AxisMax).clamped(to: 0...1))
+                            let y = plotY(ppo2, on: scale, increasesDownward: true)
                             LineMark(
                                 x: .value("Time", sample.time),
                                 y: .value("PPO₂", y),
@@ -832,10 +1011,9 @@ private struct StaticChartLayer: View, Equatable {
                 }
             } else {
                 // Fallback: voted or computed single-line PPO2
-                let data = ppo2RenderData
                 if !data.isEmpty {
                     ForEach(Array(data.enumerated()), id: \.offset) { _, point in
-                        let y = -(base * (point.ppo2 / ppo2AxisMax).clamped(to: 0...1))
+                        let y = plotY(point.ppo2, on: scale, increasesDownward: true)
                         LineMark(
                             x: .value("Time", point.time),
                             y: .value("PPO₂", y),
@@ -1108,11 +1286,6 @@ struct LegendDot: View {
         self.text = Text(text)
     }
 
-    init(_ color: Color, verbatim text: String) {
-        self.color = color
-        self.text = Text(verbatim: text)
-    }
-
     var body: some View {
         HStack(spacing: 4) {
             Circle().fill(color).frame(width: 8, height: 8)
@@ -1182,13 +1355,24 @@ struct LegendDiamond: View {
 
 struct MetricLegendRow: View {
     let color: Color
-    let label: LocalizedStringKey
+    let label: Text
     let range: String
+
+    init(color: Color, label: LocalizedStringKey, range: String) {
+        self.init(color: color, label: Text(label), range: range)
+    }
+
+    /// For a label that needs a translator comment.
+    init(color: Color, label: Text, range: String) {
+        self.color = color
+        self.label = label
+        self.range = range
+    }
 
     var body: some View {
         HStack(spacing: 4) {
             Circle().fill(color).frame(width: 8, height: 8)
-            (Text(label) + Text(": \(range)"))
+            (label + Text(": \(range)"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -1268,6 +1452,20 @@ struct UnifiedDiveChartOptimized: View {
     @State private var cachedInterpolatedPoint: ChartInterpolatedPoint? = nil
     /// Pre-built per-sample PPO₂ map (UUID → value). Rebuilt once on toggle or dive change.
     @State private var cachedPPO2BySampleID: [UUID: Double] = [:]
+    /// Lowest and highest reading of each O₂ sensor, for the legend (which is re-evaluated on
+    /// every cursor move). Built with `cachedPPO2BySampleID`.
+    @State private var cachedSensorPPO2Ranges: [Int: ClosedRange<Double>] = [:]
+    /// Range of the voted or computed PPO₂ (dives without sensor readings), for the legend.
+    @State private var cachedPPO2Range: ClosedRange<Double>? = nil
+    /// The `chartCacheKey` the PPO₂ legend caches above were built for. Until they are built
+    /// for the current key (the first frame, before `.task` runs, and after moving to another
+    /// dive or editing a gas mix) the legend computes its ranges directly.
+    @State private var ppo2LegendCacheKey: String? = nil
+    private var ppo2LegendCacheReady: Bool { ppo2LegendCacheKey == chartCacheKey }
+
+    /// What the caches built in `.task` depend on: the dive, its gas mixes and the
+    /// hide-cleared-deco-stops setting. A change rebuilds them.
+    private var chartCacheKey: String { "\(dive.id)\(tanksO2Hash)\(prefs.hideClearedDecoStops)" }
     /// Sorted (time, pressure) readings for single-tank dives — enables interpolation across sparse AI transmitter gaps.
     @State private var cachedSinglePressureReadings: [(time: Double, pressure: Double)] = []
     /// Sorted per-tank pressure readings for multi-tank dives.
@@ -1298,13 +1496,20 @@ struct UnifiedDiveChartOptimized: View {
                 legendView
             }
         }
-        .task(id: "\(dive.id)\(tanksO2Hash)\(prefs.hideClearedDecoStops)") {
+        .task(id: chartCacheKey) {
             buildPressureCache()
             buildDecoStopCache()
             if visibility.showPPO2 { rebuildPPO2Cache() }
         }
         .onChange(of: visibility.showPPO2) { _, newValue in
-            if newValue { rebuildPPO2Cache() } else { cachedPPO2BySampleID = [:] }
+            if newValue {
+                rebuildPPO2Cache()
+            } else {
+                cachedPPO2BySampleID = [:]
+                cachedSensorPPO2Ranges = [:]
+                cachedPPO2Range = nil
+                ppo2LegendCacheKey = nil
+            }
         }
         .task(id: photoMarkerKey) {
             await buildPhotoMarkers()
@@ -2011,9 +2216,33 @@ struct UnifiedDiveChartOptimized: View {
 
     // MARK: - PPO2 Helpers
 
-    /// Builds `cachedPPO2BySampleID` using `buildPPO2Map` — called once per toggle or dive change.
+    /// Builds the PPO₂ caches — `cachedPPO2BySampleID` (tooltip, via `buildPPO2Map`) and the
+    /// legend's `cachedSensorPPO2Ranges` and `cachedPPO2Range` — and records the
+    /// `chartCacheKey` they were built for. Called once per toggle or `.task` key change.
     private func rebuildPPO2Cache() {
-        cachedPPO2BySampleID = buildPPO2Map(for: dive)
+        let map = buildPPO2Map(for: dive)
+        cachedPPO2BySampleID = map
+        cachedSensorPPO2Ranges = sensorPPO2Ranges()
+        cachedPPO2Range = ppo2Range(Array(map.values))
+        ppo2LegendCacheKey = chartCacheKey
+    }
+
+    /// Lowest and highest reading of each O₂ sensor.
+    private func sensorPPO2Ranges() -> [Int: ClosedRange<Double>] {
+        var ranges: [Int: ClosedRange<Double>] = [:]
+        for sample in dive.profileSamples {
+            guard let readings = sample.sensorPPO2 else { continue }
+            // A non-finite reading (e.g. "nan" in an imported file) is skipped: it cannot be
+            // part of a range, and building one from it would trap.
+            for (idx, value) in readings where value.isFinite {
+                if let range = ranges[idx] {
+                    ranges[idx] = min(range.lowerBound, value)...max(range.upperBound, value)
+                } else {
+                    ranges[idx] = value...value
+                }
+            }
+        }
+        return ranges
     }
 
     // MARK: - Legend View
@@ -2063,9 +2292,9 @@ struct UnifiedDiveChartOptimized: View {
             VStack(alignment: .leading, spacing: 6) {
                 if showsDepthLegend { depthLegendGroup }
                 if showsTemperatureLegend { temperatureLegendGroup }
-                if showsPressureLegend { pressureLegendGroup }
+                if showsPressureLegend { pressureLegendGroup(wrapping: true) }
                 if showsNDLLegend { ndlLegendGroup }
-                if showsPPO2Legend { ppo2LegendGroup }
+                if showsPPO2Legend { ppo2LegendGroup(wrapping: true) }
                 if showsDecoLegend { decoLegendGroup }
                 if hasGasChangeData { gasSwitchLegendGroup }
             }
@@ -2096,9 +2325,9 @@ struct UnifiedDiveChartOptimized: View {
         switch index {
         case 0: depthLegendGroup
         case 1: temperatureLegendGroup
-        case 2: pressureLegendGroup
+        case 2: pressureLegendGroup(wrapping: false)
         case 3: ndlLegendGroup
-        case 4: ppo2LegendGroup
+        case 4: ppo2LegendGroup(wrapping: false)
         case 5: decoLegendGroup
         default: gasSwitchLegendGroup
         }
@@ -2135,17 +2364,26 @@ struct UnifiedDiveChartOptimized: View {
         MetricLegendRow(color: .green, label: "Temperature", range: temperatureRange)
     }
 
-    /// One entry per tank on multi-tank dives — stacked on separate lines in the
-    /// stacked legend, side by side in the single-line legend.
+    /// One entry per tank on multi-tank dives. With `wrapping` (the stacked legend) the
+    /// entries sit side by side and wrap onto further lines as needed; without it (the
+    /// macOS single-line legend) they are laid out by the enclosing line.
     @ViewBuilder
-    private var pressureLegendGroup: some View {
+    private func pressureLegendGroup(wrapping: Bool) -> some View {
         let tankIndices = chartTankIndicesForLegend
         if tankIndices.count > 1 {
-            ForEach(tankIndices, id: \.self) { idx in
-                MetricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
+            if wrapping {
+                WrappingChipLayout(spacing: 8) { tankPressureLegendRows(tankIndices) }
+            } else {
+                tankPressureLegendRows(tankIndices)
             }
         } else {
             MetricLegendRow(color: .red, label: "Pressure", range: pressureRange)
+        }
+    }
+
+    private func tankPressureLegendRows(_ tankIndices: [Int]) -> some View {
+        ForEach(tankIndices, id: \.self) { idx in
+            MetricLegendRow(color: .red, label: "T\(idx + 1) Pressure", range: pressureRangeForTank(idx))
         }
     }
 
@@ -2153,17 +2391,51 @@ struct UnifiedDiveChartOptimized: View {
         MetricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
     }
 
-    /// One entry per PPO₂ sensor when the dive has sensor readings.
+    /// One entry per PPO₂ sensor when the dive has sensor readings, each with the range
+    /// that sensor reported; otherwise one entry with the range of the voted or computed
+    /// PPO₂ the chart draws. With `wrapping` (the stacked legend) the sensor entries sit
+    /// side by side and wrap onto further lines as needed; without it (the macOS
+    /// single-line legend) they are laid out by the enclosing line.
     @ViewBuilder
-    private var ppo2LegendGroup: some View {
+    private func ppo2LegendGroup(wrapping: Bool) -> some View {
         let sensorIndices = sensorPPO2Indices(for: dive)
         if sensorIndices.isEmpty {
-            LegendDot(.indigo, "PPO₂ (bar, 0–2 scale)")
+            // The range is cached once per dive while PPO₂ is shown, as this legend is
+            // re-evaluated on every cursor move; it is computed directly only on the first
+            // frame, before the cache is built.
+            let range = ppo2LegendCacheReady ? cachedPPO2Range : ppo2Range(Array(buildPPO2Map(for: dive).values))
+            MetricLegendRow(color: .indigo, label: "PPO₂", range: ppo2RangeText(range))
+        } else if wrapping {
+            WrappingChipLayout(spacing: 8) { sensorPPO2LegendRows(sensorIndices) }
         } else {
-            ForEach(sensorIndices, id: \.self) { idx in
-                LegendDot(ppo2SensorColor(for: idx), verbatim: String(format: NSLocalizedString("S%ld PPO₂ (0–2 bar)", bundle: Bundle.forAppLanguage(), comment: "Chart legend label for a per-sensor PPO2 overlay line; %ld = sensor number (1-based)"), idx + 1))
-            }
+            sensorPPO2LegendRows(sensorIndices)
         }
+    }
+
+    private func sensorPPO2LegendRows(_ sensorIndices: [Int]) -> some View {
+        // Cached once per dive; computed directly only on the first frame (see above).
+        let ranges = ppo2LegendCacheReady ? cachedSensorPPO2Ranges : sensorPPO2Ranges()
+        return ForEach(sensorIndices, id: \.self) { idx in
+            MetricLegendRow(color: ppo2SensorColor(for: idx),
+                            label: Text("S\(idx + 1) PPO₂", comment: "Chart legend: one O₂ sensor's PPO₂ range; the number is the sensor (1-based)"),
+                            range: ppo2RangeText(ranges[idx]))
+        }
+    }
+
+    /// Lowest to highest of the finite `values`, or nil when there are none. Non-finite
+    /// readings are skipped: building a range from NaN would trap.
+    private func ppo2Range(_ values: [Double]) -> ClosedRange<Double>? {
+        let finite = values.filter(\.isFinite)
+        guard let low = finite.min(), let high = finite.max() else { return nil }
+        return low...high
+    }
+
+    /// "min-max bar" for a PPO₂ range, in the same form as the other legend ranges;
+    /// two decimals, formatted for the region. "—" until the range is known.
+    private func ppo2RangeText(_ range: ClosedRange<Double>?) -> String {
+        guard let range else { return "—" }
+        return range.lowerBound.localizedString(decimals: 2, minDecimals: 2) + "-"
+            + range.upperBound.localizedString(decimals: 2, minDecimals: 2) + " bar"
     }
 
     private var decoLegendGroup: some View {

@@ -563,34 +563,47 @@ struct PDFDiveLogbook {
         let maxDepth = max(samples.map(\.depth).max() ?? 1, 0.001)
         let maxTime = max(samples.last?.time ?? 1, 0.001)
 
-        // Horizontal grid lines + depth labels (use profileBottom so grid stays above label zone)
+        // Horizontal grid lines + depth labels at round depths in the display unit (as the
+        // in-app chart: 0, 10, 20 m…), from the surface down to the deepest sample. The
+        // profile keeps its scaling (deepest sample at profileBottom, so the grid stays
+        // above the label zone); each round depth is placed at its own height.
         ctx.setStrokeColor(CGColor(red: 0.78, green: 0.80, blue: 0.84, alpha: 0.6))
         ctx.setLineWidth(0.3)
-        for i in 0...4 {
-            let gy = profileBottom + (chartTop - profileBottom) * CGFloat(i) / 4.0
+        let displayMaxDepth = dive.displayDepth(maxDepth)
+        // A 25-unit step suits feet (0, 25, 50…), but 2.5 would give fractional depths
+        // (2.5, 7.5…): a fractional step at or above 1 is re-picked from 1/2/5 steps. Very
+        // shallow profiles keep their fractional step.
+        var depthScale = SecondaryAxisScale.rounded(low: 0, high: displayMaxDepth, targetIntervals: 6)
+        if depthScale.step >= 1, depthScale.step != depthScale.step.rounded() {
+            depthScale = SecondaryAxisScale.rounded(low: 0, high: displayMaxDepth, multipliers: [1, 2, 5], targetIntervals: 6)
+        }
+        let depthLabelAttrs: [NSAttributedString.Key: Any] = [
+            .font: font(size: 5.5),
+            .foregroundColor: platformColor(textMuted)
+        ]
+        for depthVal in depthScale.labelValues where depthVal <= displayMaxDepth * (1 + 1e-9) {
+            let gy = chartTop - (chartTop - profileBottom) * CGFloat(depthVal / displayMaxDepth)
             ctx.move(to: CGPoint(x: chartX, y: gy))
             ctx.addLine(to: CGPoint(x: chartX + chartW, y: gy))
             ctx.strokePath()
 
-            let depthVal = maxDepth * Double(4 - i) / 4.0
-            let label = dive.displayDepth(depthVal).localizedString(decimals: 0)
-            let labelAttrs: [NSAttributedString.Key: Any] = [
-                .font: font(size: 5.5),
-                .foregroundColor: platformColor(textMuted)
-            ]
-            drawText(label, attrs: labelAttrs, in: ctx, at: CGPoint(x: x + 10, y: gy - 3))
+            let label = depthVal.localizedString(decimals: depthScale.labelDecimals)
+            drawText(label, attrs: depthLabelAttrs, in: ctx, at: CGPoint(x: x + 10, y: gy - 3))
         }
 
-        // Time axis labels (stay at original chartBottom)
-        for i in 0...5 {
-            let timeVal = maxTime * Double(i) / 5.0
-            let tx = chartX + chartW * CGFloat(i) / 5.0
-            let label = String(format: "%.0f", timeVal)
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: font(size: 5.5),
-                .foregroundColor: platformColor(textMuted)
-            ]
-            drawText(label, attrs: attrs, in: ctx, at: CGPoint(x: tx - 3, y: chartBottom - 10))
+        // Time axis labels (stay at original chartBottom) at round minutes, each centred on
+        // its position and kept inside the chart's right edge (the "min" unit sits there).
+        let timeScale = SecondaryAxisScale.rounded(low: 0, high: maxTime, multipliers: [1, 2, 5], minimumStep: 1, targetIntervals: 6)
+        let timeAttrs: [NSAttributedString.Key: Any] = [
+            .font: font(size: 5.5),
+            .foregroundColor: platformColor(textMuted)
+        ]
+        for timeVal in timeScale.labelValues where timeVal <= maxTime * (1 + 1e-9) {
+            let tx = chartX + chartW * CGFloat(timeVal / maxTime)
+            let label = timeVal.localizedString(decimals: 0)
+            let labelWidth = (label as NSString).size(withAttributes: timeAttrs).width
+            let labelX = min(tx - labelWidth / 2, chartX + chartW - labelWidth)
+            drawText(label, attrs: timeAttrs, in: ctx, at: CGPoint(x: labelX, y: chartBottom - 10))
         }
 
         // Axis unit labels
