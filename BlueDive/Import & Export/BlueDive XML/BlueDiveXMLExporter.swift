@@ -385,12 +385,16 @@ enum BlueDiveXMLExporter {
                     ("depth", formatDouble(sample.depth))
                 ]
                 if let temp     = sample.temperature  { attrs.append(("temperature", formatDouble(temp))) }
-                if let pressure = sample.tankPressure  { attrs.append(("tankPressure", formatDouble(pressure))) }
+                // tankPressure is tank 0 / the lowest index of tankPressures (DiveProfilePoint's
+                // decoder and the parser both derive it), so it is written only for samples
+                // without per-tank pressures.
                 if let tp = sample.tankPressures, !tp.isEmpty {
                     let serialized = tp.sorted(by: { $0.key < $1.key })
                         .map { "\($0.key):\(formatDouble($0.value))" }
                         .joined(separator: ",")
                     attrs.append(("tankPressures", serialized))
+                } else if let pressure = sample.tankPressure {
+                    attrs.append(("tankPressure", formatDouble(pressure)))
                 }
                 if let ppo2     = sample.ppo2           { attrs.append(("ppo2", formatDouble(ppo2))) }
                 if let sp = sample.sensorPPO2, !sp.isEmpty {

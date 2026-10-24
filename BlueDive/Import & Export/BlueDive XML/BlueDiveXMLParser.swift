@@ -552,7 +552,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             events = []
         }
 
-        // When per-tank pressures exist, derive primary pressure from tank 0 / lowest index
+        // When per-tank pressures exist, derive primary pressure from tank 0 / lowest index.
+        // The exporter writes tankPressure only when tankPressures is absent; files exported
+        // earlier carry both, and tankPressure there is the same tank 0 / lowest-index value.
         let effectivePressure: Double? = tankPressures.flatMap { dict in
             dict[0] ?? dict.min(by: { $0.key < $1.key })?.value
         } ?? pressure
