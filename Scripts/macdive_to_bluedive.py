@@ -201,6 +201,14 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
                                                                sighting per critter, linked to its species
     Profile samples (time, depth, temperature, NDL, PPO₂,      Raw → XML.  PPO₂ only as the computer reports it
       per-cell PPO₂, ceiling, remaining stop time)             (BlueDive calculates it otherwise).
+    CCR setpoint per sample                                    Raw only (MacDive's XML has none), as BlueDive's
+                                                               Bluetooth import stores it: Shearwater, DiveSystem,
+                                                               McLean and TecDiving report it in every loop sample
+                                                               (none on open-circuit bailout); other computers
+                                                               report changes, held until the next one — cleared
+                                                               on a switch to an open-circuit gas and restored on
+                                                               a diluent when the computer flags its diluents.
+                                                               Not written when MacDive's XML samples are kept.
     Sample tank pressure                                       Raw (mapped transmitters, same mapping as the
                                                                tank values) → when the raw samples have no
                                                                main-tank pressure at all: MacDive's main-tank
@@ -212,7 +220,8 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
                                                                MacDive events (tank set when one tank has the mix)
     Other events (ascent, deep stop, PPO₂, ceiling,            Raw + MacDive events (MacDive's dropped when raw
       bookmark, safety stop, deco stop)                        has the same event within 30 s)
-    Not imported                                               Set point switches (counted in the log)
+    Not imported                                               Low/high setpoint labels (only the value is
+                                                               reported by the computer)
 
     Every value raw data changes is logged per dive as "raw values : … (MacDive → raw
     data)", and each dive's profile source on its "profile :" line.
@@ -260,6 +269,7 @@ import argparse
 import base64
 import bisect
 import json
+import math
 import os
 import re
 import sqlite3
@@ -999,6 +1009,12 @@ _DC_SENSOR_NONE = 0xFFFFFFFF
 _DC_GASMIX_UNKNOWN = 0xFFFFFFFF   # e.g. Shearwater, for a tank without a transmitter
 _DC_DIVEMODES = {0: "freedive", 1: "gauge", 2: "OC", 3: "CCR", 4: "SCR"}
 _DC_USAGE_OXYGEN, _DC_USAGE_DILUENT = 1, 2   # dc_usage_t: the computer's role for a tank or gas
+# dc_family_t of the backends that report DC_SAMPLE_SETPOINT in every sample while a setpoint
+# is in effect and omit it otherwise (e.g. Shearwater on open-circuit bailout): Shearwater
+# Predator / Petrel, DiveSystem iDive, TecDiving DiveComputer.eu, McLean Extreme. Other
+# backends report it only when it changes. Same list as LibDCSwift's
+# GenericParser.reportsSetpointEverySample(_:), so migrated dives match a Bluetooth download.
+_SETPOINT_EVERY_SAMPLE_FAMILIES = {(10 << 16), (10 << 16) + 1, (13 << 16), (15 << 16), (16 << 16)}
 
 
 def _http_get(url, accept=None):
@@ -1209,8 +1225,8 @@ def _merge_depthless_records(samples):
     Fold records without a depth (event-only records some computers send at their own time,
     e.g. Suunto EON Steel, or data reported before the first time sample) into the record with
     a depth nearest in time (the earlier one on a tie), so the gas, events, deco, pressures and
-    PPO₂ they carry are kept. Gas and deco state: the latest report wins. Other values: the
-    target record's own values win.
+    PPO₂ they carry are kept. Gas, deco and setpoint state: the latest report wins. Other
+    values: the target record's own values win.
     """
     out = [r for r in samples if "depth" in r]
     if not out:
@@ -1221,7 +1237,9 @@ def _merge_depthless_records(samples):
     # keeps its own report time and is always taken whole from one record.
     # NDL and a deco stop are one deco state in libdivecomputer: a later report of either
     # replaces the other.
-    groups = {"gasmix": ("gasmix",), "deco": ("ndl_secs", "deco_depth", "deco_time")}
+    # The setpoint in effect (None after a bailout) is a state as well: the later record's wins.
+    groups = {"gasmix": ("gasmix",), "deco": ("ndl_secs", "deco_depth", "deco_time"),
+              "setpoint": ("setpoint",)}
     key_group = {k: g for g, keys in groups.items() for k in keys}
     def fold(target, rec):
         times_by_group = target.setdefault("_state_times", {})
@@ -1308,6 +1326,8 @@ class LibDC:
         for fn in ("dc_descriptor_get_vendor", "dc_descriptor_get_product"):
             getattr(lib, fn).argtypes = [vp]
             getattr(lib, fn).restype = C.c_char_p
+        lib.dc_descriptor_get_type.argtypes = [vp]
+        lib.dc_descriptor_get_type.restype = C.c_uint   # dc_family_t
         lib.dc_parser_new2.argtypes = [C.POINTER(vp), vp, vp, C.c_char_p, C.c_size_t]
         lib.dc_parser_get_field.argtypes = [vp, C.c_int, C.c_uint, vp]
         lib.dc_parser_samples_foreach.argtypes = [vp, self.Callback, vp]
@@ -1371,12 +1391,45 @@ class LibDC:
             return None
         try:
             samples, cur = [], {}
-            state = {"setpoint": None, "sp_changes": 0}
+            # CCR setpoint in effect, as LibDCSwift's GenericParser tracks it (see
+            # _SETPOINT_EVERY_SAMPLE_FAMILIES): "reported" is the last DC_SAMPLE_SETPOINT,
+            # "current" the setpoint in effect, written on each time record when it ends.
+            per_sample = lib.dc_descriptor_get_type(desc) in _SETPOINT_EVERY_SAMPLE_FAMILIES
+            diluents, oxygen = set(), set()
+            if not per_sample:
+                # Change-only backends that flag their diluents (OSTC, EON Steel, Divesoft): a
+                # switch to another mix (not the loop's oxygen) is an open-circuit bailout.
+                n_flag = C.c_uint(0)
+                if lib.dc_parser_get_field(parser, _DC_FIELD_GASMIX_COUNT, 0, C.byref(n_flag)) == 0:
+                    for i in range(n_flag.value):
+                        gm = self.GasMix()
+                        if lib.dc_parser_get_field(parser, _DC_FIELD_GASMIX, i, C.byref(gm)) != 0:
+                            continue
+                        if gm.usage == _DC_USAGE_DILUENT:
+                            diluents.add(i)
+                        elif gm.usage == _DC_USAGE_OXYGEN:
+                            oxygen.add(i)
+                if not diluents:
+                    oxygen = set()   # no diluent flagged: the setpoint is held, as in LibDCSwift
+            state = {"reported": None, "current": None, "open_circuit": False, "seen_time": False}
+
+            def end_record():
+                # The record's setpoint is the one in effect when it ends (LibDCSwift writes a
+                # profile point at the next DC_SAMPLE_TIME). Per-sample backends: only what
+                # the computer reported in that record, never a value held from an earlier one.
+                cur["setpoint"] = state["current"]
+                if per_sample:
+                    state["current"] = None
 
             def cb(stype, value_p, _ud):
                 v = value_p.contents
                 nonlocal cur
                 if stype == _DC_SAMPLE_TIME:
+                    # Data before the first time sample belongs to the first record (as in
+                    # LibDCSwift, which writes no point for it), so it is not ended here.
+                    if state["seen_time"]:
+                        end_record()
+                    state["seen_time"] = True
                     cur = {"time": v.time / 1000.0, "events": []}
                     samples.append(cur)
                     return
@@ -1414,10 +1467,20 @@ class LibDC:
                 elif stype == _DC_SAMPLE_GASMIX:
                     if v.gasmix != _DC_GASMIX_UNKNOWN:
                         cur["gasmix"] = v.gasmix
+                        # Bailout to an open-circuit mix clears the held setpoint; back on a
+                        # diluent restores the last reported one. The loop's oxygen changes neither.
+                        if diluents:
+                            if v.gasmix in diluents:
+                                state["open_circuit"] = False
+                                state["current"] = state["reported"]
+                            elif v.gasmix not in oxygen:
+                                state["open_circuit"] = True
+                                state["current"] = None
                 elif stype == _DC_SAMPLE_SETPOINT:
-                    if state["setpoint"] is not None and v.setpoint != state["setpoint"]:
-                        state["sp_changes"] += 1
-                    state["setpoint"] = v.setpoint
+                    # Recorded while on open circuit, but applied only back on the loop.
+                    state["reported"] = v.setpoint
+                    if not state["open_circuit"]:
+                        state["current"] = v.setpoint
                 elif stype == _DC_SAMPLE_EVENT:
                     kind = _LIBDC_EVENT_MAP.get(v.event.type)
                     if kind and kind not in cur["events"]:
@@ -1426,6 +1489,8 @@ class LibDC:
             callback = self.Callback(cb)
             if lib.dc_parser_samples_foreach(parser, callback, None) != 0:
                 return None
+            if state["seen_time"]:
+                end_record()   # the last record: no further time sample ends it
             samples = _merge_depthless_records(samples)
             depths = [s["depth"] for s in samples]
             if not depths:
@@ -1464,7 +1529,6 @@ class LibDC:
                 "divemode":    _DC_DIVEMODES.get(mode.value, "unknown"),
                 "max_depth":   max(depths),
                 "span":        max(s["time"] for s in samples),
-                "sp_changes":  state["sp_changes"],
             }
         finally:
             lib.dc_parser_destroy(parser)
@@ -1966,6 +2030,8 @@ def raw_profile_samples(decoded, cvt_depth, cvt_temp, cvt_press, mapping, series
             "ppo2":        s.get("ppo2"),
             "sensor_ppo2": s.get("sensors"),
             "ndt":         (ndl // 60 if ndl % 60 == 0 else ndl / 60) if ndl is not None else None,
+            # CCR setpoint in effect (bar). 0 or non-finite = no setpoint, as BlueDive stores it.
+            "setpoint":    s["setpoint"] if (s.get("setpoint") or 0) > 0 and math.isfinite(s["setpoint"]) else None,
         }
         # Mandatory deco obligation, as the app's Bluetooth import stores it: ceiling in the
         # output distance unit, remaining stop time in minutes, and a decoStop event. A
@@ -2813,6 +2879,8 @@ def profile_samples_xml_lines(samples, indent=4):
             attrs.append(f'ceilingTime="{fmt_double(s["ceiling_time"])}"')
         if s.get("current_gas") is not None:
             attrs.append(f'currentGas="{s["current_gas"]}"')
+        if s.get("setpoint") is not None:
+            attrs.append(f'setpoint="{fmt_double(s["setpoint"])}"')
         attrs.append(f'events="{",".join(s.get("events", []))}"')
         lines.append(f'{inner_pad}<sample {" ".join(attrs)}/>')
     lines.append(f'{pad}</profileSamples>')
@@ -3099,6 +3167,7 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
     _n_src       = _collections.Counter()
     _raw_reasons = _collections.Counter()
     _n_deco_dives = 0
+    _n_sp_dives   = 0   # dives with CCR setpoints from raw data
     _n_raw_vals   = _collections.Counter()   # dive values taken from raw data instead of MacDive
     _n_unmatched  = _collections.Counter()   # computer tanks MacDive did not have
     _n_dup_tanks  = _collections.Counter()   # --drop-duplicate-tanks removals
@@ -3734,9 +3803,14 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
             _raw_reasons[re.sub(r"[\d.]+", "#", raw_why)] += 1
         _dive_log.append(f"  profile    : {_profile_src}")
         print(f"    Dive #{_log_dive_num}: {_profile_src}")
-        if decoded is not None and decoded["sp_changes"]:
-            _dive_log.append(f"  setpoints  : {decoded['sp_changes']} setpoint switch(es) in raw data — "
-                             f"not imported (BlueDive has no setpoint event)")
+        _sp_values = sorted({s["setpoint"] for s in samples if s.get("setpoint") is not None})
+        if _sp_values:
+            _n_sp = sum(1 for s in samples if s.get("setpoint") is not None)
+            _dive_log.append(f"  setpoints  : {_n_sp}/{len(samples)} samples with a setpoint from raw data ("
+                             + ", ".join(f"{fmt_double(v)} bar" for v in _sp_values) + ")")
+            _n_sp_dives += 1
+        elif decoded is not None and _keep_xml and any(s.get("setpoint") is not None for s in raw_samples):
+            _dive_log.append("  setpoints  : in raw data but not imported (MacDive XML samples kept)")
         # Mandatory decompression stops reported by the computer (Gas tab list). Depth in
         # metres, time in seconds, type 2 = DC_DECO_DECOSTOP.
         if _deco_stops:
@@ -3801,6 +3875,7 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
         f"  MacDive XML samples + MacDive events             : {_n_src['xml']}",
         f"  No profile                                       : {_n_src['none']}",
         f"  Dives with deco stops from raw data              : {_n_deco_dives}",
+        f"  Dives with CCR setpoints from raw data           : {_n_sp_dives}",
         "  Dive values changed by raw data (MacDive → raw): "
         + (", ".join(f"{k} {v}" for k, v in _n_raw_vals.items()) or "none"),
         "  Duplicate tanks (--drop-duplicate-tanks "
