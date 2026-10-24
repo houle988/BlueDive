@@ -1068,7 +1068,8 @@ struct PDFDiveLogbook {
         let siStr: String = {
             let raw = dive.surfaceInterval.trimmingCharacters(in: .whitespacesAndNewlines)
             if raw.isEmpty || raw == "0h 00m" || raw == "0" { return "—" }
-            return raw
+            // Same letters as the app (French "j", Dutch "u", Norwegian "t", Spanish "min").
+            return dive.displaySurfaceInterval.trimmingCharacters(in: .whitespacesAndNewlines)
         }()
 
         let computerStr = dive.computerName.isEmpty ? "—" : dive.computerName

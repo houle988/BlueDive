@@ -322,17 +322,19 @@ struct StatisticsView: View {
         case "nb": hourSuffix = "t"
         default: hourSuffix = "h"
         }
+        // Spanish "min" ("m" is metres), as in the dive list's surface interval and duration badges.
+        let minuteSuffix = locale.language.languageCode?.identifier == "es" ? "min" : "m"
         func formatIntervalMinutes(_ minutes: Int) -> String {
-            if minutes < 60 { return "\(minutes)m" }
+            if minutes < 60 { return "\(minutes)\(minuteSuffix)" }
             if minutes < 1440 {
                 let h = minutes / 60; let m = minutes % 60
-                return m == 0 ? "\(h)\(hourSuffix)" : "\(h)\(hourSuffix) \(String(format: "%02d", m))m"
+                return m == 0 ? "\(h)\(hourSuffix)" : "\(h)\(hourSuffix) \(String(format: "%02d", m))\(minuteSuffix)"
             }
             let d = minutes / 1440; let rem = minutes % 1440
             let h = rem / 60; let m = rem % 60
             if h == 0 && m == 0 { return "\(d)\(daySuffix)" }
             if m == 0 { return "\(d)\(daySuffix) \(h)\(hourSuffix)" }
-            return "\(d)\(daySuffix) \(h)\(hourSuffix) \(String(format: "%02d", m))m"
+            return "\(d)\(daySuffix) \(h)\(hourSuffix) \(String(format: "%02d", m))\(minuteSuffix)"
         }
         let siDives = dives.filter { parseIntervalMinutes($0.surfaceInterval) > 0 }
         let avgSIStr: String

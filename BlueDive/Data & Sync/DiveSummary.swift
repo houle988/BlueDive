@@ -88,6 +88,13 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
                 with: "$1t",
                 options: .regularExpression
             )
+        case "es":
+            // Spanish "min" for minutes ("m" is metres), matching shortFormattedDuration.
+            return surfaceInterval.replacingOccurrences(
+                of: #"(\d+)m\b"#,
+                with: "$1min",
+                options: .regularExpression
+            )
         default:
             return surfaceInterval
         }

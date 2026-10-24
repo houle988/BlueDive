@@ -17,7 +17,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "%@ h"
           }
         },
@@ -52,7 +52,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "%@ h %@ min"
           }
         },
@@ -87,7 +87,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "%@ min"
           }
         },
@@ -122,7 +122,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Todos los buceadores"
           }
         },
@@ -165,7 +165,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Inmersión Bluetooth"
           }
         },
@@ -200,7 +200,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Elige de qué buceador mostrar las estadísticas."
           }
         },
@@ -235,7 +235,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Días desde"
           }
         },
@@ -270,7 +270,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Más profunda"
           }
         },
@@ -306,7 +306,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Número de inmersiones"
           }
         },
@@ -341,7 +341,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Buceador"
           }
         },
@@ -376,7 +376,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Estadísticas del buceador"
           }
         },
@@ -412,7 +412,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Filtrar por nombre del buceador."
           }
         },
@@ -447,7 +447,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Desde la computadora de buceo"
           }
         },
@@ -483,7 +483,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Importa una inmersión desde tu computadora de buceo por Bluetooth."
           }
         },
@@ -518,7 +518,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Registrar a mano"
           }
         },
@@ -553,7 +553,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Más larga"
           }
         },
@@ -588,7 +588,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Manual"
           }
         },
@@ -624,7 +624,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Inmersión manual"
           }
         },
@@ -660,7 +660,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Registra rápidamente una nueva inmersión a mano."
           }
         },
@@ -695,7 +695,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Consulta tus estadísticas clave de buceador de un vistazo."
           }
         },
@@ -731,7 +731,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Consulta de un vistazo el número total de inmersiones registradas."
           }
         },
@@ -766,7 +766,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Inmersiones totales"
           }
         },
@@ -801,7 +801,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Tiempo total"
           }
         },
