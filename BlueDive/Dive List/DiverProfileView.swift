@@ -1547,6 +1547,9 @@ struct AddInsuranceView: View {
                 notes: trimmedNotes.isEmpty ? nil : trimmedNotes
             )
             modelContext.insert(newInsurance)
+            // Saved at once, as Add Gear does: the Documents list identifies rows by
+            // persistentModelID, which changes when an unsaved record is first saved.
+            try? modelContext.save()
             newInsurance.scheduleExpirationReminder()
         }
         dismiss()

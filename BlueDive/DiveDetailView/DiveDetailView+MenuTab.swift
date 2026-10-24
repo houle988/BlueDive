@@ -965,7 +965,9 @@ extension DiveDetailView {
 
     @MainActor
     func removeGearFromDive(_ gear: Gear) {
-        dive.usedGear?.removeAll { $0.id == gear.id }
+        // By record: a gear item sharing this one's id (e.g. imported on two devices before
+        // they synced) stays on the dive.
+        dive.usedGear?.removeAll { $0.persistentModelID == gear.persistentModelID }
         try? modelContext.save()
         // Exit edit mode if no gear left
         if (dive.usedGear ?? []).isEmpty {
@@ -988,10 +990,11 @@ extension DiveDetailView {
     func applyGearGroup(_ group: GearGroup) {
         guard let groupGear = group.gear, !groupGear.isEmpty else { return }
         if dive.usedGear == nil { dive.usedGear = [] }
-        let existingIds = Set((dive.usedGear ?? []).map { $0.id })
+        // By record, not by `Gear.id` (two gear items can share an id).
+        let existingIds = Set((dive.usedGear ?? []).map { $0.persistentModelID })
         var addedCount = 0
         for gear in groupGear {
-            if !existingIds.contains(gear.id) {
+            if !existingIds.contains(gear.persistentModelID) {
                 dive.usedGear!.append(gear)
                 addedCount += 1
             }

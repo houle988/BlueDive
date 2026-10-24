@@ -580,7 +580,9 @@ struct GearListView: View {
                         }
                     }
                 )) {
-                    ForEach(items) { item in
+                    // By record, not by `Gear.id`: two gear items can share an id (e.g. the same
+                    // file imported on two devices before they synced).
+                    ForEach(items, id: \.persistentModelID) { item in
                         Button {
                             selectedGear = item
                         } label: {
@@ -589,8 +591,8 @@ struct GearListView: View {
                         .buttonStyle(.plain)
                         // Same row background as the Dives tab (a card per section on macOS).
                         .listRowBackground(Color.primary.opacity(0.07),
-                                           macFirst: item.id == items.first?.id,
-                                           macLast: item.id == items.last?.id)
+                                           macFirst: item.persistentModelID == items.first?.persistentModelID,
+                                           macLast: item.persistentModelID == items.last?.persistentModelID)
                         #if os(iOS)
                         // iOS starts the separator at the row's first Text, after the icon: start
                         // it at the row's leading edge, as in the Dives list.
@@ -857,13 +859,8 @@ struct GearListView: View {
                         importProgressFileName = ""
                         let (newGear, dupGear) = classifyGearItems(parsed.gearItems)
 
-                        let existingGroupIDs = Set(allGearGroups.map(\.id))
-                        let newGroups = parsed.gearGroups.filter { !existingGroupIDs.contains($0.id) }
-                        let dupGroups = parsed.gearGroups.filter { existingGroupIDs.contains($0.id) }
-
-                        let existingTemplateIDs = Set(allTankTemplates.map(\.id))
-                        let newTemplates = parsed.tankTemplates.filter { !existingTemplateIDs.contains($0.id) }
-                        let dupTemplates = parsed.tankTemplates.filter { existingTemplateIDs.contains($0.id) }
+                        let (newGroups, dupGroups) = splitByID(parsed.gearGroups, id: \.id, existing: Set(allGearGroups.map(\.id)))
+                        let (newTemplates, dupTemplates) = splitByID(parsed.tankTemplates, id: \.id, existing: Set(allTankTemplates.map(\.id)))
 
                         // Nothing genuinely new: bypass the preview so service-data updates
                         // on duplicate gear items are still committed.
@@ -927,13 +924,8 @@ struct GearListView: View {
                     importProgressFileName = ""
                     let (newGear, dupGear) = classifyGearItems(parsed.gearItems)
 
-                    let existingGroupIDs = Set(allGearGroups.map(\.id))
-                    let newGroups = parsed.gearGroups.filter { !existingGroupIDs.contains($0.id) }
-                    let dupGroups = parsed.gearGroups.filter { existingGroupIDs.contains($0.id) }
-
-                    let existingTemplateIDs = Set(allTankTemplates.map(\.id))
-                    let newTemplates = parsed.tankTemplates.filter { !existingTemplateIDs.contains($0.id) }
-                    let dupTemplates = parsed.tankTemplates.filter { existingTemplateIDs.contains($0.id) }
+                    let (newGroups, dupGroups) = splitByID(parsed.gearGroups, id: \.id, existing: Set(allGearGroups.map(\.id)))
+                    let (newTemplates, dupTemplates) = splitByID(parsed.tankTemplates, id: \.id, existing: Set(allTankTemplates.map(\.id)))
 
                     if newGear.isEmpty && newGroups.isEmpty && newTemplates.isEmpty {
                         pendingGearXMLResult = parsed
@@ -1021,7 +1013,7 @@ struct GearListView: View {
         gearImportPreviewNew = []
         gearImportPreviewDuplicates = []
 
-        var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        var gearByID: [UUID: Gear] = Dictionary(allGear.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let (count, anyGearUpdated) = insertGearItems(items, into: &gearByID)
         try? modelContext.save()
         importedCount = count
@@ -1052,9 +1044,21 @@ struct GearListView: View {
         }
     }
 
+    /// Splits gear groups or tank templates into new and duplicate, as the commit inserts them:
+    /// an id already stored, or listed earlier in the file, is a duplicate.
+    private func splitByID<Item>(_ items: [Item], id: (Item) -> UUID, existing: Set<UUID>) -> (new: [Item], duplicates: [Item]) {
+        var seen = existing
+        var new: [Item] = []
+        var duplicates: [Item] = []
+        for item in items {
+            if seen.insert(id(item)).inserted { new.append(item) } else { duplicates.append(item) }
+        }
+        return (new, duplicates)
+    }
+
     /// Classifies gear items as new vs duplicate without inserting anything.
     private func classifyGearItems(_ items: [GearXMLParser.ParsedGear]) -> (new: [GearXMLParser.ParsedGear], duplicates: [GearXMLParser.ParsedGear]) {
-        var gearByID = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        var gearByID = Dictionary(allGear.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var new: [GearXMLParser.ParsedGear] = []
         var duplicates: [GearXMLParser.ParsedGear] = []
         var acceptedFileIDs: Set<UUID> = []
@@ -1097,11 +1101,15 @@ struct GearListView: View {
         gearImportPreviewNew = []
         gearImportPreviewDuplicates = []
 
-        var gearByID: [UUID: Gear] = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
+        // Keep-first: two stored gear items can share an id (CloudKit enforces no uniqueness,
+        // e.g. the same file imported on two devices before they synced).
+        var gearByID: [UUID: Gear] = Dictionary(allGear.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let (count, anyGearUpdated) = insertGearItems(parsed.gearItems, into: &gearByID)
 
         // ── Gear Groups ───────────────────────────────────────────────────────
-        let existingGroupIDs = Set(allGearGroups.map(\.id))
+        // Ids inserted below are added (here and for templates), so a group or template listed
+        // twice in the file is created once.
+        var existingGroupIDs = Set(allGearGroups.map(\.id))
         var groupCount = 0
         var missingMemberCount = 0
         for parsedGroup in parsed.gearGroups {
@@ -1110,11 +1118,12 @@ struct GearListView: View {
             missingMemberCount += parsedGroup.gearIDs.count - members.count
             let group = GearGroup(id: parsedGroup.id, name: parsedGroup.name, gear: members)
             modelContext.insert(group)
+            existingGroupIDs.insert(parsedGroup.id)
             groupCount += 1
         }
 
         // ── Tank Templates ────────────────────────────────────────────────────
-        let existingTemplateIDs = Set(allTankTemplates.map(\.id))
+        var existingTemplateIDs = Set(allTankTemplates.map(\.id))
         var templateCount = 0
         for parsedTemplate in parsed.tankTemplates {
             guard !existingTemplateIDs.contains(parsedTemplate.id) else { continue }
@@ -1131,6 +1140,7 @@ struct GearListView: View {
                 model: parsedTemplate.model
             )
             modelContext.insert(template)
+            existingTemplateIDs.insert(parsedTemplate.id)
             templateCount += 1
         }
 

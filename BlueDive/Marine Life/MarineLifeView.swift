@@ -258,12 +258,23 @@ struct MarineLifeView: View {
                                                  otherNames: Set<String>)] = [:]
         var linkedSpecies = Set<PersistentIdentifier>()
         var currentNames: [PersistentIdentifier: String] = [:]
+        var pidsByID: [UUID: [PersistentIdentifier]] = [:]
         for species in catalogue {
             if species.inatTaxonID != nil { linkedSpecies.insert(species.persistentModelID) }
             if let current = species.currentTaxonName { currentNames[species.persistentModelID] = current }
             let names = Set([species.commonName] + (species.altNames ?? []) + species.inatCommonNames.values.filter { !$0.isEmpty })
             speciesInfo[species.persistentModelID] = (species.id, species.displayName, species.scientificName,
                                                       species.category, names)
+            pidsByID[species.id, default: []].append(species.persistentModelID)
+        }
+        // Row key of each species: "s:<id>". Two species can share an id (e.g. the same file
+        // imported on two devices before they synced); the others then get "s:<id>/2", … so
+        // each keeps its own row and can be opened, deleted or merged.
+        var keyByPID: [PersistentIdentifier: String] = [:]
+        for (id, pids) in pidsByID {
+            for (index, pid) in pids.sorted().enumerated() {
+                keyByPID[pid] = index == 0 ? "s:\(id.uuidString)" : "s:\(id.uuidString)/\(index + 1)"
+            }
         }
 
         var byKey: [String: Accumulator] = [:]
@@ -278,7 +289,7 @@ struct MarineLifeView: View {
             // merged) is looked up by name, as an unlinked sighting is.
             let linked = value.speciesPID.flatMap { speciesInfo[$0] != nil ? $0 : nil }
             if let pid = linked ?? speciesByName[SpeciesCatalog.key(value.name)], let info = speciesInfo[pid] {
-                let key = "s:\(info.id.uuidString)"
+                let key = keyByPID[pid] ?? "s:\(info.id.uuidString)"
                 var existing = byKey[key] ?? (info.name, info.scientific, info.category, pid, 0, [], nil, [:], [:], info.otherNames)
                 existing.otherNames.insert(value.name)
                 existing.entryCount += 1
@@ -306,8 +317,10 @@ struct MarineLifeView: View {
 
         // Catalogue species not seen on any dive yet (shown when no diver is selected).
         if selectedDiver.isEmpty {
-            for (pid, info) in speciesInfo where byKey["s:\(info.id.uuidString)"] == nil {
-                byKey["s:\(info.id.uuidString)"] = (info.name, info.scientific, info.category, pid, 0, [], nil, [:], [:], info.otherNames)
+            for (pid, info) in speciesInfo {
+                let key = keyByPID[pid] ?? "s:\(info.id.uuidString)"
+                guard byKey[key] == nil else { continue }
+                byKey[key] = (info.name, info.scientific, info.category, pid, 0, [], nil, [:], [:], info.otherNames)
             }
         }
 

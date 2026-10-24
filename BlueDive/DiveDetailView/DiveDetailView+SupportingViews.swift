@@ -403,13 +403,15 @@ struct AddGearToDiveView: View {
     @Query private var allGear: [Gear]
 
     // Équipements déjà utilisés dans cette plongée
-    private var usedGearIds: Set<UUID> {
-        Set((dive.usedGear ?? []).map { $0.id })
+    // By record, not by `Gear.id`: a gear item sharing an id with one already on the dive
+    // (e.g. imported on two devices before they synced) stays available.
+    private var usedGearIds: Set<PersistentIdentifier> {
+        Set((dive.usedGear ?? []).map { $0.persistentModelID })
     }
 
     // Équipements disponibles (non encore ajoutés)
     private var availableGear: [Gear] {
-        allGear.filter { !usedGearIds.contains($0.id) && !$0.isInactive }
+        allGear.filter { !usedGearIds.contains($0.persistentModelID) && !$0.isInactive }
     }
 
     /// Gear items grouped by category, sorted A-Z within each group.

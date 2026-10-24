@@ -14,7 +14,9 @@ struct EditGearGroupView: View {
     // MARK: - Form State
 
     @State private var name: String
-    @State private var selectedGearIds: Set<UUID>
+    // By record, not by `Gear.id`: two gear items can share an id (e.g. the same file imported
+    // on two devices before they synced), and ticking one must not select both.
+    @State private var selectedGearIds: Set<PersistentIdentifier>
 
     // Validation
     @State private var showValidationError = false
@@ -25,7 +27,7 @@ struct EditGearGroupView: View {
     init(gearGroup: GearGroup) {
         self.gearGroup = gearGroup
         _name = State(initialValue: gearGroup.name)
-        _selectedGearIds = State(initialValue: Set((gearGroup.gear ?? []).map { $0.id }))
+        _selectedGearIds = State(initialValue: Set((gearGroup.gear ?? []).map { $0.persistentModelID }))
     }
 
     // MARK: - Computed Properties
@@ -44,7 +46,7 @@ struct EditGearGroupView: View {
     /// Shows active gear + any inactive gear already in the group.
     /// Same sections and order as the Equipment list (`gearCategorySections`).
     private var groupedGear: [(key: String, items: [Gear])] {
-        gearCategorySections(allGear.filter { !$0.isInactive || selectedGearIds.contains($0.id) }, locale: locale)
+        gearCategorySections(allGear.filter { !$0.isInactive || selectedGearIds.contains($0.persistentModelID) }, locale: locale)
     }
 
     // MARK: - Body
@@ -195,7 +197,7 @@ struct EditGearGroupView: View {
     }
 
     private func gearSelectionRow(_ gear: Gear) -> some View {
-        let isSelected = selectedGearIds.contains(gear.id)
+        let isSelected = selectedGearIds.contains(gear.persistentModelID)
         let gearCategory = displayCategory(of: gear)
 
         return Button {
@@ -290,10 +292,10 @@ struct EditGearGroupView: View {
     // MARK: - Actions
 
     private func toggleGearSelection(_ gear: Gear) {
-        if selectedGearIds.contains(gear.id) {
-            selectedGearIds.remove(gear.id)
+        if selectedGearIds.contains(gear.persistentModelID) {
+            selectedGearIds.remove(gear.persistentModelID)
         } else {
-            selectedGearIds.insert(gear.id)
+            selectedGearIds.insert(gear.persistentModelID)
         }
     }
 
@@ -307,7 +309,7 @@ struct EditGearGroupView: View {
         }
 
         gearGroup.name = trimmedName
-        gearGroup.gear = allGear.filter { selectedGearIds.contains($0.id) }
+        gearGroup.gear = allGear.filter { selectedGearIds.contains($0.persistentModelID) }
 
         try? modelContext.save()
         dismiss()
