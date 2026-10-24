@@ -519,6 +519,16 @@ enum BlueDiveUDDFExporter {
         if !samples.isEmpty {
             lines.append("        <samples>")
             let lastIndex = samples.count - 1
+            // CCR setpoint last written: <setpo2> marks where a setpoint is set and holds until
+            // the next one, so it is written only where it changes, and <divemode> marks where a
+            // setpoint starts (closed circuit) or stops (e.g. open-circuit bailout).
+            var writtenSetpoint: Double?
+            // Semi-closed dives (libdc SCR, e.g. iDive, or a Subsurface PSCR dive) are marked as
+            // such, not as closed circuit.
+            // Matched as whole comma-separated types (the values the Bluetooth and Subsurface
+            // importers write), so a user-entered type that merely contains them does not count.
+            let diveTypes = Set((dive.diveTypes ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+            let loopMode = diveTypes.contains("Semi-Rebreather") || diveTypes.contains("PSCR") ? "semiclosedcircuit" : "closedcircuit"
             for (index, sample) in samples.enumerated() {
                 lines.append("          <waypoint>")
                 // Time: profile stores minutes, UDDF needs seconds
@@ -537,6 +547,19 @@ enum BlueDiveUDDFExporter {
                 }
                 if let ppo2 = sample.ppo2 {
                     lines.append("            <calculatedpo2>\(formatDouble(barToPascal(ppo2)))</calculatedpo2>")
+                }
+                let sampleSetpoint = sample.setpoint
+                if sampleSetpoint != writtenSetpoint {
+                    if let setpoint = sampleSetpoint {
+                        if writtenSetpoint == nil {
+                            lines.append("            <divemode type=\"\(loopMode)\"/>")
+                        }
+                        // CCR setpoint reported by the dive computer (bar → Pa)
+                        lines.append("            <setpo2 setby=\"computer\">\(formatDouble(barToPascal(setpoint)))</setpo2>")
+                    } else {
+                        lines.append("            <divemode type=\"opencircuit\"/>")
+                    }
+                    writtenSetpoint = sampleSetpoint
                 }
                 if let ndl = sample.ndl {
                     // NDL: profile stores minutes, UDDF needs seconds

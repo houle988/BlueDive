@@ -543,6 +543,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         let ceilingTime = attributes["ceilingTime"].flatMap(Double.init)
         let cns         = attributes["cns"].flatMap(Double.init)
         let currentGas  = attributes["currentGas"].flatMap(Int.init)
+        // Stored through DiveProfilePoint's rule (0 or non-finite = no setpoint).
+        let setpoint    = attributes["setpoint"].flatMap(Double.init)
         let events: [DiveProfileEvent]
         if let eventsStr = attributes["events"], !eventsStr.isEmpty {
             events = eventsStr.split(separator: ",").compactMap { parseEvent(String($0)) }
@@ -568,7 +570,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             ceilingTime: ceilingTime,
             cns: cns,
             events: events,
-            currentGas: currentGas
+            currentGas: currentGas,
+            setpoint: setpoint
         ))
     }
 

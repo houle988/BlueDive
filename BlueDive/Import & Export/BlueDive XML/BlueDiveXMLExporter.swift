@@ -404,6 +404,7 @@ enum BlueDiveXMLExporter {
                 if let ceilTime = sample.ceilingTime    { attrs.append(("ceilingTime", formatDouble(ceilTime))) }
                 if let cns      = sample.cns            { attrs.append(("cns", formatDouble(cns))) }
                 if let gas      = sample.currentGas     { attrs.append(("currentGas", String(gas))) }
+                if let setpoint = sample.setpoint       { attrs.append(("setpoint", formatDouble(setpoint))) }
                 let eventsStr = sample.events.map { serializeEvent($0) }.joined(separator: ",")
                 attrs.append(("events", eventsStr))
                 let attrString = attrs.map { "\($0.0)=\"\($0.1)\"" }.joined(separator: " ")

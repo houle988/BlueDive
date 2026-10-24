@@ -197,8 +197,14 @@ struct BlueDiveSamplesData: Sendable {
     let cns: Double?               // reported CNS oxygen-toxicity load at this sample, percentage 0-100; nil when not reported per sample
     let events: [DiveProfileEvent]
     let currentGas: Int?           // active tank index at this sample point
+    let setpoint: Double?          // CCR setpoint in bar at this sample, as each importer provides it: the UDDF
+                                   // importer stores the setpoint in effect (held, ended on open circuit); the
+                                   // Subsurface importer first stores the raw po2 (may be 0 or logged on open
+                                   // circuit) and resolves it in its forward-fill; BlueDive XML stores the
+                                   // attribute as exported. DiveProfilePoint then drops 0 and non-finite values.
+                                   // nil when not reported
 
-    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
+    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil, setpoint: Double? = nil) {
         self.time = time
         self.depth = depth
         self.pressure = pressure
@@ -212,6 +218,7 @@ struct BlueDiveSamplesData: Sendable {
         self.cns = cns
         self.events = events
         self.currentGas = currentGas
+        self.setpoint = setpoint
     }
 }
 

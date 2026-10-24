@@ -142,6 +142,18 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var tankIdToIndex: [String: Int] = [:]
     private var tempWaypointTemperature: Double?
     private var tempWaypointPPO2: Double?
+    /// Last <setpo2> value of the dive (bar). UDDF writes <setpo2> where the setpoint is set and
+    /// it stays in effect until the next <setpo2>, or until a waypoint's <divemode> leaves closed
+    /// circuit (e.g. open-circuit bailout); it applies again when a <divemode> returns to the
+    /// loop without a new <setpo2> (the setpoint is unchanged, so it need not be written again).
+    /// Reset for each dive's samples.
+    private var lastReportedSetpoint: Double?
+    /// True after a <divemode> leaves the loop: a <setpo2> logged then (e.g. an automatic
+    /// setpoint switch during a bailout) is recorded but not applied until back on the loop,
+    /// as on the Bluetooth path.
+    private var onOpenCircuit = false
+    /// The CCR setpoint in effect at the current waypoint: none while off the loop.
+    private var setpointInEffect: Double? { onOpenCircuit ? nil : lastReportedSetpoint }
     private var tempWaypointNDT: Int?
     private var tempWaypointCNS: Double?
 
@@ -304,12 +316,29 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             isInInformationAfterDive = true
 
         case "samples":
-            if isInDive { isInSamples = true }
+            if isInDive {
+                isInSamples = true
+                lastReportedSetpoint = nil
+                onOpenCircuit = false
+            }
 
         case "waypoint":
             if isInSamples {
                 isInWaypoint = true
                 resetTempWaypoint()
+            }
+
+        case "divemode":
+            // Open circuit or apnoe: no setpoint in effect. Back on the loop (closed or
+            // semi-closed circuit): the last setpoint applies again. A <divemode> without a
+            // type changes nothing.
+            if isInWaypoint, let type = attributeDict["type"]?.lowercased() {
+                switch type {
+                case "closedcircuit", "semiclosedcircuit":
+                    onOpenCircuit = false
+                default:
+                    onOpenCircuit = true
+                }
             }
 
         case "tankdata":
@@ -700,6 +729,12 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             }
         case "calculatedpo2":
             if isInWaypoint, let pa = Double(text) { tempWaypointPPO2 = pascalToBar(pa) }
+        case "setpo2":
+            // CCR setpoint in Pa; stored in bar like the PPO2 samples, through the rule every
+            // import path shares (0 or non-finite = no setpoint). Applied only on the loop.
+            if isInWaypoint, let pa = Double(text) {
+                lastReportedSetpoint = DiveProfilePoint.validSetpoint(pascalToBar(pa))
+            }
         case "nodecotime":
             // UDDF nodecotime is in seconds; convert to minutes for BlueDiveSamplesData.ndt
             if isInWaypoint, let seconds = parseSeconds(text), seconds > 0 {
@@ -724,7 +759,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                         temperature: tempWaypointTemperature,
                         ppo2: tempWaypointPPO2,
                         ndt: tempWaypointNDT,
-                        cns: tempWaypointCNS
+                        cns: tempWaypointCNS,
+                        setpoint: setpointInEffect
                     ))
                 }
                 // Track max CNS across all waypoints

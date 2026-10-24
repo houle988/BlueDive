@@ -55,8 +55,9 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
     let sensorPPO2: [Int: Double]? // Per-O2-sensor PPO2 {sensorIndex: bar}; nil for non-CCR/legacy
     let events: [DiveProfileEvent] // Events at this profile point
     let currentGas: Int? // Active tank index at this point (index into Dive.tanks)
+    let setpoint: Double? // CCR setpoint in bar in effect at this point, as reported by the dive computer; nil for OC/legacy
 
-    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
+    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil, setpoint: Double? = nil) {
         self.id = id
         self.time = time
         self.depth = depth
@@ -71,6 +72,9 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         self.sensorPPO2 = sensorPPO2
         self.events = events
         self.currentGas = currentGas
+        // Stored only when valid (see `validSetpoint(_:)`): 0 is no setpoint, and a non-finite
+        // value would make the whole profile fail to encode.
+        self.setpoint = Self.validSetpoint(setpoint)
     }
 
     // Custom decoder so that profiles serialized before the events field was added
@@ -94,6 +98,20 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         sensorPPO2 = try container.decodeIfPresent([Int: Double].self, forKey: .sensorPPO2)
         events = (try? container.decode([DiveProfileEvent].self, forKey: .events)) ?? []
         currentGas = try container.decodeIfPresent(Int.self, forKey: .currentGas)
+        setpoint = Self.validSetpoint(try container.decodeIfPresent(Double.self, forKey: .setpoint))
+    }
+}
+
+extension DiveProfilePoint {
+    /// A CCR setpoint as BlueDive stores and shows it: a reported setpoint of 0, or a
+    /// non-finite value, is no setpoint (libdivecomputer backends such as Divesoft omit 0,
+    /// Subsurface writes po2='0.0 bar' when none is in effect), never a real one. Both
+    /// initializers store `setpoint` through this rule, so a stored setpoint is always valid;
+    /// importers call it directly only where the rule decides what they do next (a value
+    /// that ends a forward-filled or held setpoint).
+    static func validSetpoint(_ value: Double?) -> Double? {
+        guard let value, value > 0, value.isFinite else { return nil }
+        return value
     }
 }
 

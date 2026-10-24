@@ -180,13 +180,16 @@ extension DiveDetailView {
         return indices.sorted()
     }
 
-    /// Sorted O2 sensor indices that have per-sensor PPO2 data across the whole dive.
-    private var sampleSensorIndices: [Int] {
+    /// The optional CCR columns, found in one pass over the dive: sorted O2 sensor indices that
+    /// have per-sensor PPO2 data, and whether any sample has a CCR setpoint (SP column).
+    private var sampleCCRColumns: (sensorIndices: [Int], hasSetpoint: Bool) {
         var indices = Set<Int>()
+        var hasSetpoint = false
         for sample in dive.profileSamples {
             if let sp = sample.sensorPPO2 { indices.formUnion(sp.keys) }
+            if !hasSetpoint, sample.setpoint != nil { hasSetpoint = true }
         }
-        return indices.sorted()
+        return (indices.sorted(), hasSetpoint)
     }
 
     /// Rows shown before "Show all" is tapped. Keeps the tab short so the page stays easy
@@ -225,8 +228,11 @@ extension DiveDetailView {
         let visibleSamples = showAllSamples ? allSamples : Array(allSamples.prefix(Self.samplesPreviewLimit))
         let tankIndices = sampleTankIndices
         let hasMultiTank = tankIndices.count > 1
-        let sensorIndices = sampleSensorIndices
+        let ccrColumns = sampleCCRColumns
+        let sensorIndices = ccrColumns.sensorIndices
         let hasSensorPPO2 = !sensorIndices.isEmpty
+        // CCR setpoint column, only for dives whose computer reported a setpoint.
+        let hasSetpoint = ccrColumns.hasSetpoint
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -256,6 +262,9 @@ extension DiveDetailView {
                             ForEach(sensorIndices, id: \.self) { idx in
                                 sampleHeader(Text(verbatim: "S\(idx + 1)"), .sensor(idx), alignment: .trailing)
                             }
+                        }
+                        if hasSetpoint {
+                            sampleHeader(Text("SP", comment: "Samples table column header: CCR setpoint (bar)"), .setpoint, alignment: .trailing)
                         }
                         sampleHeader(Text("CNS"), .cns, alignment: .trailing)
                         sampleHeader(Text("NDL"), .ndl, alignment: .trailing)
@@ -324,6 +333,15 @@ extension DiveDetailView {
                                         } else {
                                             Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.sensor(idx)), alignment: .trailing)
                                         }
+                                    }
+                                }
+                                if hasSetpoint {
+                                    if let setpoint = sample.setpoint {
+                                        Text(verbatim: setpoint.localizedString(decimals: 2, minDecimals: 2))
+                                            .font(.caption).foregroundStyle(Color.ccrSetpoint)
+                                            .frame(width: sampleColumnWidth(.setpoint), alignment: .trailing)
+                                    } else {
+                                        Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.setpoint), alignment: .trailing)
                                     }
                                 }
                                 if let cns = sample.cns {
@@ -411,7 +429,7 @@ extension DiveDetailView {
 extension DiveDetailView {
     /// Columns of the samples table whose width adapts to their header title.
     enum SampleColumn: Hashable {
-        case time, depth, temperature, pressure, ppo2, cns, ndl, ceiling, stop, gas, events
+        case time, depth, temperature, pressure, ppo2, setpoint, cns, ndl, ceiling, stop, gas, events
         case tank(Int)
         case sensor(Int)
 
@@ -420,7 +438,7 @@ extension DiveDetailView {
             switch self {
             case .time, .temperature, .pressure, .ppo2, .tank: return 50
             case .depth, .ndl, .ceiling, .stop:                return 45
-            case .sensor:                                     return 42
+            case .sensor, .setpoint:                          return 42
             case .cns:                                        return 40
             case .gas:                                        return 35
             // Fixed rather than sized to its content: rows are built lazily, so a row built

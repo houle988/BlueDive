@@ -958,7 +958,8 @@ extension ContentView {
                 ppo2: sample.ppo2,
                 sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
-                currentGas: sample.currentGas
+                currentGas: sample.currentGas,
+                setpoint: sample.setpoint
             )
         }
         
@@ -1293,7 +1294,8 @@ extension ContentView {
                 ppo2: sample.ppo2,
                 sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
-                currentGas: sample.currentGas
+                currentGas: sample.currentGas,
+                setpoint: sample.setpoint
             ))
         }
         earlier.profileSamples = combinedSamples

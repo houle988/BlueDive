@@ -30,6 +30,9 @@ struct ChartInterpolatedPoint {
     let sensorPPO2: [Int: Double]?
     let events: [DiveProfileEvent]
     let currentGas: Int?
+    /// CCR setpoint held from the nearest earlier real sample — never interpolated, and nil
+    /// where that sample reported none (e.g. on open-circuit bailout).
+    let setpoint: Double?
     let ascentSpeed: Double?
 }
 
@@ -107,7 +110,9 @@ fileprivate struct PPO2Setup {
 
 /// Builds a per-sample representative PPO₂ map for all profile samples in `dive`.
 /// Priority per sample: device voted/controller PPO₂ (DC_SENSOR_NONE) →
-/// median of physical O₂ cells → computed from gas mix + depth (Dalton's Law).
+/// median of physical O₂ cells → computed from gas mix + depth (Dalton's Law), the last only
+/// for open-circuit samples: a sample with a CCR setpoint is on the loop, where the breathed
+/// PPO₂ is not the diluent's, so it gets no PPO₂ unless the computer reported one.
 fileprivate func buildPPO2Map(for dive: Dive) -> [UUID: Double] {
     let tanks = dive.tanks
     let setup = tanks.isEmpty ? nil : PPO2Setup(dive: dive)
@@ -126,7 +131,7 @@ fileprivate func buildPPO2Map(for dive: Dive) -> [UUID: Double] {
             result[sample.id] = sorted.count.isMultiple(of: 2)
                 ? (sorted[mid - 1] + sorted[mid]) / 2.0
                 : sorted[mid]
-        } else if let s = setup {
+        } else if let s = setup, sample.setpoint == nil {
             // OC fallback: no sensor data — compute from gas mix + depth (Dalton's Law).
             let gasIdx: Int?
             if let idx = sample.currentGas, idx >= 0, idx < tanks.count { gasIdx = idx }
@@ -147,6 +152,122 @@ fileprivate func sensorPPO2Indices(for dive: Dive) -> [Int] {
         if let sp = sample.sensorPPO2 { indices.formUnion(sp.keys) }
     }
     return indices.sorted()
+}
+
+/// A dive's CCR setpoint data, shared by the change markers, the setpoint line, the PPO₂ scale
+/// and the legend, so they always agree on where a setpoint is set and where its runs start and
+/// end: the changes and the line come from one pass over the samples, the range from
+/// `range(for:)`. Stored setpoints are always valid
+/// (`DiveProfilePoint.validSetpoint(_:)`). Empty for dives without setpoint data.
+fileprivate struct SetpointProfile {
+    /// Samples where the setpoint is set: the first sample with a setpoint, every sample whose
+    /// setpoint differs from the previous sample's, and the return to the loop after a gap with
+    /// no setpoint (e.g. open-circuit bailout), even at the same value — where the setpoint line
+    /// restarts and the UDDF export writes a new <setpo2>.
+    let changes: [DiveProfilePoint]
+    /// The setpoint as a dashed step line, one series per run of samples with a setpoint: the
+    /// line breaks where the computer reported none instead of bridging the gap. Only each run's
+    /// ends and the corners of each step are emitted (explicit corners keep the steps square
+    /// without relying on an interpolation method). Each run is held to the next sample's time
+    /// (the first sample without a setpoint), as the tooltip holds the setpoint until the next
+    /// sample; the dive's last run ends at its last sample. A run that is still a single point
+    /// (one sample at the very end of the dive) is drawn as a dot (`singlePointRuns`). Empty
+    /// unless built with `includeLine` (the line is drawn only while PPO₂ is shown).
+    let linePoints: [(run: Int, time: Double, setpoint: Double)]
+    /// Lowest to highest setpoint; nil when the dive has none (`range(for:)`).
+    let range: ClosedRange<Double>?
+
+    init(dive: Dive, includeLine: Bool) {
+        var changes: [DiveProfilePoint] = []
+        var points: [(run: Int, time: Double, setpoint: Double)] = []
+        var run = 0
+        var previous: Double?
+        var lastTime = 0.0
+        /// Ends the current run at `nextTime` (the next sample's time), or at its last sample
+        /// at the end of the dive.
+        func closeRun(nextTime: Double?) {
+            guard includeLine, let previous, let last = points.last, last.run == run else { return }
+            let end = nextTime ?? lastTime
+            if end > last.time {
+                points.append((run: run, time: end, setpoint: previous))
+            }
+        }
+        for sample in dive.profileSamples {
+            guard let setpoint = sample.setpoint else {
+                if previous != nil {
+                    closeRun(nextTime: sample.time)
+                    run += 1
+                }
+                previous = nil
+                continue
+            }
+            if previous == nil {
+                changes.append(sample)
+                if includeLine {
+                    points.append((run: run, time: sample.time, setpoint: setpoint))
+                }
+            } else if let previous, previous != setpoint {
+                changes.append(sample)
+                if includeLine {
+                    points.append((run: run, time: sample.time, setpoint: previous))
+                    points.append((run: run, time: sample.time, setpoint: setpoint))
+                }
+            }
+            previous = setpoint
+            lastTime = sample.time
+        }
+        closeRun(nextTime: nil)
+        self.changes = changes
+        self.linePoints = points
+        self.range = Self.range(for: dive)
+    }
+
+    /// Lowest to highest setpoint of the dive, without building the markers and line; nil when
+    /// the dive has none. The only place the range is computed.
+    static func range(for dive: Dive) -> ClosedRange<Double>? {
+        var low = Double.greatestFiniteMagnitude
+        var high = -Double.greatestFiniteMagnitude
+        for sample in dive.profileSamples {
+            guard let setpoint = sample.setpoint else { continue }
+            low = min(low, setpoint)
+            high = max(high, setpoint)
+        }
+        return low <= high ? low...high : nil
+    }
+}
+
+/// Runs (series) with a single point: Swift Charts draws no line for them, so the chart draws
+/// each as a dot instead of dropping a value the dive computer reported.
+fileprivate func singlePointRuns(_ runs: [Int]) -> Set<Int> {
+    var counts: [Int: Int] = [:]
+    for run in runs { counts[run, default: 0] += 1 }
+    return Set(counts.compactMap { $0.value == 1 ? $0.key : nil })
+}
+
+/// The dive and a fingerprint of its samples (count, and the first and last sample ids), so a
+/// view or cache depending on the profile is rebuilt when the profile is replaced while the
+/// chart is shown (a dive merge, a Bluetooth re-download, an iCloud update): every import builds
+/// new samples with new ids, so a replacement of the same length is detected too. Cheap to
+/// compare: the legend checks it on every cursor move.
+fileprivate struct ProfileCacheID: Equatable {
+    let diveID: UUID
+    let sampleCount: Int
+    let firstSampleID: UUID?
+    let lastSampleID: UUID?
+
+    init(dive: Dive) {
+        let samples = dive.profileSamples
+        diveID = dive.id
+        sampleCount = samples.count
+        firstSampleID = samples.first?.id
+        lastSampleID = samples.last?.id
+    }
+}
+
+extension Color {
+    /// Colour of the CCR setpoint: the chart's markers, line, legend entry and tooltip row, and
+    /// the Samples table's SP column.
+    static var ccrSetpoint: Color { .mint }
 }
 
 /// Line colour per physical O2 sensor index — cycles for N > 5.
@@ -377,6 +498,9 @@ private struct StaticChartLayer: View, Equatable {
     /// newly-flipped Bool on it could never make two `StaticChartLayer` values compare
     /// unequal on its own.
     let hideClearedDecoStops: Bool
+    /// The profile's fingerprint, so the layer redraws when the samples are replaced (e.g. a
+    /// re-download that adds setpoints) even though `dive.id` is stable.
+    let profileID: ProfileCacheID
     #if os(macOS)
     /// How the plot height follows the window: the dive detail view's rule by default, a
     /// lower one for the dive list's profile preview.
@@ -388,6 +512,7 @@ private struct StaticChartLayer: View, Equatable {
         guard lhs.heightRule == rhs.heightRule else { return false }
         #endif
         return lhs.dive.id == rhs.dive.id &&
+        lhs.profileID == rhs.profileID &&
         lhs.tanksO2Hash == rhs.tanksO2Hash &&
         lhs.unitsHash == rhs.unitsHash &&
         lhs.hideClearedDecoStops == rhs.hideClearedDecoStops &&
@@ -499,10 +624,12 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     /// PPO₂ scale: from 0 to the highest value `ppo2Marks` plots (every O₂ sensor when the
-    /// dive has per-sensor readings, the voted or computed PPO₂ otherwise), never below
+    /// dive has per-sensor readings, and the voted or computed PPO₂ in `data`), never below
     /// 1.6 bar so a low-PPO₂ dive is still drawn against the usual working limits.
-    /// `sensorIndices` and `data` are computed once in `body` and shared with `ppo2Marks`.
-    private func ppo2Axis(sensorIndices: [Int], data: [(time: Double, ppo2: Double)]) -> SecondaryAxisScale {
+    /// `sensorIndices` and `data` are computed once in `body` and shared with `ppo2Marks`;
+    /// `setpointRange` comes from the body's `SetpointProfile`.
+    private func ppo2Axis(sensorIndices: [Int], data: [(time: Double, ppo2: Double, run: Int, joinsPrevious: Bool)],
+                          setpointRange: ClosedRange<Double>?) -> SecondaryAxisScale {
         var hi = 0.0
         if !sensorIndices.isEmpty {
             for sample in dive.profileSamples {
@@ -511,9 +638,10 @@ private struct StaticChartLayer: View, Equatable {
                     if let ppo2 = readings[idx], ppo2 > hi { hi = ppo2 }
                 }
             }
-        } else {
-            for point in data where point.ppo2 > hi { hi = point.ppo2 }
         }
+        for point in data where point.ppo2 > hi { hi = point.ppo2 }
+        // The setpoint line is drawn on the same scale.
+        if let setpointRange, setpointRange.upperBound > hi { hi = setpointRange.upperBound }
         return .rounded(low: 0, high: max(hi, ppo2AxisMinimumMax))
     }
 
@@ -632,11 +760,14 @@ private struct StaticChartLayer: View, Equatable {
         // Compute each shown metric's scale once per render, then thread it into its marks
         // and every right-axis label so the sample scan runs a single time instead of once
         // per mark or axis label.
-        // PPO₂ sources, shared by its scale and its marks: the per-sensor readings, or else
-        // the voted or computed series (built only when there are no sensor readings).
+        // PPO₂ sources, shared by its scale and its marks: the per-sensor readings, and the
+        // voted or computed series — for the whole dive when there are no sensor readings, for
+        // the open-circuit bailout samples only when there are.
         let ppo2Sensors = visibility.showPPO2 ? chartSensorIndices : []
-        let ppo2Data = visibility.showPPO2 && ppo2Sensors.isEmpty ? ppo2RenderData : []
-        let ppo2Scale = visibility.showPPO2 ? ppo2Axis(sensorIndices: ppo2Sensors, data: ppo2Data) : nil
+        let ppo2Data = visibility.showPPO2 ? (ppo2Sensors.isEmpty ? ppo2RenderData : ppo2BailoutRenderData) : []
+        // Setpoint data, shared by the markers, the setpoint line and the PPO₂ scale.
+        let setpoints = SetpointProfile(dive: dive, includeLine: visibility.showPPO2)
+        let ppo2Scale = visibility.showPPO2 ? ppo2Axis(sensorIndices: ppo2Sensors, data: ppo2Data, setpointRange: setpoints.range) : nil
         // Pressure and NDL sources, likewise shared by each scale and its marks.
         let pressureTanks = visibility.showPressure ? chartTankIndices : []
         let ndlSeries = visibility.showNDL ? ndlSeriesSamples : []
@@ -650,10 +781,11 @@ private struct StaticChartLayer: View, Equatable {
             depthMarks
             decoMarks
             gasChangeMarks
+            setpointChangeMarks(setpoints.changes)
             if let temperatureScale { temperatureMarks(scale: temperatureScale) }
             if let pressureScale { pressureMarks(scale: pressureScale, tankIndices: pressureTanks) }
             if let ndlScale { ndlMarks(scale: ndlScale, series: ndlSeries) }
-            if let ppo2Scale { ppo2Marks(scale: ppo2Scale, sensorIndices: ppo2Sensors, data: ppo2Data) }
+            if let ppo2Scale { ppo2Marks(scale: ppo2Scale, sensorIndices: ppo2Sensors, data: ppo2Data, setpointLine: setpoints.linePoints) }
         }
         // Explicit domain from yDomainMin (deepest, negative) to 0 (surface).
         // No automatic padding — the chart fills exactly to the data.
@@ -769,6 +901,36 @@ private struct StaticChartLayer: View, Equatable {
                     .padding(.horizontal, 3)
                     .padding(.vertical, 1)
                     .background(RoundedRectangle(cornerRadius: 3).fill(Color.brown.opacity(0.15)))
+            }
+        }
+    }
+
+    // MARK: - Setpoint change markers
+
+    /// A square on the depth curve wherever the CCR setpoint changes, labelled with the new
+    /// setpoint below the curve (gas switch labels sit above it, so both stay readable when
+    /// they happen at the same time).
+    @ChartContentBuilder
+    private func setpointChangeMarks(_ changes: [DiveProfilePoint]) -> some ChartContent {
+        ForEach(changes) { sample in
+            PointMark(
+                x: .value("Setpoint Change", sample.time),
+                y: .value("Depth", -dive.displayProfileDepth(sample.depth))
+            )
+            .symbol(.square)
+            .symbolSize(70)
+            .foregroundStyle(Color.ccrSetpoint)
+            // Below the curve; moved back inside the plot when the change is at the deepest
+            // point, where the plot (clipped at its edges) has no room below it.
+            .annotation(position: .bottom, alignment: .center,
+                        overflowResolution: .init(x: .fit(to: .plot), y: .fit(to: .plot))) {
+                Text(verbatim: String(format: NSLocalizedString("SP %@", bundle: Bundle.forAppLanguage(), value: "SP %@", comment: "Dive chart chip at a CCR setpoint change; %@ is the new setpoint in bar, e.g. '1.30'"),
+                                      (sample.setpoint ?? 0).localizedString(decimals: 2, minDecimals: 2)))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.ccrSetpoint)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.ccrSetpoint.opacity(0.15)))
             }
         }
     }
@@ -973,57 +1135,204 @@ private struct StaticChartLayer: View, Equatable {
 
     // MARK: - PPO₂ overlay (sensor values preferred per sample; computed as fallback)
 
-    /// Produces (time, ppo2) pairs for each profile sample using the shared `buildPPO2Map` helper.
-    /// Per-sample: sensor value if available, else Dalton's-Law from gas mix + depth.
-    private var ppo2RenderData: [(time: Double, ppo2: Double)] {
+    /// Produces (time, ppo2, run, joinsPrevious) for each profile sample using the shared
+    /// `buildPPO2Map` helper. Per-sample: sensor value if available, else Dalton's-Law from gas
+    /// mix + depth. The smoothed line starts a new run where the breathing mode changes (a
+    /// setpoint starts or stops: loop ↔ open circuit), so its curve never bulges past the two
+    /// values at the switch; `joinsPrevious` marks the first point after such a change when the
+    /// sample just before it has a value too, and the two are joined by a straight segment, so
+    /// the line stays continuous across a gas switch. It also starts a new run at a loop sample
+    /// (with a setpoint) that has no reported PPO₂, so it never bridges a loop section with
+    /// values nobody recorded.
+    private var ppo2RenderData: [(time: Double, ppo2: Double, run: Int, joinsPrevious: Bool)] {
         guard visibility.showPPO2 else { return [] }
         let map = buildPPO2Map(for: dive)
-        return dive.profileSamples.compactMap { s in map[s.id].map { (time: s.time, ppo2: $0) } }
+        var data: [(time: Double, ppo2: Double, run: Int, joinsPrevious: Bool)] = []
+        var run = 0
+        var previousOnLoop: Bool?
+        var previousHasValue = false
+        for sample in dive.profileSamples {
+            let onLoop = sample.setpoint != nil
+            let modeChanged = previousOnLoop.map { $0 != onLoop } ?? false
+            if modeChanged, data.last?.run == run {
+                run += 1
+            }
+            previousOnLoop = onLoop
+            if let ppo2 = map[sample.id] {
+                data.append((time: sample.time, ppo2: ppo2, run: run,
+                             joinsPrevious: modeChanged && previousHasValue))
+                previousHasValue = true
+            } else {
+                previousHasValue = false
+                if onLoop, data.last?.run == run {
+                    run += 1
+                }
+            }
+        }
+        return data
+    }
+
+    /// On a dive with O₂-cell readings, the voted or computed PPO₂ of its open-circuit sections
+    /// (bailout: no setpoint) in which no sample has cell readings — the bailout gas's PPO₂ — so
+    /// such a section is not left without a PPO₂ trace. A section with any cell reading (a
+    /// computer that keeps logging cells on open circuit) gets none, so calculated and measured
+    /// values are never mixed in one section. A new run starts after each section, so it never
+    /// bridges a loop section. Empty for dives without setpoint data.
+    private var ppo2BailoutRenderData: [(time: Double, ppo2: Double, run: Int, joinsPrevious: Bool)] {
+        let samples = dive.profileSamples
+        guard visibility.showPPO2, samples.contains(where: { $0.setpoint != nil }) else { return [] }
+        let map = buildPPO2Map(for: dive)
+        var data: [(time: Double, ppo2: Double, run: Int, joinsPrevious: Bool)] = []
+        var run = 0
+        var start = 0
+        while start < samples.count {
+            guard samples[start].setpoint == nil else {
+                start += 1
+                continue
+            }
+            var end = start
+            while end < samples.count, samples[end].setpoint == nil { end += 1 }
+            let section = samples[start..<end]
+            if !section.contains(where: { !($0.sensorPPO2?.isEmpty ?? true) }) {
+                for sample in section {
+                    if let ppo2 = map[sample.id] {
+                        data.append((time: sample.time, ppo2: ppo2, run: run, joinsPrevious: false))
+                    } else if data.last?.run == run {
+                        run += 1
+                    }
+                }
+            }
+            if data.last?.run == run { run += 1 }
+            start = end
+        }
+        return data
+    }
+
+    /// Run index of each sample, starting a new run at every loop ↔ open-circuit change (a
+    /// setpoint starts or stops), so a per-cell PPO₂ line never bridges a bailout.
+    private func breathingModeRuns(_ samples: [DiveProfilePoint]) -> [Int] {
+        var runs: [Int] = []
+        runs.reserveCapacity(samples.count)
+        var run = 0
+        var previousOnLoop: Bool?
+        for sample in samples {
+            let onLoop = sample.setpoint != nil
+            if let previousOnLoop, previousOnLoop != onLoop { run += 1 }
+            previousOnLoop = onLoop
+            runs.append(run)
+        }
+        return runs
     }
 
     @ChartContentBuilder
     private func ppo2Marks(scale: SecondaryAxisScale, sensorIndices: [Int],
-                           data: [(time: Double, ppo2: Double)]) -> some ChartContent {
+                           data: [(time: Double, ppo2: Double, run: Int, joinsPrevious: Bool)],
+                           setpointLine: [(run: Int, time: Double, setpoint: Double)]) -> some ChartContent {
         let base = depthBase
         if base > 0 {
             if !sensorIndices.isEmpty {
-                // One line per physical O2 cell
+                // One line per physical O2 cell, broken at each loop ↔ open-circuit change so it
+                // never bridges a bailout (where the computer reports no cell readings).
+                let samples = dive.profileSamples
+                let modeRuns = breathingModeRuns(samples)
                 ForEach(sensorIndices, id: \.self) { sensorIdx in
-                    let samplesWithSensor = dive.profileSamples.filter { $0.sensorPPO2?[sensorIdx] != nil }
-                    ForEach(samplesWithSensor) { sample in
-                        if let ppo2 = sample.sensorPPO2?[sensorIdx] {
-                            let y = plotY(ppo2, on: scale, increasesDownward: true)
-                            LineMark(
-                                x: .value("Time", sample.time),
-                                y: .value("PPO₂", y),
-                                series: .value("Sequence", "PPO2-S\(sensorIdx)")
-                            )
-                            .interpolationMethod(.catmullRom)
-                            .lineStyle(StrokeStyle(
-                                lineWidth: 2,
-                                lineCap: .round,
-                                lineJoin: .round,
-                                dash: ppo2Dash(forSensorAtPosition: sensorIndices.firstIndex(of: sensorIdx) ?? 0)
-                            ))
-                            .foregroundStyle(ppo2SensorColor(for: sensorIdx))
-                        }
+                    let points: [(time: Double, ppo2: Double, run: Int)] = samples.indices.compactMap { i in
+                        samples[i].sensorPPO2?[sensorIdx].map { (time: samples[i].time, ppo2: $0, run: modeRuns[i]) }
                     }
-                }
-            } else {
-                // Fallback: voted or computed single-line PPO2
-                if !data.isEmpty {
-                    ForEach(Array(data.enumerated()), id: \.offset) { _, point in
-                        let y = plotY(point.ppo2, on: scale, increasesDownward: true)
+                    let dash = ppo2Dash(forSensorAtPosition: sensorIndices.firstIndex(of: sensorIdx) ?? 0)
+                    ForEach(Array(points.enumerated()), id: \.offset) { _, point in
                         LineMark(
                             x: .value("Time", point.time),
-                            y: .value("PPO₂", y),
-                            series: .value("Sequence", "PPO2")
+                            y: .value("PPO₂", plotY(point.ppo2, on: scale, increasesDownward: true)),
+                            series: .value("Sequence", "PPO2-S\(sensorIdx)-\(point.run)")
                         )
                         .interpolationMethod(.catmullRom)
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: dash))
+                        .foregroundStyle(ppo2SensorColor(for: sensorIdx))
+                    }
+                    // A one-point run (a single reading between two switches) is drawn as a dot.
+                    let loneRuns = singlePointRuns(points.map(\.run))
+                    ForEach(Array(points.enumerated().filter { loneRuns.contains($0.element.run) }), id: \.offset) { _, point in
+                        PointMark(
+                            x: .value("Time", point.time),
+                            y: .value("PPO₂", plotY(point.ppo2, on: scale, increasesDownward: true))
+                        )
+                        .symbolSize(16)
+                        .foregroundStyle(ppo2SensorColor(for: sensorIdx))
+                    }
+                }
+            }
+            // Voted or computed single-line PPO2: the whole dive without cell readings, the
+            // bailout sections only with them (see the body). With cells it is the bailout gas's
+            // calculated PPO₂, drawn thinner, dotted and lighter so it cannot be read as a cell's
+            // measurement (cell S1 is solid indigo).
+            let calculatedOnly = !sensorIndices.isEmpty
+            let ppo2LineColor: Color = calculatedOnly ? Color.indigo.opacity(0.6) : Color.indigo
+            let ppo2LineStyle = calculatedOnly
+                ? StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [1, 3])
+                : StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            if !data.isEmpty {
+                ForEach(Array(data.enumerated()), id: \.offset) { _, point in
+                    let y = plotY(point.ppo2, on: scale, increasesDownward: true)
+                    LineMark(
+                        x: .value("Time", point.time),
+                        y: .value("PPO₂", y),
+                        series: .value("Sequence", "PPO2-\(point.run)")
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(ppo2LineStyle)
+                    .foregroundStyle(ppo2LineColor)
+                }
+                // Straight segment across each loop ↔ open-circuit switch (see ppo2RenderData).
+                ForEach(Array(data.indices.filter { $0 > 0 && data[$0].joinsPrevious }), id: \.self) { index in
+                    ForEach([index - 1, index], id: \.self) { pointIndex in
+                        let point = data[pointIndex]
+                        LineMark(
+                            x: .value("Time", point.time),
+                            y: .value("PPO₂", plotY(point.ppo2, on: scale, increasesDownward: true)),
+                            series: .value("Sequence", "PPO2-switch-\(index)")
+                        )
+                        .interpolationMethod(.linear)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                         .foregroundStyle(Color.indigo)
                     }
                 }
+                // A one-point run not joined by a switch segment (a value between two loop
+                // samples without PPO₂) is drawn as a dot; a point a switch segment already
+                // reaches needs none.
+                let lonePPO2Runs = singlePointRuns(data.map(\.run))
+                let loneIndices = data.indices.filter { index in
+                    lonePPO2Runs.contains(data[index].run)
+                        && !data[index].joinsPrevious
+                        && !(index + 1 < data.count && data[index + 1].joinsPrevious)
+                }
+                ForEach(loneIndices, id: \.self) { index in
+                    let point = data[index]
+                    PointMark(
+                        x: .value("Time", point.time),
+                        y: .value("PPO₂", plotY(point.ppo2, on: scale, increasesDownward: true))
+                    )
+                    .symbolSize(16)
+                    .foregroundStyle(ppo2LineColor)
+                }
+            }
+            ForEach(Array(setpointLine.enumerated()), id: \.offset) { _, point in
+                LineMark(
+                    x: .value("Time", point.time),
+                    y: .value("PPO₂", plotY(point.setpoint, on: scale, increasesDownward: true)),
+                    series: .value("Sequence", "Setpoint-\(point.run)")
+                )
+                .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [4, 3]))
+                .foregroundStyle(Color.ccrSetpoint)
+            }
+            let loneSetpointRuns = singlePointRuns(setpointLine.map(\.run))
+            ForEach(Array(setpointLine.enumerated().filter { loneSetpointRuns.contains($0.element.run) }), id: \.offset) { _, point in
+                PointMark(
+                    x: .value("Time", point.time),
+                    y: .value("PPO₂", plotY(point.setpoint, on: scale, increasesDownward: true))
+                )
+                .symbolSize(12)
+                .foregroundStyle(Color.ccrSetpoint)
             }
         }
     }
@@ -1317,16 +1626,23 @@ struct LegendBand: View {
     }
 }
 
-/// Circle swatch for gas switch legend entries.
+/// Point-marker swatch for legend entries: a circle for gas switches, a square for CCR
+/// setpoint changes, matching the chart's symbols.
 struct LegendGasChange: View {
     let color: Color
     let text: LocalizedStringKey
+    var square: Bool = false
 
     var body: some View {
         HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
+            Group {
+                if square {
+                    Rectangle().fill(color)
+                } else {
+                    Circle().fill(color)
+                }
+            }
+            .frame(width: 8, height: 8)
             Text(text)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -1460,18 +1776,41 @@ struct UnifiedDiveChartOptimized: View {
     /// The `chartCacheKey` the PPO₂ legend caches above were built for. Until they are built
     /// for the current key (the first frame, before `.task` runs, and after moving to another
     /// dive or editing a gas mix) the legend computes its ranges directly.
-    @State private var ppo2LegendCacheKey: String? = nil
+    @State private var ppo2LegendCacheKey: ChartCacheKey? = nil
     private var ppo2LegendCacheReady: Bool { ppo2LegendCacheKey == chartCacheKey }
 
-    /// What the caches built in `.task` depend on: the dive, its gas mixes and the
-    /// hide-cleared-deco-stops setting. A change rebuilds them.
-    private var chartCacheKey: String { "\(dive.id)\(tanksO2Hash)\(prefs.hideClearedDecoStops)" }
+    /// What the caches built in `.task` depend on: the dive, its samples (`ProfileCacheID`, so a
+    /// profile replaced while the chart is shown — e.g. a re-download — rebuilds them), its gas
+    /// mixes and the hide-cleared-deco-stops setting. A change rebuilds them. Compared field by
+    /// field (no string building), as the legend checks it on every cursor move.
+    private struct ChartCacheKey: Equatable {
+        /// The dive (`ProfileCacheID.diveID`) and its samples.
+        let profile: ProfileCacheID
+        let tanksO2Hash: Int
+        let hideClearedDecoStops: Bool
+    }
+
+    private var chartCacheKey: ChartCacheKey {
+        ChartCacheKey(profile: profileCacheID, tanksO2Hash: tanksO2Hash,
+                      hideClearedDecoStops: prefs.hideClearedDecoStops)
+    }
     /// Sorted (time, pressure) readings for single-tank dives — enables interpolation across sparse AI transmitter gaps.
     @State private var cachedSinglePressureReadings: [(time: Double, pressure: Double)] = []
     /// Sorted per-tank pressure readings for multi-tank dives.
     @State private var cachedMultiPressureReadings: [Int: [(time: Double, pressure: Double)]] = [:]
     /// Entry time (diamond position) per mandatory deco stop for tooltip matching — built once per dive.
     @State private var cachedDecoStopEntries: [(stop: DecoStop, entryTime: Double)] = []
+    /// Lowest to highest CCR setpoint of the dive, for the legend; nil when the dive has no
+    /// setpoint data. Built in `.task`, with `cachedSensorIndices`, for `profileCacheID`.
+    @State private var cachedSetpointRange: ClosedRange<Double>? = nil
+    /// Sorted O₂ sensor indices with readings (legend), built with `cachedSetpointRange`.
+    @State private var cachedSensorIndices: [Int] = []
+    /// The `profileCacheID` the two caches above were built for; until then (first frame) the
+    /// values are computed directly, so a setpoint dive never shows as having none.
+    @State private var builtProfileCacheID: ProfileCacheID? = nil
+    private var setpointCacheReady: Bool { builtProfileCacheID == profileCacheID }
+
+    private var profileCacheID: ProfileCacheID { ProfileCacheID(dive: dive) }
 
     // MARK: - Photo Markers
     @Environment(\.modelContext) private var modelContext
@@ -1500,6 +1839,11 @@ struct UnifiedDiveChartOptimized: View {
             buildPressureCache()
             buildDecoStopCache()
             if visibility.showPPO2 { rebuildPPO2Cache() }
+        }
+        .task(id: profileCacheID) {
+            cachedSetpointRange = SetpointProfile.range(for: dive)
+            cachedSensorIndices = sensorPPO2Indices(for: dive)
+            builtProfileCacheID = profileCacheID
         }
         .onChange(of: visibility.showPPO2) { _, newValue in
             if newValue {
@@ -1889,9 +2233,9 @@ struct UnifiedDiveChartOptimized: View {
         let depthBase = max(dive.displayMaxDepth, deepestSampleDepth)
 
         #if os(macOS)
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, heightRule: chartHeightRule)
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, heightRule: chartHeightRule)
         #else
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops)
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID)
         #endif
         return layer
             .equatable()
@@ -2159,10 +2503,18 @@ struct UnifiedDiveChartOptimized: View {
             return pn ?? nn
         }()
 
+        // Across a change between the loop (setpoint) and open circuit, the next sample's PPO₂
+        // values belong to the other breathing mode: hold the earlier sample's only, like the
+        // setpoint row — never blend or borrow across the change.
+        let breathingModeChanges = (prev.setpoint == nil) != (next.setpoint == nil)
         let ppo2: Double? = {
             let pp = cachedPPO2BySampleID[prev.id]
             let np = cachedPPO2BySampleID[next.id]
+            if breathingModeChanges { return pp }
             if let a = pp, let b = np { return a + t * (b - a) }
+            // A loop sample without a reported PPO₂ has none (the chart line breaks there):
+            // never borrow the next sample's value for it.
+            if prev.setpoint != nil { return pp }
             return pp ?? np
         }()
 
@@ -2189,9 +2541,13 @@ struct UnifiedDiveChartOptimized: View {
             // between two reports is not a value the dive computer ever gave.
             ceilingDepth: prev.ceilingDepth,
             ppo2: ppo2,
-            sensorPPO2: nearest.sensorPPO2,
+            // Held from the earlier sample across a loop ↔ open-circuit change and on the loop
+            // (like the PPO₂ row, never borrowed from the next sample), nearest otherwise.
+            sensorPPO2: breathingModeChanges || prev.setpoint != nil ? prev.sensorPPO2 : nearest.sensorPPO2,
             events: mergedEvents,
             currentGas: gasSource.currentGas,
+            // Step-hold from the earlier real sample, like the ceiling.
+            setpoint: prev.setpoint,
             ascentSpeed: ascentSpeed
         )
     }
@@ -2210,6 +2566,7 @@ struct UnifiedDiveChartOptimized: View {
             sensorPPO2: sample.sensorPPO2,
             events: sample.events,
             currentGas: sample.currentGas,
+            setpoint: sample.setpoint,
             ascentSpeed: ascentSpeed
         )
     }
@@ -2297,16 +2654,18 @@ struct UnifiedDiveChartOptimized: View {
                 if showsPPO2Legend { ppo2LegendGroup(wrapping: true) }
                 if showsDecoLegend { decoLegendGroup }
                 if hasGasChangeData { gasSwitchLegendGroup }
+                if hasSetpointData { setpointLegendGroup(wrapping: true) }
             }
         }
     }
 
     #if os(macOS)
-    /// Indices (0 = depth … 6 = gas switch, the stacked legend's order) of the legend
+    /// Indices (0 = depth … 6 = gas switch, 7 = setpoint, the stacked legend's order) of the legend
     /// groups currently shown (macOS only).
     private var shownLegendGroups: [Int] {
         let shown = [showsDepthLegend, showsTemperatureLegend, showsPressureLegend,
-                     showsNDLLegend, showsPPO2Legend, showsDecoLegend, hasGasChangeData]
+                     showsNDLLegend, showsPPO2Legend, showsDecoLegend, hasGasChangeData,
+                     hasSetpointData]
         return shown.indices.filter { shown[$0] }
     }
 
@@ -2329,7 +2688,8 @@ struct UnifiedDiveChartOptimized: View {
         case 3: ndlLegendGroup
         case 4: ppo2LegendGroup(wrapping: false)
         case 5: decoLegendGroup
-        default: gasSwitchLegendGroup
+        case 6: gasSwitchLegendGroup
+        default: setpointLegendGroup(wrapping: false)
         }
     }
 
@@ -2349,7 +2709,21 @@ struct UnifiedDiveChartOptimized: View {
     private var showsTemperatureLegend: Bool { visibility.showTemperature && hasTemperatureData }
     private var showsPressureLegend: Bool { visibility.showPressure && hasPressureData }
     private var showsNDLLegend: Bool { visibility.showNDL && hasNDLData }
-    private var showsPPO2Legend: Bool { visibility.showPPO2 && ppo2Available }
+    private var showsPPO2Legend: Bool { visibility.showPPO2 && ppo2Available && ppo2LegendHasRow }
+
+    /// The voted or computed PPO₂ range the legend shows when there are no O₂ sensors. Cached
+    /// once per dive while PPO₂ is shown, as the legend is re-evaluated on every cursor move;
+    /// computed directly only on the first frame, before the cache is built.
+    private var ppo2LegendRange: ClosedRange<Double>? {
+        ppo2LegendCacheReady ? cachedPPO2Range : ppo2Range(Array(buildPPO2Map(for: dive).values))
+    }
+
+    /// False for a CCR dive with setpoints but no PPO₂: it draws no PPO₂ trace (only the
+    /// setpoint line, in its own legend entry), so the PPO₂ group has no row — and, on macOS,
+    /// no separator.
+    private var ppo2LegendHasRow: Bool {
+        !hasSetpointData || hasSensorPPO2Data || ppo2LegendRange != nil
+    }
     private var showsDecoLegend: Bool { visibility.showDeco && hasDecoData }
 
     private var depthLegendGroup: some View {
@@ -2398,13 +2772,10 @@ struct UnifiedDiveChartOptimized: View {
     /// single-line legend) they are laid out by the enclosing line.
     @ViewBuilder
     private func ppo2LegendGroup(wrapping: Bool) -> some View {
-        let sensorIndices = sensorPPO2Indices(for: dive)
+        let sensorIndices = legendSensorIndices
         if sensorIndices.isEmpty {
-            // The range is cached once per dive while PPO₂ is shown, as this legend is
-            // re-evaluated on every cursor move; it is computed directly only on the first
-            // frame, before the cache is built.
-            let range = ppo2LegendCacheReady ? cachedPPO2Range : ppo2Range(Array(buildPPO2Map(for: dive).values))
-            MetricLegendRow(color: .indigo, label: "PPO₂", range: ppo2RangeText(range))
+            // The group is shown only when it has a row (`ppo2LegendHasRow`).
+            MetricLegendRow(color: .indigo, label: "PPO₂", range: ppo2RangeText(ppo2LegendRange))
         } else if wrapping {
             WrappingChipLayout(spacing: 8) { sensorPPO2LegendRows(sensorIndices) }
         } else {
@@ -2457,6 +2828,29 @@ struct UnifiedDiveChartOptimized: View {
     private var gasSwitchLegendGroup: some View {
         LegendGasChange(color: .brown, text: "Gas switch")
     }
+
+    /// The setpoint change markers, plus the setpoint line's range while PPO₂ is shown. With
+    /// `wrapping` (the stacked legend) the two entries wrap onto a second line when they do not
+    /// fit (long translations on iPhone); without it (the macOS single-line legend) they are laid
+    /// out by the enclosing line.
+    @ViewBuilder
+    private func setpointLegendGroup(wrapping: Bool) -> some View {
+        if wrapping {
+            WrappingChipLayout(spacing: 8) { setpointLegendEntries }
+        } else {
+            HStack(spacing: 8) { setpointLegendEntries }
+        }
+    }
+
+    @ViewBuilder
+    private var setpointLegendEntries: some View {
+        LegendGasChange(color: Color.ccrSetpoint, text: "Setpoint change", square: true)
+        if visibility.showPPO2 {
+            MetricLegendRow(color: Color.ccrSetpoint,
+                            label: Text("Setpoint", comment: "Chart legend: range of the CCR setpoint line"),
+                            range: ppo2RangeText(setpointRange))
+        }
+    }
     
     private var ascentRateLegendFast: LocalizedStringKey {
         if prefs.depthUnit == .feet {
@@ -2495,10 +2889,12 @@ struct UnifiedDiveChartOptimized: View {
         return hasher.finalize()
     }
 
+    /// Also true for setpoint data alone: the setpoint line is drawn with the PPO₂ trace.
     private var ppo2Available: Bool {
         dive.tanks.contains { $0.o2 > 0 }
             || dive.profileSamples.contains { $0.ppo2 != nil }
             || dive.profileSamples.contains { $0.sensorPPO2?.isEmpty == false }
+            || hasSetpointData
     }
 
     private var hasTemperatureData: Bool {
@@ -2524,6 +2920,25 @@ struct UnifiedDiveChartOptimized: View {
 
     private var hasGasChangeData: Bool {
         dive.profileSamples.contains { $0.events.contains(.gasChange) }
+    }
+
+    /// The dive's setpoint range: from the `.task` cache, as the legend is re-evaluated on every
+    /// cursor move; computed directly only on the first frame, before the cache is built.
+    private var setpointRange: ClosedRange<Double>? {
+        setpointCacheReady ? cachedSetpointRange : SetpointProfile.range(for: dive)
+    }
+
+    private var hasSetpointData: Bool {
+        setpointRange != nil
+    }
+
+    /// Sorted O₂ sensor indices with readings, for the legend; cached like `setpointRange`.
+    private var legendSensorIndices: [Int] {
+        setpointCacheReady ? cachedSensorIndices : sensorPPO2Indices(for: dive)
+    }
+
+    private var hasSensorPPO2Data: Bool {
+        !legendSensorIndices.isEmpty
     }
     
     
@@ -2785,6 +3200,12 @@ struct ChartTooltipView: View {
             // Gas switch — always shown when present (gas change markers are always on).
             if let gasName = gasChangeName {
                 TooltipRow(icon: "cylinder.fill", color: .brown, label: String(format: NSLocalizedString("→ %@", bundle: .forAppLanguage(), comment: "Gas switch tooltip row: arrow followed by gas mix name"), gasName))
+            }
+
+            // CCR setpoint in effect, held from the earlier sample (never interpolated); none
+            // while no setpoint is in effect (e.g. on open-circuit bailout).
+            if let setpoint = point.setpoint {
+                TooltipRow(icon: "scope", color: Color.ccrSetpoint, label: String(format: NSLocalizedString("Setpoint %@", bundle: .forAppLanguage(), value: "Setpoint %@", comment: "Dive chart tooltip row: CCR setpoint in effect; %@ is the value with unit, e.g. '1.30 bar'"), setpoint.localizedString(decimals: 2, minDecimals: 2) + " bar"))
             }
         }
         .padding(.horizontal, 10)

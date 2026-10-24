@@ -305,7 +305,7 @@ extension BluetoothScannerView {
                 ndl: point.ndl, ceilingDepth: point.ceilingDepth,
                 ceilingTime: point.ceilingTime, cns: point.cns, ppo2: point.ppo2,
                 sensorPPO2: point.sensorPPO2, events: point.events,
-                currentGas: gasMixToTankIndex[gasIdx]
+                currentGas: gasMixToTankIndex[gasIdx], setpoint: point.setpoint
             )
         }
     }
@@ -373,6 +373,14 @@ extension BluetoothScannerView {
             // Use the last non-nil currentGas from this group — carries the most recent gas context.
             let currentGas: Int? = group.points.compactMap { $0.currentGas }.last
 
+            // CCR setpoint (DC_SAMPLE_SETPOINT, bar) in effect at this sample as libdc-swift
+            // reports it; nil when none is (e.g. on open-circuit bailout). Taken from the group's
+            // last point — the interval's flush, which holds the state at the end of the sample —
+            // not the last non-nil value: an event point built before a bailout cleared it would
+            // otherwise outlive the cleared state. Stored through DiveProfilePoint's rule
+            // (0 or non-finite = no setpoint).
+            let setpoint: Double? = group.points.last?.setpoint
+
             result.append(DiveProfilePoint(
                 time: base.time / 60.0, // LibDCSwift uses seconds, BlueDive uses minutes
                 depth: base.depth,
@@ -395,7 +403,8 @@ extension BluetoothScannerView {
                 ppo2: base.po2,
                 sensorPPO2: sensorPPO2,
                 events: allEvents,
-                currentGas: currentGas
+                currentGas: currentGas,
+                setpoint: setpoint
             ))
         }
 

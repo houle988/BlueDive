@@ -120,6 +120,13 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
     // block is fully parsed, so association is independent of the document order in
     // which Subsurface writes <event> vs <sample> elements at the same timestamp.
     private var tempRawEvents: [(time: Int, name: String, cylinder: Int?)] = []
+    /// Breathing-mode changes (<event name='modechange' divemode='OC'/'CCR'/'PSCR'/…>): true
+    /// when the new mode is on the loop. A setpoint applies only while on the loop.
+    private var tempModeChanges: [(time: Int, onLoop: Bool)] = []
+    /// Each cylinder's `use` attribute, lowercased, in cylinder order (parallel to tempTanks):
+    /// 'diluent', 'oxygen', 'not used', 'travel gas', or nil for an open-circuit gas (Subsurface
+    /// writes no `use` for OC-gas). Read during the import only, to follow bailouts on CCR dives.
+    private var tempCylinderUses: [String?] = []
 
     // Raw per-sample deco fields, aligned 1:1 with tempSamples: the in_deco (mandatory
     // decompression) flag, the current ceiling / next-stop depth in metres, and the
@@ -444,6 +451,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
     }
 
     private func parseCylinder(_ attrs: [String: String]) {
+        tempCylinderUses.append(attrs["use"]?.lowercased())
         let volume       = attrs["size"].flatMap         { parseSubsurfaceValue($0) }
         let workPressure = attrs["workpressure"].flatMap { parseSubsurfaceValue($0) }
         let startPres    = attrs["start"].flatMap        { parseSubsurfaceValue($0) }
@@ -484,8 +492,19 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         else { return }
 
         let temp     = attrs["temp"].flatMap    { parseSubsurfaceValue($0) }
-        // For OC dives this attribute is absent; for CCR dives it is the setpoint (in bar).
-        let ppo2     = attrs["po2"].flatMap { parseSubsurfaceValue($0) }
+        // For OC dives this attribute is absent; on a rebreather dive (CCR or PSCR) it is the
+        // setpoint (in bar) — Subsurface writes it from the sample's setpoint in any mode — not
+        // a measured ppO₂, so it is stored as the setpoint. The ppO₂ the dive computer itself
+        // reported (libdivecomputer's voted value) is dc_supplied_ppo2; the O₂-cell readings
+        // are the sensorN= attributes below. The split follows the dive's dctype only: a dive
+        // without one that switches to the loop through a modechange keeps po2 as its ppO₂, as
+        // before setpoints were imported (not seen in real files: a rebreather dive carries
+        // dctype='CCR' or 'PSCR').
+        let po2      = attrs["po2"].flatMap { parseSubsurfaceValue($0) }
+        let dcPPO2   = attrs["dc_supplied_ppo2"].flatMap { parseSubsurfaceValue($0) }
+        let isLoop   = Self.isLoopMode(tempDCType)
+        let ppo2     = isLoop ? dcPPO2 : (po2 ?? dcPPO2)
+        let setpoint = isLoop ? po2 : nil
 
         // Per-sample CNS (written as "N%"). Also feeds the max tracker, used as the dive
         // CNS when the dive-level cns attribute is absent.
@@ -534,7 +553,8 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             sensorPPO2: sensorPPO2.isEmpty ? nil : sensorPPO2,
             ndt: ndtMinutes,
             cns: sampleCNS,
-            currentGas: 0
+            currentGas: 0,
+            setpoint: setpoint
         ))
         // Kept 1:1 with tempSamples (appended on the same guard-passing path).
         tempRawDeco.append((inDeco: inDeco, stopDepth: stopDepth, stopTime: stopTime))
@@ -547,12 +567,27 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             let timeSec = parseSubsurfaceTime(timeStr)
         else { return }
 
+        // Breathing-mode changes end or resume the setpoint (resolveSampleEventsAndGas).
+        if name.lowercased() == "modechange", let mode = attrs["divemode"] {
+            tempModeChanges.append((time: timeSec, onLoop: Self.isLoopMode(mode)))
+            return
+        }
+
         // Buffer only events we know how to map; gas index and marker placement are
         // resolved once the whole divecomputer block is parsed (resolveSampleEventsAndGas),
         // so we do not depend on the document order of <event> vs <sample>.
         guard mapEvent(name: name) != nil else { return }
         let cylinder = attrs["cylinder"].flatMap { Int($0) }
         tempRawEvents.append((time: timeSec, name: name, cylinder: cylinder))
+    }
+
+    /// Whether a Subsurface dive mode (dctype, or a modechange event's divemode) breathes from
+    /// the loop, where a setpoint applies: CCR or PSCR.
+    private static func isLoopMode(_ mode: String?) -> Bool {
+        switch mode?.uppercased() {
+        case "CCR", "PSCR": return true
+        default: return false
+        }
     }
 
     /// Maps a Subsurface event name to a DiveProfileEvent, or nil if unsupported.
@@ -574,7 +609,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
     /// Resolves buffered events against the full sample array, independent of the
     /// document order in which Subsurface writes <event> vs <sample> at the same time.
     /// - Delta decode: Subsurface omits an optional sample field (temp, pressureN,
-    ///   sensorN ppO₂, ndl, po2) when it is unchanged from the previous sample, holding
+    ///   sensorN ppO₂, ndl, po2 — ppO₂ or CCR setpoint) when it is unchanged from the previous sample, holding
     ///   the last value. We forward-fill so profiles are continuous rather than sparse.
     /// - Gas index: each sample's currentGas is the cylinder of the last gaschange at or
     ///   before the sample's time (0 when none precedes it).
@@ -590,6 +625,34 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         var lastTemp: Double? = nil
         var lastNdt: Int? = nil
         var lastPpo2: Double? = nil
+        var lastSetpoint: Double? = nil
+        // Breathing mode: on the loop from the start (the setpoint is only read on rebreather
+        // dives), then as the modechange events and, on a CCR dive, the gas breathed say. Gas
+        // changes follow Subsurface's own rule (get_effective_divemode / is_oc): a switch to an
+        // open-circuit gas (no `use`, 'oc-gas' or 'travel gas') takes the diver off the loop; to
+        // any other cylinder (diluent, oxygen, 'not used') puts them on it. They count only when
+        // the dive flags a diluent (older or third-party files may carry no `use` at all), and
+        // not on PSCR dives, which breathe open-circuit cylinders on the loop; at the same time
+        // a gas change wins over a modechange, as in Subsurface. Unlike Subsurface, which lets
+        // any later gas change end an open-circuit modechange (get_dive_status_at), an explicit
+        // modechange to OC holds on a PSCR dive until one says the diver is back on the loop,
+        // and a modechange at the very start is not overridden by the starting gas. A setpoint
+        // reported while on open circuit is recorded and applies once back on the loop.
+        let isLoopDive = Self.isLoopMode(tempDCType)
+        var timeline: [(time: Int, order: Int, onLoop: Bool)] = tempModeChanges.map { (time: $0.time, order: 0, onLoop: $0.onLoop) }
+        if tempDCType?.uppercased() == "CCR", tempCylinderUses.contains("diluent") {
+            for gc in gasChanges {
+                guard let cylinder = gc.cylinder, tempCylinderUses.indices.contains(cylinder) else { continue }
+                let use = tempCylinderUses[cylinder]
+                let isOpenCircuitGas = use == nil || use == "oc-gas" || use == "travel gas"
+                timeline.append((time: gc.time, order: 1, onLoop: !isOpenCircuitGas))
+            }
+        }
+        let modeChanges = timeline.sorted { ($0.time, $0.order) < ($1.time, $1.order) }
+        var nextModeChange = 0
+        var onLoop = true
+        // Whether a computer ppO₂ was written since the diver last left the loop (see below).
+        var ppo2WrittenOffLoop = false
         var lastCNS: Double? = nil
         var runningTankPressures: [Int: Double] = [:]
         var runningSensorPPO2: [Int: Double] = [:]
@@ -607,7 +670,21 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             // Forward-fill the delta-encoded fields from the last sample that carried them.
             if let t = s.temperature { lastTemp = t }
             if let n = s.ndt { lastNdt = n }
-            if let pp = s.ppo2 { lastPpo2 = pp }
+            // Breathing mode at this sample (before ppo2, which depends on it).
+            let wasOnLoop = onLoop
+            while nextModeChange < modeChanges.count, Double(modeChanges[nextModeChange].time) <= s.time {
+                onLoop = modeChanges[nextModeChange].onLoop
+                nextModeChange += 1
+            }
+            if wasOnLoop && !onLoop { ppo2WrittenOffLoop = false }
+            // ppo2 is delta-encoded: an absent value is unchanged from the last one written.
+            if let pp = s.ppo2 {
+                lastPpo2 = pp
+                if !onLoop { ppo2WrittenOffLoop = true }
+            }
+            // A delta-written po2 of 0 on a CCR dive means no setpoint from here on (never a
+            // real setpoint), so it ends the forward-fill instead of being stored.
+            if let sp = s.setpoint { lastSetpoint = DiveProfilePoint.validSetpoint(sp) }
             if let c = s.cns { lastCNS = c }
             if let tp = s.tankPressures { for (k, v) in tp { runningTankPressures[k] = v } }
             if let sp = s.sensorPPO2 { for (k, v) in sp { runningSensorPPO2[k] = v } }
@@ -644,7 +721,17 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             return BlueDiveSamplesData(
                 time: s.time, depth: s.depth, pressure: primaryPressure,
                 tankPressures: filledTankPressures, temperature: lastTemp,
-                ppo2: lastPpo2, sensorPPO2: filledSensorPPO2, ndt: lastNdt,
+                // On a rebreather dive after leaving the loop (bailout), the loop value is not
+                // carried into the open-circuit samples: some computers report no ppO₂ there
+                // (Shearwater: 0, which Subsurface never writes), so the samples get none until
+                // the computer writes one; one that keeps reporting it (Divesoft) has it held
+                // as usual from its first open-circuit value. Back on the loop, the last value
+                // written applies again (Subsurface writes it only when it changes). Limitation:
+                // if a computer's first open-circuit value equals the last loop value, Subsurface
+                // does not write it, so the samples get none until it changes — the file cannot
+                // tell this from a computer that reports nothing on open circuit, and holding the
+                // loop value there would show a value nobody measured on every such bailout.
+                ppo2: (isLoopDive && !onLoop && !ppo2WrittenOffLoop) ? nil : lastPpo2, sensorPPO2: filledSensorPPO2, ndt: lastNdt,
                 // Gate on lastInDeco so a forward-filled stopdepth never leaks past the
                 // end of the obligation, and require > 0 (matching the stopsByDepth check
                 // above) so a file where in_deco='1' but stopdepth='0.0 m' — flags out of
@@ -660,7 +747,8 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
                 // forward-filled value needs no gating predicate the way the ceiling
                 // does — there is no obligation window it could leak past.
                 cns: lastCNS,
-                events: events, currentGas: gas
+                events: events, currentGas: gas,
+                setpoint: onLoop ? lastSetpoint : nil
             )
         }
 
@@ -698,7 +786,8 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
                 ceilingDepth: s.ceilingDepth,
                 ceilingTime: s.ceilingTime,
                 cns: s.cns,
-                events: s.events + [ev], currentGas: s.currentGas
+                events: s.events + [ev], currentGas: s.currentGas,
+                setpoint: s.setpoint
             )
         }
 
@@ -883,6 +972,8 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         tempWeightKg     = 0.0
         tempSamples      = []
         tempRawEvents    = []
+        tempModeChanges  = []
+        tempCylinderUses = []
         tempRawDeco      = []
         tempDecoStops    = []
         tempIsDecoDive   = false
