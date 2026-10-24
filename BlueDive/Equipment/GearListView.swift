@@ -1057,9 +1057,13 @@ struct GearListView: View {
         var gearByID = Dictionary(uniqueKeysWithValues: allGear.map { ($0.id, $0) })
         var new: [GearXMLParser.ParsedGear] = []
         var duplicates: [GearXMLParser.ParsedGear] = []
+        var acceptedFileIDs: Set<UUID> = []
         for item in items {
             if gearByID[item.id] != nil ||
-                gearByID.values.contains(where: { $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber) }) {
+                gearByID.values.contains(where: {
+                    !(item.idFromFile && acceptedFileIDs.contains($0.id)) &&
+                    $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
+                }) {
                 duplicates.append(item)
             } else {
                 // Mirror insertGearItems: track accepted items so intra-file duplicates
@@ -1077,6 +1081,7 @@ struct GearListView: View {
                     serviceHistory: item.serviceHistory, gearNotes: item.gearNotes
                 )
                 gearByID[item.id] = placeholder
+                if item.idFromFile { acceptedFileIDs.insert(item.id) }
                 new.append(item)
             }
         }
@@ -1152,6 +1157,8 @@ struct GearListView: View {
     private func insertGearItems(_ items: [GearXMLParser.ParsedGear], into gearByID: inout [UUID: Gear]) -> (inserted: Int, anyUpdated: Bool) {
         var count = 0
         var anyUpdated = false
+        // Gear this import created from an id carried in the file.
+        var createdFileIDs: Set<UUID> = []
         for item in items {
             // Primary dedup: by UUID (same source device, same export).
             if let existing = gearByID[item.id] {
@@ -1162,8 +1169,11 @@ struct GearListView: View {
             }
             // Secondary dedup: by name + category + diverName + serial — catches gear previously
             // imported via a dive XML, which assigned a fresh UUID instead of the canonical one,
-            // and also handles CSV imports that always assign a fresh UUID.
+            // and also handles CSV imports that always assign a fresh UUID. An item with its own
+            // id is never merged into gear created from another id of the same file: the source
+            // holds them as separate records (e.g. two regulators of the same model).
             if let existing = gearByID.values.first(where: {
+                !(item.idFromFile && createdFileIDs.contains($0.id)) &&
                 $0.matches(name: item.name, category: item.category, diverName: item.diverName, serial: item.serialNumber)
             }) {
                 if existing.syncServiceData(importedDate: item.lastServiceDate, importedHistory: item.serviceHistory) {
@@ -1194,6 +1204,7 @@ struct GearListView: View {
             )
             modelContext.insert(gear)
             gearByID[item.id] = gear
+            if item.idFromFile { createdFileIDs.insert(gear.id) }
             count += 1
         }
         return (inserted: count, anyUpdated: anyUpdated)

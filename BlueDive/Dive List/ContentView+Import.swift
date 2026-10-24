@@ -89,6 +89,10 @@ struct GearSnapshot: Sendable {
     let category: String
     let diverName: String
     let serialNumber: String?
+    /// True for gear created by the current import from an id carried in the file. Another
+    /// item of the file with a different id is a distinct record (e.g. two regulators of the
+    /// same model), so it must not be merged into this one by name or serial.
+    var createdFromFileID: Bool = false
 }
 
 private let gearSentinelSerials: Set<String> = ["n/a", "na", "unknown", "none", "0", "00", "-", "--"]
@@ -1147,12 +1151,18 @@ extension ContentView {
 
                 // Priority 1: UUID match — O(1) snapshot lookup, Gear resolved lazily on demand.
                 // Priority 2: name + category + diver + serial — O(1) hash index, resolved lazily.
+                // An item with its own id is never merged into gear this import created from
+                // another id of the file: the source holds them as separate records.
                 let matchedID: UUID?
                 if let gearID = gearItem.id, snapshotByID[gearID] != nil {
                     matchedID = gearID
                 } else {
                     let key = gearMatchKey(name: gearName, category: category, diverName: gearItem.diverName, serial: gearItem.serial)
-                    matchedID = snapshotByMatchKey[key]?.id
+                    if let snap = snapshotByMatchKey[key], !(gearItem.id != nil && snap.createdFromFileID) {
+                        matchedID = snap.id
+                    } else {
+                        matchedID = nil
+                    }
                 }
 
                 let existingGear: Gear?
@@ -1194,7 +1204,7 @@ extension ContentView {
                         gearNotes: gearItem.gearNotes
                     )
                     modelContext.insert(newGear)
-                    let snap = GearSnapshot(id: newGear.id, name: newGear.name, category: newGear.category, diverName: newGear.diverName, serialNumber: newGear.serialNumber)
+                    let snap = GearSnapshot(id: newGear.id, name: newGear.name, category: newGear.category, diverName: newGear.diverName, serialNumber: newGear.serialNumber, createdFromFileID: gearItem.id != nil)
                     snapshotByID[newGear.id] = snap
                     snapshotByMatchKey[gearMatchKey(name: newGear.name, category: newGear.category, diverName: newGear.diverName, serial: newGear.serialNumber)] = snap
                     resolvedGearByID[newGear.id] = newGear

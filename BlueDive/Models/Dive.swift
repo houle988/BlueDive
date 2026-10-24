@@ -1479,8 +1479,15 @@ extension Dive {
         if let last = profileSamples.last?.time, last > 0 {
             return Int(round(last * 60))
         }
+        return storedDurationSeconds
+    }
+
+    /// The stored `duration` in seconds, for export. Unlike `durationSeconds` it ignores the
+    /// profile, whose last sample often comes minutes after the computer's dive time (many
+    /// computers keep logging at the surface), so a re-import keeps the same `duration`.
+    var storedDurationSeconds: Int {
         // Heuristic: if duration >= 3600 it was stored in seconds (some importers), otherwise minutes.
-        return (duration >= 3600) ? duration : (duration * 60)
+        (duration >= 3600) ? duration : (duration * 60)
     }
 
     /// Durée formatée en heures, minutes et secondes, préférant les secondes depuis le profil ou heuristique

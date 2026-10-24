@@ -220,7 +220,7 @@ enum BlueDiveXMLExporter {
         lines.append("    <!-- BlueDiveGlobalData: Dive Stats -->")
         lines.append(xmlTag("maxDepth",        formatDouble(dive.maxDepth),                                                indent: 4))
         lines.append(xmlTag("averageDepth",    dive.averageDepth > 0 ? formatDouble(dive.averageDepth) : "",              indent: 4))
-        lines.append(xmlTag("duration",        String(dive.durationSeconds),                                              indent: 4))
+        lines.append(xmlTag("duration",        String(dive.storedDurationSeconds),                                        indent: 4))
         lines.append(xmlTag("surfaceInterval", surfaceIntervalMinutes(from: dive.surfaceInterval).map(String.init) ?? "", indent: 4))
 
         // Decompression

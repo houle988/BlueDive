@@ -84,6 +84,10 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
         var weightContributionUnit: String?
         var isInactive: Bool
         var diverName: String
+        /// True when `id` was read from the file (false for a generated UUID, e.g. CSV). Two
+        /// items of one file with their own different ids are distinct records, so the import
+        /// does not merge them by name or serial.
+        var idFromFile: Bool = false
     }
 
     struct ParsedGearGroup {
@@ -338,7 +342,8 @@ final class GearXMLParser: NSObject, XMLParserDelegate {
                 weightContribution: tempWeightContribution.flatMap(Double.init) ?? 0.0,
                 weightContributionUnit: tempWeightContributionUnit,
                 isInactive: tempIsInactive == "true",
-                diverName: tempDiverName ?? ""
+                diverName: tempDiverName ?? "",
+                idFromFile: UUID(uuidString: tempID ?? "") != nil
             )
             gearItems.append(parsed)
             isInGear = false
