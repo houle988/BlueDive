@@ -239,6 +239,20 @@ struct DiveDetailView: View {
         .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Dive %@, %@", bundle: Bundle.forAppLanguage(), comment: "VoiceOver label for a dive entry. First argument is the dive number (e.g. 1140), second is the site name."), "\(number)", siteName)))
     }
 
+    #if os(iOS)
+    /// The navigation bar title: number and site, with the dive's date on a second line.
+    private func diveTitleWithDate(number: Int, siteName: String, date: Date) -> some View {
+        VStack(spacing: 0) {
+            diveTitleLabel(number: number, siteName: siteName)
+            Text(date, format: .dateTime.day().month(.abbreviated).year().hour().minute().locale(locale))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+    #endif
+
     var locationText: Text {
         if let country = dive.siteCountry, !country.isEmpty {
             // If both location and country exist, combine them
@@ -270,6 +284,11 @@ struct DiveDetailView: View {
 
                 // Current dive content
                 VStack(spacing: 0) {
+                    #if os(macOS)
+                    // macOS has no dive title in the toolbar (the tab bar holds its centre), so
+                    // the dive is identified above the tab bar on every tab.
+                    diveHeaderStrip
+                    #endif
                     // The photo import's dialogs hang on the tab bar, which is always shown, so
                     // an import finishing while another tab is open still presents them.
                     photoImportDialogs(diveTabBar)
@@ -435,12 +454,14 @@ struct DiveDetailView: View {
                 #else
                 ToolbarItem(placement: .principal) {
                     ZStack {
-                        diveTitleLabel(number: dive.diveNumber ?? diveNumber,
-                                       siteName: dive.siteName)
+                        diveTitleWithDate(number: dive.diveNumber ?? diveNumber,
+                                          siteName: dive.siteName,
+                                          date: dive.timestamp)
                             .offset(x: dragOffset)
                         if let pending = pendingDive {
-                            diveTitleLabel(number: pending.diveNumber ?? pendingDiveNumber(for: pending),
-                                           siteName: pending.siteName)
+                            diveTitleWithDate(number: pending.diveNumber ?? pendingDiveNumber(for: pending),
+                                              siteName: pending.siteName,
+                                              date: pending.timestamp)
                                 .offset(x: dragOffset < 0
                                         ? dragOffset + viewWidth
                                         : dragOffset - viewWidth)
@@ -588,8 +609,9 @@ struct DiveDetailView: View {
     }
 
     #if os(macOS)
-    // Previous / next dive buttons (macOS replaces the iOS swipe-between-dives gesture).
-    // Each is its own ToolbarItem so toolbar overflow can manage them independently.
+    // macOS-only parts of the dive page: the previous / next dive buttons (macOS replaces the
+    // iOS swipe-between-dives gesture; both share one ToolbarItemGroup) and the header strip
+    // that stands in for the iOS navigation bar title.
     private var previousDiveButton: some View {
         Button {
             if let prev = previousDiveInList { navigateTo(prev, forward: false) }
@@ -612,6 +634,26 @@ struct DiveDetailView: View {
         .disabled(nextDiveInList == nil)
         .help("Next dive")
         .accessibilityLabel(Text("Next dive"))
+    }
+
+    /// Dive number, site and date above the tab bar. Part of the content, so it slides with
+    /// the dive during previous/next navigation (the slide preview draws its own).
+    private var diveHeaderStrip: some View {
+        HStack(spacing: 12) {
+            diveTitleLabel(number: dive.diveNumber ?? diveNumber, siteName: dive.siteName)
+            Spacer(minLength: 8)
+            Text(dive.timestamp, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated).year().hour().minute().locale(locale))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                // A narrow window shortens the site name, never the date.
+                .fixedSize()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.primary.opacity(0.05))
+        // Read as one element, like the iOS title: "Dive 123, Site, date".
+        .accessibilityElement(children: .combine)
     }
     #endif
 
