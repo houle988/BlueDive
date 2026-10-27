@@ -168,7 +168,10 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
     Air / high / low temperature (dive)                        XML → SQLite
     Duration                                                   Raw (computer dive time, if not longer than its
                                                                profile + 60 s and within 10 min or 20 % of
-                                                               MacDive's) → SQLite
+                                                               MacDive's) → SQLite. Written in seconds to
+                                                               <duration> and <durationSeconds>; BlueDive
+                                                               keeps the seconds and lists whole minutes
+                                                               (30 s rounds up).
     Max depth                                                  Raw (computer value, if within 0.5 m of its
                                                                deepest sample) → SQLite
     Decompression-dive flag                                    Raw (the app's Bluetooth rule: a deco-stop
@@ -286,6 +289,12 @@ from pathlib import Path
 # CoreData epoch: 2001-01-01 00:00:00 UTC
 # ---------------------------------------------------------------------------
 COREDATA_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
+
+# ---------------------------------------------------------------------------
+# BlueDive version and build the exported files are written for, in the same
+# "version (build)" form as the app's own exports (<metadata><version>).
+# ---------------------------------------------------------------------------
+BLUEDIVE_VERSION = "2.1 (156)"
 
 
 def coredata_to_str(ts):
@@ -3197,7 +3206,7 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
     lines.append("<blueDiveExport>")
     lines.append("  <metadata>")
     lines.append(xtag("software",   "BlueDive", indent=4))
-    lines.append(xtag("version",    "1.0",                    indent=4))
+    lines.append(xtag("version",    BLUEDIVE_VERSION, indent=4))
     lines.append(xtag("exportedAt", datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"), indent=4))
     lines.append(xtag("diveCount",  str(len(rows)),           indent=4))
     lines.append("  </metadata>")
@@ -3563,6 +3572,16 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
         lines.append(xtag("maxDepth",        fmt_double(cvt_dist(max_depth)),  indent=4))
         lines.append(xtag("averageDepth",    fmt_double(cvt_dist(avg_depth)),  indent=4))
         lines.append(xtag("duration",        str(dur_secs),          indent=4))
+        # The dive time in seconds (raw computer time or MacDive's), stored by BlueDive as the
+        # dive's own time (Dive.durationSeconds). BlueDive reads <durationSeconds> only from
+        # BlueDive XML; without it, <duration> alone gives minutes only. Omitted outside BlueDive's
+        # accepted range (Dive.validDurationSeconds: 1 s to just under 60 hours), which stores
+        # no duration. Minutes as BlueDive rounds them: 30 s and more rounds up.
+        if 0 < dur_secs < 3600 * 60 - 30:
+            lines.append(xtag("durationSeconds", str(dur_secs),      indent=4))
+            _dive_log.append(f"  duration   : {dur_secs} s → {(dur_secs + 30) // 60} min in BlueDive")
+        else:
+            _dive_log.append(f"  duration   : {dur_secs} s — out of range, BlueDive stores no duration")
         _dive_log.append(f"  maxDepth   : {_fv(max_depth, 4)} m ({_max_depth_src}) → {_fv(cvt_dist(max_depth), 4)} {_log_du}")
         _dive_log.append(f"  avgDepth   : {_fv(avg_depth, 4)} m (SQLite) → {_fv(cvt_dist(avg_depth), 4)} {_log_du}")
         try:
@@ -4017,7 +4036,7 @@ def export_gears(input_path, output_path, weight_unit):
     lines.append("<blueDiveGearExport>")
     lines.append("  <metadata>")
     lines.append(xtag("software",          "BlueDive",  indent=4))
-    lines.append(xtag("version",           "1.0",       indent=4))
+    lines.append(xtag("version",           BLUEDIVE_VERSION, indent=4))
     lines.append(xtag("exportedAt",        datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"), indent=4))
     lines.append(xtag("gearCount",         str(len(gear_map)),    indent=4))
     lines.append(xtag("gearGroupCount",    str(len(gear_groups)), indent=4))
@@ -4147,7 +4166,7 @@ def export_certifications(input_path, output_path):
     lines.append("<blueDiveCertificationExport>")
     lines.append("  <metadata>")
     lines.append(xtag("software",           "BlueDive", indent=4))
-    lines.append(xtag("version",            "1.0",      indent=4))
+    lines.append(xtag("version",            BLUEDIVE_VERSION, indent=4))
     lines.append(xtag("exportedAt",         datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"), indent=4))
     lines.append(xtag("certificationCount", str(len(certs)), indent=4))
     lines.append("  </metadata>")
@@ -4212,7 +4231,7 @@ def export_species(input_path, output_path, critter_opts):
     lines.append("<blueDiveSpeciesExport>")
     lines.append("  <metadata>")
     lines.append(xtag("software",       "BlueDive", indent=4))
-    lines.append(xtag("version",        "1.0",      indent=4))
+    lines.append(xtag("version",        BLUEDIVE_VERSION, indent=4))
     lines.append(xtag("exportedAt",     datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"), indent=4))
     lines.append(xtag("speciesCount",   str(len(written)), indent=4))
     lines.append(xtag("includesImages", "true" if includes_images else "false", indent=4))
