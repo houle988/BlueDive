@@ -533,7 +533,7 @@ struct ContentView: View {
                     diveToDelete = nil
                 }
             } message: {
-                Text("This action is irreversible. All associated data (fish sightings, equipment) will also be deleted.")
+                Text("This action is irreversible. All associated data (marine life sightings, equipment) will also be deleted.")
             }
             .sheet(isPresented: $showManualDiveDatePicker) {
                 NavigationStack {
@@ -574,7 +574,7 @@ struct ContentView: View {
                     diveToDeleteDirectly = nil
                 }
             } message: { dive in
-                Text("\"\(dive.siteName)\" will be permanently deleted. All associated data (fish sightings, equipment) will also be deleted.")
+                Text("\"\(dive.siteName)\" will be permanently deleted. All associated data (marine life sightings, equipment) will also be deleted.")
             }
             .navigationDestination(for: DiveNavTarget.self) { target in
                 diveDetailDestination(target)

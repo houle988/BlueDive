@@ -139,7 +139,7 @@ struct DiveRowView: View {
                 Image(systemName: "fish.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(.teal)
-                    .accessibilityLabel(Text("Has fish sightings"))
+                    .accessibilityLabel(Text("Has marine life sightings"))
             }
             if summary.hasPhotos {
                 Image(systemName: "camera.fill")

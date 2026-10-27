@@ -1186,7 +1186,7 @@ extension DiveDetailView {
             }
 
             if (dive.seenFish ?? []).isEmpty {
-                Text("No fish saved.")
+                Text("No marine life saved.")
                     .font(.caption)
                     .foregroundStyle(.gray)
             } else {

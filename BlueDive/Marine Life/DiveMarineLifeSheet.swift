@@ -88,7 +88,7 @@ struct DiveMarineLifeSheet: View {
             groupedList {
                 Section {
                     if sightings.isEmpty {
-                        Text("No fish saved.")
+                        Text("No marine life saved.")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(sightings) { fish in

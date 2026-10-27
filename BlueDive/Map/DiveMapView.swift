@@ -1301,7 +1301,7 @@ struct DiveMapCard: View {
                     Image(systemName: "fish.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(.teal)
-                        .accessibilityLabel(Text("Has fish sightings"))
+                        .accessibilityLabel(Text("Has marine life sightings"))
                 }
 
                 if store.cachedDivesWithPhotos.contains(dive.id) {
