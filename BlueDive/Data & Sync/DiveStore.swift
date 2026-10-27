@@ -1495,7 +1495,7 @@ final class DiveStore {
             \Dive.diveNumber, \Dive.timestamp, \Dive.diverName, \Dive.siteName, \Dive.location,
             \Dive.siteCountry, \Dive.siteLatitude, \Dive.siteLongitude, \Dive.exitLatitude,
             \Dive.exitLongitude, \Dive.maxDepth, \Dive.importDistanceUnit, \Dive.duration,
-            \Dive.surfaceInterval, \Dive.rating, \Dive.buddies, \Dive.diveTypes, \Dive.tags,
+            \Dive.durationSeconds, \Dive.surfaceInterval, \Dive.rating, \Dive.buddies, \Dive.diveTypes, \Dive.tags,
             Dive.tanksDataKeyPath
         ]
         // A photo record added or removed on another device comes with a `photos` update on its dive.

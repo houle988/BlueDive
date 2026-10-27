@@ -1347,12 +1347,25 @@ extension DiveDetailView {
                 color: .cyan
             )
 
+            // The dive time (computer or file): with its seconds when known, else the minutes
+            // shown in the dive list. Never the profile's length (Profile Time, below).
             DetailCard(
                 title: "DURATION",
                 value: dive.formattedDuration,
                 icon: "clock",
                 color: .green
             )
+
+            // Length of the recorded profile, which can run past the dive time when the
+            // computer keeps logging at the surface.
+            if dive.hasProfileTime {
+                DetailCard(
+                    title: "PROFILE TIME",
+                    value: dive.formattedProfileTime,
+                    icon: "clock.arrow.circlepath",
+                    color: .green
+                )
+            }
 
             DetailCard(
                 title: "REPETITIVE",

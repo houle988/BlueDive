@@ -1032,7 +1032,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private func parseSeconds(_ text: String) -> Int? {
         guard !text.isEmpty else { return nil }
         if let intValue = Int(text) { return intValue }
-        if let doubleValue = Double(text) { return Int(doubleValue) }
+        // Truncated as before; Int(exactly:) returns nil instead of trapping on "1e30" or "inf".
+        if let doubleValue = Double(text) { return Int(exactly: doubleValue.rounded(.towardZero)) }
         return nil
     }
 }

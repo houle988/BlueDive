@@ -36,6 +36,10 @@ struct BlueDiveGlobalData: Sendable {
     let maxDepth: Double           // meters or feet
     let averageDepth: Double?      // meters or feet
     let duration: Int              // seconds
+    // BlueDive XML only: the `<durationSeconds>` element (the dive computer's time, written only
+    // when the exported dive had one). nil for every other format, whose `duration` is the
+    // file's own dive time. `var` with a nil default so the other parsers can omit it.
+    var exportedDurationSeconds: Int? = nil
     let interval: Int?
 
     // MARK: Decompression
@@ -817,7 +821,8 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private func parseSeconds(_ text: String) -> Int? {
         guard !text.isEmpty else { return nil }
         if let intValue = Int(text) { return intValue }
-        if let doubleValue = Double(text) { return Int(doubleValue) }
+        // Truncated as before; Int(exactly:) returns nil instead of trapping on "1e30" or "inf".
+        if let doubleValue = Double(text) { return Int(exactly: doubleValue.rounded(.towardZero)) }
         return nil
     }
 }

@@ -220,7 +220,12 @@ enum BlueDiveXMLExporter {
         lines.append("    <!-- BlueDiveGlobalData: Dive Stats -->")
         lines.append(xmlTag("maxDepth",        formatDouble(dive.maxDepth),                                                indent: 4))
         lines.append(xmlTag("averageDepth",    dive.averageDepth > 0 ? formatDouble(dive.averageDepth) : "",              indent: 4))
-        lines.append(xmlTag("duration",        String(dive.storedDurationSeconds),                                        indent: 4))
+        lines.append(xmlTag("duration",        String(dive.resolvedDurationSeconds),                                       indent: 4))
+        // The dive computer's time, only when the dive has one that still matches its minutes:
+        // a dive without it must not gain one through an export and re-import.
+        if let computerSeconds = dive.consistentDurationSeconds {
+            lines.append(xmlTag("durationSeconds", String(computerSeconds),                                        indent: 4))
+        }
         lines.append(xmlTag("surfaceInterval", surfaceIntervalMinutes(from: dive.surfaceInterval).map(String.init) ?? "", indent: 4))
 
         // Decompression

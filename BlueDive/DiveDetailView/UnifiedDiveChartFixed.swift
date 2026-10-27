@@ -2222,9 +2222,8 @@ struct UnifiedDiveChartOptimized: View {
 
     private var chartView: some View {
         let lastSampleTime = dive.profileSamples.last?.time ?? 0
-        let storedDurationMinutes: Double = dive.duration >= 3600
-            ? Double(dive.duration) / 60.0
-            : Double(dive.duration)
+        // The stored dive time: the computer/file time, else the minutes (legacy seconds kept).
+        let storedDurationMinutes = Double(dive.resolvedDurationSeconds) / 60.0
         let xMax = max(lastSampleTime, storedDurationMinutes)
         // The chart reaches the deeper of the stored max depth and the deepest sample, so no
         // part of the profile is clipped when the computer's recorded maximum is shallower.

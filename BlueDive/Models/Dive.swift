@@ -372,7 +372,13 @@ final class Dive {
     var maxDepth: Double = 0.0
     var averageDepth: Double = 0.0
     var duration: Int = 0 // in minutes
-    
+    /// Dive time in seconds as recorded by the dive computer or the imported file, nil when
+    /// none was provided (manual dives, dives saved before this field existed). Never filled
+    /// from `duration`. Written only through `setDuration(seconds:)`, `setDuration(minutes:)`
+    /// and `setImportedDuration(...)`; read through `consistentDurationSeconds` and the helpers
+    /// built on it, which ignore it once it no longer matches `duration`.
+    var durationSeconds: Int?
+
     // MARK: Temperatures
     
     var waterTemperature: Double?
@@ -954,7 +960,9 @@ final class Dive {
     /// RMV for a specific tank (L/min at the surface).
     /// Uses the tank's usage time window when available for accurate per-tank calculation.
     func calculatedRMV(forTankAt index: Int) -> Double {
-        guard duration > 0, index >= 0, index < tanks.count else { return 0.0 }
+        // A dive under 30 s has duration 0 but may still carry its computer time.
+        guard duration > 0 || consistentDurationSeconds != nil,
+              index >= 0, index < tanks.count else { return 0.0 }
         let tank = tanks[index]
 
         let samples = profileSamples
@@ -962,6 +970,10 @@ final class Dive {
 
         // Manual dive (no samples): only supported for single tank
         if !hasSamples && tanks.count > 1 { return 0.0 }
+
+        // The dive's end in minutes: the last sample, else the computer/file time, else the
+        // stored duration (manual dive).
+        let diveMinutes = gasDurationMinutes(using: samples)
 
         let hasUsageTimes = tank.usageStartTime != nil || tank.usageEndTime != nil
 
@@ -971,20 +983,16 @@ final class Dive {
         if hasUsageTimes, hasSamples {
             let lastTimeMin = samples.last!.time              // minutes
             let usageStartMin = (tank.usageStartTime ?? 0) / 60.0 // seconds → minutes
-            // usageEndTime=0 means "no end recorded" (same as nil); fall back to dive end
+            // usageEndTime=0 means "no end recorded" (same as nil); fall back to the dive end
             let usageEndRaw = tank.usageEndTime ?? 0
             let usageEndMin = usageEndRaw > 0 ? usageEndRaw / 60.0 : lastTimeMin
             let durationMin = usageEndMin - usageStartMin
             guard durationMin > 0 else { return 0.0 }
             divisor = durationMin
             effectiveAvgDepth = timeWeightedAverageDepth(from: usageStartMin, to: usageEndMin)
-        } else if hasSamples {
-            // Match combined calculatedRMV: divide by lastTime (minutes)
-            divisor = samples.last!.time
-            effectiveAvgDepth = timeWeightedAverageDepth
         } else {
-            // Manual single-tank dive: use stored duration (minutes)
-            divisor = Double(duration)
+            // Match combined calculatedRMV: divide by the dive time (minutes).
+            divisor = diveMinutes
             effectiveAvgDepth = timeWeightedAverageDepth
         }
         guard divisor > 0, effectiveAvgDepth > 0 else { return 0.0 }
@@ -1049,7 +1057,8 @@ final class Dive {
     ///
     /// Multi-tank non-sidemount dives without usage times are suppressed via combinedRMVNeedsUsageTime.
     var combinedRMV: Double {
-        guard duration > 0 else { return 0.0 }
+        // A dive under 30 s has duration 0 but may still carry its computer time.
+        guard duration > 0 || consistentDurationSeconds != nil else { return 0.0 }
 
         // Decode profileSamples and tanks exactly once for the entire calculation.
         let samples = profileSamples
@@ -1059,10 +1068,8 @@ final class Dive {
         // Manual dive (no samples): only supported for single tank
         if !hasSamples && tankList.count > 1 { return 0.0 }
 
-        let durationMinutes: Double = {
-            if let lastTime = samples.last?.time, lastTime > 0 { return lastTime }
-            return Double(duration)
-        }()
+        // The last sample, else the computer/file time, else the stored duration.
+        let durationMinutes = gasDurationMinutes(using: samples)
 
         // Non-sidemount multi-tank without usage times: cannot determine when each tank
         // was in use, so combined RMV cannot be computed accurately.
@@ -1200,10 +1207,7 @@ final class Dive {
             // Treat (0, 0) usage windows as full-dive duration — they mean "no times recorded".
             // Only decode profileSamples when at least one tank actually has a zero window.
             let hasZeroWindow = tanksWithTime.contains { ($0.usageEndTime! - $0.usageStartTime!) <= 0 }
-            let diveSeconds: Double = hasZeroWindow ? {
-                if let lastTime = profileSamples.last?.time, lastTime > 0 { return lastTime * 60.0 }
-                return Double(duration) * 60.0
-            }() : 0
+            let diveSeconds: Double = hasZeroWindow ? gasDurationMinutes(using: profileSamples) * 60.0 : 0
             let effectiveDuration: (TankData) -> Double = { tank in
                 let raw = tank.usageEndTime! - tank.usageStartTime!
                 return raw > 0 ? raw : diveSeconds
@@ -1474,25 +1478,147 @@ extension Dive {
     /// DiveStore can recognise a gas change in persistent-history `updatedAttributes`.
     static var tanksDataKeyPath: PartialKeyPath<Dive> { \Dive.tanksData }
 
-    /// Precise duration in seconds, preferring the profile's last sample time over the whole-minute `duration` field.
-    var durationSeconds: Int {
-        if let last = profileSamples.last?.time, last > 0 {
-            return Int(round(last * 60))
+    // MARK: Duration
+    //
+    // `duration` (whole minutes) is always set and drives the dive list, sorting, totals and
+    // the widget; older app versions read only it. `durationSeconds` is the dive computer's
+    // or the imported file's own dive time, when one was provided. Every writer goes through
+    // `setDuration(seconds:)`, `setDuration(minutes:)` or `setImportedDuration(...)`, so the
+    // two fields never disagree.
+
+    /// Accepted dive times in seconds: below the value that would round to 3600 minutes
+    /// (60 hours, which the legacy "≥ 3600 is seconds" rule would misread). Anything else is
+    /// garbage (MacDive files can hold e.g. 1159792640) and stores no duration.
+    static let validDurationSeconds = 0..<(3600 * 60 - 30)
+
+    /// Stores a dive time recorded by the dive computer or an imported file, and the minutes
+    /// rounded from it (`roundedMinutes`). Zero or a value outside `validDurationSeconds`
+    /// stores no duration.
+    func setDuration(seconds: Int) {
+        guard seconds > 0, Self.validDurationSeconds.contains(seconds) else {
+            durationSeconds = nil
+            duration = 0
+            return
         }
-        return storedDurationSeconds
+        durationSeconds = seconds
+        duration = Self.roundedMinutes(fromSeconds: seconds)
     }
 
-    /// The stored `duration` in seconds, for export. Unlike `durationSeconds` it ignores the
-    /// profile, whose last sample often comes minutes after the computer's dive time (many
-    /// computers keep logging at the surface), so a re-import keeps the same `duration`.
-    var storedDurationSeconds: Int {
+    /// Stores whole minutes (typed by the user or calculated) and clears any computer time,
+    /// which would no longer match them.
+    func setDuration(minutes: Int) {
+        durationSeconds = nil
+        duration = minutes
+    }
+
+    /// Stores the dive time of a dive imported from a file. `fileSeconds` is the file's dive
+    /// time (MacDive, UDDF, Subsurface, Garmin FIT, BlueDive XML `<duration>`). A BlueDive XML
+    /// file carries the computer's time separately (`exportedSeconds`, `<durationSeconds>`),
+    /// written only when the exported dive had one, so its `<duration>` alone sets minutes
+    /// only: a dive without a computer time never gains one through an export and re-import,
+    /// and files exported before `<durationSeconds>` existed give minutes only.
+    /// `exportedSeconds` is ignored when it does not round to the same minutes as `<duration>`.
+    func setImportedDuration(fileSeconds: Int, exportedSeconds: Int?, isBlueDiveXML: Bool) {
+        guard isBlueDiveXML else {
+            setDuration(seconds: fileSeconds)
+            return
+        }
+        let minutes = Self.roundedMinutes(fromSeconds: fileSeconds)
+        if let exportedSeconds, exportedSeconds > 0,
+           Self.roundedMinutes(fromSeconds: exportedSeconds) == minutes {
+            setDuration(seconds: exportedSeconds)
+        } else {
+            setDuration(minutes: minutes)
+        }
+    }
+
+    /// `durationSeconds` while it still rounds to `duration`, else nil. It no longer does when
+    /// the minutes were changed without it, e.g. by an older app version on another device.
+    var consistentDurationSeconds: Int? {
+        guard let durationSeconds, durationSeconds > 0,
+              Self.validDurationSeconds.contains(durationSeconds),
+              Self.roundedMinutes(fromSeconds: durationSeconds) == duration else { return nil }
+        return durationSeconds
+    }
+
+    /// Dive time in seconds from the stored fields: the computer/file time, else the minutes.
+    /// Used for exports and the chart's time axis.
+    var resolvedDurationSeconds: Int {
+        if let consistentDurationSeconds { return consistentDurationSeconds }
         // Heuristic: if duration >= 3600 it was stored in seconds (some importers), otherwise minutes.
-        (duration >= 3600) ? duration : (duration * 60)
+        return (duration >= 3600) ? duration : (duration * 60)
     }
 
-    /// Durée formatée en heures, minutes et secondes, préférant les secondes depuis le profil ou heuristique
+    /// Length of the recorded profile (last sample) in seconds, else `resolvedDurationSeconds`.
+    /// Used for photo matching: the profile also covers photos taken at the surface.
+    var profileDurationSeconds: Int {
+        if let last = profileSamples.last?.time, last > 0,
+           let seconds = Int(exactly: (last * 60).rounded()) {
+            return seconds
+        }
+        return resolvedDurationSeconds
+    }
+
+    /// Dive time in minutes for the gas calculations (SAC/RMV): the profile's last sample, else
+    /// the computer/file time, else `duration`. The profile comes first because the average
+    /// depth and the tank usage windows are on the profile's clock, which can differ from the
+    /// computer's dive time (e.g. Shearwater starts and ends its dive time a few seconds inside
+    /// the profile and keeps logging at the surface after it); dividing by the computer's time
+    /// would mix the two. A dive with a profile gives the same value as before `durationSeconds`
+    /// existed. Takes the already-decoded samples so the profile is decoded once per calculation.
+    func gasDurationMinutes(using samples: [DiveProfilePoint]) -> Double {
+        if let lastTime = samples.last?.time, lastTime > 0 { return lastTime }
+        if let consistentDurationSeconds { return Double(consistentDurationSeconds) / 60.0 }
+        return Double(duration)
+    }
+
+    /// Orders dives by `duration` (minutes), then within the same minute by
+    /// `resolvedDurationSeconds`, so a longest/shortest pick shows the true extreme.
+    static func isShorterDuration(_ lhs: Dive, _ rhs: Dive) -> Bool {
+        if lhs.duration != rhs.duration { return lhs.duration < rhs.duration }
+        return lhs.resolvedDurationSeconds < rhs.resolvedDurationSeconds
+    }
+
+    /// Whole minutes from seconds, rounded to the nearest minute: 30 s and more rounds up
+    /// (42:29 → 42, 42:30 → 43). Used to store `duration` from a computer's or file's dive
+    /// time. A value outside `validDurationSeconds` (negative, or reaching 3600 minutes) gives
+    /// 0, no duration, and Int arithmetic stays safe.
+    static func roundedMinutes(fromSeconds seconds: Int) -> Int {
+        guard validDurationSeconds.contains(seconds) else { return 0 }
+        return (seconds + 30) / 60
+    }
+
+    /// `roundedMinutes(fromSeconds:)` for a `TimeInterval` (LibDCSwift dive times); 0 when the
+    /// value is not finite or out of Int's range.
+    static func roundedMinutes(fromSeconds seconds: TimeInterval) -> Int {
+        guard seconds.isFinite, let whole = Int(exactly: seconds.rounded()) else { return 0 }
+        return roundedMinutes(fromSeconds: whole)
+    }
+
+    /// True when the dive has a recorded profile, whose length `formattedProfileTime` shows.
+    var hasProfileTime: Bool {
+        (profileSamples.last?.time ?? 0) > 0
+    }
+
+    /// Length of the recorded profile (last sample) in hours, minutes and seconds, else the
+    /// stored minutes. Shown as "Profile Time", not as the duration: many computers keep
+    /// logging at the surface after the dive, so it can be longer than `duration`.
+    var formattedProfileTime: String {
+        Self.formattedHoursMinutesSeconds(profileDurationSeconds)
+    }
+
+    /// The dive's duration for the detail card: the computer/file time with its seconds when
+    /// known (e.g. "1h 08m 34s"), else the stored minutes as in the dive list ("1h 09m").
+    /// Never the profile's length, which is shown separately as "Profile Time".
     var formattedDuration: String {
-        let totalSeconds = durationSeconds
+        if let consistentDurationSeconds {
+            return Self.formattedHoursMinutesSeconds(consistentDurationSeconds)
+        }
+        return shortFormattedDuration
+    }
+
+    /// Seconds as hours, zero-padded minutes and seconds ("1h 05m 30s", "42m 05s", "45s").
+    private static func formattedHoursMinutesSeconds(_ totalSeconds: Int) -> String {
         let h = totalSeconds / 3600
         let m = (totalSeconds % 3600) / 60
         let s = totalSeconds % 60
@@ -1556,7 +1682,8 @@ extension Dive {
                     result[dive.id] = "0h 00m"
                 } else {
                     let prev = sorted[index - 1]
-                    let prevEnd = prev.timestamp.addingTimeInterval(TimeInterval(prev.duration * 60))
+                    // Previous dive's end: its computer/file time, else its minutes (as before).
+                    let prevEnd = prev.timestamp.addingTimeInterval(TimeInterval(prev.consistentDurationSeconds ?? prev.duration * 60))
                     let gap = dive.timestamp.timeIntervalSince(prevEnd)
                     guard gap > 0 else {
                         dive.surfaceInterval = "0h 00m"

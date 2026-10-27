@@ -121,8 +121,9 @@ extension BluetoothScannerView {
                 )
                 descriptor.fetchLimit = 1
                 if let previousDive = try? modelContext.fetch(descriptor).first {
-                    // End time = start time + duration (duration is in minutes)
-                    previousDiveEndTime = previousDive.timestamp.addingTimeInterval(Double(previousDive.duration) * 60)
+                    // End time = start time + its computer/file time, else its minutes
+                    previousDiveEndTime = previousDive.timestamp.addingTimeInterval(
+                        Double(previousDive.consistentDurationSeconds ?? previousDive.duration * 60))
                 }
             }
 
@@ -191,8 +192,8 @@ extension BluetoothScannerView {
                 }
 
                 // Update previous dive end time for the next iteration
-                // divetime is in seconds
-                previousDiveEndTime = diveData.datetime.addingTimeInterval(diveData.divetime)
+                // End of the dive: the computer's dive time when it reports one, else the last sample (seconds)
+                previousDiveEndTime = diveData.datetime.addingTimeInterval(diveData.reportedDivetime ?? diveData.divetime)
 
                 importProgress = Double(index + 1) / Double(total)
             }
@@ -796,7 +797,7 @@ extension BluetoothScannerView {
         // Dive statistics
         dive.maxDepth = diveData.maxDepth
         dive.averageDepth = diveData.avgDepth
-        dive.duration = Int(diveData.divetime / 60)
+        Self.applyDuration(from: diveData, to: dive)
 
         // Temperatures
         let profileTemperatures = diveData.profile.compactMap { $0.temperature }

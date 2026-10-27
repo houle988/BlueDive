@@ -707,7 +707,7 @@ extension ContentView {
                 incomingDate: dive.date,
                 incomingSiteName: dive.site?.name ?? "",
                 incomingMaxDepth: dive.maxDepth,
-                incomingDuration: dive.duration / 60,
+                incomingDuration: Dive.roundedMinutes(fromSeconds: dive.duration),
                 incomingDistanceUnit: dive.distanceFormat,
                 existing: existing,
                 reason: reason
@@ -760,10 +760,19 @@ extension ContentView {
         }
 
         // Profile tolerances — shared by Path B, the identifier path, and the heuristic.
-        // BlueDiveGlobalData.duration is seconds; Dive.duration is stored in minutes (floor).
+        // BlueDiveGlobalData.duration is seconds; Dive.duration is stored in minutes (rounded; older
+        // dives truncated — within the tolerance either way).
         let depthToleranceMeters = 1.0
         let durationToleranceMin = 2
-        let incomingDurationMin = incoming.duration / 60
+        let incomingDurationMin = Dive.roundedMinutes(fromSeconds: incoming.duration)
+        // Minutes earlier builds stored for the same file (seconds / 60, truncated, with no range
+        // check): a garbage duration (e.g. 1159792640) now rounds to 0, but a dive imported
+        // before kept the huge value, and must still be recognised on re-import.
+        let legacyIncomingDurationMin = incoming.duration / 60
+        func durationMatches(_ existingMinutes: Int) -> Bool {
+            abs(existingMinutes - incomingDurationMin) <= durationToleranceMin
+                || abs(existingMinutes - legacyIncomingDurationMin) <= durationToleranceMin
+        }
         let incomingDepthMeters = depthInMeters(incoming.maxDepth, unit: incoming.distanceFormat)
 
         // MARK: Serial + fingerprint match (Path B)
@@ -782,7 +791,7 @@ extension ContentView {
            !consumed.contains(match.id) {
             let matchDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
             if abs(matchDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
-               abs(match.duration - incomingDurationMin) <= durationToleranceMin {
+               durationMatches(match.duration) {
                 return (match, .sameComputerAndFingerprint)
             }
             // Profile mismatch — suspected recycled fingerprint after firmware reset. Fall through.
@@ -861,7 +870,7 @@ extension ContentView {
                     // resets that recycle dive IDs — even within a short time window.
                     let existingDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
                     if abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
-                       abs(match.duration - incomingDurationMin) <= durationToleranceMin {
+                       durationMatches(match.duration) {
                         return (match, .sameIdentifierAndProfile)
                     }
                     // Profile validation failed — proven wrong dive despite matching identifier+serial.
@@ -897,7 +906,7 @@ extension ContentView {
                 guard !identifierRejectedIDs.contains(existing.id) else { return false }
                 guard !consumed.contains(existing.id) else { return false }
                 guard abs(existing.timestamp.timeIntervalSince(date)) <= dateTolerance else { return false }
-                guard abs(existing.duration - incomingDurationMin) <= durationToleranceMin else { return false }
+                guard durationMatches(existing.duration) else { return false }
                 let existingDepthMeters = depthInMeters(existing.maxDepth, unit: existing.importDistanceUnit)
                 guard abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters else { return false }
                 let existingSiteName = existing.siteName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1031,7 +1040,6 @@ extension ContentView {
             boat: diveData.boat,
             maxDepth: diveData.maxDepth,
             averageDepth: averageDepth,
-            duration: diveData.duration / 60, // Convert seconds to minutes
             waterTemperature: diveData.tempLow,
             minTemperature: diveData.tempLow,
             airTemperature: diveData.tempAir,
@@ -1055,7 +1063,13 @@ extension ContentView {
             siteLongitude: diveData.site?.longitude,
             profileSamples: profilePoints
         )
-        
+
+        // Dive time: the file's seconds and the minutes rounded from them (30 s rounds up);
+        // a BlueDive XML file carries the computer's time in <durationSeconds>.
+        newDive.setImportedDuration(fileSeconds: diveData.duration,
+                                    exportedSeconds: diveData.exportedDurationSeconds,
+                                    isBlueDiveXML: diveData.isBlueDiveXMLImport)
+
         // Exit GPS (BlueDive XML round-trip)
         newDive.exitLatitude  = diveData.site?.exitLatitude
         newDive.exitLongitude = diveData.site?.exitLongitude
@@ -1337,11 +1351,13 @@ extension ContentView {
         }
 
         // --- Recalculate duration ---
-        // Use the last sample time (which includes surface interval) converted to minutes
+        // Use the last sample time (which includes surface interval) converted to minutes.
+        // setDuration(minutes:) also clears the earlier dive's computer time, which no longer
+        // matches the merged dive.
         if let lastTime = combinedSamples.last?.time {
-            earlier.duration = Int(lastTime.rounded())
+            earlier.setDuration(minutes: Int(exactly: lastTime.rounded()) ?? earlier.duration)
         } else {
-            earlier.duration = earlier.duration + surfaceMinutes + later.duration
+            earlier.setDuration(minutes: earlier.duration + surfaceMinutes + later.duration)
         }
 
         // --- CNS: sum both segments, capped at 100% ---

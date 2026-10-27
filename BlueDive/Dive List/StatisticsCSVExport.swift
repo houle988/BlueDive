@@ -15,6 +15,9 @@ nonisolated struct StatisticsCSVRow: Sendable {
     let maxDepth: Double
     let averageDepth: Double?
     let durationMinutes: Int
+    /// The computer's or file's dive time (`Dive.consistentDurationSeconds`); nil when the dive
+    /// has none (never derived from the minutes).
+    let durationSeconds: Int?
     let waterTemperature: Double?
     let rmv: Double?
     let sac: Double?
@@ -43,6 +46,7 @@ extension StatisticsCSVRow {
             maxDepth: dive.displayMaxDepth,
             averageDepth: dive.averageDepth > 0 ? dive.displayAverageDepth : nil,
             durationMinutes: dive.duration,
+            durationSeconds: dive.consistentDurationSeconds,
             waterTemperature: dive.displayWaterTemperature,
             rmv: rmv > 0 ? (pressureUnit == .psi ? rmv / 28.3168 : rmv) : nil,
             sac: sac > 0 ? pressureUnit.convertFromBar(sac) : nil,
@@ -96,6 +100,7 @@ nonisolated enum StatisticsCSVExport {
                 number(row.maxDepth, decimals: 1),
                 row.averageDepth.map { number($0, decimals: 1) } ?? "",
                 String(row.durationMinutes),
+                row.durationSeconds.map { String($0) } ?? "",
                 row.waterTemperature.map { number($0, decimals: 1) } ?? "",
                 row.rmv.map { number($0, decimals: labels.rmvDecimals) } ?? "",
                 row.sac.map { number($0, decimals: 2) } ?? "",

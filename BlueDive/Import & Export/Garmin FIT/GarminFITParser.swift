@@ -176,7 +176,8 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                   let totalElapsed = session.getTotalElapsedTime() else { continue }
 
             let startDate = startDateTime.date
-            let durationSec = Int(totalElapsed.rounded())
+            // Int(exactly:) gives nil (→ 0) instead of trapping on an out-of-range value.
+            let durationSec = Int(exactly: totalElapsed.rounded()) ?? 0
             let endDate = startDate.addingTimeInterval(totalElapsed)
             let summary = session.getMessageIndex().flatMap { summaryBySessionMsgIdx[$0] }
 
@@ -480,7 +481,7 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
             // getBottomTime() from DiveSummary is the Descent's recorded dive time and matches
             // what the watch displays. totalElapsedTime is the broader session time and may
             // include pre-entry surface time if the diver activated dive mode early.
-            let finalDuration = summary?.getBottomTime().map { Int($0.rounded()) } ?? durationSec
+            let finalDuration = summary?.getBottomTime().flatMap { Int(exactly: $0.rounded()) } ?? durationSec
             let endCns = (summary?.getEndCns()
                 ?? session.getEndCns()
                 ?? sessionRecords.last(where: { $0.getCnsLoad() != nil })?.getCnsLoad()

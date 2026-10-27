@@ -785,7 +785,6 @@ extension BluetoothScannerView {
             isRepetitiveDive: isRepetitiveDive,
             maxDepth: diveData.maxDepth,
             averageDepth: averageDepth,
-            duration: Int(diveData.divetime / 60), // LibDCSwift uses seconds
             waterTemperature: diveData.temperature.isFinite ? diveData.temperature : nil,
             minTemperature: minTemperature,
             // Only a surface temperature the computer reports: LibDC-Swift's surfaceTemperature
@@ -821,6 +820,7 @@ extension BluetoothScannerView {
         dive.rawDiveComputerData = diveData.rawData
         dive.fingerprintData = diveData.fingerprint
         dive.decoStops = Self.extractDecoStops(from: diveData)
+        Self.applyDuration(from: diveData, to: dive)
 
         if let exitLoc = diveData.exitLocation,
            (-90...90).contains(exitLoc.latitude),
@@ -831,6 +831,19 @@ extension BluetoothScannerView {
         }
 
         return dive
+    }
+
+    /// Stores the dive time (LibDCSwift seconds): the computer's own (DC_FIELD_DIVETIME) with
+    /// its seconds when it reports one, else whole minutes rounded from the last profile
+    /// sample (30 s rounds up), with no seconds — that is the profile's length, not the
+    /// computer's dive time.
+    static func applyDuration(from diveData: DiveData, to dive: Dive) {
+        if let reported = diveData.reportedDivetime,
+           reported.isFinite, let seconds = Int(exactly: reported.rounded()) {
+            dive.setDuration(seconds: seconds)
+        } else {
+            dive.setDuration(minutes: Dive.roundedMinutes(fromSeconds: diveData.divetime))
+        }
     }
 
     /// Extracts all distinct decompression stops from the dive profile samples.

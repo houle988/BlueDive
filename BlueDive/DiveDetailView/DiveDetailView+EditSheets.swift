@@ -719,8 +719,13 @@ struct EditMenuStatsView: View {
         // An untouched field keeps the stored duration exactly; an emptied one clears it (0, as
         // before); an entry that cannot be read, or is out of range, keeps the stored duration.
         let trimmedDuration = workingDurationText.trimmingCharacters(in: .whitespaces)
+        // Changed minutes go through setDuration(minutes:), which also clears a computer time
+        // that would no longer match; the same minutes typed differently ("45" → "45.0") keep it.
         if trimmedDuration != initialDurationText {
-            dive.duration = trimmedDuration.isEmpty ? 0 : (Self.durationMinutes(trimmedDuration) ?? dive.duration)
+            let minutes = trimmedDuration.isEmpty ? 0 : (Self.durationMinutes(trimmedDuration) ?? dive.duration)
+            if minutes != dive.duration {
+                dive.setDuration(minutes: minutes)
+            }
         }
         dive.weights      = workingWeights
         let originalDiverName = dive.diverName

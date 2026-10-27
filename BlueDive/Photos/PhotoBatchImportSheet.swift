@@ -448,7 +448,7 @@ struct PhotoBatchImportSheet: View {
         var durations: [UUID: Int] = [:]
         func duration(of dive: Dive) -> Int {
             if let known = durations[dive.id] { return known }
-            let value = dive.durationSeconds
+            let value = dive.profileDurationSeconds
             durations[dive.id] = value
             return value
         }

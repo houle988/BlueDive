@@ -21084,6 +21084,41 @@
         }
       }
     },
+    "Duration (s)" : {
+      "comment" : "Statistics CSV export column: the dive time in seconds recorded by the dive computer or the imported file; empty when the dive has none",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dauer (s)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Duración (s)"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durée (s)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Varighet (s)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tijdsduur (s)"
+          }
+        }
+      }
+    },
     "Dutch Translation, Testing and ideas for new features" : {
       "localizations" : {
         "de" : {
@@ -47507,6 +47542,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Profiel"
+          }
+        }
+      }
+    },
+    "PROFILE TIME" : {
+      "comment" : "Detail card title (dive Overview): length of the recorded dive profile, up to its last sample. It can be longer than the dive's Duration, because many dive computers keep logging at the surface after the dive ends.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PROFILDAUER"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "DURACIÓN DEL PERFIL"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DURÉE DU PROFIL"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PROFILTID"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PROFIELDUUR"
           }
         }
       }

@@ -19,7 +19,7 @@ struct DiveTrip: Identifiable {
     /// Compared in the display unit: each dive keeps its depth in the unit it was imported
     /// in, so raw `maxDepth` values of metric and imperial dives are not comparable.
     var deepestDive: Dive?     { dives.max(by: { $0.displayMaxDepth < $1.displayMaxDepth }) }
-    var longestDive: Dive?     { dives.max(by: { $0.duration < $1.duration }) }
+    var longestDive: Dive?     { dives.max(by: Dive.isShorterDuration) }
     var bestRatedDive: Dive?   { dives.max(by: { $0.rating < $1.rating }) }
     var averageRating: Double  {
         let rated = dives.filter { $0.rating > 0 }

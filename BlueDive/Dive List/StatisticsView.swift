@@ -300,8 +300,11 @@ struct StatisticsView: View {
 
         // --- Average / longest / shortest duration ---
         let avgDuration = dives.isEmpty ? 0 : totalMin / dives.count
-        let longestDive = dives.max(by: { $0.duration < $1.duration })
-        let shortestDive = dives.filter { $0.duration > 0 }.min(by: { $0.duration < $1.duration })
+        // Minutes first; equal minutes are ordered by the computer/file seconds when known.
+        let longestDive = dives.max(by: Dive.isShorterDuration)
+        // A dive under 30 s has 0 minutes but still counts when it carries its computer time.
+        let shortestDive = dives.filter { $0.duration > 0 || $0.consistentDurationSeconds != nil }
+            .min(by: Dive.isShorterDuration)
 
         // --- Surface interval stats ---
         func parseIntervalMinutes(_ s: String) -> Int {
@@ -864,6 +867,7 @@ struct StatisticsView: View {
                 String(format: NSLocalizedString("Max Depth (%@)", bundle: bundle, value: "Max Depth (%@)", comment: "Maximum depth label; %@ is the depth unit (m or ft)"), depthSymbol),
                 String(format: NSLocalizedString("Average Depth (%@)", bundle: bundle, value: "Average Depth (%@)", comment: "Statistics CSV export column: average depth; %@ is the depth unit (m or ft)"), depthSymbol),
                 NSLocalizedString("Duration (min)", bundle: bundle, value: "Duration (min)", comment: "Label for the dive duration in minutes (dive editor field, Statistics CSV export column)"),
+                NSLocalizedString("Duration (s)", bundle: bundle, value: "Duration (s)", comment: "Statistics CSV export column: the dive time in seconds recorded by the dive computer or the imported file; empty when the dive has none"),
                 String(format: NSLocalizedString("Water Temperature (%@)", bundle: bundle, value: "Water Temperature (%@)", comment: "Statistics CSV export column: water temperature; %@ is the temperature unit (°C or °F)"), temperatureSymbol),
                 String(format: NSLocalizedString("RMV (%@)", bundle: bundle, value: "RMV (%@)", comment: "Statistics CSV export column: respiratory minute volume; %@ is the unit (L/min or cu ft/min)"), rmvUnit),
                 String(format: NSLocalizedString("SAC (%@/min)", bundle: bundle, value: "SAC (%@/min)", comment: "Statistics CSV export column: surface air consumption; %@ is the pressure unit (bar or psi)"), pressureUnit.symbol),

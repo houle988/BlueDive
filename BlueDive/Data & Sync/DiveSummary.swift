@@ -19,6 +19,11 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
     let maxDepth: Double           // raw stored value
     let importDistanceUnit: String
     let duration: Int
+    /// `Dive.consistentDurationSeconds` (the computer/file time, nil without one). Not shown in
+    /// list rows; kept so a seconds-only change (e.g. a re-download on another device with the
+    /// same minutes) changes the summary, which refreshes views keyed on `cachedSummaries`
+    /// (Statistics tiles, Trips) that show `Dive.formattedDuration`.
+    let durationSeconds: Int?
     var surfaceInterval: String
     let rating: Int
     let buddies: String
@@ -149,6 +154,7 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
         maxDepth = dive.maxDepth
         importDistanceUnit = dive.importDistanceUnit
         duration = dive.duration
+        durationSeconds = dive.consistentDurationSeconds
         surfaceInterval = dive.surfaceInterval
         rating = dive.rating
         buddies = dive.buddies

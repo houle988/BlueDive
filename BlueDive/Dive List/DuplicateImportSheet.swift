@@ -476,7 +476,8 @@ struct DuplicateImportSheet: View {
     private func newDiveRow(_ dive: BlueDiveGlobalData) -> some View {
         let depthUnit = (dive.distanceFormat == "feet" ? DepthUnit.feet : DepthUnit.meters).symbol
         let depthString = dive.maxDepth.localizedString(decimals: 1) + " \(depthUnit)"
-        let durationMin = Int(dive.duration / 60)
+        // Same rounding as the stored minutes (30 s rounds up).
+        let durationMin = Dive.roundedMinutes(fromSeconds: dive.duration)
         let durationString: String = {
             let fmt = NSLocalizedString("%lld min", bundle: .forAppLanguage(), comment: "Duration in minutes")
             return String(format: fmt, durationMin)

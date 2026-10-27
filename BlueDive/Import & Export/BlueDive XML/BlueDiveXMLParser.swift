@@ -41,6 +41,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private var currentMaxDepth: Double = 0.0
     private var currentAverageDepth: Double?
     private var currentDuration: Int = 0
+    private var currentDurationSeconds: Int?   // <durationSeconds>: the dive computer's time
     private var currentInterval: Int?
     private var currentCNS: Double?
     private var currentDecoModel: String?
@@ -649,6 +650,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         case "maxDepth":         currentMaxDepth = Double(text) ?? 0.0
         case "averageDepth":     currentAverageDepth = Double(text)
         case "duration":         currentDuration = parseSeconds(text) ?? 0
+        case "durationSeconds":  currentDurationSeconds = parseSeconds(text)
         case "surfaceInterval":  currentSurfaceInterval = parseSeconds(text) ?? 0
         case "cns":              currentCNS = Double(text)
         case "decoModel":        currentDecoModel = text.nilIfEmpty
@@ -704,6 +706,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
                 maxDepth: currentMaxDepth,
                 averageDepth: currentAverageDepth,
                 duration: currentDuration,
+                exportedDurationSeconds: currentDurationSeconds,
                 interval: currentInterval,
                 cns: currentCNS,
                 decoModel: currentDecoModel,
@@ -759,6 +762,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         currentMaxDepth = 0.0
         currentAverageDepth = nil
         currentDuration = 0
+        currentDurationSeconds = nil
         currentInterval = nil
         currentCNS = nil
         currentDecoModel = nil
@@ -883,7 +887,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private func parseSeconds(_ text: String) -> Int? {
         guard !text.isEmpty else { return nil }
         if let intValue = Int(text) { return intValue }
-        if let doubleValue = Double(text) { return Int(doubleValue) }
+        // Truncated as before; Int(exactly:) returns nil instead of trapping on "1e30" or "inf".
+        if let doubleValue = Double(text) { return Int(exactly: doubleValue.rounded(.towardZero)) }
         return nil
     }
 }

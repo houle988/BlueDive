@@ -1156,8 +1156,9 @@ struct ContentView: View {
         let surfaceInterval: String = {
             let previous = dives.first(where: { $0.timestamp < date && $0.diverName == diverName })
             guard let prev = previous else { return "0h 00m" }
-            let durationSeconds = TimeInterval(prev.duration * 60)
-            let prevEnd = prev.timestamp.addingTimeInterval(durationSeconds)
+            // Previous dive's end: its computer/file time, else its minutes.
+            let prevDurationSeconds = TimeInterval(prev.consistentDurationSeconds ?? prev.duration * 60)
+            let prevEnd = prev.timestamp.addingTimeInterval(prevDurationSeconds)
             let gap = date.timeIntervalSince(prevEnd)
             guard gap > 0 else { return "0h 00m" }
             let totalMinutes = Int(gap / 60)
