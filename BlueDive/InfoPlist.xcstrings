@@ -153,38 +153,38 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "BlueDive nutzt deinen Standort, um deine Position auf der Tauchkarte anzuzeigen."
+            "state" : "needs_review",
+            "value" : "BlueDive nutzt deinen Standort, um deine Position auf der Tauchkarte anzuzeigen und die Koordinaten von Tauchplätzen einzutragen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "BlueDive uses your location to show your position on the dive map."
+            "value" : "BlueDive uses your location to show your position on the dive map and to fill in dive site coordinates."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "BlueDive usa tu ubicación para mostrar tu posición en el mapa de inmersiones."
+            "value" : "BlueDive usa tu ubicación para mostrar tu posición en el mapa de inmersiones y completar las coordenadas de los puntos de inmersión."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "BlueDive utilise votre position pour l'afficher sur la carte de plongée."
+            "value" : "BlueDive utilise votre position pour l'afficher sur la carte de plongée et pour remplir les coordonnées des sites de plongée."
           }
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "BlueDive bruker posisjonen din til å vise hvor du er på kartet."
+            "state" : "needs_review",
+            "value" : "BlueDive bruker posisjonen din til å vise hvor du er på kartet og til å fylle inn koordinatene til dykkesteder."
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "BlueDive gebruikt je locatie om je positie op de duikkaart weer te geven."
+            "state" : "needs_review",
+            "value" : "BlueDive gebruikt je locatie om je positie op de duikkaart weer te geven en de coördinaten van duikstekken in te vullen."
           }
         }
       }

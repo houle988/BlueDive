@@ -830,6 +830,18 @@ struct EditSiteDetailsView: View {
     @State private var showExitCoordinatePicker = false
     @State private var showSameAsEntryConfirm = false
 
+    /// Which GPS section a "Use Current Location" action fills.
+    private enum GPSTarget { case entry, exit }
+    /// The section whose current-location lookup is running (both rows are disabled meanwhile).
+    @State private var locatingTarget: GPSTarget? = nil
+    /// The section waiting for the user to confirm replacing its coordinates with the current
+    /// location; the alert hands it to its Replace button through `presenting:`.
+    @State private var currentLocationReplaceTarget: GPSTarget? = nil
+    @State private var showCurrentLocationReplaceConfirm = false
+    @State private var currentLocationFailure: CurrentLocationFetcher.Failure? = nil
+    /// The running lookup, cancelled when the sheet closes.
+    @State private var currentLocationTask: Task<Void, Never>? = nil
+
     /// The entry coordinate currently in the form fields, or nil if unset/invalid — mirrors
     /// `Dive.hasGPSCoordinates`'s (0, 0)-sentinel handling.
     private var entryCoordinate: CLLocationCoordinate2D? {
@@ -1034,6 +1046,71 @@ struct EditSiteDetailsView: View {
         } message: {
             Text("This will replace the existing exit coordinates with the entry coordinates.")
         }
+        .alert("Replace Coordinates", isPresented: $showCurrentLocationReplaceConfirm,
+               presenting: currentLocationReplaceTarget) { target in
+            Button("Replace", role: .destructive) { fetchCurrentLocation(for: target) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This will replace the existing coordinates with your current location.")
+        }
+        .alert("Location Unavailable", isPresented: Binding(
+            get: { currentLocationFailure != nil },
+            set: { if !$0 { currentLocationFailure = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if currentLocationFailure == .denied {
+                Text("BlueDive doesn't have access to your location. Allow it in Privacy & Security → Location Services.")
+            } else {
+                Text("Your current position couldn't be determined accurately enough. Try again outdoors, or pick the position on the map.")
+            }
+        }
+        // Stop a running lookup when the sheet closes, so Location Services do not keep running.
+        .onDisappear { currentLocationTask?.cancel() }
+    }
+
+    /// "Use Current Location": asks before replacing coordinates already in the section.
+    private func useCurrentLocation(for target: GPSTarget) {
+        let existing = target == .entry ? entryCoordinate : exitCoordinate
+        if existing != nil {
+            currentLocationReplaceTarget = target
+            showCurrentLocationReplaceConfirm = true
+        } else {
+            fetchCurrentLocation(for: target)
+        }
+    }
+
+    private func fetchCurrentLocation(for target: GPSTarget) {
+        guard locatingTarget == nil else { return }
+        locatingTarget = target
+        currentLocationTask = Task {
+            defer {
+                locatingTarget = nil
+                currentLocationTask = nil
+            }
+            do {
+                let coordinate = try await CurrentLocationFetcher.fetch()
+                // Replace the whole PrefilledDouble so the exact fix is saved, not its "%.6f" text.
+                switch target {
+                case .entry:
+                    prefilledLatitude  = .coordinate(coordinate.latitude)
+                    prefilledLongitude = .coordinate(coordinate.longitude)
+                    workingLatitude  = prefilledLatitude.text
+                    workingLongitude = prefilledLongitude.text
+                case .exit:
+                    prefilledExitLatitude  = .coordinate(coordinate.latitude)
+                    prefilledExitLongitude = .coordinate(coordinate.longitude)
+                    workingExitLatitude  = prefilledExitLatitude.text
+                    workingExitLongitude = prefilledExitLongitude.text
+                }
+            } catch is CancellationError {
+                // The sheet closed during the lookup: nothing to fill or report.
+            } catch let failure as CurrentLocationFetcher.Failure {
+                currentLocationFailure = failure
+            } catch {
+                currentLocationFailure = .unavailable
+            }
+        }
     }
 
 
@@ -1130,6 +1207,8 @@ struct EditSiteDetailsView: View {
 
                     Section {
                         gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showEntryCoordinatePicker = true }
+                        gpsActionRow("Use Current Location", icon: "location", enabled: locatingTarget == nil,
+                                     isBusy: locatingTarget == .entry) { useCurrentLocation(for: .entry) }
                         HStack(spacing: 12) {
                             Image(systemName: "arrow.up.arrow.down")
                                 .foregroundStyle(.green)
@@ -1208,6 +1287,8 @@ struct EditSiteDetailsView: View {
 
                     Section {
                         gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showExitCoordinatePicker = true }
+                        gpsActionRow("Use Current Location", icon: "location", enabled: locatingTarget == nil,
+                                     isBusy: locatingTarget == .exit) { useCurrentLocation(for: .exit) }
                         gpsActionRow("Same as Entry", icon: "arrow.turn.right.up", enabled: entryCoordinate != nil) {
                             if exitCoordinate != nil {
                                 showSameAsEntryConfirm = true
@@ -1318,9 +1399,10 @@ struct EditSiteDetailsView: View {
         #endif
     }
 
-    /// A full-width tappable row for GPS actions (Pick on Map, Same as Entry) inside a Form
-    /// section — a larger, more discoverable target than a small header text link.
-    private func gpsActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    /// A full-width tappable row for GPS actions (Pick on Map, Use Current Location, Same as Entry)
+    /// inside a Form section — a larger, more discoverable target than a small header text link.
+    /// `isBusy` shows a spinner in place of the chevron while the action runs.
+    private func gpsActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, isBusy: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -1329,7 +1411,10 @@ struct EditSiteDetailsView: View {
                 Text(title)
                     .foregroundStyle(enabled ? .blue : .secondary)
                 Spacer()
-                if enabled {
+                if isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if enabled {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1341,6 +1426,8 @@ struct EditSiteDetailsView: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        // VoiceOver announces the running action, which the spinner only shows visually.
+        .accessibilityValue(isBusy ? Text("Locating…") : Text(verbatim: ""))
     }
 
     private func resetEntryGPS() {
