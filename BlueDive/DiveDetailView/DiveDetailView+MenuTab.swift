@@ -1098,6 +1098,11 @@ extension DiveDetailView {
                         }
                     }
                     .padding(.vertical, 4)
+                    // Room for the remove badge, which sits 6 pt above and 6 pt past the
+                    // chip's corner (its tap target 6 pt further on iOS): the scroll view
+                    // clips its content, so the last chip's badge was cut in half.
+                    .padding(.top, 2)
+                    .padding(.trailing, 12)
                 }
             }
         }
