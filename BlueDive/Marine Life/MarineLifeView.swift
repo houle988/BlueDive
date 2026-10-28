@@ -382,18 +382,14 @@ struct MarineLifeView: View {
                         title: DiverFilter.noDivesTitle(for: selectedDiver),
                         description: DiverFilter.noDivesDescription(for: selectedDiver)
                     )
-                    #if os(macOS)
-                    // macOS sizes ContentUnavailableView to its content; fill the tab so the
-                    // Group's AppBackground covers the whole window, as on iOS.
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    #endif
                 } else if !statsReady {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if cachedSpecies.isEmpty {
                     ContentUnavailableView("No marine life recorded", systemImage: "fish")
                         #if os(macOS)
-                        // As above: fill the tab so the background covers the whole window.
+                        // macOS sizes ContentUnavailableView to its content; fill the tab so the
+                        // Group's AppBackground covers the whole window, as on iOS.
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         #endif
                 } else {
@@ -403,7 +399,8 @@ struct MarineLifeView: View {
                         // In place of the list, as the Dives and Equipment tabs' "no results".
                         noMatchesView
                             #if os(macOS)
-                            // As above: fill the tab so the background covers the whole window.
+                            // macOS sizes ContentUnavailableView to its content; fill the tab so the
+                            // Group's AppBackground covers the whole window, as on iOS.
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             #endif
                     } else {

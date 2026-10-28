@@ -56,6 +56,51 @@ extension View {
         self
         #endif
     }
+
+    /// Sizes an icon label in a sheet's utility items on macOS, where those items sit in the
+    /// sheet's bottom bar: a 24 pt icon frame plus the padding of the bezel that
+    /// `sheetToolbarControlOnMac()` draws around the control, so the whole bezel is clickable
+    /// and every item has the same size. The system's bezels cannot give one look — each hugs its
+    /// label (a short glyph such as `line.3.horizontal.decrease` gets a shorter button) and a
+    /// `Menu`'s bezel is lighter than a `Button`'s, even with the same button style. Pass `false`
+    /// when the label is not in a sheet (main window), which leaves it as it is. On iOS the view
+    /// is returned unchanged.
+    func sheetToolbarIconOnMac(_ isInSheet: Bool = true) -> some View {
+        #if os(macOS)
+        self
+            .frame(width: isInSheet ? 24 : nil, height: isInSheet ? 24 : nil)
+            .padding(.horizontal, isInSheet ? 12 : 0)
+            .padding(.vertical, isInSheet ? 3 : 0)
+            .contentShape(Rectangle())
+        #else
+        self
+        #endif
+    }
+
+    /// Gives a sheet's utility `Button` or `Menu` one look on macOS: it removes the system bezel
+    /// (plain style; menus drawn as buttons, without the ⌄ indicator) and draws the app's own
+    /// around the control, at the size of the label `sheetToolbarIconOnMac()` frames (24 pt icon
+    /// + 12/3 pt padding). The fixed frame gives every item the same size (a menu and a button
+    /// otherwise report slightly different ones); the bezel is drawn here, outside the control,
+    /// because a menu shifts its label down inside its pop-up cell. Pair it with
+    /// `sheetToolbarIconOnMac()` on the label. On iOS the view is returned unchanged.
+    func sheetToolbarControlOnMac() -> some View {
+        #if os(macOS)
+        self
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .frame(width: 48, height: 30)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            // The bar aligns its items by text baseline, which each label puts elsewhere (the
+            // bottom of its glyph, the initials' text), leaving a staircase of half-point steps:
+            // give every item the same baseline, its centre.
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
+            .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] }
+        #else
+        self
+        #endif
+    }
 }
 
 // MARK: - Close button on pushed sheet pages

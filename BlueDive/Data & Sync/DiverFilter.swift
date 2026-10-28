@@ -226,12 +226,31 @@ struct DiverSourcesFeeder: View {
 struct DiverFilterToolbar: ToolbarContent {
     let uniqueDivers: [String]
     @Binding var selectedDiver: String
+    /// The picker sits with a sheet's utility items: on macOS its label gets their common frame.
+    var inSheet = false
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             picker
                 .toolbarMenuIndicatorHiddenOnMac()
         }
+    }
+
+    /// The diver filter for a sheet whose only utility item it is (Trips, Calendar, Diver Profile).
+    /// macOS draws no `.navigation` item (`.topBarLeading`) in a sheet's toolbar, so there it sits
+    /// with the sheet's utility items (`.sheetPrimaryAction`); on iOS it is exactly `DiverFilterToolbar`.
+    /// A sheet with other utility items puts `picker` (with `inSheet: true` and
+    /// `sheetToolbarControlOnMac()`) first in their macOS group instead (Statistics, Documents).
+    @ToolbarContentBuilder
+    static func sheetItem(uniqueDivers: [String], selectedDiver: Binding<String>) -> some ToolbarContent {
+        #if os(macOS)
+        ToolbarItemGroup(placement: .sheetPrimaryAction) {
+            DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: selectedDiver, inSheet: true).picker
+                .sheetToolbarControlOnMac()
+        }
+        #else
+        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: selectedDiver)
+        #endif
     }
 
     private var isActive: Bool { !selectedDiver.isEmpty }
@@ -281,9 +300,11 @@ struct DiverFilterToolbar: ToolbarContent {
                         .foregroundStyle(Color.black)
                 }
                 .accessibilityHidden(true)
+                .sheetToolbarIconOnMac(inSheet)
             } else {
                 Image(systemName: "person.2")
                     .foregroundStyle(Color.cyan)
+                    .sheetToolbarIconOnMac(inSheet)
             }
         }
         .accessibilityLabel(Self.accessibilityTitle(selectedDiver: selectedDiver))
@@ -687,5 +708,10 @@ struct NoEntriesForDiverView<Actions: View>: View {
         } actions: {
             actions()
         }
+        #if os(macOS)
+        // macOS sizes ContentUnavailableView to its content: fill the container so a sheet
+        // keeps its page size and the screen's AppBackground covers it, as on iOS.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #endif
     }
 }

@@ -655,38 +655,26 @@ struct StatisticsView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
+                #if os(macOS)
+                // The diver filter leads the sheet's utility items: macOS draws no .navigation
+                // item (DiverFilterToolbar's placement) in a sheet's toolbar.
+                ToolbarItemGroup(placement: .sheetPrimaryAction) {
+                    DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver, inSheet: true).picker
+                        .sheetToolbarControlOnMac()
+                    exportCSVButton
+                        .sheetToolbarControlOnMac()
+                    filterButton
+                        .sheetToolbarControlOnMac()
+                }
+                #else
                 DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
                 ToolbarItem(placement: .sheetPrimaryAction) {
-                    Button(action: exportStatisticsCSV) {
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundStyle(.cyan)
-                    }
-                    .disabled(isCSVExportBusy || !statsReady || cachedFilteredDives.isEmpty)
-                    .accessibilityLabel(Text("Export CSV"))
+                    exportCSVButton
                 }
                 ToolbarItem(placement: .sheetPrimaryAction) {
-                    Button(action: { showFilterSheet = true }) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "line.3.horizontal.decrease")
-                                .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
-                            if activeFilterCount > 0 {
-                                Text("\(activeFilterCount)")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.black)
-                                    .padding(3)
-                                    .background(Color.orange, in: Circle())
-                                    .offset(x: 6, y: -6)
-                            }
-                        }
-                    }
-                    // The progress overlay does not cover the toolbar: no filter sheet during an
-                    // export, which would keep the Files exporter from appearing when it ends.
-                    .disabled(isCSVExportBusy)
-                    .accessibilityLabel(activeFilterCount == 0
-                        ? NSLocalizedString("Filter dives", bundle: Bundle.forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active")
-                        : String(format: NSLocalizedString("%d active filters", bundle: Bundle.forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), activeFilterCount)
-                    )
+                    filterButton
                 }
+                #endif
             }
             .background(AppBackground().ignoresSafeArea())
             .task(id: filterTaskId) {
@@ -784,6 +772,43 @@ struct StatisticsView: View {
             csvSavePanel?.cancel(nil)
             #endif
         }
+    }
+
+    // MARK: - Toolbar Buttons
+
+    private var exportCSVButton: some View {
+        Button(action: exportStatisticsCSV) {
+            Image(systemName: "square.and.arrow.up")
+                .foregroundStyle(.cyan)
+                .sheetToolbarIconOnMac()
+        }
+        .disabled(isCSVExportBusy || !statsReady || cachedFilteredDives.isEmpty)
+        .accessibilityLabel(Text("Export CSV"))
+    }
+
+    private var filterButton: some View {
+        Button(action: { showFilterSheet = true }) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .foregroundStyle(activeFilterCount > 0 ? .orange : .cyan)
+                    .sheetToolbarIconOnMac()
+                if activeFilterCount > 0 {
+                    Text("\(activeFilterCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.black)
+                        .padding(3)
+                        .background(Color.orange, in: Circle())
+                        .offset(x: 6, y: -6)
+                }
+            }
+        }
+        // The progress overlay does not cover the toolbar: no filter sheet during an
+        // export, which would keep the Files exporter from appearing when it ends.
+        .disabled(isCSVExportBusy)
+        .accessibilityLabel(activeFilterCount == 0
+            ? NSLocalizedString("Filter dives", bundle: Bundle.forAppLanguage(), comment: "Accessibility label for the filter button when no filters are active")
+            : String(format: NSLocalizedString("%d active filters", bundle: Bundle.forAppLanguage(), comment: "Accessibility label for the filter button showing the number of active filters"), activeFilterCount)
+        )
     }
 
     // MARK: - CSV Export

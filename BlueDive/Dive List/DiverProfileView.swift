@@ -272,7 +272,7 @@ struct DiverProfileView: View {
                     closeToolbarButton { dismiss() }
                 }
 
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar.sheetItem(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
             .sheet(item: $documentsSection) { section in
                 DocumentsView(initialSection: section, onClose: { documentsSection = nil })

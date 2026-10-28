@@ -179,6 +179,11 @@ struct DiveTripsView: View {
                         systemImage: "airplane.departure",
                         description: Text("Your dives will automatically organize into trips here.")
                     )
+                    #if os(macOS)
+                    // macOS sizes ContentUnavailableView to its content: fill the sheet so it
+                    // keeps its page size and the AppBackground covers it, as on iOS.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    #endif
                 } else if filteredDives.isEmpty {
                     NoEntriesForDiverView(
                         title: Text(verbatim: String(format: NSLocalizedString("No Trips for %@", bundle: Bundle.forAppLanguage(), value: "No Trips for %@", comment: "Empty-state title when the selected diver has no trips; %@ is the diver's name"), selectedDiver)),
@@ -193,6 +198,11 @@ struct DiveTripsView: View {
                         systemImage: "airplane.departure",
                         description: Text("Your dives will automatically organize into trips here.")
                     )
+                    #if os(macOS)
+                    // macOS sizes ContentUnavailableView to its content: fill the sheet so it
+                    // keeps its page size and the AppBackground covers it, as on iOS.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    #endif
                 } else {
                     ScrollView {
                         VStack(spacing: 16) {
@@ -232,7 +242,7 @@ struct DiveTripsView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar.sheetItem(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             }
             #if os(macOS)
             // Pushed inside this sheet (with Back), not a sheet on the sheet: macOS has no

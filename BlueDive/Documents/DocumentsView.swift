@@ -409,29 +409,31 @@ struct DocumentsView: View {
                         closeToolbarButton { onClose() }
                     }
                     // In a sheet (from Diver Profile): the diver filter only, no app-wide buttons.
-                    DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
                     #if os(macOS)
-                    // One ToolbarItemGroup so macOS shares a single glass capsule, as the iOS
-                    // navigation bar does. In a sheet macOS would draw a .primaryAction item as
-                    // the sheet's accent-filled default button, so it uses .sheetPrimaryAction.
+                    // In a sheet macOS would draw a .primaryAction item as the sheet's
+                    // accent-filled default button, so the items use .sheetPrimaryAction; the
+                    // diver filter leads them, as macOS draws no .navigation item in a sheet.
                     ToolbarItemGroup(placement: .sheetPrimaryAction) {
-                        addDocumentMenu
-                            .toolbarMenuIndicatorHiddenOnMac()
-                        documentsMoreMenu
-                            .toolbarMenuIndicatorHiddenOnMac()
+                        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver, inSheet: true).picker
+                            .sheetToolbarControlOnMac()
+                        addDocumentMenu(inSheet: true)
+                            .sheetToolbarControlOnMac()
+                        documentsMoreMenu(inSheet: true)
+                            .sheetToolbarControlOnMac()
                     }
                     #else
+                    DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
                     ToolbarItem(placement: .primaryAction) {
-                        addDocumentMenu
+                        addDocumentMenu()
                     }
                     ToolbarItem(placement: .primaryAction) {
-                        documentsMoreMenu
+                        documentsMoreMenu()
                     }
                     #endif
                 } else {
                     MainWindowToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver) {
-                        addDocumentMenu
-                        documentsMoreMenu
+                        addDocumentMenu()
+                        documentsMoreMenu()
                     }
                 }
             }
@@ -588,7 +590,8 @@ struct DocumentsView: View {
     // MARK: - Toolbar Controls
     // Shared by the iOS and macOS toolbar layouts in `body`.
 
-    private var addDocumentMenu: some View {
+    /// `inSheet`: shown with a sheet's utility items, which share one label frame on macOS.
+    private func addDocumentMenu(inSheet: Bool = false) -> some View {
         Menu {
             Button { showAddCertification = true } label: {
                 Label("Add Certification", systemImage: "graduationcap")
@@ -599,11 +602,12 @@ struct DocumentsView: View {
         } label: {
             Image(systemName: "plus")
                 .foregroundStyle(.cyan)
+                .sheetToolbarIconOnMac(inSheet)
         }
         .accessibilityLabel(Text("Add Document"))
     }
 
-    private var documentsMoreMenu: some View {
+    private func documentsMoreMenu(inSheet: Bool = false) -> some View {
         Menu {
             Section("Certifications") {
                 Button {
@@ -639,6 +643,7 @@ struct DocumentsView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .foregroundStyle(.cyan)
+                .sheetToolbarIconOnMac(inSheet)
         }
         .accessibilityLabel(Text("More"))
     }

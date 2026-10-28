@@ -641,6 +641,16 @@ struct ContentView: View {
         .onChange(of: store.cachedUniqueDivers) { _, newDivers in
             collapsedDiverSections.formIntersection(newDivers)
         }
+        #if os(macOS)
+        // Clear the profile preview's selection once its dive is no longer listed (diver
+        // filter, search or filter sheet), so the preview never shows a dive the list hides.
+        .onChange(of: store.cachedFilteredSummaries) { _, summaries in
+            if let selectedID = listSelection.diveID,
+               !summaries.contains(where: { $0.id == selectedID }) {
+                listSelection.diveID = nil
+            }
+        }
+        #endif
         .background(filterObservers)
         // Warm-launch: handle file URLs that arrive while the app is already running.
         .onChange(of: importCoordinator.pendingURL) { _, url in

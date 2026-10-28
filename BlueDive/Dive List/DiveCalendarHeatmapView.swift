@@ -172,7 +172,7 @@ struct DiveCalendarHeatmapView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
-                DiverFilterToolbar(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar.sheetItem(uniqueDivers: store.cachedUniqueDivers, selectedDiver: $selectedDiver)
             }
             .task(id: "\(store.dives.count):\(selectedDiver):\(statsVersion):\(store.dives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })") {
                 recomputeAllStats(filteredDives)
