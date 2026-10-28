@@ -9,14 +9,6 @@ import UniformTypeIdentifiers
 
 extension DiveDetailView {
 
-    private var formattedTimestamp: String {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: dive.timestamp)
-    }
-
     private var minAbbreviation: String {
         NSLocalizedString("min", bundle: Bundle.forAppLanguage(), comment: "Abbreviation for minutes on chart time axis")
     }
@@ -91,22 +83,8 @@ extension DiveDetailView {
     }
 
     var depthProfileSection: some View {
+        // The dive's number, site and date are in the header strip under the tab bar.
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Text(verbatim: "#\(dive.diveNumber ?? diveNumber)")
-                    .font(.system(.caption, design: .monospaced))
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.cyan.opacity(0.2))
-                    .foregroundStyle(Color.readableCyan)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-
-                Text(dive.siteName)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-            }
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -131,9 +109,6 @@ extension DiveDetailView {
                         }
                     }
                     locationText
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(formattedTimestamp)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

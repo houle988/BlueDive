@@ -166,6 +166,8 @@ struct DiveDetailView: View {
     private static let swipeRejectionHapticIntensity: CGFloat = 0.35
 
     #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var hapticGenerator: UIImpactFeedbackGenerator = {
         let g = UIImpactFeedbackGenerator(style: .light)
         g.prepare()
@@ -229,6 +231,8 @@ struct DiveDetailView: View {
                 .background(Color.cyan.opacity(0.2))
                 .foregroundStyle(Color.readableCyan)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
+                // Never wraps: a long site name is shortened instead.
+                .fixedSize()
             Text(siteName)
                 .font(.headline)
                 .foregroundStyle(.primary)
@@ -238,20 +242,6 @@ struct DiveDetailView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Dive %@, %@", bundle: Bundle.forAppLanguage(), comment: "VoiceOver label for a dive entry. First argument is the dive number (e.g. 1140), second is the site name."), "\(number)", siteName)))
     }
-
-    #if os(iOS)
-    /// The navigation bar title: number and site, with the dive's date on a second line.
-    private func diveTitleWithDate(number: Int, siteName: String, date: Date) -> some View {
-        VStack(spacing: 0) {
-            diveTitleLabel(number: number, siteName: siteName)
-            Text(date, format: .dateTime.day().month(.abbreviated).year().hour().minute().locale(locale))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .accessibilityElement(children: .combine)
-    }
-    #endif
 
     var locationText: Text {
         if let country = dive.siteCountry, !country.isEmpty {
@@ -284,18 +274,18 @@ struct DiveDetailView: View {
 
                 // Current dive content
                 VStack(spacing: 0) {
-                    #if os(macOS)
-                    // macOS has no dive title in the toolbar (the tab bar holds its centre), so
-                    // the dive is identified above the tab bar on every tab.
-                    diveHeaderStrip
-                    #endif
                     // The photo import's dialogs hang on the tab bar, which is always shown, so
                     // an import finishing while another tab is open still presents them.
                     photoImportDialogs(diveTabBar)
 
+                    // The dive's number, site and date, shown on every tab (not scrolled).
+                    diveHeaderStrip
+
                     ScrollViewReader { proxy in
                         ScrollView {
-                            VStack(spacing: 20) {
+                            // No spacing: the first card sits the strip's 8 pt padding below it
+                            // (each tab spaces its own cards).
+                            VStack(spacing: 0) {
                                 Color.clear.frame(height: 0).id("diveTop")
                                 switch selectedTab {
                                 case .menu:        menuTabContent
@@ -399,7 +389,8 @@ struct DiveDetailView: View {
                     }
                 }
         )
-        .modifier(NavTitleIfNotPreview(title: dive.siteName, isSlidePreview: isSlidePreview))
+        .modifier(NavTitleIfNotPreview(title: dive.siteName, isSlidePreview: isSlidePreview,
+                                       hasPrincipalDate: showsDateInNavigationBar))
         .background(AppBackground().ignoresSafeArea())
         #if os(iOS)
         // Disable the system interactive back-swipe so our own edge swipe can
@@ -452,20 +443,23 @@ struct DiveDetailView: View {
                     editDiveButton
                 }
                 #else
-                ToolbarItem(placement: .principal) {
-                    ZStack {
-                        diveTitleWithDate(number: dive.diveNumber ?? diveNumber,
-                                          siteName: dive.siteName,
-                                          date: dive.timestamp)
-                            .offset(x: dragOffset)
-                        if let pending = pendingDive {
-                            diveTitleWithDate(number: pending.diveNumber ?? pendingDiveNumber(for: pending),
-                                              siteName: pending.siteName,
-                                              date: pending.timestamp)
-                                .offset(x: dragOffset < 0
-                                        ? dragOffset + viewWidth
-                                        : dragOffset - viewWidth)
+                if showsDateInNavigationBar {
+                    // The date follows the page when swiping, like the header strip below it.
+                    ToolbarItem(placement: .principal) {
+                        ZStack {
+                            diveDateText(dive.timestamp, inNavigationBar: true)
+                                .offset(x: dragOffset)
+                            if let pending = pendingDive {
+                                diveDateText(pending.timestamp, inNavigationBar: true)
+                                    .offset(x: dragOffset < 0
+                                            ? dragOffset + viewWidth
+                                            : dragOffset - viewWidth)
+                            }
                         }
+                        // One element read as the current dive's date (not the hidden title,
+                        // nor the incoming dive's date during a swipe).
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text(dive.timestamp, format: diveDateFormat))
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -609,9 +603,8 @@ struct DiveDetailView: View {
     }
 
     #if os(macOS)
-    // macOS-only parts of the dive page: the previous / next dive buttons (macOS replaces the
-    // iOS swipe-between-dives gesture; both share one ToolbarItemGroup) and the header strip
-    // that stands in for the iOS navigation bar title.
+    // Previous / next dive buttons (macOS replaces the iOS swipe-between-dives gesture).
+    // Both share one ToolbarItemGroup, so macOS draws them in one capsule.
     private var previousDiveButton: some View {
         Button {
             if let prev = previousDiveInList { navigateTo(prev, forward: false) }
@@ -635,27 +628,65 @@ struct DiveDetailView: View {
         .help("Next dive")
         .accessibilityLabel(Text("Next dive"))
     }
+    #endif
 
-    /// Dive number, site and date above the tab bar. Part of the content, so it slides with
-    /// the dive during previous/next navigation (the slide preview draws its own).
+    /// Dive number and site under the tab bar, with the date on the right when it is not in
+    /// the navigation bar (see `showsDateInNavigationBar`). Part of the page content, so it
+    /// slides with the dive when swiping or using previous/next (the slide preview draws its own).
     private var diveHeaderStrip: some View {
-        HStack(spacing: 12) {
+        // At least 16 pt between the site name and the date, so a long name keeps its room.
+        HStack(spacing: 8) {
             diveTitleLabel(number: dive.diveNumber ?? diveNumber, siteName: dive.siteName)
-            Spacer(minLength: 8)
-            Text(dive.timestamp, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated).year().hour().minute().locale(locale))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                // A narrow window shortens the site name, never the date.
-                .fixedSize()
+            Spacer(minLength: 0)
+            if !showsDateInNavigationBar {
+                diveDateText(dive.timestamp)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Color.primary.opacity(0.05))
-        // Read as one element, like the iOS title: "Dive 123, Site, date".
+        // Read as one element: "Dive 123, Site" (and the date when the strip shows it).
         .accessibilityElement(children: .combine)
     }
-    #endif
+
+    private var diveDateFormat: Date.FormatStyle {
+        .dateTime.day().month(.abbreviated).year().hour().minute().locale(locale)
+    }
+
+    /// The dive's date, in the header strip or (iPhone) the navigation bar.
+    @ViewBuilder
+    private func diveDateText(_ date: Date, inNavigationBar: Bool = false) -> some View {
+        if inNavigationBar {
+            // Large text on a small iPhone: the numeric date when the long one would reach the
+            // buttons. Both keep their natural width, so the bar can centre them when they fit.
+            ViewThatFits(in: .horizontal) {
+                dateLabel(Text(date, format: diveDateFormat))
+                dateLabel(Text(date, format: Date.FormatStyle(date: .numeric, time: .shortened).locale(locale)))
+            }
+        } else {
+            // A narrow width shortens the site name, never the date.
+            dateLabel(Text(date, format: diveDateFormat))
+        }
+    }
+
+    private func dateLabel(_ text: Text) -> some View {
+        text
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    /// True on iPhone in any orientation (compact width in portrait, compact height in
+    /// landscape) and in a narrow iPad Split View, where the navigation bar's title area is
+    /// free: the date moves there and the strip's whole width goes to the site name. A
+    /// full-screen iPad (its tab bar is in the navigation bar) and the Mac keep it in the strip.
+    private var showsDateInNavigationBar: Bool {
+        #if os(iOS)
+        return horizontalSizeClass == .compact || verticalSizeClass == .compact
+        #else
+        return false
+        #endif
+    }
 
     // Export / Edit toolbar controls, shared by the iOS and macOS toolbar layouts.
 
@@ -888,14 +919,20 @@ struct DiveDetailView: View {
 private struct NavTitleIfNotPreview: ViewModifier {
     let title: String
     let isSlidePreview: Bool
+    /// The navigation bar shows the dive's date in a `.principal` item, which replaces the
+    /// title by itself. Removing the title would also remove that item.
+    let hasPrincipalDate: Bool
 
     func body(content: Content) -> some View {
         if isSlidePreview {
             content
         } else {
+            // The title still names the page (e.g. the back-button menu), but is not drawn:
+            // the dive is identified by the header strip under the tab bar.
             content
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar(removing: hasPrincipalDate ? nil : .title)
         }
     }
 }
