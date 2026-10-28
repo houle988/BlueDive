@@ -23,10 +23,15 @@ struct DataManagementSettingsView: View {
     @State private var backupProgress = BackupProgress()
     @State private var showConvertPhotosAlert = false
     @State private var photoConversionSummary: PhotoImporter.ConversionSummary?
+    /// The size of the app's temporary folder, in bytes; nil while it is measured.
+    @State private var temporaryFilesSize: Int64?
+    /// Numbers the measurements: only the latest one is shown (an earlier, slower one finishing
+    /// after it would show a stale size).
+    @State private var temporaryFilesMeasurement = 0
     #if os(iOS)
-    @State private var showBackupExporter = false
-    @State private var backupDocument: BackupArchiveDocument?
-    @State private var backupFileName: String = ""
+    @State private var showBackupMover = false
+    /// The backup zip offered in the save dialog (`DatabaseBackup.build` names it).
+    @State private var backupArchiveURL: URL?
     #endif
 
     var body: some View {
@@ -105,6 +110,51 @@ struct DataManagementSettingsView: View {
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     Text("Convert photos added with earlier versions of BlueDive: each photo gets its own record with a thumbnail and its capture time, and photos taken during a dive appear on its profile. The images are not changed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button {
+                            deleteTemporaryFiles()
+                        } label: {
+                            HStack {
+                                Label("Delete temporary files", systemImage: "xmark.bin")
+                                Spacer()
+                                // While a data operation runs (also one started before the screen
+                                // was reopened), tmp is changing: the size is measured once it ends.
+                                if isDataOperationRunning || temporaryFilesSize == nil {
+                                    ProgressView().scaleEffect(0.8)
+                                } else if let temporaryFilesSize {
+                                    Text(verbatim: temporaryFilesSizeText(temporaryFilesSize))
+                                        .font(.caption)
+                                        .monospacedDigit()
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            // The padding sits inside the button so the whole card responds, not only the
+                            // drawn label (a borderless Button only responds where something is drawn).
+                            .padding()
+                            .contentShape(Rectangle())
+                        }
+                        .disabled(isDataOperationRunning)
+                        .borderlessButton()
+                    }
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    Text("Removes the copies BlueDive makes to preview, share or save photos and to build backups. Your dives and photos are not affected.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
@@ -270,31 +320,120 @@ struct DataManagementSettingsView: View {
             Text(backupError ?? "")
         }
         #if os(iOS)
-        .fileExporter(
-            isPresented: $showBackupExporter,
-            document: backupDocument,
-            contentType: .zip,
-            defaultFilename: backupFileName
-        ) { _ in
+        // The archive (it holds every photo original and can be several GB) is moved, not
+        // exported: a file exporter first writes a full staging copy of its document in tmp,
+        // which it leaves there when the save is cancelled. Once the dialog is done, the
+        // archive's folder is deleted with whatever is still in it (all of it after a cancel,
+        // nothing but the empty folder after a move).
+        .fileMover(isPresented: $showBackupMover, file: backupArchiveURL) { result in
+            if case .failure = result {
+                backupError = NSLocalizedString("Backup failed: could not save the backup file.", bundle: .forAppLanguage(), value: "Backup failed: could not save the backup file.", comment: "Database backup error: the archive could not be written where the user chose")
+            }
+            removeBackupArchive()
+        } onCancellation: {
             removeBackupArchive()
         }
-        // Cancelling the exporter may not call its completion: the temporary zip (it can be
-        // several GB) is deleted whenever the exporter closes.
-        .onChange(of: showBackupExporter) { _, isShown in
+        // Backstop for a dialog closed without either callback. The dialog closes once the
+        // move is done (the document picker moves the file before reporting it), so this never
+        // deletes a zip being moved; a second removal does nothing (the URL is cleared).
+        .onChange(of: showBackupMover) { _, isShown in
             if !isShown { removeBackupArchive() }
         }
         #endif
         // A backup still being built when the screen closes is not presented: its zip is
         // deleted once it is done (`backupDatabase`).
         .onDisappear { backupTask?.cancel() }
+        .task { await measureTemporaryFiles() }
+        // A backup adds and removes its staging folder there: measure again once it ends.
+        .onChange(of: isDataOperationRunning) { _, isRunning in
+            if !isRunning { Task { await measureTemporaryFiles() } }
+        }
+    }
+
+    // MARK: - Temporary Files
+
+    /// The app's temporary folder: Quick Look, Share and Save As copies of photos, backup
+    /// staging folders (left if the app was stopped during a backup), and files the system
+    /// passes through it. Nothing in it is part of the logbook.
+    private nonisolated static var temporaryFolder: URL { FileManager.default.temporaryDirectory }
+
+    private func measureTemporaryFiles() async {
+        temporaryFilesMeasurement += 1
+        let measurement = temporaryFilesMeasurement
+        temporaryFilesSize = nil
+        let size = await Task.detached(priority: .utility) {
+            Self.sizeOfTemporaryFiles()
+        }.value
+        guard measurement == temporaryFilesMeasurement else { return }
+        temporaryFilesSize = size
+    }
+
+    /// The size shown on the button in kilobytes, megabytes or gigabytes (decimal units, as Files
+    /// and Finder show them), one decimal, with the region's number format. The unit is chosen
+    /// after rounding, so 999.96 MB shows as 1 GB, not 1,000 MB.
+    private func temporaryFilesSizeText(_ bytes: Int64) -> String {
+        // Rounded once here and shown as rounded, so the unit and the number always agree.
+        let megabytes = (Double(bytes) / 100_000).rounded() / 10
+        if megabytes >= 1_000 {
+            let gigabytes = (Double(bytes) / 100_000_000).rounded() / 10
+            return String(format: NSLocalizedString("%@ GB", bundle: .forAppLanguage(), value: "%@ GB", comment: "Size of the app's temporary files in gigabytes (locale-formatted number)"), gigabytes.localizedString(decimals: 1))
+        }
+        if megabytes >= 1 {
+            return String(format: NSLocalizedString("%@ MB", bundle: .forAppLanguage(), value: "%@ MB", comment: "Size of the app's temporary files in megabytes (locale-formatted number)"), megabytes.localizedString(decimals: 1))
+        }
+        let kilobytes = (Double(bytes) / 1_000).rounded()
+        return String(format: NSLocalizedString("%@ KB", bundle: .forAppLanguage(), value: "%@ KB", comment: "Size of the app's temporary files in kilobytes (locale-formatted number)"), kilobytes.localizedString(decimals: 0))
+    }
+
+    /// Deletes everything in the temporary folder. It is a data operation of its own (in
+    /// `DataOperationActivity`, so it keeps excluding a backup when the screen is closed and
+    /// reopened): a backup builds its archive there.
+    private func deleteTemporaryFiles() {
+        guard !isDataOperationRunning else { return }
+        let activity = activity
+        activity.isDeletingTemporaryFiles = true
+        // The Quick Look copies go with the rest; a reopened photo finds its copy missing and
+        // writes a new one (`QuickLookCopies.copy(for:byteCount:)`).
+        Task {
+            await Task.detached(priority: .utility) {
+                Self.removeTemporaryFiles()
+            }.value
+            // Measured again by `onChange(of: isDataOperationRunning)`.
+            activity.isDeletingTemporaryFiles = false
+        }
+    }
+
+    private nonisolated static func sizeOfTemporaryFiles() -> Int64 {
+        let keys: [URLResourceKey] = [.isRegularFileKey, .totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+        guard let enumerator = FileManager.default.enumerator(at: temporaryFolder, includingPropertiesForKeys: keys) else { return 0 }
+        var total: Int64 = 0
+        for case let url as URL in enumerator {
+            guard let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
+            total += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
+        }
+        return total
+    }
+
+    /// Removes each item of the temporary folder (not the folder itself). A file another part
+    /// of the app still uses is removed too (e.g. a Share copy in a photo viewer open in another
+    /// window, which then has to be shared again); nothing in tmp is part of the logbook.
+    private nonisolated static func removeTemporaryFiles() {
+        let fileManager = FileManager.default
+        guard let items = try? fileManager.contentsOfDirectory(at: temporaryFolder, includingPropertiesForKeys: nil) else { return }
+        for item in items {
+            try? fileManager.removeItem(at: item)
+        }
     }
 
     // MARK: - Backup
 
     #if os(iOS)
     private func removeBackupArchive() {
-        if let url = backupDocument?.url { Self.removeBackupArchive(at: url) }
-        backupDocument = nil
+        guard let url = backupArchiveURL else { return }
+        Self.removeBackupArchive(at: url)
+        backupArchiveURL = nil
+        // The archive counted in the size measured when the backup ended.
+        Task { await measureTemporaryFiles() }
     }
     #endif
 
@@ -306,11 +445,13 @@ struct DataManagementSettingsView: View {
     /// The operations running on this screen, kept outside the view (`DataOperationActivity`).
     private var activity: DataOperationActivity { .shared }
 
-    /// A backup, a photo conversion or an erase is running. They exclude each other: an erase or
-    /// a conversion removes files a backup is still copying, and a backup of a log being erased
-    /// or converted would be incomplete.
+    /// A backup, a photo conversion, an erase or a temporary-files deletion is running. They
+    /// exclude each other: an erase or a conversion removes files a backup is still copying, a
+    /// backup of a log being erased or converted would be incomplete, and the deletion empties
+    /// tmp, where a backup builds its archive.
     private var isDataOperationRunning: Bool {
         activity.isBackingUp || activity.photoConversionProgress != nil || activity.isErasing
+            || activity.isDeletingTemporaryFiles
     }
 
     private var isEraseDisabled: Bool { isDataOperationRunning || erasePhase != nil }
@@ -391,11 +532,10 @@ struct DataManagementSettingsView: View {
                 }
                 Self.removeBackupArchive(at: backup.url)
                 #else
-                // The archive is handed over by its file (it holds every photo original and can
-                // be several GB); it is deleted once the exporter has finished.
-                backupDocument = BackupArchiveDocument(url: backup.url)
-                backupFileName = backup.name
-                showBackupExporter = true
+                // The archive is moved where the user saves it; its folder is deleted once the
+                // dialog is done.
+                backupArchiveURL = backup.url
+                showBackupMover = true
                 #endif
             }
         }
@@ -541,6 +681,8 @@ struct DataManagementSettingsView: View {
                     Self.removeExternalFiles(in: externalDataFolder, olderThan: eraseStarted)
                 }.value
             }
+            // The temporary copies photos were opened from in Quick Look.
+            QuickLookCopies.removeAll()
 
             NotificationManager.shared.cancelAllNotifications()
             NotificationManager.shared.clearAllCatchUpMarkers()
@@ -571,28 +713,6 @@ struct DataManagementSettingsView: View {
     }
 }
 
-#if os(iOS)
-/// The backup zip, written by the exporter straight from its temporary file instead of
-/// being read into memory first.
-private struct BackupArchiveDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.zip] }
-
-    let url: URL
-
-    init(url: URL) {
-        self.url = url
-    }
-
-    init(configuration: ReadConfiguration) throws {
-        throw CocoaError(.fileReadUnsupportedScheme)
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        // Without `.immediate`, the contents are read only as they are written out.
-        try FileWrapper(url: url, options: [])
-    }
-}
-#endif
 
 /// The phase of the backup being built, updated from the background copy.
 @MainActor @Observable
@@ -623,4 +743,6 @@ private final class DataOperationActivity {
     /// (dives processed, total) while converting legacy photos.
     var photoConversionProgress: (Int, Int)?
     var isErasing = false
+    /// Delete temporary files is emptying tmp, where a backup builds its archive.
+    var isDeletingTemporaryFiles = false
 }

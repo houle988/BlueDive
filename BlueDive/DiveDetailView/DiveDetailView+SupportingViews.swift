@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 import ImageIO
+import QuickLook
 #if os(macOS)
 import AppKit
 #endif
@@ -987,6 +988,15 @@ struct PhotoPreviewSheet: View {
     @State private var cachedShareItem: PhotoTransferable?
     @State private var sessionTempFileURLs: Set<URL> = []
     @State private var isPreparingShare = false
+    /// The photo shown in Quick Look (full screen and zoomable on iOS, a resizable, zoomable
+    /// window on macOS): a temporary copy of the original, kept until the next launch (see
+    /// `QuickLookCopies`).
+    @State private var quickLookURL: URL?
+    /// A copy is being written: further taps are ignored until it opens.
+    @State private var isOpeningQuickLook = false
+    /// The page identity of the photo shown now. Kept in state so a copy finishing its write
+    /// is checked against the current photos, not those captured when it was tapped.
+    @State private var shownPageID: String?
 
     init(photoIDs: [String], photoData: @escaping (Int) -> Data, initialIndex: Int,
          photoNote: @escaping (Int) -> String? = { _ in nil },
@@ -1085,7 +1095,9 @@ struct PhotoPreviewSheet: View {
                         LazyHStack(spacing: 0) {
                             ForEach(photoIDs.indices, id: \.self) { index in
                                 PhotoPageView(photoID: pageID(index), load: { photoData(index) }, index: index, total: photoIDs.count,
-                                              isCurrent: index == currentIndex)
+                                              isCurrent: index == currentIndex,
+                                              canOpenQuickLook: hasOriginal(index),
+                                              openQuickLook: { openInQuickLook(index) })
                                     .containerRelativeFrame([.horizontal, .vertical])
                                     .id(index)
                             }
@@ -1130,6 +1142,17 @@ struct PhotoPreviewSheet: View {
                         .padding()
                     }
                 }
+            }
+            .quickLookPreview($quickLookURL)
+            .onChange(of: thumbnailTaskID, initial: true) { _, _ in
+                shownPageID = photoIDs.isEmpty ? nil : pageID(min(currentIndex, photoIDs.count - 1))
+                #if os(macOS)
+                // The shown photo changed (paged, removed, replaced) while the macOS Quick Look
+                // panel, which does not block the viewer, was open: close it rather than keep
+                // showing the previous photo. (On iOS Quick Look covers the viewer, which cannot
+                // be paged meanwhile; a sync must not close the photo being looked at.)
+                quickLookURL = nil
+                #endif
             }
             .sheet(item: $taggingPhoto) { photo in
                 PhotoSpeciesTagSheet(photo: photo)
@@ -1235,7 +1258,10 @@ struct PhotoPreviewSheet: View {
             }
             .alert("Remove Photo", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) {
-                    if let deleteTargetID { onDelete?(deleteTargetID) }
+                    if let deleteTargetID {
+                        onDelete?(deleteTargetID)
+                        QuickLookCopies.remove(photoID: deleteTargetID)
+                    }
                     deleteTargetID = nil
                     // onChange(of: photoIDs.count) handles both index clamping and dismissal
                     // when count reaches zero (covers in-app delete AND external iCloud sync).
@@ -1307,11 +1333,18 @@ struct PhotoPreviewSheet: View {
                 }
             }
             .onDisappear {
+                #if os(macOS)
+                // The macOS Quick Look panel does not block the viewer: close it with the viewer,
+                // so it does not stay over the main window. (Not on iOS, where Quick Look's own
+                // full-screen presentation may hide the viewer.)
+                quickLookURL = nil
+                #endif
                 // Remove only the temp files this session predicted (one per photo navigated to).
                 // SentTransferredFile(allowAccessingOriginalFile: false) (the default) causes the
                 // system to copy the file before returning control, so deleting these paths is safe.
                 // A prefix-based sweep is intentionally avoided: it would also remove files written
                 // by other concurrently open photo sheets on iPad/Mac multi-window.
+                // (Quick Look copies are not listed here: they are kept until the next launch.)
                 for url in sessionTempFileURLs {
                     try? FileManager.default.removeItem(at: url)
                 }
@@ -1337,6 +1370,52 @@ struct PhotoPreviewSheet: View {
         return "\(prefix) \(PhotoPreviewSheet.exportDateFormatter.string(from: Date()))"
     }
 
+    /// Opens the photo at an index in Quick Look. Quick Look reads only files, so the original's
+    /// bytes are written unchanged to a folder of their own in the temporary directory, once
+    /// per photo version (see `QuickLookCopies`). Only the original is shown, never
+    /// the thumbnail while it downloads.
+    private func openInQuickLook(_ index: Int) {
+        // Only the current photo (not a neighbouring page peeking in during a swipe).
+        guard !isOpeningQuickLook, quickLookURL == nil, index == currentIndex,
+              photoIDs.indices.contains(index), hasOriginal(index) else { return }
+        let data = photoData(index)
+        guard !data.isEmpty else { return }
+        let pageAtTap = pageID(index)
+        if let url = QuickLookCopies.copy(for: pageAtTap, byteCount: data.count) {
+            quickLookURL = url
+            return
+        }
+        let name = exportFileName
+        isOpeningQuickLook = true
+        Task {
+            let folder = QuickLookCopies.newCopyFolder()
+            let url: URL? = await Task.detached {
+                // The same type detection and extension as Share and Save As.
+                let url = folder.appendingPathComponent("\(name).\(PhotoTransferable(data: data, suggestedName: name).fileExtension)")
+                do {
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try data.write(to: url, options: .atomic)
+                    // Read-only: an app it is handed to (Preview) offers to duplicate it rather
+                    // than save edits into a file BlueDive removes later.
+                    try? FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: url.path)
+                    return url
+                } catch {
+                    try? FileManager.default.removeItem(at: folder)
+                    return nil
+                }
+            }.value
+            isOpeningQuickLook = false
+            guard let url else { return }
+            QuickLookCopies.record(url, for: pageAtTap, byteCount: data.count)
+            // Not opened if the photo was paged away from, removed or replaced during the write
+            // (Quick Look would show another photo than the viewer); the copy is still reused
+            // if that photo is opened again. Read from state: this task's `photoIDs` and page
+            // closures are those of the tap.
+            guard shownPageID == pageAtTap else { return }
+            quickLookURL = url
+        }
+    }
+
     @ViewBuilder private var shareButtonLabel: some View {
         Label("Save As", systemImage: "square.and.arrow.up")
             .foregroundStyle(.primary)
@@ -1359,6 +1438,100 @@ struct PhotoPreviewSheet: View {
     #endif
 }
 
+// MARK: - Quick Look Copies
+
+/// The temporary copies photos are opened from in Quick Look, on both platforms. They are not
+/// removed when Quick Look or the viewer closes: Quick Look can hand the file to another app
+/// ("Open with Preview" on macOS, share extensions), which reads it after Quick Look has
+/// closed. One copy per photo version (the viewer's page identity: photo, original present,
+/// content hash), reused when the photo is opened again. The latest copies are kept, up to
+/// `maxCopies` and `maxBytes` (the newest always); the others are removed as new ones are
+/// written, a removed photo's copies at once, all of them
+/// on Erase all data, and whatever a previous launch left at the next launch.
+@MainActor
+enum QuickLookCopies {
+    /// Name prefix of the launch folders, which identifies them in the launch sweep.
+    nonisolated static let folderPrefix = "BlueDive-QuickLook-"
+
+    /// This launch's folder, holding each copy in a subfolder of its own (under the export
+    /// file name, which several copies can share).
+    nonisolated static let launchFolder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("\(folderPrefix)\(UUID().uuidString)", isDirectory: true)
+
+    /// How many copies a launch keeps (a few MB each, up to tens for large originals).
+    private static let maxCopies = 20
+    /// How much space they may use together (ProRAW or DNG originals can be 50–100 MB each).
+    private static let maxBytes = 500_000_000
+
+    /// This launch's copies by photo version, least recently opened first.
+    private static var copies: [(key: String, url: URL, bytes: Int)] = []
+
+    /// A new subfolder of this launch's folder, for one copy.
+    nonisolated static func newCopyFolder() -> URL {
+        launchFolder.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    }
+
+    /// The copy already written for a photo version, if it is still there with the photo's
+    /// size (else it is forgotten and written again).
+    static func copy(for key: String, byteCount: Int) -> URL? {
+        guard let index = copies.firstIndex(where: { $0.key == key }) else { return nil }
+        let entry = copies.remove(at: index)
+        let size = (try? FileManager.default.attributesOfItem(atPath: entry.url.path))?[.size] as? Int
+        guard size == byteCount else {
+            removeFolder(of: entry.url)
+            return nil
+        }
+        copies.append(entry)
+        return entry.url
+    }
+
+    static func record(_ url: URL, for key: String, byteCount: Int) {
+        if let index = copies.firstIndex(where: { $0.key == key }) {
+            removeFolder(of: copies.remove(at: index).url)
+        }
+        copies.append((key, url, byteCount))
+        // The oldest copies were opened photos ago: whatever they were handed to has long read
+        // them. The newest one is always kept, even alone above the byte budget.
+        while copies.count > maxCopies
+                || (copies.count > 1 && copies.reduce(0, { $0 + $1.bytes }) > maxBytes) {
+            removeFolder(of: copies.removeFirst().url)
+        }
+    }
+
+    /// Removes the copies of a photo the user removed (keys start with its viewer id).
+    static func remove(photoID: String) {
+        let prefix = "\(photoID)|"
+        for entry in copies where entry.key.hasPrefix(prefix) {
+            removeFolder(of: entry.url)
+        }
+        copies.removeAll { $0.key.hasPrefix(prefix) }
+    }
+
+    /// Removes every copy of this launch (Erase all data).
+    static func removeAll() {
+        try? FileManager.default.removeItem(at: launchFolder)
+        copies.removeAll()
+    }
+
+    private static func removeFolder(of url: URL) {
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
+    /// Removes the copies previous launches left: every Quick Look folder but this launch's.
+    /// Run once at launch. Touches only the Quick Look folders, nothing else in `tmp`.
+    nonisolated static func removeLeftovers() {
+        let fileManager = FileManager.default
+        let tmp = fileManager.temporaryDirectory
+        let current = launchFolder.lastPathComponent
+        guard let names = try? fileManager.contentsOfDirectory(atPath: tmp.path) else { return }
+        // Only folders this code names: the prefix followed by a launch UUID.
+        for name in names where name.hasPrefix(folderPrefix) && name != current
+            && UUID(uuidString: String(name.dropFirst(folderPrefix.count))) != nil {
+            try? fileManager.removeItem(at: tmp.appendingPathComponent(name, isDirectory: true))
+        }
+    }
+}
+
 // MARK: - Photo Page View
 
 private struct PhotoPageView: View {
@@ -1371,6 +1544,9 @@ private struct PhotoPageView: View {
     /// (a species page), so Back shows it at once instead of a spinner (it is still read and
     /// decoded again, when the page reappears).
     let isCurrent: Bool
+    /// Whether a tap opens the photo in Quick Look (its original is here).
+    let canOpenQuickLook: Bool
+    let openQuickLook: () -> Void
     @State private var image: PlatformImage?
 
     var body: some View {
@@ -1380,6 +1556,17 @@ private struct PhotoPageView: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                    // Tap or click the photo itself (not the margin around it) to open it in
+                    // Quick Look; a swipe still pages through the photos.
+                    .contentShape(RoundedRectangle(cornerRadius: 16))
+                    .onTapGesture { openQuickLook() }
+                    .allowsHitTesting(canOpenQuickLook)
+                    .accessibilityAddTraits(canOpenQuickLook ? .isButton : [])
+                    .accessibilityHint(canOpenQuickLook ? Text("Opens the photo in Quick Look") : Text(verbatim: ""))
+                    // VoiceOver and Full Keyboard Access activate this, not the tap gesture.
+                    .accessibilityAction {
+                        if canOpenQuickLook { openQuickLook() }
+                    }
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %@ of %@", bundle: .forAppLanguage(), value: "Photo %@ of %@", comment: "Announces the current photo's position while paging through photos (locale-formatted numbers)"), Double(index + 1).localizedString(decimals: 0), Double(total).localizedString(decimals: 0))))
