@@ -41,12 +41,17 @@ struct MarineLifeView: View {
     @State private var searchText: String = ""
     /// Stored category value to show only ("" = all categories).
     @State private var categoryFilter: String = ""
+    /// Shows the species outside `categoryFilter` instead (those with no category included).
+    @State private var categoryNegate = false
     /// Shows only the catalogue species not linked to iNaturalist yet.
     @State private var notLinkedFilter = false
     /// Only species whose scientific name is a former one (`SpeciesAggregate.currentName`).
     @State private var formerNameFilter = false
     /// iNaturalist taxon to show only, as "rank|name" ("" = all), e.g. "family|Nephropidae".
     @State private var taxonFilter: String = ""
+    /// Shows the species outside `taxonFilter` instead, including those with no iNaturalist
+    /// classification and sightings not linked to the catalogue.
+    @State private var taxonNegate = false
     @State private var showAddSpecies = false
     @State private var showFilterSheet = false
     @State private var buildPlan: SpeciesCatalog.BuildPlan?
@@ -74,6 +79,9 @@ struct MarineLifeView: View {
     /// Group names per rank and the categories in use, rebuilt when the catalogue changes
     /// (reading a classification decodes JSON, too costly to repeat on every redraw).
     @State private var cachedTaxonNames: [String: [String]] = [:]
+    /// The same group names per rank, for the species of each category ("" for none), so the
+    /// filter sheet offers only the groups of the species the Category filter keeps.
+    @State private var cachedTaxonNamesByCategory: [String: [String: Set<String>]] = [:]
     /// Common name of each group ("Actinopterygii" → "Ray-finned Fishes"), when known.
     @State private var cachedGroupCommonNames: [String: String] = [:]
     @State private var cachedUsedCategories: [String] = []
@@ -161,20 +169,29 @@ struct MarineLifeView: View {
         return species
     }
 
-    /// Names at `rank` used by the catalogue's iNaturalist classifications.
+    /// Names at `rank` used by the catalogue's iNaturalist classifications, limited to the
+    /// species the Category filter keeps (in the category, or outside it while excluding).
     private func taxonNames(rank: String) -> [String] {
-        cachedTaxonNames[rank] ?? []
+        guard !categoryFilter.isEmpty else { return cachedTaxonNames[rank] ?? [] }
+        var names = Set<String>()
+        for (category, ranks) in cachedTaxonNamesByCategory where (category == categoryFilter) != categoryNegate {
+            names.formUnion(ranks[rank] ?? [])
+        }
+        return names.sorted()
     }
 
     /// Rebuilds the taxonomy and category caches from the catalogue.
     private func rebuildCatalogueCaches() {
         var names: [String: Set<String>] = [:]
+        var namesByCategory: [String: [String: Set<String>]] = [:]
         var commonNames: [String: String] = [:]
         var byID: [PersistentIdentifier: Species] = [:]
         for species in catalogue {
             byID[species.persistentModelID] = species
+            let category = species.category ?? ""
             for rank in species.taxonomy where Self.filterRanks.contains(rank.rank) {
                 names[rank.rank, default: []].insert(rank.name)
+                namesByCategory[category, default: [:]][rank.rank, default: []].insert(rank.name)
                 if commonNames[rank.name] == nil, let common = rank.commonName, !common.isEmpty {
                     commonNames[rank.name] = common
                 }
@@ -182,6 +199,7 @@ struct MarineLifeView: View {
         }
         cachedSpeciesByID = byID
         cachedTaxonNames = names.mapValues { $0.sorted() }
+        cachedTaxonNamesByCategory = namesByCategory
         cachedGroupCommonNames = commonNames
         let used = Set(catalogue.compactMap(\.category).filter { !$0.isEmpty })
         cachedUsedCategories = SpeciesCategory.allCases.map(\.storedValue).filter { used.contains($0) }
@@ -194,6 +212,13 @@ struct MarineLifeView: View {
         cachedSpeciesByID = cachedSpeciesByID.filter { live.contains($0.key) }
         cachedTaxonSpeciesIDs.formIntersection(live)
         cachedSpecies.removeAll { aggregate in aggregate.speciesID.map { !live.contains($0) } ?? false }
+    }
+
+    /// Clears the group filter when no species the Category filter keeps is in that group,
+    /// so the two filters never contradict each other (an always-empty list).
+    private func clearGroupOutsideCategory() {
+        guard let (rank, name) = taxonFilterParts, !taxonNames(rank: rank).contains(name) else { return }
+        withAnimation { taxonFilter = "" }
     }
 
     private func rebuildTaxonSelection() {
@@ -215,11 +240,15 @@ struct MarineLifeView: View {
             SpeciesCategory.displayName($0)?.localizedCaseInsensitiveContains(trimmed) ?? false
         }
         return cachedSpecies.filter { aggregate in
-            if !categoryFilter.isEmpty, aggregate.category != categoryFilter { return false }
+            if !categoryFilter.isEmpty {
+                let inCategory = aggregate.category == categoryFilter
+                if inCategory == categoryNegate { return false }
+            }
             if notLinkedFilterActive, aggregate.speciesID == nil || aggregate.isLinked { return false }
             if formerNameFilter, aggregate.currentName == nil { return false }
             if let taxonIDs {
-                guard let id = aggregate.speciesID, taxonIDs.contains(id) else { return false }
+                let inTaxon = aggregate.speciesID.map { taxonIDs.contains($0) } ?? false
+                if inTaxon == taxonNegate { return false }
             }
             guard !trimmed.isEmpty else { return true }
             return aggregate.name.localizedCaseInsensitiveContains(trimmed)
@@ -482,7 +511,15 @@ struct MarineLifeView: View {
             .mainListSearchable(text: $searchText, prompt: Text("Search marine life…"))
             .toolbar { toolbarContent }
             .background(AppBackground().ignoresSafeArea())
-            .onChange(of: taxonFilter) { _, _ in rebuildTaxonSelection() }
+            .onChange(of: taxonFilter) { _, newValue in
+                if newValue.isEmpty { taxonNegate = false }
+                rebuildTaxonSelection()
+            }
+            .onChange(of: categoryFilter) { _, newValue in
+                if newValue.isEmpty { categoryNegate = false }
+                clearGroupOutsideCategory()
+            }
+            .onChange(of: categoryNegate) { _, _ in clearGroupOutsideCategory() }
             // Species deleted or merged (here or on another device): dropped from the caches
             // at once, before the statistics are recomputed.
             .onChange(of: catalogue.count) { _, _ in pruneDeletedSpecies() }
@@ -529,7 +566,9 @@ struct MarineLifeView: View {
                     showsFormerName: formerNameFilter || cachedSpecies.contains { $0.currentName != nil },
                     activeFilterCount: activeFilterCount,
                     categoryFilter: $categoryFilter,
+                    categoryNegate: $categoryNegate,
                     taxonFilter: $taxonFilter,
+                    taxonNegate: $taxonNegate,
                     notLinkedFilter: $notLinkedFilter,
                     formerNameFilter: $formerNameFilter,
                     reset: resetFilters
@@ -693,7 +732,9 @@ struct MarineLifeView: View {
 
     private func resetFilters() {
         categoryFilter = ""
+        categoryNegate = false
         taxonFilter = ""
+        taxonNegate = false
         notLinkedFilter = false
         formerNameFilter = false
     }
@@ -837,22 +878,33 @@ struct MarineLifeView: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.1)))
     }
 
+    /// The banner's text: "Family: Nephropidae", or "Not Family: Nephropidae" while excluding.
+    private func taxonBannerLabel(rank: String, name: String) -> String {
+        let group = String(format: NSLocalizedString("%@: %@", bundle: .forAppLanguage(), value: "%@: %@", comment: "A taxonomic rank and its name, e.g. Family: Nephropidae"), INaturalistUpdater.localizedRank(rank), Species.groupLabel(name: name, commonName: cachedGroupCommonNames[name]))
+        guard taxonNegate else { return group }
+        return String(format: NSLocalizedString("Not %@", bundle: Bundle.forAppLanguage(), value: "Not %@", comment: "Filter value shown when the filter excludes the selected value, e.g. “Not Egypt”"), group)
+    }
+
     /// The active taxonomy filter, with the action that filters the dive log to it.
     private func taxonFilterBanner(rank: String, name: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "leaf.fill")
                 .foregroundStyle(.green)
                 .accessibilityHidden(true)
-            Text(verbatim: String(format: NSLocalizedString("%@: %@", bundle: .forAppLanguage(), value: "%@: %@", comment: "A taxonomic rank and its name, e.g. Family: Nephropidae"), INaturalistUpdater.localizedRank(rank), Species.groupLabel(name: name, commonName: cachedGroupCommonNames[name])))
+            Text(verbatim: taxonBannerLabel(rank: rank, name: name))
                 .font(.subheadline.weight(.semibold))
             Spacer()
-            Button("View Dives") {
-                viewDivesInTaxon()
+            // Not while excluding: the dive list would be filtered to the group's species,
+            // which has no meaning for the species outside it.
+            if !taxonNegate {
+                Button("View Dives") {
+                    viewDivesInTaxon()
+                }
+                .font(.caption.weight(.semibold))
+                // Explicit on iOS too: the banner sits in a List row, where default-style buttons
+                // make the whole row one tap target that fires them.
+                .buttonStyle(.borderless)
             }
-            .font(.caption.weight(.semibold))
-            // Explicit on iOS too: the banner sits in a List row, where default-style buttons
-            // make the whole row one tap target that fires them.
-            .buttonStyle(.borderless)
             Button {
                 taxonFilter = ""
             } label: {
@@ -1241,8 +1293,8 @@ struct UnlinkedSightingsView: View {
 
 // MARK: - Marine Life Filter Sheet
 
-/// The Marine Life tab's filters, laid out like the Dives tab's filter sheet (cards of
-/// chips, a reset button at the top).
+/// The Marine Life tab's filters, laid out like the Dives tab's filter sheet (a reset button
+/// at the top, switch cards, then one card of single-choice rows).
 struct MarineLifeFilterSheet: View {
     /// Categories used in the catalogue.
     let categories: [String]
@@ -1256,7 +1308,9 @@ struct MarineLifeFilterSheet: View {
     let activeFilterCount: Int
 
     @Binding var categoryFilter: String
+    @Binding var categoryNegate: Bool
     @Binding var taxonFilter: String
+    @Binding var taxonNegate: Bool
     @Binding var notLinkedFilter: Bool
     @Binding var formerNameFilter: Bool
     let reset: () -> Void
@@ -1293,11 +1347,8 @@ struct MarineLifeFilterSheet: View {
                     if showsFormerName {
                         formerNameSection
                     }
-                    if !categoryChoices.isEmpty {
-                        categorySection
-                    }
-                    if !taxonChoices.isEmpty {
-                        groupSection
+                    if !categoryChoices.isEmpty || !taxonChoices.isEmpty {
+                        choiceFiltersCard
                     }
                     // Unlike the Dives sheet, no card is always shown: explain how to get some.
                     if !showsNotLinked && !showsFormerName && categoryChoices.isEmpty && taxonChoices.isEmpty {
@@ -1361,70 +1412,78 @@ struct MarineLifeFilterSheet: View {
         .filterCardStyle()
     }
 
-    private var categorySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Category", icon: "square.grid.2x2")
-
-            chipRow {
-                ModernFilterChip(
-                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                    isSelected: categoryFilter.isEmpty,
-                    color: .orange
+    /// Category, then one row per rank (Class, Order, Family, Genus) in one card, as the
+    /// Dives sheet's single-choice filters, each with Include/Exclude once set. Only one group
+    /// can be set, so choosing one in a rank replaces a group chosen in another, whose row
+    /// returns to "All"; its Include/Exclude mode moves with it.
+    private var choiceFiltersCard: some View {
+        VStack(spacing: 0) {
+            if !categoryChoices.isEmpty {
+                FilterChoiceRow(
+                    Text("Category"),
+                    icon: "square.grid.2x2",
+                    value: categoryFilter.isEmpty ? nil : (SpeciesCategory.displayName(categoryFilter) ?? categoryFilter),
+                    color: .indigo,
+                    selection: $categoryFilter.animation(),
+                    negate: $categoryNegate,
+                    hasValue: !categoryFilter.isEmpty
                 ) {
-                    withAnimation { categoryFilter = "" }
+                    Text(NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items"))
+                        .tag("")
+                    ForEach(categoryChoices, id: \.self) { category in
+                        Text(verbatim: SpeciesCategory.displayName(category) ?? category).tag(category)
+                    }
                 }
+            }
 
-                ForEach(categoryChoices, id: \.self) { category in
-                    ModernFilterChip(
-                        label: SpeciesCategory.displayName(category) ?? category,
-                        isSelected: categoryFilter == category,
-                        color: .orange
-                    ) {
-                        withAnimation { categoryFilter = category }
+            ForEach(Array(taxonChoices.enumerated()), id: \.element.rank) { index, choice in
+                if index > 0 || !categoryChoices.isEmpty {
+                    Divider()
+                }
+                FilterChoiceRow(
+                    Text(verbatim: INaturalistUpdater.localizedRank(choice.rank)),
+                    icon: "leaf",
+                    value: selectedGroup(in: choice.rank).map { Species.groupLabel(name: $0, commonName: groupCommonNames[$0]) },
+                    color: .green,
+                    selection: groupSelection(for: choice.rank),
+                    negate: $taxonNegate,
+                    hasValue: selectedGroup(in: choice.rank) != nil
+                ) {
+                    Text(NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items"))
+                        .tag("")
+                    ForEach(choice.names, id: \.self) { name in
+                        Text(verbatim: Species.groupLabel(name: name, commonName: groupCommonNames[name])).tag(name)
                     }
                 }
             }
         }
-        .filterCardStyle()
+        .padding(.horizontal)
+        .padding(.vertical, 4)
+        .filterCardBackground()
     }
 
-    private var groupSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Group", icon: "leaf")
+    /// The group chosen in `rank` (`taxonFilter` is "rank|name"), or nil.
+    private func selectedGroup(in rank: String) -> String? {
+        let prefix = "\(rank)|"
+        guard taxonFilter.hasPrefix(prefix) else { return nil }
+        return String(taxonFilter.dropFirst(prefix.count))
+    }
 
-            chipRow {
-                ModernFilterChip(
-                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                    isSelected: taxonFilter.isEmpty,
-                    color: .green
-                ) {
-                    withAnimation { taxonFilter = "" }
-                }
-            }
-
-            ForEach(taxonChoices, id: \.rank) { rank, names in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(verbatim: INaturalistUpdater.localizedRank(rank))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-
-                    chipRow {
-                        ForEach(names, id: \.self) { name in
-                            let tag = "\(rank)|\(name)"
-                            ModernFilterChip(
-                                label: Species.groupLabel(name: name, commonName: groupCommonNames[name]),
-                                isSelected: taxonFilter == tag,
-                                color: .green
-                            ) {
-                                withAnimation { taxonFilter = tag }
-                            }
-                        }
+    /// Selection for one rank's row: a name sets the group (replacing any other rank's);
+    /// "All" ("") clears it only when this rank holds the group.
+    private func groupSelection(for rank: String) -> Binding<String> {
+        Binding(
+            get: { selectedGroup(in: rank) ?? "" },
+            set: { name in
+                withAnimation {
+                    if !name.isEmpty {
+                        taxonFilter = "\(rank)|\(name)"
+                    } else if selectedGroup(in: rank) != nil {
+                        taxonFilter = ""
                     }
                 }
             }
-        }
-        .filterCardStyle()
+        )
     }
 
     private var resetSection: some View {
@@ -1459,26 +1518,6 @@ struct MarineLifeFilterSheet: View {
         activeFilterCount == 1
             ? NSLocalizedString("Reset 1 filter", bundle: Bundle.forAppLanguage(), comment: "Reset button label when exactly one filter is active.")
             : String(format: NSLocalizedString("Reset %lld filters", bundle: Bundle.forAppLanguage(), comment: "Reset button label showing the number of active filters (plural)."), activeFilterCount)
-    }
-
-    /// A row of filter chips, as in the Dives filter sheet. iOS: one line that scrolls
-    /// sideways, with an edge fade. macOS: the chips wrap onto as many lines as needed.
-    @ViewBuilder
-    private func chipRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        #if os(macOS)
-        WrappingChipLayout(spacing: 12) {
-            content()
-        }
-        .padding(.horizontal, 4)
-        #else
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                content()
-            }
-            .padding(.horizontal, 4)
-        }
-        .chipRowFade()
-        #endif
     }
 }
 

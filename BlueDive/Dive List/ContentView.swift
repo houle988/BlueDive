@@ -388,6 +388,7 @@ struct ContentView: View {
                     filterDiveType: $store.filterDiveType,
                     filterDiveTypeNegate: $store.filterDiveTypeNegate,
                     filterTag: $store.filterTag,
+                    filterTagNegate: $store.filterTagNegate,
                     filterMarineLife: $store.filterMarineLife,
                     filterMarineLifeMode: $store.filterMarineLifeMode,
                     sortOrder: $store.sortOrder
@@ -696,6 +697,7 @@ struct ContentView: View {
             .onChange(of: store.filterDiveType)       { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterDiveTypeNegate) { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterTag)            { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterTagNegate)      { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterMarineLife)     { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterMarineLifeMode) { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.sortOrder)            { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }

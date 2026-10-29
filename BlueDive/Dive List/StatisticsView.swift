@@ -54,6 +54,7 @@ struct StatisticsView: View {
     @State private var filterDiveType: String? = nil
     @State private var filterDiveTypeNegate: Bool = false
     @State private var filterTag: String? = nil
+    @State private var filterTagNegate: Bool = false
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @State private var filterSortOrder: DiveSortOrder = .dateDesc
@@ -137,7 +138,7 @@ struct StatisticsView: View {
             minRating: filterMinRating,
             country: filterCountry, countryNegate: filterCountryNegate,
             diveType: filterDiveType, diveTypeNegate: filterDiveTypeNegate,
-            tag: filterTag,
+            tag: filterTag, tagNegate: filterTagNegate,
             marineLife: filterMarineLife, marineLifeMode: filterMarineLifeMode
         )
     }
@@ -193,7 +194,7 @@ struct StatisticsView: View {
     }
 
     private var filterTaskId: String {
-        "\(store.dives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(statsVersion):\(store.liveDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
+        "\(store.dives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterTagNegate):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(statsVersion):\(store.liveDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
     }
 
     private func computeStats(_ dives: [Dive], locale: Locale) async {
@@ -739,6 +740,7 @@ struct StatisticsView: View {
                     filterDiveType: $filterDiveType,
                     filterDiveTypeNegate: $filterDiveTypeNegate,
                     filterTag: $filterTag,
+                    filterTagNegate: $filterTagNegate,
                     filterMarineLife: $filterMarineLife,
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: $filterSortOrder

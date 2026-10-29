@@ -87,7 +87,7 @@ enum DiverFilter {
         minRating: Int,
         country: String?, countryNegate: Bool,
         diveType: String?, diveTypeNegate: Bool,
-        tag: String?,
+        tag: String?, tagNegate: Bool,
         marineLife: [String], marineLifeMode: FilterMarineLifeMode
     ) -> [Dive] {
         dives.filter { dive in
@@ -131,7 +131,8 @@ enum DiverFilter {
                     if !trimmed.isEmpty { return false }
                 } else {
                     let diveTags = dive.tags?.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if !diveTags.contains(tag) { return false }
+                    if tagNegate { if diveTags.contains(tag) { return false } }
+                    else { if !diveTags.contains(tag) { return false } }
                 }
             }
             if !diveMatchesMarineLifeFilter(dive, species: marineLife, mode: marineLifeMode) { return false }

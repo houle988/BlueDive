@@ -45,6 +45,7 @@ struct DiveFilterSheet: View {
     @Binding var filterDiveType: String?
     @Binding var filterDiveTypeNegate: Bool
     @Binding var filterTag: String?
+    @Binding var filterTagNegate: Bool
     @Binding var filterMarineLife: [String]
     @Binding var filterMarineLifeMode: FilterMarineLifeMode
     @Binding var sortOrder: DiveSortOrder
@@ -106,30 +107,168 @@ struct DiveFilterSheet: View {
     
     // MARK: - Chip Rows
 
-    /// A row of filter chips. iOS: one line that scrolls sideways, with an edge fade
-    /// hinting at more chips (`fade: false` drops the fade). macOS: the chips wrap onto
-    /// as many lines as needed — scrolling a row sideways needs a trackpad swipe or
-    /// Shift-scroll with a mouse, and the sheet has room to show every chip.
+    /// A row of chips (the marine life selection and suggestions). iOS: one line that
+    /// scrolls sideways. macOS: the chips wrap onto as many lines as needed — scrolling a
+    /// row sideways needs a trackpad swipe or Shift-scroll with a mouse.
     @ViewBuilder
-    private func chipRow<Content: View>(spacing: CGFloat, fade: Bool = true, @ViewBuilder content: () -> Content) -> some View {
+    private func chipRow<Content: View>(spacing: CGFloat, @ViewBuilder content: () -> Content) -> some View {
         #if os(macOS)
         WrappingChipLayout(spacing: spacing) {
             content()
         }
         .padding(.horizontal, 4)
         #else
-        let row = ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: spacing) {
                 content()
             }
             .padding(.horizontal, 4)
         }
-        if fade {
-            row.chipRowFade()
-        } else {
-            row
-        }
         #endif
+    }
+
+    // MARK: - Choice Filters
+
+    /// Year, Country, Dive type, Tags and Gas type: single-choice filters shown as the rows
+    /// of one card, like a Settings list — icon and name leading, the current value trailing
+    /// as a menu, with its Include/Exclude control underneath once a value is set. Each row
+    /// stays short however many values the logbook holds, and every current choice is
+    /// visible at a glance.
+    private var choiceFiltersCard: some View {
+        VStack(spacing: 0) {
+            FilterChoiceRow(
+                Text("Year"),
+                icon: "calendar",
+                value: filterYear.map { "\($0)" },
+                color: .cyan,
+                selection: Binding(
+                    get: { filterYear },
+                    set: { newValue in
+                        withAnimation {
+                            filterYear = newValue
+                            if newValue == nil { filterYearNegate = false }
+                        }
+                    }
+                ),
+                negate: $filterYearNegate,
+                hasValue: filterYear != nil
+            ) {
+                Text(NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items"))
+                    .tag(Int?.none)
+                ForEach(availableYears, id: \.self) { year in
+                    Text(verbatim: "\(year)").tag(Int?.some(year))
+                }
+            }
+
+            if !availableCountries.isEmpty {
+                Divider()
+                FilterChoiceRow(
+                    Text("Country"),
+                    icon: "globe",
+                    value: choiceLabel(filterCountry, none: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no country set")),
+                    color: .blue,
+                    selection: choiceSelection($filterCountry, negate: $filterCountryNegate),
+                    negate: $filterCountryNegate,
+                    hasValue: filterCountry?.isEmpty == false
+                ) {
+                    Text(NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items"))
+                        .tag(String?.none)
+                    Text(NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no country set"))
+                        .tag(String?.some(""))
+                    ForEach(availableCountries, id: \.self) { country in
+                        Text(verbatim: country).tag(String?.some(country))
+                    }
+                }
+            }
+
+            if !availableDiveTypes.isEmpty {
+                Divider()
+                FilterChoiceRow(
+                    Text("Dive type"),
+                    icon: "figure.open.water.swim",
+                    value: choiceLabel(filterDiveType, none: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no dive type set")),
+                    color: .purple,
+                    selection: choiceSelection($filterDiveType, negate: $filterDiveTypeNegate),
+                    negate: $filterDiveTypeNegate,
+                    hasValue: filterDiveType?.isEmpty == false
+                ) {
+                    Text(NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items"))
+                        .tag(String?.none)
+                    Text(NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no dive type set"))
+                        .tag(String?.some(""))
+                    ForEach(availableDiveTypes, id: \.self) { diveType in
+                        Text(verbatim: diveType).tag(String?.some(diveType))
+                    }
+                }
+            }
+
+            if !availableTags.isEmpty {
+                Divider()
+                FilterChoiceRow(
+                    Text("Tags"),
+                    icon: "tag.fill",
+                    value: choiceLabel(filterTag, none: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no tag set")),
+                    color: .pink,
+                    selection: choiceSelection($filterTag, negate: $filterTagNegate),
+                    negate: $filterTagNegate,
+                    hasValue: filterTag?.isEmpty == false
+                ) {
+                    Text(NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items"))
+                        .tag(String?.none)
+                    Text(NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no tag set"))
+                        .tag(String?.some(""))
+                    ForEach(availableTags, id: \.self) { tag in
+                        Text(verbatim: tag).tag(String?.some(tag))
+                    }
+                }
+            }
+
+            if !availableGasTypes.isEmpty {
+                Divider()
+                FilterChoiceRow(
+                    Text("Gas type"),
+                    icon: "bubbles.and.sparkles",
+                    value: choiceLabel(filterGasType.map { $0.isEmpty ? $0 : DiveSummary.localizedGasName($0) }, none: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no gas type set")),
+                    color: .green,
+                    selection: choiceSelection($filterGasType, negate: $filterGasTypeNegate),
+                    negate: $filterGasTypeNegate,
+                    hasValue: filterGasType?.isEmpty == false
+                ) {
+                    Text(NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items"))
+                        .tag(String?.none)
+                    Text(NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no gas type set"))
+                        .tag(String?.some(""))
+                    ForEach(availableGasTypes, id: \.self) { gas in
+                        Text(verbatim: DiveSummary.localizedGasName(gas)).tag(String?.some(gas))
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 4)
+        .filterCardBackground()
+    }
+
+    /// Label of a String filter's value: nil for "All", `none` for "None" (""), else the value.
+    private func choiceLabel(_ value: String?, none: String) -> String? {
+        guard let value else { return nil }
+        return value.isEmpty ? none : value
+    }
+
+    /// Selection for a single-choice filter with an Include/Exclude mode: choosing "All"
+    /// (nil) or "None" ("") also returns the mode to Include, as the chips did.
+    private func choiceSelection(_ value: Binding<String?>, negate: Binding<Bool>) -> Binding<String?> {
+        Binding(
+            get: { value.wrappedValue },
+            set: { newValue in
+                withAnimation {
+                    value.wrappedValue = newValue
+                    if newValue == nil || newValue == "" {
+                        negate.wrappedValue = false
+                    }
+                }
+            }
+        )
     }
 
     // MARK: - Sections
@@ -159,23 +298,7 @@ struct DiveFilterSheet: View {
 
     @ViewBuilder
     private var filterSections: some View {
-        yearFilterSection
-
-        if !availableCountries.isEmpty {
-            countryFilterSection
-        }
-
-        if !availableDiveTypes.isEmpty {
-            diveTypeFilterSection
-        }
-
-        if !availableTags.isEmpty {
-            tagsFilterSection
-        }
-
-        if !availableGasTypes.isEmpty {
-            gasTypeFilterSection
-        }
+        choiceFiltersCard
 
         if !availableMarineLife.isEmpty {
             marineLifeFilterSection
@@ -195,204 +318,6 @@ struct DiveFilterSheet: View {
         depthFilterSection
         ratingFilterSection
         #endif
-    }
-    
-    private var yearFilterSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                Image(systemName: "calendar")
-                    .font(.title3)
-                    .foregroundStyle(.cyan)
-                Text("Year")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                Spacer()
-                if filterYear != nil {
-                    Picker("", selection: $filterYearNegate) {
-                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
-                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 160)
-                }
-            }
-            .padding(.horizontal, 4)
-
-            chipRow(spacing: 12) {
-                ModernFilterChip(
-                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                    isSelected: filterYear == nil,
-                    color: .cyan
-                ) {
-                    withAnimation {
-                        filterYear = nil
-                        filterYearNegate = false
-                    }
-                }
-
-                ForEach(availableYears, id: \.self) { year in
-                    ModernFilterChip(
-                        label: "\(year)",
-                        isSelected: filterYear == year,
-                        color: filterYearNegate ? .orange : .cyan
-                    ) {
-                        withAnimation { filterYear = year }
-                    }
-                }
-            }
-        }
-        .filterCardStyle()
-    }
-    
-    private var countryFilterSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                Image(systemName: "globe")
-                    .font(.title3)
-                    .foregroundStyle(.cyan)
-                Text("Country")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                Spacer()
-                if let c = filterCountry, !c.isEmpty {
-                    Picker("", selection: $filterCountryNegate) {
-                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
-                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 160)
-                }
-            }
-            .padding(.horizontal, 4)
-
-            chipRow(spacing: 12) {
-                ModernFilterChip(
-                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                    isSelected: filterCountry == nil,
-                    color: .blue
-                ) {
-                    withAnimation {
-                        filterCountry = nil
-                        filterCountryNegate = false
-                    }
-                }
-
-                ModernFilterChip(
-                    label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no country set"),
-                    isSelected: filterCountry == "",
-                    color: .blue
-                ) {
-                    withAnimation {
-                        filterCountry = ""
-                        filterCountryNegate = false
-                    }
-                }
-
-                ForEach(availableCountries, id: \.self) { country in
-                    ModernFilterChip(
-                        label: country,
-                        isSelected: filterCountry == country,
-                        color: filterCountryNegate ? .orange : .blue
-                    ) {
-                        withAnimation { filterCountry = country }
-                    }
-                }
-            }
-        }
-        .filterCardStyle()
-    }
-    
-    private var diveTypeFilterSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                Image(systemName: "figure.open.water.swim")
-                    .font(.title3)
-                    .foregroundStyle(.cyan)
-                Text("Dive type")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                Spacer()
-                if let dt = filterDiveType, !dt.isEmpty {
-                    Picker("", selection: $filterDiveTypeNegate) {
-                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
-                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 160)
-                }
-            }
-            .padding(.horizontal, 4)
-
-            chipRow(spacing: 12) {
-                ModernFilterChip(
-                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                    isSelected: filterDiveType == nil,
-                    color: .purple
-                ) {
-                    withAnimation {
-                        filterDiveType = nil
-                        filterDiveTypeNegate = false
-                    }
-                }
-
-                ModernFilterChip(
-                    label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no dive type set"),
-                    isSelected: filterDiveType == "",
-                    color: .purple
-                ) {
-                    withAnimation {
-                        filterDiveType = ""
-                        filterDiveTypeNegate = false
-                    }
-                }
-
-                ForEach(availableDiveTypes, id: \.self) { diveType in
-                    ModernFilterChip(
-                        label: diveType,
-                        isSelected: filterDiveType == diveType,
-                        color: filterDiveTypeNegate ? .orange : .purple
-                    ) {
-                        withAnimation { filterDiveType = diveType }
-                    }
-                }
-            }
-        }
-        .filterCardStyle()
-    }
-    
-    private var tagsFilterSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            FilterSectionHeader(title: "Tags", icon: "tag.fill")
-            
-            chipRow(spacing: 12) {
-                ModernFilterChip(
-                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                    isSelected: filterTag == nil,
-                    color: .orange
-                ) {
-                    withAnimation { filterTag = nil }
-                }
-
-                ModernFilterChip(
-                    label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no tag set"),
-                    isSelected: filterTag == "",
-                    color: .orange
-                ) {
-                    withAnimation { filterTag = "" }
-                }
-                
-                ForEach(availableTags, id: \.self) { tag in
-                    ModernFilterChip(
-                        label: tag,
-                        isSelected: filterTag == tag,
-                        color: .orange
-                    ) {
-                        withAnimation { filterTag = tag }
-                    }
-                }
-            }
-        }
-        .filterCardStyle()
     }
     
     private var marineLifeFilterSection: some View {
@@ -418,7 +343,7 @@ struct DiveFilterSheet: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 if !filterMarineLife.isEmpty {
-                    chipRow(spacing: 8, fade: false) {
+                    chipRow(spacing: 8) {
                         ForEach(filterMarineLife, id: \.self) { species in
                             HStack(spacing: 4) {
                                 Text(species)
@@ -473,7 +398,7 @@ struct DiveFilterSheet: View {
                 .cornerRadius(12)
 
                 if !marineLifeSuggestions.isEmpty {
-                    chipRow(spacing: 8, fade: false) {
+                    chipRow(spacing: 8) {
                         ForEach(marineLifeSuggestions.prefix(8), id: \.self) { suggestion in
                             Button {
                                 withAnimation {
@@ -519,64 +444,6 @@ struct DiveFilterSheet: View {
         marineLifeInput = ""
     }
 
-    private var gasTypeFilterSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                Image(systemName: "bubbles.and.sparkles")
-                    .font(.title3)
-                    .foregroundStyle(.cyan)
-                Text("Gas type")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                Spacer()
-                if let g = filterGasType, !g.isEmpty {
-                    Picker("", selection: $filterGasTypeNegate) {
-                        Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
-                        Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 160)
-                }
-            }
-            .padding(.horizontal, 4)
-
-            chipRow(spacing: 12) {
-                ModernFilterChip(
-                    label: NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter chip label for selecting all items"),
-                    isSelected: filterGasType == nil,
-                    color: .green
-                ) {
-                    withAnimation {
-                        filterGasType = nil
-                        filterGasTypeNegate = false
-                    }
-                }
-
-                ModernFilterChip(
-                    label: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no gas type set"),
-                    isSelected: filterGasType == "",
-                    color: .green
-                ) {
-                    withAnimation {
-                        filterGasType = ""
-                        filterGasTypeNegate = false
-                    }
-                }
-
-                ForEach(availableGasTypes, id: \.self) { gas in
-                    ModernFilterChip(
-                        label: DiveSummary.localizedGasName(gas),
-                        isSelected: filterGasType == gas,
-                        color: filterGasTypeNegate ? .orange : .green
-                    ) {
-                        withAnimation { filterGasType = gas }
-                    }
-                }
-            }
-        }
-        .filterCardStyle()
-    }
-    
     private var isDepthRangeInverted: Bool {
         filterMinDepth > 0 && filterMaxDepth > 0 && filterMinDepth > filterMaxDepth
     }
@@ -846,6 +713,7 @@ struct DiveFilterSheet: View {
                         filterDiveType       = nil
                         filterDiveTypeNegate = false
                         filterTag            = nil
+                        filterTagNegate      = false
                         filterMarineLife     = []
                         filterMarineLifeMode = .any
                         marineLifeInput      = ""
@@ -994,6 +862,104 @@ struct SortFieldRow: View {
     }
 }
 
+// MARK: - Filter Choice Row
+
+/// A single-choice filter row, shared by the Dives and Marine Life filter sheets: icon and
+/// name leading, the current value trailing as a menu of the options. `value` is the selected
+/// value's label (nil while "All" is selected). A filter with an Include/Exclude mode passes
+/// `negate`, and `hasValue` once a value other than "All" or "None" is chosen, which shows
+/// the Include/Exclude control under the row. The value shows grey while "All" is selected,
+/// in the row's colour once set, and as "Not …" in orange when excluded.
+struct FilterChoiceRow<Value: Hashable, Options: View>: View {
+    private let title: Text
+    private let icon: String
+    private let value: String?
+    private let color: Color
+    private let selection: Binding<Value>
+    private let negate: Binding<Bool>?
+    private let hasValue: Bool
+    private let options: Options
+
+    init(
+        _ title: Text,
+        icon: String,
+        value: String?,
+        color: Color,
+        selection: Binding<Value>,
+        negate: Binding<Bool>? = nil,
+        hasValue: Bool = false,
+        @ViewBuilder options: () -> Options
+    ) {
+        self.title = title
+        self.icon = icon
+        self.value = value
+        self.color = color
+        self.selection = selection
+        self.negate = negate
+        self.hasValue = hasValue
+        self.options = options()
+    }
+
+    private var excludes: Bool { hasValue && negate?.wrappedValue == true }
+
+    private var label: String {
+        guard let value else {
+            return NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items")
+        }
+        guard excludes else { return value }
+        return String(format: NSLocalizedString("Not %@", bundle: Bundle.forAppLanguage(), value: "Not %@", comment: "Filter value shown when the filter excludes the selected value, e.g. “Not Egypt”"), value)
+    }
+
+    private var labelColor: Color { value == nil ? .secondary : (excludes ? .orange : color) }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                // Visual only: VoiceOver reads the name with the value on the menu below.
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(.cyan)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+                title
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .accessibilityHidden(true)
+                Spacer(minLength: 12)
+                Menu {
+                    Picker(selection: selection) { options } label: { EmptyView() }
+                        .pickerStyle(.inline)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(verbatim: label)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(labelColor)
+                    .contentShape(Rectangle())
+                }
+                .filterMenuStyleOnMac()
+                .accessibilityLabel(title)
+                .accessibilityValue(Text(verbatim: label))
+            }
+
+            // Include/Exclude under its row, aligned with the filter name, once a value is set.
+            if hasValue, let negate {
+                Picker(selection: negate.animation()) {
+                    Text(NSLocalizedString("Include", bundle: Bundle.forAppLanguage(), comment: "Filter mode: include dives matching the selected value")).tag(false)
+                    Text(NSLocalizedString("Exclude", bundle: Bundle.forAppLanguage(), comment: "Filter mode: exclude dives matching the selected value")).tag(true)
+                } label: { Text("Include or exclude") }
+                .fullWidthSegmentedPicker()
+                .padding(.leading, 38)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.vertical, 12)
+    }
+}
+
 // MARK: - Filter Section Header
 
 struct FilterSectionHeader: View {
@@ -1068,9 +1034,29 @@ extension View {
     func filterCardStyle() -> some View {
         self
             .padding()
+            .filterCardBackground()
+    }
+
+    /// The filter card's background, corners and shadow, for a card that sets its own padding.
+    func filterCardBackground() -> some View {
+        self
             .background(Color.platformTertiaryBackground)
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+    }
+
+    /// The choice filters' value menu: on macOS a `Menu` is otherwise a bordered pull-down
+    /// button that ignores its label's colour (as in `listRowMenu`); on iOS it is unchanged.
+    @ViewBuilder
+    func filterMenuStyleOnMac() -> some View {
+        #if os(macOS)
+        self
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+        #else
+        self
+        #endif
     }
 
     /// Masks the trailing edge with a fade gradient to hint that more chips are scrollable.

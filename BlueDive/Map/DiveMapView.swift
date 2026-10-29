@@ -65,6 +65,7 @@ struct DiveMapView: View {
     @State private var filterDiveType: String? = nil
     @State private var filterDiveTypeNegate: Bool = false
     @State private var filterTag: String? = nil
+    @State private var filterTagNegate: Bool = false
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
@@ -265,6 +266,7 @@ struct DiveMapView: View {
         let fDiveType   = filterDiveType
         let fDiveTypeNeg = filterDiveTypeNegate
         let fTag        = filterTag
+        let fTagNeg     = filterTagNegate
         let fMarineLife = filterMarineLife
         let fMarineLifeMode = filterMarineLifeMode
         let span        = currentSpan
@@ -285,7 +287,7 @@ struct DiveMapView: View {
                     filterMinRating: fRating,
                     filterCountry: fCountry, filterCountryNegate: fCountryNeg,
                     filterDiveType: fDiveType, filterDiveTypeNegate: fDiveTypeNeg,
-                    filterTag: fTag,
+                    filterTag: fTag, filterTagNegate: fTagNeg,
                     filterMarineLife: fMarineLife, filterMarineLifeMode: fMarineLifeMode,
                     displayInFeet: displayInFeet,
                     depthFactor: depthFactor
@@ -372,7 +374,7 @@ struct DiveMapView: View {
         filterMinRating: Int,
         filterCountry: String?, filterCountryNegate: Bool,
         filterDiveType: String?, filterDiveTypeNegate: Bool,
-        filterTag: String?,
+        filterTag: String?, filterTagNegate: Bool,
         filterMarineLife: [String], filterMarineLifeMode: FilterMarineLifeMode,
         displayInFeet: Bool,
         depthFactor: Double
@@ -426,8 +428,9 @@ struct DiveMapView: View {
                 else                       { if !snap.diveTypes.contains(diveType) { return nil } }
             }
             if let tag = filterTag {
-                if tag.isEmpty { if !snap.tags.isEmpty { return nil } }
-                else           { if !snap.tags.contains(tag) { return nil } }
+                if tag.isEmpty         { if !snap.tags.isEmpty { return nil } }
+                else if filterTagNegate { if snap.tags.contains(tag) { return nil } }
+                else                   { if !snap.tags.contains(tag) { return nil } }
             }
             if !marineLifeLowercased.isEmpty {
                 switch filterMarineLifeMode {
@@ -539,6 +542,7 @@ struct DiveMapView: View {
             .onChange(of: filterDiveType)       { _, _ in scheduleFilterAndCluster() }
             .onChange(of: filterDiveTypeNegate) { _, _ in scheduleFilterAndCluster() }
             .onChange(of: filterTag)            { _, _ in scheduleFilterAndCluster() }
+            .onChange(of: filterTagNegate)      { _, _ in scheduleFilterAndCluster() }
             .onChange(of: filterMarineLife)     { _, _ in scheduleFilterAndCluster() }
             .onChange(of: filterMarineLifeMode) { _, _ in scheduleFilterAndCluster() }
     }
@@ -905,6 +909,7 @@ struct DiveMapView: View {
                     filterDiveType: $filterDiveType,
                     filterDiveTypeNegate: $filterDiveTypeNegate,
                     filterTag: $filterTag,
+                    filterTagNegate: $filterTagNegate,
                     filterMarineLife: $filterMarineLife,
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: .constant(.dateDesc)

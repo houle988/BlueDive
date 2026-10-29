@@ -133,6 +133,7 @@ final class DiveStore {
     var filterDiveType: String? = nil
     var filterDiveTypeNegate: Bool = false
     var filterTag: String? = nil
+    var filterTagNegate: Bool = false
     var filterMarineLife: [String] = []
     var filterMarineLifeMode: FilterMarineLifeMode = .any
     var sortOrder: DiveSortOrder = .persisted {
@@ -337,6 +338,7 @@ final class DiveStore {
         filterDiveType       = nil
         filterDiveTypeNegate = false
         filterTag            = nil
+        filterTagNegate      = false
         filterMarineLife     = []
         filterMarineLifeMode = .any
     }
@@ -1975,7 +1977,11 @@ final class DiveStore {
                     let diveTags = dive.tags?
                         .split(separator: ",")
                         .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if !diveTags.contains(tag) { return false }
+                    if filterTagNegate {
+                        if diveTags.contains(tag) { return false }
+                    } else {
+                        if !diveTags.contains(tag) { return false }
+                    }
                 }
             }
             // Marine life filter
