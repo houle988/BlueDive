@@ -5,12 +5,22 @@ import MapKit
 
 extension DiveDetailView {
 
-    // Mirrors `Dive.hasGPSCoordinates`'s definition of a valid pair (both
-    // components present and not the (0, 0) sentinel) so the map's per-pin
-    // branches never see a coordinate the gate itself would have rejected.
+    // A pair the map can show: both components present, not the (0, 0) sentinel
+    // (as `Dive.hasGPSCoordinates`), and within −90…90 / −180…180 — as the Map tab
+    // checks — since the edit sheet and file imports accept any number. Only the map
+    // skips an out-of-range pair; the coordinate rows still show the stored values.
     private func validGPSCoordinate(lat: Double?, lon: Double?) -> (lat: Double, lon: Double)? {
-        guard let lat, let lon, !(lat == 0 && lon == 0) else { return nil }
+        guard let lat, let lon, !(lat == 0 && lon == 0),
+              CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: lat, longitude: lon))
+        else { return nil }
         return (lat, lon)
+    }
+
+    /// Whether the entry or the exit pair can be shown on the map — the gate for the
+    /// map preview and the full-screen map.
+    private var hasMappableCoordinate: Bool {
+        validGPSCoordinate(lat: dive.siteLatitude, lon: dive.siteLongitude) != nil
+            || validGPSCoordinate(lat: dive.exitLatitude, lon: dive.exitLongitude) != nil
     }
 
     var siteDetailsTabContent: some View {
@@ -117,7 +127,7 @@ extension DiveDetailView {
             #endif
 
             // Map view — tap to open a larger, zoomable map.
-            if dive.hasGPSCoordinates {
+            if hasMappableCoordinate {
                 Divider().background(.primary.opacity(0.2))
 
                 siteMapPreview
@@ -127,7 +137,7 @@ extension DiveDetailView {
         .detailCardBackground()
         .padding(.horizontal)
         .sheet(isPresented: $showFullScreenSiteMap) {
-            if dive.hasGPSCoordinates {
+            if hasMappableCoordinate {
                 let entry = validGPSCoordinate(lat: dive.siteLatitude, lon: dive.siteLongitude)
                 let exit = validGPSCoordinate(lat: dive.exitLatitude, lon: dive.exitLongitude)
                 SiteMapFullScreenView(
@@ -248,6 +258,10 @@ extension DiveDetailView {
         let exit = validGPSCoordinate(lat: dive.exitLatitude, lon: dive.exitLongitude)
         siteMap(entryLat: entry?.lat, entryLon: entry?.lon,
                 exitLat: exit?.lat, exitLon: exit?.lon)
+            // A new map per dive and coordinate edit: `Map(initialPosition:)` frames the site
+            // only when created. Keyed on the validated values, so a rejected NaN cannot
+            // rebuild it every redraw.
+            .id([entry?.lat, entry?.lon, exit?.lat, exit?.lon])
             .frame(height: 200)
             // Keep the preview itself non-interactive so the tap gesture
             // below (not the map's own pan/zoom) receives the touch.
@@ -276,29 +290,18 @@ extension DiveDetailView {
         if let entryLat, let entryLon, let eLat = exitLat, let eLon = exitLon {
             let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
             let exitCoord = CLLocationCoordinate2D(latitude: eLat, longitude: eLon)
-            let center = CLLocationCoordinate2D(
-                latitude: (entryLat + eLat) / 2,
-                longitude: (entryLon + eLon) / 2
-            )
-            let span = MKCoordinateSpan(
-                latitudeDelta: max(abs(entryLat - eLat) * 1.5, 0.005),
-                longitudeDelta: max(abs(entryLon - eLon) * 1.5, 0.005)
-            )
             // `SiteEntryExitMap` owns the identical / overlapping / separate pin cases —
             // see its documentation for why overlapping pins must share one annotation.
             SiteEntryExitMap(
                 entryCoord: entryCoord,
                 exitCoord: exitCoord,
-                region: MKCoordinateRegion(center: center, span: span),
+                region: SiteMapFraming.region(entry: entryCoord, exit: exitCoord),
                 pinDiameter: 26
             )
         } else if let entryLat, let entryLon {
             // Entry only — same green as the combined-map entry pin.
             let entryCoord = CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon)
-            Map(initialPosition: .region(MKCoordinateRegion(
-                center: entryCoord,
-                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-            ))) {
+            Map(initialPosition: .region(SiteMapFraming.region(around: entryCoord))) {
                 Annotation(coordinate: entryCoord, anchor: .bottom) {
                     MapPointerPin(systemImage: "arrow.down", tint: .green, diameter: 26)
                 } label: {
@@ -312,10 +315,7 @@ extension DiveDetailView {
         } else if let eLat = exitLat, let eLon = exitLon {
             // Exit only — same orange as the combined-map exit pin.
             let exitCoord = CLLocationCoordinate2D(latitude: eLat, longitude: eLon)
-            Map(initialPosition: .region(MKCoordinateRegion(
-                center: exitCoord,
-                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-            ))) {
+            Map(initialPosition: .region(SiteMapFraming.region(around: exitCoord))) {
                 Annotation(coordinate: exitCoord, anchor: .bottom) {
                     MapPointerPin(systemImage: "arrow.up", tint: .orange, diameter: 26)
                 } label: {
@@ -413,9 +413,10 @@ struct SiteEntryExitMap: View {
     /// The map's laid-out size in points. `.zero` until the first layout pass, which is
     /// why `mergedExitOffset` returns `nil` (two plain annotations) until it is known.
     @State private var mapSize: CGSize = .zero
-    /// The map rect actually on screen, tracked continuously so both the overlap test
-    /// and the exit pin's offset stay correct while the user zooms the full-screen map.
-    @State private var visibleRect: MKMapRect?
+    /// The size of the map rect actually on screen, tracked continuously so both the
+    /// overlap test and the exit pin's offset stay correct while the user zooms the
+    /// full-screen map. Only the size is needed: it sets the points-per-map-point scale.
+    @State private var visibleMapSize: MKMapSize?
 
     /// Centre-to-centre screen distance, in points, below which the two pins are treated
     /// as overlapping and merged into one annotation. A pin circle is `pinDiameter`
@@ -433,33 +434,39 @@ struct SiteEntryExitMap: View {
         guard !coordinatesIdentical, mapSize.width > 0, mapSize.height > 0 else { return nil }
         // Until the first camera callback arrives, project against the region we asked
         // for, so the merged pins are already correct on the very first frame.
-        let rect = visibleRect ?? Self.mapRect(for: region)
-        guard rect.width > 0, rect.height > 0 else { return nil }
+        let visible = visibleMapSize ?? Self.mapSize(for: region)
+        guard visible.width > 0, visible.height > 0 else { return nil }
         // Points per `MKMapPoint`. `min` mirrors how MapKit fits a requested region into
-        // a view of a different aspect ratio; for a rect read back from the camera the
+        // a view of a different aspect ratio; for a size read back from the camera the
         // two ratios are already equal, so it is exact there too.
-        let scale = min(mapSize.width / rect.width, mapSize.height / rect.height)
+        let scale = min(mapSize.width / visible.width, mapSize.height / visible.height)
         let entryPoint = MKMapPoint(entryCoord)
         let exitPoint = MKMapPoint(exitCoord)
-        let offset = CGSize(width: (exitPoint.x - entryPoint.x) * scale,
+        // Take the east–west distance the short way round, so pins either side of the
+        // 180° meridian (at opposite edges of the flat map) are measured as neighbours.
+        let worldWidth = MKMapSize.world.width
+        var dx = exitPoint.x - entryPoint.x
+        if dx > worldWidth / 2 { dx -= worldWidth }
+        if dx < -worldWidth / 2 { dx += worldWidth }
+        let offset = CGSize(width: dx * scale,
                             height: (exitPoint.y - entryPoint.y) * scale)
         guard hypot(offset.width, offset.height) < overlapThreshold else { return nil }
         return offset
     }
 
-    /// `MKCoordinateRegion` has no `MKMapRect` bridge, so project its north-west and
-    /// south-east corners instead.
-    private static func mapRect(for region: MKCoordinateRegion) -> MKMapRect {
-        let northWest = MKMapPoint(CLLocationCoordinate2D(
-            latitude: region.center.latitude + region.span.latitudeDelta / 2,
-            longitude: region.center.longitude - region.span.longitudeDelta / 2))
-        let southEast = MKMapPoint(CLLocationCoordinate2D(
-            latitude: region.center.latitude - region.span.latitudeDelta / 2,
-            longitude: region.center.longitude + region.span.longitudeDelta / 2))
-        return MKMapRect(x: min(northWest.x, southEast.x),
-                         y: min(northWest.y, southEast.y),
-                         width: abs(southEast.x - northWest.x),
-                         height: abs(southEast.y - northWest.y))
+    /// The size, in map points, of a requested region (`MKCoordinateRegion` has no
+    /// `MKMapRect` bridge). The width comes from the span itself (map points are linear
+    /// in longitude), so a region crossing the 180° meridian keeps its true width; the
+    /// height projects the top and bottom edges, kept within the poles.
+    private static func mapSize(for region: MKCoordinateRegion) -> MKMapSize {
+        let top = MKMapPoint(CLLocationCoordinate2D(
+            latitude: min(region.center.latitude + region.span.latitudeDelta / 2, 90),
+            longitude: 0))
+        let bottom = MKMapPoint(CLLocationCoordinate2D(
+            latitude: max(region.center.latitude - region.span.latitudeDelta / 2, -90),
+            longitude: 0))
+        return MKMapSize(width: region.span.longitudeDelta / 360 * MKMapSize.world.width,
+                         height: abs(bottom.y - top.y))
     }
 
     private var entryPin: MapPointerPin {
@@ -515,8 +522,66 @@ struct SiteEntryExitMap: View {
             mapSize = newSize
         }
         .onMapCameraChange(frequency: .continuous) { context in
-            visibleRect = context.rect
+            visibleMapSize = context.rect.size
         }
+    }
+}
+
+// MARK: - Site Map Framing
+
+/// The region the Site Details preview and the full-screen site map open on; shared so
+/// both frame the site identically.
+///
+/// The minimum is set in metres rather than degrees so it covers the same ground at any
+/// latitude (a degree of longitude shrinks towards the poles): about 1 km shows the
+/// surrounding coastline, so the site can be located at a glance.
+enum SiteMapFraming {
+    /// Smallest north–south and east–west extent shown, in metres.
+    static let minimumExtentMeters: CLLocationDistance = 1_000
+    /// Entry-to-exit distance multiplier, leaving room around both pins (which are drawn
+    /// above their coordinate) so neither is clipped at the map's edge.
+    static let entryExitSpanFactor = 3.0
+
+    /// Region centred on a single entry or exit point. Within about 0.0014° of a pole,
+    /// 1 km east–west is more than 360° of longitude, so the east–west span is capped
+    /// there to keep the region valid (1 km north–south is always about 0.009°).
+    static func region(around coordinate: CLLocationCoordinate2D) -> MKCoordinateRegion {
+        let metric = MKCoordinateRegion(center: coordinate,
+                                        latitudinalMeters: minimumExtentMeters,
+                                        longitudinalMeters: minimumExtentMeters)
+        return MKCoordinateRegion(
+            center: metric.center,
+            span: MKCoordinateSpan(latitudeDelta: metric.span.latitudeDelta,
+                                   longitudeDelta: min(metric.span.longitudeDelta, 360)))
+    }
+
+    /// Region centred between entry and exit, showing both with padding and never
+    /// smaller than the single-point region. The east–west gap is measured the short
+    /// way round, so entry and exit either side of the 180° meridian (e.g. Fiji's
+    /// Rainbow Reef) are framed together rather than across the whole globe. The span
+    /// is capped at 180° by 360°, so entry and exit far apart — e.g. a sign typo in one
+    /// latitude — open a zoomed-out map instead of an invalid span (the centre is not
+    /// moved; MapKit clamps a region that reaches past a pole).
+    static func region(entry: CLLocationCoordinate2D,
+                       exit: CLLocationCoordinate2D) -> MKCoordinateRegion {
+        var longitudeGap = exit.longitude - entry.longitude
+        if longitudeGap > 180 { longitudeGap -= 360 }
+        if longitudeGap < -180 { longitudeGap += 360 }
+        var centerLongitude = entry.longitude + longitudeGap / 2
+        if centerLongitude > 180 { centerLongitude -= 360 }
+        if centerLongitude < -180 { centerLongitude += 360 }
+        let center = CLLocationCoordinate2D(
+            latitude: (entry.latitude + exit.latitude) / 2,
+            longitude: centerLongitude
+        )
+        let minimumSpan = region(around: center).span
+        let span = MKCoordinateSpan(
+            latitudeDelta: min(max(abs(entry.latitude - exit.latitude) * entryExitSpanFactor,
+                                   minimumSpan.latitudeDelta), 180),
+            longitudeDelta: min(max(abs(longitudeGap) * entryExitSpanFactor,
+                                    minimumSpan.longitudeDelta), 360)
+        )
+        return MKCoordinateRegion(center: center, span: span)
     }
 }
 
@@ -540,33 +605,22 @@ struct SiteMapFullScreenView: View {
     // The framed region for this site, computed once from the coordinates.
     private var targetRegion: MKCoordinateRegion {
         if let entryLat, let entryLon, let eLat = exitLat, let eLon = exitLon {
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: (entryLat + eLat) / 2,
-                                               longitude: (entryLon + eLon) / 2),
-                span: MKCoordinateSpan(
-                    latitudeDelta: max(abs(entryLat - eLat) * 1.5, 0.005),
-                    longitudeDelta: max(abs(entryLon - eLon) * 1.5, 0.005)
-                )
-            )
+            return SiteMapFraming.region(
+                entry: CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon),
+                exit: CLLocationCoordinate2D(latitude: eLat, longitude: eLon))
         } else if let entryLat, let entryLon {
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon),
-                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-            )
+            return SiteMapFraming.region(
+                around: CLLocationCoordinate2D(latitude: entryLat, longitude: entryLon))
         } else if let eLat = exitLat, let eLon = exitLon {
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: eLat, longitude: eLon),
-                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-            )
+            return SiteMapFraming.region(
+                around: CLLocationCoordinate2D(latitude: eLat, longitude: eLon))
         } else {
             // Unreachable: the sole caller only presents this view when
-            // `dive.hasGPSCoordinates` is true, and passes entry/exit through
-            // the same (0, 0)-excluding check, so at least one pair is always
+            // `hasMappableCoordinate` is true, and passes entry/exit through
+            // the same `validGPSCoordinate` check, so at least one pair is always
             // present here. Required only for exhaustiveness.
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-            )
+            return SiteMapFraming.region(
+                around: CLLocationCoordinate2D(latitude: 0, longitude: 0))
         }
     }
 
