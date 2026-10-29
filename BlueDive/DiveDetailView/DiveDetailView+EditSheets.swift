@@ -31,6 +31,8 @@ struct EditMenuStatsView: View {
     @State private var workingDiveCenter: String
     @State private var workingEntryType: String
     @State private var newTag: String = ""
+    /// Suggestions for the single-value fields, built once when the sheet appears.
+    @State private var fieldSuggestions = DiveFieldSuggestions()
     @State private var newBuddy: String = ""
     @State private var newType: String = ""
     @State private var workingMaxDepthText: String
@@ -110,7 +112,8 @@ struct EditMenuStatsView: View {
         guard !trimmed.isEmpty else { return }
 
         var tags = tagsArray
-        if !tags.contains(trimmed) {
+        // A tag already on the dive with different capitals ("reef" vs "Reef") is not added again.
+        if !tags.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             tags.append(trimmed)
             workingTags = tags.joined(separator: ", ")
         }
@@ -127,7 +130,8 @@ struct EditMenuStatsView: View {
         guard !trimmed.isEmpty else { return }
 
         var buddies = buddiesArray
-        if !buddies.contains(trimmed) {
+        // A buddy already on the dive with different capitals is not added again.
+        if !buddies.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             buddies.append(trimmed)
             workingBuddies = buddies.joined(separator: ", ")
         }
@@ -144,7 +148,8 @@ struct EditMenuStatsView: View {
         guard !trimmed.isEmpty, trimmed != "None" else { return }
 
         var types = diveTypesArray
-        if !types.contains(trimmed) {
+        // A dive type already on the dive with different capitals is not added again.
+        if !types.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             types.append(trimmed)
             workingTypes = types.joined(separator: ", ")
         }
@@ -156,61 +161,47 @@ struct EditMenuStatsView: View {
         workingTypes = types.joined(separator: ", ")
     }
 
-    private func uniqueOptionalValues(for keyPath: KeyPath<Dive, String?>) -> [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            guard let val = d[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces),
-                  !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
-    private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            let val = d[keyPath: keyPath].trimmingCharacters(in: .whitespaces)
-            guard !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
     // DiveStore's complete diver list (dives, gear, certifications, insurance).
     private var uniqueDiverNames: [String] { store.cachedUniqueDivers }
 
-    private var uniqueBuddyNames: [String] {
+    // Buddy, dive type and tag suggestions read the store's summaries (plain values, already
+    // split and trimmed for types and tags) rather than Dive objects, so no attribute is
+    // faulted and a dive deleted on another device is never read.
+    private func uniqueNames(_ names: [String]) -> [String] {
         var seen = Set<String>()
-        return store.dives.flatMap { d -> [String] in
-            d.buddies
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-        }.compactMap { name -> String? in
+        return names.compactMap { name -> String? in
             let key = name.lowercased()
             guard seen.insert(key).inserted else { return nil }
             return name
         }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    private var uniqueDiveTypeNames: [String] {
-        var seen = Set<String>()
-        return store.dives.flatMap { d -> [String] in
-            (d.diveTypes ?? "")
+    private var uniqueBuddyNames: [String] {
+        uniqueNames(store.cachedSummaries.flatMap { summary in
+            summary.buddies
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
-        }.compactMap { name -> String? in
-            let key = name.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return name
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        })
+    }
+
+    private var uniqueDiveTypeNames: [String] {
+        uniqueNames(store.cachedSummaries.flatMap(\.diveTypes))
+    }
+
+    private var uniqueTagNames: [String] {
+        uniqueNames(store.cachedSummaries.flatMap(\.tags))
     }
 
     var body: some View {
         iOSBody
+            .onAppear {
+                fieldSuggestions = DiveFieldSuggestions(
+                    dives: store.dives,
+                    fields: [\.computerName],
+                    optionalFields: [\.computerSerialNumber, \.diveOperator, \.diveMaster,
+                                     \.skipper, \.boat, \.entryType])
+            }
     }
 
 
@@ -290,8 +281,8 @@ struct EditMenuStatsView: View {
                 .font(.caption2)
         }
         Section {
-            AutocompleteMenuTextField(label: "Computer Name", text: $workingComputerName, icon: "desktopcomputer", color: .purple, suggestions: uniqueValues(for: \.computerName))
-            AutocompleteMenuTextField(label: "Serial Number", text: $workingSerialNumber, icon: "number", color: .purple, suggestions: uniqueOptionalValues(for: \.computerSerialNumber))
+            AutocompleteMenuTextField(label: "Computer Name", text: $workingComputerName, icon: "desktopcomputer", color: .purple, suggestions: fieldSuggestions[\Dive.computerName])
+            AutocompleteMenuTextField(label: "Serial Number", text: $workingSerialNumber, icon: "number", color: .purple, suggestions: fieldSuggestions[\Dive.computerSerialNumber])
         } header: {
             MenuSectionHeader(title: "Dive Computer", icon: "desktopcomputer", color: .purple)
         }
@@ -338,11 +329,11 @@ struct EditMenuStatsView: View {
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2", color: .blue, suggestions: uniqueOptionalValues(for: \.diveOperator))
-                        AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark", color: .teal, suggestions: uniqueOptionalValues(for: \.diveMaster))
-                        AutocompleteMenuTextField(label: "Captain", text: $workingSkipper, icon: "person.fill.turn.right", color: .indigo, suggestions: uniqueOptionalValues(for: \.skipper))
-                        AutocompleteMenuTextField(label: "Boat", text: $workingBoat, icon: "ferry", color: .mint, suggestions: uniqueOptionalValues(for: \.boat))
-                        AutocompleteMenuTextField(label: "Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle", color: .yellow, suggestions: uniqueOptionalValues(for: \.entryType))
+                        AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2", color: .blue, suggestions: fieldSuggestions[\Dive.diveOperator])
+                        AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark", color: .teal, suggestions: fieldSuggestions[\Dive.diveMaster])
+                        AutocompleteMenuTextField(label: "Captain", text: $workingSkipper, icon: "person.fill.turn.right", color: .indigo, suggestions: fieldSuggestions[\Dive.skipper])
+                        AutocompleteMenuTextField(label: "Boat", text: $workingBoat, icon: "ferry", color: .mint, suggestions: fieldSuggestions[\Dive.boat])
+                        AutocompleteMenuTextField(label: "Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle", color: .yellow, suggestions: fieldSuggestions[\Dive.entryType])
                     } header: {
                         MenuSectionHeader(title: "Operator", icon: "building.2", color: .teal)
                     }
@@ -413,8 +404,9 @@ struct EditMenuStatsView: View {
                                 .foregroundStyle(newBuddy.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.green)
                                 .disabled(newBuddy.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
-                            let filteredBuddySuggestions = newBuddy.isEmpty ? [] : uniqueBuddyNames.filter {
-                                $0.localizedCaseInsensitiveContains(newBuddy) && $0.lowercased() != newBuddy.lowercased() && !buddiesArray.contains($0)
+                            let filteredBuddySuggestions = newBuddy.isEmpty ? [] : uniqueBuddyNames.filter { name in
+                                name.localizedCaseInsensitiveContains(newBuddy) && name.lowercased() != newBuddy.lowercased()
+                                    && !buddiesArray.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
                             }
                             if !filteredBuddySuggestions.isEmpty {
                                 VStack(alignment: .leading, spacing: 0) {
@@ -543,8 +535,9 @@ struct EditMenuStatsView: View {
                                 .foregroundStyle(newType.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.purple)
                                 .disabled(newType.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
-                            let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter {
-                                $0.localizedCaseInsensitiveContains(newType) && $0.lowercased() != newType.lowercased() && !diveTypesArray.contains($0)
+                            let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter { name in
+                                name.localizedCaseInsensitiveContains(newType) && name.lowercased() != newType.lowercased()
+                                    && !diveTypesArray.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
                             }
                             if !filteredDiveTypeSuggestions.isEmpty {
                                 VStack(alignment: .leading, spacing: 0) {
@@ -644,28 +637,59 @@ struct EditMenuStatsView: View {
                         }
 
                         // Add new tag
-                        HStack(spacing: 8) {
-                            Image(systemName: "plus.circle")
-                                .foregroundStyle(.cyan)
-                            formTextField("Add a tag", text: $newTag)
-                                .autocorrectionDisabled()
-                                .foregroundStyle(.primary)
-                            if !newTag.isEmpty {
-                                Button {
-                                    newTag = ""
-                                } label: {
-                                    ClearButtonGlyph()
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(.cyan)
+                                formTextField("Add a tag", text: $newTag)
+                                    .autocorrectionDisabled()
+                                    .foregroundStyle(.primary)
+                                if !newTag.isEmpty {
+                                    Button {
+                                        newTag = ""
+                                    } label: {
+                                        ClearButtonGlyph()
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
-                            }
-                            Button("Add") {
-                                withAnimation {
-                                    addTag(newTag)
-                                    newTag = ""
+                                Button("Add") {
+                                    withAnimation {
+                                        addTag(newTag)
+                                        newTag = ""
+                                    }
                                 }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(newTag.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.cyan)
+                                .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
+                            let filteredTagSuggestions = newTag.isEmpty ? [] : uniqueTagNames.filter { name in
+                                name.localizedCaseInsensitiveContains(newTag) && name.lowercased() != newTag.lowercased()
+                                    && !tagsArray.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
+                            }
+                            if !filteredTagSuggestions.isEmpty {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    ForEach(filteredTagSuggestions.prefix(5), id: \.self) { suggestion in
+                                        Button {
+                                            addTag(suggestion)
+                                            newTag = ""
+                                        } label: {
+                                            Text(suggestion)
+                                                .foregroundStyle(.primary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.vertical, 6)
+                                                .padding(.horizontal, 8)
+                                                // The whole suggestion responds, not only its text
+                                                // (a plain Button only responds where something is drawn).
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .background(Color.primary.opacity(0.05))
+                                        .cornerRadius(4)
+                                    }
+                                }
+                                .padding(.leading, 28)
+                                .padding(.top, 4)
+                            }
                         }
                     } header: {
                         MenuSectionHeader(title: "Tags", icon: "tag", color: .pink)
@@ -829,6 +853,9 @@ struct EditSiteDetailsView: View {
     @State private var showEntryCoordinatePicker = false
     @State private var showExitCoordinatePicker = false
     @State private var showSameAsEntryConfirm = false
+    /// Suggestions for the site name, country, location and body of water fields, built once
+    /// when the sheet appears.
+    @State private var fieldSuggestions = DiveFieldSuggestions()
 
     /// Which GPS section a "Use Current Location" action fills.
     private enum GPSTarget { case entry, exit }
@@ -912,8 +939,9 @@ struct EditSiteDetailsView: View {
 
     private var uniqueSites: [Dive] {
         var seen = Set<String>()
+        // store.dives may briefly hold a dive deleted on another device; skip it before reading.
         return store.dives.compactMap { d -> Dive? in
-            guard d.id != dive.id,
+            guard !d.isDeleted, d.modelContext != nil, d.id != dive.id,
                   !d.siteName.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
             let key = d.siteName.trimmingCharacters(in: .whitespaces).lowercased()
             guard seen.insert(key).inserted else { return nil }
@@ -922,11 +950,19 @@ struct EditSiteDetailsView: View {
     }
 
     /// The 3 most recently dived sites (by date, unique by name)
+    /// The chosen site's dive, or nil once it is deleted (on another device, while the sheet is
+    /// open): the selection is kept across redraws, so it is checked before it is read.
+    private var liveSelectedSite: Dive? {
+        guard let site = selectedSite, !site.isDeleted, site.modelContext != nil else { return nil }
+        return site
+    }
+
     private var recentSites: [Dive] {
         var seen = Set<String>()
         var result: [Dive] = []
+        // store.dives may briefly hold a dive deleted on another device; skip it before reading.
         for d in allDivesByDate {
-            guard d.id != dive.id,
+            guard !d.isDeleted, d.modelContext != nil, d.id != dive.id,
                   !d.siteName.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
             let key = d.siteName.trimmingCharacters(in: .whitespaces).lowercased()
             guard seen.insert(key).inserted else { continue }
@@ -936,27 +972,6 @@ struct EditSiteDetailsView: View {
         return result
     }
 
-    private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            let val = d[keyPath: keyPath].trimmingCharacters(in: .whitespaces)
-            guard !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
-    private func uniqueOptionalValues(for keyPath: KeyPath<Dive, String?>) -> [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            guard let val = d[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces),
-                  !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
 
     private func applySite(from source: Dive) {
         workingCountry     = source.siteCountry ?? ""
@@ -1007,6 +1022,17 @@ struct EditSiteDetailsView: View {
     var body: some View {
         Group {
             iOSBody
+        }
+        // A chosen site whose dive was deleted on another device is cleared once the list
+        // drops it, so the field no longer shows it as selected.
+        .onChange(of: store.dives) {
+            if selectedSite != nil && liveSelectedSite == nil { selectedSite = nil }
+        }
+        .onAppear {
+            fieldSuggestions = DiveFieldSuggestions(
+                dives: store.dives,
+                fields: [\.siteName, \.location],
+                optionalFields: [\.siteCountry, \.siteBodyOfWater])
         }
         .sheet(isPresented: $showEntryCoordinatePicker) {
             CoordinatePickerView(
@@ -1132,8 +1158,10 @@ struct EditSiteDetailsView: View {
                 .fullWidthSwitch()
 
                 Button {
-                    if let source = selectedSite {
+                    if let source = liveSelectedSite {
                         applySite(from: source)
+                    } else {
+                        selectedSite = nil
                     }
                 } label: {
                     HStack {
@@ -1141,7 +1169,7 @@ struct EditSiteDetailsView: View {
                         Text("Copy Site Information")
                     }
                 }
-                .disabled(selectedSite == nil)
+                .disabled(liveSelectedSite == nil)
                 .foregroundStyle(.orange)
                 .listRowButton()
             } header: {
@@ -1159,9 +1187,9 @@ struct EditSiteDetailsView: View {
                     copyFromSiteSection
 
                     Section {
-                        AutocompleteMenuTextField(label: "Site Name", text: $workingSiteName, icon: "location", color: .cyan, suggestions: uniqueValues(for: \.siteName))
-                        AutocompleteMenuTextField(label: "Country", text: $workingCountry, icon: "flag", color: .blue, suggestions: uniqueOptionalValues(for: \.siteCountry))
-                        AutocompleteMenuTextField(label: "Location", text: $workingLocation, icon: "mappin.and.ellipse", color: .orange, suggestions: uniqueValues(for: \.location))
+                        AutocompleteMenuTextField(label: "Site Name", text: $workingSiteName, icon: "location", color: .cyan, suggestions: fieldSuggestions[\Dive.siteName])
+                        AutocompleteMenuTextField(label: "Country", text: $workingCountry, icon: "flag", color: .blue, suggestions: fieldSuggestions[\Dive.siteCountry])
+                        AutocompleteMenuTextField(label: "Location", text: $workingLocation, icon: "mappin.and.ellipse", color: .orange, suggestions: fieldSuggestions[\Dive.location])
                         Picker(selection: $workingDifficulty) {
                             Text("—").tag("")
                             ForEach(Self.difficultyScale, id: \.level) { item in
@@ -1200,7 +1228,7 @@ struct EditSiteDetailsView: View {
                             }
                         }
                         .tint(.blue)
-                        AutocompleteMenuTextField(label: "Body of Water", text: $workingBodyOfWater, icon: "water.waves", color: .teal, suggestions: uniqueOptionalValues(for: \.siteBodyOfWater))
+                        AutocompleteMenuTextField(label: "Body of Water", text: $workingBodyOfWater, icon: "water.waves", color: .teal, suggestions: fieldSuggestions[\Dive.siteBodyOfWater])
                     } header: {
                         MenuSectionHeader(title: "Water", icon: "drop", color: .teal)
                     }
@@ -1508,16 +1536,8 @@ struct EditConditionsView: View {
     @State private var weatherFetchTask: Task<Void, Never>?
 
 
-    private var visibilitySuggestions: [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            guard let val = d.visibility?.trimmingCharacters(in: .whitespaces),
-                  !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
+    /// Suggestions for the Visibility field, built once when the sheet appears.
+    @State private var fieldSuggestions = DiveFieldSuggestions()
 
     init(dive: Dive) {
         self.dive = dive
@@ -1635,7 +1655,7 @@ struct EditConditionsView: View {
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye", color: .green, suggestions: visibilitySuggestions)
+                        AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye", color: .green, suggestions: fieldSuggestions[\Dive.visibility])
                     } header: {
                         ConditionsSectionHeader(title: "Visibility", icon: "eye", color: .green)
                     }
@@ -1644,6 +1664,9 @@ struct EditConditionsView: View {
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Edit Conditions")
+            .onAppear {
+                fieldSuggestions = DiveFieldSuggestions(dives: store.dives, optionalFields: [\.visibility])
+            }
             .onDisappear { weatherFetchTask?.cancel() }
             // `presenting:` keeps the failure for the alert's content while it animates out,
             // after the binding has cleared `weatherFetchFailure`.

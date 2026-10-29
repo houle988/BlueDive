@@ -1787,8 +1787,10 @@ final class DiveStore {
     }
 
     /// The listed dives that may be read: not deleted (here or merged from another device) and
-    /// not pending a remote deletion. For re-filters run outside the @Query delivery.
-    private var liveDives: [Dive] {
+    /// not pending a remote deletion. For re-filters run outside the @Query delivery, and for
+    /// view bodies that read dive attributes over the whole list (it reads `dives`, so a view
+    /// using it is still refreshed when the list changes).
+    var liveDives: [Dive] {
         dives.filter {
             !$0.isDeleted && $0.modelContext != nil && !pendingRemoteDeletedPIDs.contains($0.persistentModelID)
         }

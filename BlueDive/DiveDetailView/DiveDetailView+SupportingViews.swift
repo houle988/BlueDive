@@ -632,6 +632,38 @@ struct MenuTextField: View {
     }
 }
 
+/// Autocomplete suggestions for the text fields of an edit sheet, built in one pass over the
+/// logbook when the sheet opens rather than on every redraw (every keystroke redraws the whole
+/// sheet, which would read each field of every dive again). Values are trimmed, de-duplicated
+/// regardless of case (the first spelling found is kept) and sorted. A value saved on another
+/// device while the sheet is open is suggested from the sheet's next opening.
+struct DiveFieldSuggestions {
+    private var values: [AnyKeyPath: [String]] = [:]
+
+    init() {}
+
+    /// Skips dives deleted on another device, which `DiveStore.dives` may still briefly hold
+    /// (reading their attributes would crash).
+    @MainActor
+    init(dives: [Dive], fields: [KeyPath<Dive, String>] = [], optionalFields: [KeyPath<Dive, String?>] = []) {
+        var seen: [AnyKeyPath: Set<String>] = [:]
+        var found: [AnyKeyPath: [String]] = [:]
+        func add(_ raw: String?, for field: AnyKeyPath) {
+            guard let value = raw?.trimmingCharacters(in: .whitespaces), !value.isEmpty,
+                  seen[field, default: []].insert(value.lowercased()).inserted else { return }
+            found[field, default: []].append(value)
+        }
+        for dive in dives where !dive.isDeleted && dive.modelContext != nil {
+            for field in fields { add(dive[keyPath: field], for: field) }
+            for field in optionalFields { add(dive[keyPath: field], for: field) }
+        }
+        values = found.mapValues { $0.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending } }
+    }
+
+    /// The suggestions for one field (empty before the sheet appears or when no dive has a value).
+    subscript(_ field: AnyKeyPath) -> [String] { values[field] ?? [] }
+}
+
 struct AutocompleteMenuTextField: View {
     let label: LocalizedStringKey
     @Binding var text: String
@@ -726,7 +758,8 @@ struct SiteSearchField: View {
     @FocusState private var isFocused: Bool
 
     private var selectedDisplayText: String {
-        guard let site = selectedSite else { return "" }
+        // The selection is kept across redraws; a dive deleted on another device is not read.
+        guard let site = selectedSite, !site.isDeleted, site.modelContext != nil else { return "" }
         return site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
     }
 

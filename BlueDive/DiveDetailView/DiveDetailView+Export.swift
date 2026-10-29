@@ -75,8 +75,9 @@ extension DiveDetailView {
     }
 
     func exportToPDF() {
-        // store.dives is already sorted by timestamp desc (same order DiveDataFeeder's @Query delivers)
-        guard let data = PDFDiveLogbook.generatePDF(for: dive, allDives: store.dives) else { return }
+        // currentDives is sorted by timestamp desc (same order DiveDataFeeder's @Query delivers),
+        // without any dive deleted since (the PDF reads every dive's attributes for the trips).
+        guard let data = PDFDiveLogbook.generatePDF(for: dive, allDives: store.currentDives) else { return }
         let fileName = makeExportFileName(extension: "pdf")
 
         #if os(macOS)

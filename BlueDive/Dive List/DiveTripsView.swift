@@ -164,10 +164,10 @@ struct DiveTripsView: View {
     @State private var builtTripsKey = ""
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
 
-    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
+    private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.liveDives) }
 
     private var tripsKey: String {
-        "\(store.dives.count):\(selectedDiver):\(tripsVersion):\(store.dives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
+        "\(store.dives.count):\(selectedDiver):\(tripsVersion):\(store.liveDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
     }
 
     var body: some View {
@@ -563,8 +563,8 @@ struct TripDetailSheet: View {
 
     private var numberMap: [PersistentIdentifier: Int] {
         let numbering = selectedDiver.isEmpty
-            ? store.dives
-            : store.dives.filter { $0.diverName == selectedDiver }
+            ? store.liveDives
+            : store.liveDives.filter { $0.diverName == selectedDiver }
         let total = numbering.count
         return Dictionary(uniqueKeysWithValues: numbering.enumerated().map {
             ($0.element.persistentModelID, total - $0.offset)
@@ -700,16 +700,18 @@ struct TripDetailSheet: View {
 
     private func divesListSection(closeSheet: @escaping () -> Void) -> some View {
         let sortedDives = trip.dives.sorted { $0.timestamp < $1.timestamp }
+        // Built once per redraw, not once per row: it numbers every dive of the logbook.
+        let numbers = numberMap
         return VStack(alignment: .leading, spacing: 8) {
             Text("🤿 All Dives (\(trip.totalDives))")
                 .font(.headline)
                 .padding(.bottom, 4)
 
             ForEach(sortedDives) { dive in
-                NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { closeSheet() }) {
+                NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numbers[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { closeSheet() }) {
                     DiveRowView(
                         summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: store.cachedDivesWithPhotos.contains(dive.id)),
-                        diveNumber: numberMap[dive.persistentModelID] ?? 0
+                        diveNumber: numbers[dive.persistentModelID] ?? 0
                     )
                     .padding(.vertical, 4)
                     .padding(.horizontal, 8)

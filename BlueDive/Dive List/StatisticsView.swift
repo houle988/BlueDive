@@ -130,7 +130,7 @@ struct StatisticsView: View {
 
     private var filteredDives: [Dive] {
         DiverFilter.applyDiveFilters(
-            to: DiverFilter.apply(selectedDiver, to: store.dives),
+            to: DiverFilter.apply(selectedDiver, to: store.liveDives),
             year: filterYear, yearNegate: filterYearNegate,
             gasType: filterGasType, gasTypeNegate: filterGasTypeNegate,
             minDepth: filterMinDepth, maxDepth: filterMaxDepth,
@@ -149,28 +149,30 @@ struct StatisticsView: View {
         statsReady ? cachedFilteredDives.isEmpty : filteredDives.isEmpty
     }
 
-    private var diverDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.dives) }
+    private var diverDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.liveDives) }
 
-    private var availableYears: [Int] {
+    // The filter sheet's option lists take the diver's dives once (`diverDives` is a pass
+    // over the whole logbook) instead of each list reading `diverDives` again.
+    private func availableYears(in diverDives: [Dive]) -> [Int] {
         Array(Set(diverDives.compactMap { Calendar.current.dateComponents([.year], from: $0.timestamp).year })).sorted(by: >)
     }
-    private var availableGasTypes: [String] { Array(Set(diverDives.flatMap { DiveSummary.gasNames(of: $0) })).sorted() }
-    private var availableCountries: [String] { Array(Set(diverDives.compactMap { $0.siteCountry }.filter { !$0.isEmpty })).sorted() }
-    private var availableDiveTypes: [String] {
+    private func availableGasTypes(in diverDives: [Dive]) -> [String] { Array(Set(diverDives.flatMap { DiveSummary.gasNames(of: $0) })).sorted() }
+    private func availableCountries(in diverDives: [Dive]) -> [String] { Array(Set(diverDives.compactMap { $0.siteCountry }.filter { !$0.isEmpty })).sorted() }
+    private func availableDiveTypes(in diverDives: [Dive]) -> [String] {
         var types = Set<String>()
         for dive in diverDives {
             dive.diveTypes?.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.forEach { types.insert($0) }
         }
         return types.sorted()
     }
-    private var availableTags: [String] {
+    private func availableTags(in diverDives: [Dive]) -> [String] {
         var tags = Set<String>()
         for dive in diverDives {
             dive.tags?.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.forEach { tags.insert($0) }
         }
         return tags.sorted()
     }
-    private var availableMarineLife: [String] {
+    private func availableMarineLife(in diverDives: [Dive]) -> [String] {
         var species = Set<String>()
         for dive in diverDives { dive.seenFish?.forEach { s in let n = s.name.trimmingCharacters(in: .whitespaces); if !n.isEmpty { species.insert(n) } } }
         return species.sorted()
@@ -191,7 +193,7 @@ struct StatisticsView: View {
     }
 
     private var filterTaskId: String {
-        "\(store.dives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(statsVersion):\(store.dives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
+        "\(store.dives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(statsVersion):\(store.liveDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
     }
 
     private func computeStats(_ dives: [Dive], locale: Locale) async {
@@ -716,13 +718,14 @@ struct StatisticsView: View {
                 Text("The CSV file could not be saved.")
             }
             .sheet(isPresented: $showFilterSheet) {
+                let diverDives = diverDives
                 DiveFilterSheet(
-                    availableYears: availableYears,
-                    availableGasTypes: availableGasTypes,
-                    availableCountries: availableCountries,
-                    availableDiveTypes: availableDiveTypes,
-                    availableTags: availableTags,
-                    availableMarineLife: availableMarineLife,
+                    availableYears: availableYears(in: diverDives),
+                    availableGasTypes: availableGasTypes(in: diverDives),
+                    availableCountries: availableCountries(in: diverDives),
+                    availableDiveTypes: availableDiveTypes(in: diverDives),
+                    availableTags: availableTags(in: diverDives),
+                    availableMarineLife: availableMarineLife(in: diverDives),
                     showSort: false,
                     filterYear: $filterYear,
                     filterYearNegate: $filterYearNegate,
@@ -2105,8 +2108,8 @@ struct SiteDivesSheet: View {
 
     private var numberMap: [PersistentIdentifier: Int] {
         let numbering = selectedDiver.isEmpty
-            ? store.dives
-            : store.dives.filter { $0.diverName == selectedDiver }
+            ? store.liveDives
+            : store.liveDives.filter { $0.diverName == selectedDiver }
         let total = numbering.count
         return Dictionary(uniqueKeysWithValues: numbering.enumerated().map {
             ($0.element.persistentModelID, total - $0.offset)
@@ -2114,13 +2117,15 @@ struct SiteDivesSheet: View {
     }
 
     var body: some View {
+        // Built once per redraw, not once per row: it numbers every dive of the logbook.
+        let numbers = numberMap
         NavigationStack {
             List {
                 ForEach(sortedDives) { dive in
-                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numberMap[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { dismiss() }) {
+                    NavigationLink(destination: DiveDetailView(dive: dive, sortedDives: sortedDives, diveNumber: numbers[dive.persistentModelID] ?? 0).closeSheetButtonOnMac { dismiss() }) {
                         DiveRowView(
                             summary: DiveSummary(from: dive, hasFish: !(dive.seenFish?.isEmpty ?? true), hasPhotos: store.cachedDivesWithPhotos.contains(dive.id)),
-                            diveNumber: numberMap[dive.persistentModelID] ?? 0
+                            diveNumber: numbers[dive.persistentModelID] ?? 0
                         )
                     }
                     .listRowBackground(Color.primary.opacity(0.07))

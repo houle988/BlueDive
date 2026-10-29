@@ -83,7 +83,7 @@ struct DiverProfileView: View {
     private var uniqueDivers: [String] { store.cachedUniqueDivers }
 
     private var filteredDives: [Dive] {
-        DiverFilter.apply(selectedDiver, to: store.dives)
+        DiverFilter.apply(selectedDiver, to: store.liveDives)
     }
 
     private var filteredCertifications: [Certification] {
