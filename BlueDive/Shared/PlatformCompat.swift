@@ -839,6 +839,47 @@ struct WidthAdaptiveLayout<Wide: View, Narrow: View>: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
+
+/// macOS wide-window density layouts: places its subviews side by side, each taking its
+/// share of the offered width (`weights`, e.g. `[3, 2]` for ⅗ and ⅖), all as tall as the
+/// tallest. It sizes to the width it is offered — a scroll view's content area, without a
+/// permanent scroller — never to its content: `containerRelativeFrame` uses the scroll
+/// view's full width, so with permanent scroll bars the row was a scroller wider than its
+/// space and the sheet window grew without end to fit it.
+struct ProportionalHStack: Layout {
+    let weights: [CGFloat]
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        // An unspecified or infinite width (a probe for the ideal or largest size) gives the
+        // subviews' ideal widths, never an infinite size.
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+            ?? subviews.reduce(0) { $0 + $1.sizeThatFits(.unspecified).width }
+        let height = subviews.indices.reduce(0) { tallest, index in
+            max(tallest, subviews[index].sizeThatFits(ProposedViewSize(width: share(index, of: width, count: subviews.count), height: nil)).height)
+        }
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        for index in subviews.indices {
+            let width = share(index, of: bounds.width, count: subviews.count)
+            subviews[index].place(
+                at: CGPoint(x: x, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: width, height: bounds.height)
+            )
+            x += width
+        }
+    }
+
+    /// The subview's share of `width`; a subview without a weight gets none.
+    private func share(_ index: Int, of width: CGFloat, count: Int) -> CGFloat {
+        let total = weights.prefix(count).reduce(0, +)
+        guard index < weights.count, total > 0 else { return 0 }
+        return width * weights[index] / total
+    }
+}
 #endif
 
 // MARK: - One-Line List Rows (macOS wide-window layouts)

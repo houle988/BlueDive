@@ -613,16 +613,14 @@ struct StatisticsView: View {
                             #if os(macOS)
                             // The Mac sheet is wide enough to show Favourite Sites (⅗) beside
                             // At a Glance (⅖, wide enough for long labels such as the German
-                            // "Gesichtete Arten"); fixedSize gives both the height of the taller one.
-                            // A narrower sheet falls back to the iOS order, one under the other.
+                            // "Gesichtete Arten"); ProportionalHStack gives both the height of the
+                            // taller one. A narrower sheet falls back to the iOS order, one under
+                            // the other.
                             WidthAdaptiveLayout(minWidth: 600) {
-                                HStack(alignment: .top, spacing: 0) {
+                                ProportionalHStack(weights: [3, 2]) {
                                     topSitesSection
-                                        .containerRelativeFrame(.horizontal, count: 5, span: 3, spacing: 0)
                                     moreStatsGrid
-                                        .containerRelativeFrame(.horizontal, count: 5, span: 2, spacing: 0)
                                 }
-                                .fixedSize(horizontal: false, vertical: true)
                             } narrow: {
                                 VStack(spacing: 24) {
                                     topSitesSection(sideBySide: false)
