@@ -56245,6 +56245,40 @@
         }
       }
     },
+    "Shows species photos in a wider 3:2 format in Marine Life and on species pages. Photos that are taller than they are wide are cropped at the top and bottom." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zeigt Artenfotos im breiteren 3:2-Format im Bereich „Unterwasserlebewesen“ und auf den Artenseiten an. Fotos, die höher als breit sind, werden oben und unten beschnitten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Muestra las fotos de especies en un formato 3:2 más ancho en «Vida marina» y en las páginas de especies. Las fotos más altas que anchas se recortan por arriba y por abajo."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche les photos d'espèces dans un format 3:2 plus large dans « Vie marine » et sur les pages des espèces. Les photos plus hautes que larges sont recadrées en haut et en bas."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Viser artsbilder i et bredere 3:2-format under «Arter» og på artssidene. Bilder som er høyere enn de er brede, beskjæres øverst og nederst."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toont soortfoto’s in een breder 3:2-formaat in ‘Onderwaterleven’ en op de soortpagina’s. Foto’s die hoger dan breed zijn, worden aan de boven- en onderkant bijgesneden."
+          }
+        }
+      }
+    },
     "Sidemount" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -69532,6 +69566,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Welk apparaat is dit?"
+          }
+        }
+      }
+    },
+    "Wide species photos" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Breite Artenfotos"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fotos de especies en formato ancho"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos d'espèces en format large"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Brede artsbilder"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Brede soortfoto’s"
           }
         }
       }

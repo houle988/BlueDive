@@ -95,6 +95,38 @@ struct AppearanceSettingsView: View {
                         )
                 )
                 .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $prefs.wideSpeciesImages) {
+                            Label {
+                                Text("Wide species photos")
+                            } icon: {
+                                Image(systemName: "photo")
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                        .fullWidthSwitch()
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    Text("Shows species photos in a wider 3:2 format in Marine Life and on species pages. Photos that are taller than they are wide are cropped at the top and bottom.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
             }
             .padding(.vertical)
         }

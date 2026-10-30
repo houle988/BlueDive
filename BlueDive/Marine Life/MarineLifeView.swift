@@ -10,6 +10,7 @@ struct MarineLifeView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     @Query(sort: \Species.commonName) private var catalogue: [Species]
+    @State private var prefs = UserPreferences.shared
 
     @State private var appeared = false
     @State private var statsReady = false
@@ -973,7 +974,7 @@ struct MarineLifeView: View {
     /// Image, then name / scientific name / dives + last seen / quantities, the dive count trailing.
     private func stackedSpeciesRow(index: Int, species: SpeciesAggregate) -> some View {
         HStack(spacing: 14) {
-            speciesImage(index: index, species: species, size: 44)
+            speciesImage(index: index, species: species, size: prefs.wideSpeciesImages ? 72 : 44)
 
             VStack(alignment: .leading, spacing: 3) {
                 speciesName(species)
@@ -1013,10 +1014,11 @@ struct MarineLifeView: View {
     /// `MarineLifeColumnHeader` so the labels stay over their values).
     private func wideSpeciesRow(index: Int, species: SpeciesAggregate) -> some View {
         HStack(spacing: MarineLifeColumns.spacing) {
-            speciesImage(index: index, species: species, size: MarineLifeColumns.image)
+            speciesImage(index: index, species: species, size: MarineLifeColumns.image(wide: prefs.wideSpeciesImages))
 
             speciesName(species)
-                .frame(minWidth: MarineLifeColumns.name, idealWidth: MarineLifeColumns.name,
+                .frame(minWidth: MarineLifeColumns.name(wide: prefs.wideSpeciesImages),
+                       idealWidth: MarineLifeColumns.name(wide: prefs.wideSpeciesImages),
                        maxWidth: .infinity, alignment: .leading)
 
             // ZStack, not Group: a Group's frame applies to its children, so an empty value would
@@ -1060,24 +1062,34 @@ struct MarineLifeView: View {
 
     /// The species' featured image, or a fish placeholder (highlighted for the first row), `size`
     /// points wide: 44 in the stacked row and 32 in the one-line row, as the Dives, Equipment and
-    /// Documents rows' icons.
+    /// Documents rows' icons. With Settings → Wide species photos, 3:2 and 72 / 48 points wide
+    /// (48 / 32 high), the placeholder then a rounded rectangle of the same size so the rows
+    /// line up.
     @ViewBuilder
     private func speciesImage(index: Int, species: SpeciesAggregate, size: CGFloat) -> some View {
+        let aspectRatio = prefs.wideSpeciesImages ? SpeciesImageView.wideAspectRatio : 1
+        let height = size / aspectRatio
         if let id = species.speciesID, let catalogued = liveSpecies(id),
            catalogued.hasFeaturedImage {
-            SpeciesImageView(species: catalogued, size: size)
+            SpeciesImageView(species: catalogued, size: size, aspectRatio: aspectRatio)
         } else {
+            let fill = index == 0
+                ? LinearGradient(colors: [.orange, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                : LinearGradient(colors: [.white.opacity(0.15), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
             ZStack {
-                Circle()
-                    .fill(
-                        index == 0
-                            ? LinearGradient(colors: [.orange, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            : LinearGradient(colors: [.white.opacity(0.15), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                    .frame(width: size, height: size)
+                if prefs.wideSpeciesImages {
+                    // The corners of `SpeciesImageView`, so a row without a photo matches one with.
+                    RoundedRectangle(cornerRadius: height * 0.2)
+                        .fill(fill)
+                        .frame(width: size, height: height)
+                } else {
+                    Circle()
+                        .fill(fill)
+                        .frame(width: size, height: size)
+                }
                 Image(systemName: "fish.fill")
-                    // 12 pt in a 32 pt circle, the same proportion at any size.
-                    .font(.system(size: (size * 0.375).rounded(), weight: .bold))
+                    // 12 pt in a 32 pt circle, the same proportion at any size (of the height).
+                    .font(.system(size: (height * 0.375).rounded(), weight: .bold))
                     .foregroundStyle(index == 0 ? .primary : .secondary)
                     .accessibilityHidden(true)
             }
@@ -1149,8 +1161,14 @@ struct MarineLifeView: View {
 enum MarineLifeColumns {
     static let spacing: CGFloat = 12
     static let image: CGFloat = 32
+    /// The image's width with Settings → Wide species photos (3:2, 32 pt high).
+    static let wideImage: CGFloat = 48
     /// Minimum (and ideal) width of the flexible name column.
     static let name: CGFloat = 200
+
+    static func image(wide: Bool) -> CGFloat { wide ? wideImage : image }
+    /// The name column gives up the wide image's extra width, so the row keeps `rowWidth`.
+    static func name(wide: Bool) -> CGFloat { wide ? name - (wideImage - image) : name }
     /// Wide enough for "Current name: …" under a scientific name (`speciesSubtitle`).
     static let scientificName: CGFloat = 250
     static let lastSeen: CGFloat = 130
@@ -1166,12 +1184,15 @@ enum MarineLifeColumns {
 /// Column labels over the one-line species rows (macOS), pinned to the top of the list with
 /// `pinnedColumnHeader`, which shows them only while the rows are one-line (`OneLineRowsLayout`).
 struct MarineLifeColumnHeader: View {
+    @State private var prefs = UserPreferences.shared
+
     var body: some View {
+        let wide = prefs.wideSpeciesImages
         ColumnHeaderRowContent {
             HStack(spacing: MarineLifeColumns.spacing) {
-                Color.clear.frame(width: MarineLifeColumns.image, height: 0)
+                Color.clear.frame(width: MarineLifeColumns.image(wide: wide), height: 0)
                 Text("Name").columnHeaderLabel()
-                    .frame(minWidth: MarineLifeColumns.name, idealWidth: MarineLifeColumns.name,
+                    .frame(minWidth: MarineLifeColumns.name(wide: wide), idealWidth: MarineLifeColumns.name(wide: wide),
                            maxWidth: .infinity, alignment: .leading)
                 Text("Scientific Name").columnHeaderLabel()
                     .frame(width: MarineLifeColumns.scientificName, alignment: .leading)

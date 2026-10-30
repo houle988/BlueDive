@@ -478,17 +478,23 @@ struct EditSpeciesView: View {
             }
     }
 
+    /// The species page header's format (Settings → Wide species photos), so the preview shows
+    /// the crop the page will show.
+    private var previewWidth: CGFloat { prefs.wideSpeciesImages ? 240 : 120 }
+    private var previewAspectRatio: CGFloat { prefs.wideSpeciesImages ? SpeciesImageView.wideAspectRatio : 1 }
+
     @ViewBuilder
     private var previewContent: some View {
         if let image = previewImage {
+            let height = previewWidth / previewAspectRatio
             Image(platformImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 120, height: 120)
-                .clipShape(RoundedRectangle(cornerRadius: 24))
+                .frame(width: previewWidth, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: height * 0.2))
                 .accessibilityHidden(true)
         } else {
-            SpeciesImageView(species: nil, size: 120)
+            SpeciesImageView(species: nil, size: previewWidth, aspectRatio: previewAspectRatio)
         }
     }
 

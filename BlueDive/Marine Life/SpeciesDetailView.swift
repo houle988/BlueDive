@@ -246,7 +246,10 @@ struct SpeciesDetailView: View {
 
     private var header: some View {
         VStack(spacing: 12) {
-            SpeciesImageView(species: species, size: 120)
+            // 240 × 160 pt in 3:2 (Settings → Wide species photos), close to the stored image's
+            // ~500 px so it is not enlarged much; else a 120 pt square.
+            SpeciesImageView(species: species, size: prefs.wideSpeciesImages ? 240 : 120,
+                             aspectRatio: prefs.wideSpeciesImages ? SpeciesImageView.wideAspectRatio : 1)
             VStack(spacing: 4) {
                 Text(verbatim: species.displayName)
                     .font(.title2.weight(.bold))
@@ -744,20 +747,30 @@ struct SpeciesSearchField: View {
 /// The species' featured image, or a fish symbol when it has none.
 struct SpeciesImageView: View {
     let species: Species?
-    /// Side of the square image, clipped to rounded corners. Nil fills the space it is given
-    /// (a grid tile, which clips it), the image then scaled down to a tile's size when decoded.
+    /// Width of the image (its side when `aspectRatio` is 1), clipped to rounded corners. Nil
+    /// fills the space it is given (a grid tile, which clips it), the image then scaled down to
+    /// a tile's size when decoded.
     let size: CGFloat?
+    /// Width over height when `size` is set: 1 (a square) or `wideAspectRatio`. `size` is then
+    /// the width; the image fills the frame and is cropped to it.
+    var aspectRatio: CGFloat = 1
     /// Decoded once per image record, off the main thread — not in `body`, which runs for
     /// every visible row on each keystroke of a search field.
     @State private var image: PlatformImage?
 
+    /// The 3:2 format of Settings → Appearance & Language → Wide species photos
+    /// (`UserPreferences.wideSpeciesImages`).
+    static let wideAspectRatio: CGFloat = 3 / 2
+
     var body: some View {
         if let size {
-            // Outlined from 64 pt (the species page header), as on the tiles; filled for the
-            // small list icons, where an outline reads poorly.
-            content(symbol: size >= 64 ? "fish" : "fish.fill", symbolFont: .system(size: size * 0.4))
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.2))
+            let height = size / aspectRatio
+            // Outlined from 64 pt high (the species page header), as on the tiles; filled for the
+            // small list icons, where an outline reads poorly. The symbol and corners follow
+            // the height, so a wide image keeps the proportions of the square one.
+            content(symbol: height >= 64 ? "fish" : "fish.fill", symbolFont: .system(size: height * 0.4))
+                .frame(width: size, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: height * 0.2))
         } else {
             // A tile: a larger outlined fish (the small icons keep the filled one, which reads
             // better at 32 pt).

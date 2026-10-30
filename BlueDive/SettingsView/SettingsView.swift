@@ -487,6 +487,13 @@ class UserPreferences {
     var searchDiveNotes: Bool {
         didSet { UserDefaults.standard.set(searchDiveNotes, forKey: "searchDiveNotes") }
     }
+    /// When true, species photos are shown in a 3:2 format (`SpeciesImageView.wideAspectRatio`)
+    /// in the Marine Life list, on the species page and in Edit Species, instead of squares.
+    /// Display only: stored images are unchanged. On by default. No App Group write: the
+    /// widget does not show species.
+    var wideSpeciesImages: Bool {
+        didSet { UserDefaults.standard.set(wideSpeciesImages, forKey: "wideSpeciesImages") }
+    }
     #if os(macOS)
     /// When true, the main dive list shows the profile chart of the selected dive above the
     /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
@@ -511,6 +518,7 @@ class UserPreferences {
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
         self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
         // On by default: an absent key reads as true.
+        self.wideSpeciesImages = UserDefaults.standard.object(forKey: "wideSpeciesImages") as? Bool ?? true
         self.showPhotosOnProfile = UserDefaults.standard.object(forKey: "showPhotosOnProfile") as? Bool ?? true
         self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
         self.fetchTaxonomyOnline = UserDefaults.standard.bool(forKey: "fetchTaxonomyOnline")
@@ -539,6 +547,7 @@ class UserPreferences {
         hideClearedDecoStops = false
         showSamplesTab = false
         searchDiveNotes = false
+        wideSpeciesImages = true
         showPhotosOnProfile = true
         fetchWeatherOnline = false
         fetchTaxonomyOnline = false
