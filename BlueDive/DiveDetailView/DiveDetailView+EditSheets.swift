@@ -886,6 +886,31 @@ struct EditSiteDetailsView: View {
         return CLLocationCoordinate2D(latitude: lat, longitude: lon)
     }
 
+    /// Whether a coordinate field would save a number outside ±`limit` (90 for latitude,
+    /// 180 for longitude) that differs from the dive's stored `original`. A stored value kept
+    /// as is (e.g. one imported out of range) never blocks an unrelated edit. Compared with the
+    /// stored value rather than the field's pre-fill text, because the +/− button and copying
+    /// a site replace that text (a typed 91 flipped to −91 must still be caught).
+    private func isOutOfRange(_ text: String, prefilled: PrefilledDouble, original: Double?,
+                              limit: Double) -> Bool {
+        guard let value = prefilled.resolve(text) else { return false }
+        return abs(value) > limit && value != original
+    }
+
+    private var entryGPSOutOfRange: Bool {
+        isOutOfRange(workingLatitude, prefilled: prefilledLatitude,
+                     original: dive.siteLatitude, limit: 90)
+            || isOutOfRange(workingLongitude, prefilled: prefilledLongitude,
+                            original: dive.siteLongitude, limit: 180)
+    }
+
+    private var exitGPSOutOfRange: Bool {
+        isOutOfRange(workingExitLatitude, prefilled: prefilledExitLatitude,
+                     original: dive.exitLatitude, limit: 90)
+            || isOutOfRange(workingExitLongitude, prefilled: prefilledExitLongitude,
+                            original: dive.exitLongitude, limit: 180)
+    }
+
     private func copyEntryToExit() {
         // Copy the entry's exact values, not just its rounded text, so an untouched entry and
         // its copy stay identical (the Site Details map shows one "Entry & exit" pin then).
@@ -1234,7 +1259,7 @@ struct EditSiteDetailsView: View {
                     }
 
                     Section {
-                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showEntryCoordinatePicker = true }
+                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse", showsChevron: true) { showEntryCoordinatePicker = true }
                         gpsActionRow("Use Current Location", icon: "location", enabled: locatingTarget == nil,
                                      isBusy: locatingTarget == .entry) { useCurrentLocation(for: .entry) }
                         HStack(spacing: 12) {
@@ -1309,12 +1334,17 @@ struct EditSiteDetailsView: View {
                             }
                         }
                     } footer: {
-                        Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
-                            .font(.caption2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            if entryGPSOutOfRange {
+                                coordinateRangeMessage
+                            }
+                            Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
+                                .font(.caption2)
+                        }
                     }
 
                     Section {
-                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showExitCoordinatePicker = true }
+                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse", showsChevron: true) { showExitCoordinatePicker = true }
                         gpsActionRow("Use Current Location", icon: "location", enabled: locatingTarget == nil,
                                      isBusy: locatingTarget == .exit) { useCurrentLocation(for: .exit) }
                         gpsActionRow("Same as Entry", icon: "arrow.turn.right.up", enabled: entryCoordinate != nil) {
@@ -1377,6 +1407,10 @@ struct EditSiteDetailsView: View {
                                 .borderlessButton()
                             }
                         }
+                    } footer: {
+                        if exitGPSOutOfRange {
+                            coordinateRangeMessage
+                        }
                     }
                 }
                 .groupedFormStyleOnMac()
@@ -1394,9 +1428,18 @@ struct EditSiteDetailsView: View {
                     Button("Save") { save() }
                         .bold()
                         .confirmationActionForeground(.blue)
+                        .disabled(entryGPSOutOfRange || exitGPSOutOfRange)
                 }
             }
         }
+    }
+
+    /// Shown under a GPS section while one of its edited coordinates is out of range;
+    /// Save stays disabled until it is fixed or cleared.
+    private var coordinateRangeMessage: some View {
+        Text("Latitude must be between −90 and 90, and longitude between −180 and 180.")
+            .font(.caption)
+            .foregroundStyle(.red)
     }
 
     /// A "+/−" button that toggles the sign of a GPS coordinate string, keeping the decimal pad usable.
@@ -1429,8 +1472,9 @@ struct EditSiteDetailsView: View {
 
     /// A full-width tappable row for GPS actions (Pick on Map, Use Current Location, Same as Entry)
     /// inside a Form section — a larger, more discoverable target than a small header text link.
-    /// `isBusy` shows a spinner in place of the chevron while the action runs.
-    private func gpsActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, isBusy: Bool = false, action: @escaping () -> Void) -> some View {
+    /// `isBusy` shows a spinner while the action runs. `showsChevron` is only for a row that
+    /// opens another screen (Pick on Map); rows that act in place show none.
+    private func gpsActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, isBusy: Bool = false, showsChevron: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -1442,13 +1486,13 @@ struct EditSiteDetailsView: View {
                 if isBusy {
                     ProgressView()
                         .controlSize(.small)
-                } else if enabled {
+                } else if enabled && showsChevron {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            // The whole row responds, including the space before the chevron (a plain Button
+            // The whole row responds, including the empty space after the title (a plain Button
             // only responds where something is drawn).
             .contentShape(Rectangle())
         }
