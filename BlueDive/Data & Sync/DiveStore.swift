@@ -134,6 +134,8 @@ final class DiveStore {
     var filterDiveTypeNegate: Bool = false
     var filterTag: String? = nil
     var filterTagNegate: Bool = false
+    var filterBuddy: String? = nil
+    var filterBuddyNegate: Bool = false
     var filterMarineLife: [String] = []
     var filterMarineLifeMode: FilterMarineLifeMode = .any
     var sortOrder: DiveSortOrder = .persisted {
@@ -165,6 +167,7 @@ final class DiveStore {
     private(set) var cachedAvailableCountries: [String] = []
     private(set) var cachedAvailableDiveTypes: [String] = []
     private(set) var cachedAvailableTags: [String] = []
+    private(set) var cachedAvailableBuddies: [String] = []
     private(set) var cachedAvailableMarineLife: [String] = []
     private var cachedInsurances: [DivingInsurance] = []
     private var cachedGear: [Gear] = []
@@ -317,6 +320,7 @@ final class DiveStore {
         if filterCountry != nil                     { count += 1 }
         if filterDiveType != nil                    { count += 1 }
         if filterTag != nil                         { count += 1 }
+        if filterBuddy != nil                       { count += 1 }
         if !filterMarineLife.isEmpty                { count += 1 }
         return count
     }
@@ -339,6 +343,8 @@ final class DiveStore {
         filterDiveTypeNegate = false
         filterTag            = nil
         filterTagNegate      = false
+        filterBuddy          = nil
+        filterBuddyNegate    = false
         filterMarineLife     = []
         filterMarineLifeMode = .any
     }
@@ -648,6 +654,7 @@ final class DiveStore {
             self.cachedAvailableCountries = result.availableCountries
             self.cachedAvailableDiveTypes = result.availableDiveTypes
             self.cachedAvailableTags = result.availableTags
+            self.cachedAvailableBuddies = result.availableBuddies
         }
     }
 
@@ -702,6 +709,7 @@ final class DiveStore {
         !searchText.isEmpty
             || filterCountry  != nil || filterGasType  != nil
             || filterDiveType != nil || filterTag       != nil
+            || filterBuddy    != nil
             || filterMinDepth  > 0  || filterMaxDepth   > 0
             || filterMinRating > 0  || !filterMarineLife.isEmpty
     }
@@ -748,6 +756,7 @@ final class DiveStore {
         var countrySet    = Set<String>()
         var diveTypeSet   = Set<String>()
         var tagSet        = Set<String>()
+        var buddySet      = Set<String>()
         var marineLifeSet = Set<String>()
         for summary in cachedSummaries {
             yearSet.insert(summary.year)
@@ -755,6 +764,7 @@ final class DiveStore {
             if let c = summary.siteCountry, !c.isEmpty { countrySet.insert(c) }
             summary.diveTypes.forEach     { diveTypeSet.insert($0) }
             summary.tags.forEach          { tagSet.insert($0) }
+            DiverFilter.buddyNames(summary.buddies).forEach { buddySet.insert($0) }
             summary.seenFishNames.forEach { marineLifeSet.insert($0) }
         }
         cachedAvailableYears       = yearSet.sorted(by: >)
@@ -762,6 +772,7 @@ final class DiveStore {
         cachedAvailableCountries   = countrySet.sorted()
         cachedAvailableDiveTypes   = diveTypeSet.sorted()
         cachedAvailableTags        = tagSet.sorted()
+        cachedAvailableBuddies     = buddySet.sorted()
         cachedAvailableMarineLife  = marineLifeSet.sorted()
     }
 
@@ -1984,6 +1995,17 @@ final class DiveStore {
                     }
                 }
             }
+            // Buddy filter ("" = dives with no buddy recorded)
+            if let buddy = filterBuddy {
+                let names = DiverFilter.buddyNames(dive.buddies)
+                if buddy.isEmpty {
+                    if !names.isEmpty { return false }
+                } else if filterBuddyNegate {
+                    if names.contains(buddy) { return false }
+                } else {
+                    if !names.contains(buddy) { return false }
+                }
+            }
             // Marine life filter
             if !diveMatchesMarineLifeFilter(dive, species: filterMarineLife, mode: filterMarineLifeMode) { return false }
             return true
@@ -2079,6 +2101,7 @@ final class DiveStore {
         let availableCountries: [String]
         let availableDiveTypes: [String]
         let availableTags: [String]
+        let availableBuddies: [String]
         let availableMarineLife: [String]
     }
 
@@ -2094,6 +2117,7 @@ final class DiveStore {
         var countrySet = Set<String>()
         var diveTypeSet = Set<String>()
         var tagSet = Set<String>()
+        var buddySet = Set<String>()
         var marineLifeSet = Set<String>()
 
         for dive in snapshot {
@@ -2111,6 +2135,7 @@ final class DiveStore {
             if let country = dive.siteCountry, !country.isEmpty { countrySet.insert(country) }
             dive.diveTypes.forEach { diveTypeSet.insert($0) }
             dive.tags.forEach { tagSet.insert($0) }
+            DiverFilter.buddyNames(dive.buddies).forEach { buddySet.insert($0) }
         }
 
         return DiveAggregationResult(
@@ -2121,6 +2146,7 @@ final class DiveStore {
             availableCountries: countrySet.sorted(),
             availableDiveTypes: diveTypeSet.sorted(),
             availableTags: tagSet.sorted(),
+            availableBuddies: buddySet.sorted(),
             availableMarineLife: marineLifeSet.sorted()
         )
     }

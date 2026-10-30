@@ -5029,7 +5029,7 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajouter un coéquipier"
+            "value" : "Ajouter un binôme"
           }
         },
         "nb" : {
@@ -43654,7 +43654,7 @@
       }
     },
     "None" : {
-      "comment" : "Filter option to show dives with no country set\nFilter option to show dives with no dive type set\nFilter option to show dives with no gas type set\nFilter option to show dives with no tag set",
+      "comment" : "Filter option to show dives with no buddy recorded\nFilter option to show dives with no country set\nFilter option to show dives with no dive type set\nFilter option to show dives with no gas type set\nFilter option to show dives with no tag set",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -53042,7 +53042,7 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recherchez par site, binôme, pays ou tag. Filtrez par année, profondeur, type de gaz, note et bien plus encore."
+            "value" : "Recherchez par site, binôme, pays ou étiquette. Filtrez par année, profondeur, type de gaz, note et bien plus encore."
           }
         },
         "nb" : {
@@ -56909,7 +56909,7 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Site, lieu, coéquipier, pays, type, étiquette, plongée #, notes…"
+            "value" : "Site, lieu, binôme, pays, type, étiquette, plongée #, notes…"
           }
         },
         "nb" : {
@@ -56951,7 +56951,7 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Site, lieu, coéquipier, pays, type, étiquette, plongée #…"
+            "value" : "Site, lieu, binôme, pays, type, étiquette, plongée #…"
           }
         },
         "nb" : {

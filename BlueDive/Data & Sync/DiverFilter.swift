@@ -70,6 +70,14 @@ enum DiverFilter {
         selected.isEmpty ? insurances : insurances.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selected }
     }
 
+    /// The buddy names of a dive's comma-separated `buddies` text, trimmed, empty ones dropped
+    /// (as the XML and UDDF exporters split it). Shared by the buddy filter and its menu.
+    nonisolated static func buddyNames(_ buddies: String) -> [String] {
+        buddies.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
     /// Gas filter rule shared by the Dives list, Map and Statistics: "None" (empty `gas`) keeps
     /// dives with no tanks; otherwise a dive matches when any of its tanks uses `gas`, and
     /// `negate` keeps the dives where none does.
@@ -88,6 +96,7 @@ enum DiverFilter {
         country: String?, countryNegate: Bool,
         diveType: String?, diveTypeNegate: Bool,
         tag: String?, tagNegate: Bool,
+        buddy: String?, buddyNegate: Bool,
         marineLife: [String], marineLifeMode: FilterMarineLifeMode
     ) -> [Dive] {
         dives.filter { dive in
@@ -134,6 +143,12 @@ enum DiverFilter {
                     if tagNegate { if diveTags.contains(tag) { return false } }
                     else { if !diveTags.contains(tag) { return false } }
                 }
+            }
+            if let buddy = buddy {
+                let names = buddyNames(dive.buddies)
+                if buddy.isEmpty { if !names.isEmpty { return false } }
+                else if buddyNegate { if names.contains(buddy) { return false } }
+                else { if !names.contains(buddy) { return false } }
             }
             if !diveMatchesMarineLifeFilter(dive, species: marineLife, mode: marineLifeMode) { return false }
             return true

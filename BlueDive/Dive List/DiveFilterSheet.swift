@@ -30,6 +30,7 @@ struct DiveFilterSheet: View {
     let availableCountries: [String]
     let availableDiveTypes: [String]
     let availableTags: [String]
+    let availableBuddies: [String]
     let availableMarineLife: [String]
     var showSort: Bool = true
 
@@ -46,6 +47,8 @@ struct DiveFilterSheet: View {
     @Binding var filterDiveTypeNegate: Bool
     @Binding var filterTag: String?
     @Binding var filterTagNegate: Bool
+    @Binding var filterBuddy: String?
+    @Binding var filterBuddyNegate: Bool
     @Binding var filterMarineLife: [String]
     @Binding var filterMarineLifeMode: FilterMarineLifeMode
     @Binding var sortOrder: DiveSortOrder
@@ -66,6 +69,7 @@ struct DiveFilterSheet: View {
         if filterCountry != nil { count += 1 }
         if filterDiveType != nil { count += 1 }
         if filterTag != nil { count += 1 }
+        if filterBuddy != nil { count += 1 }
         if !filterMarineLife.isEmpty { count += 1 }
         return count
     }
@@ -129,7 +133,7 @@ struct DiveFilterSheet: View {
 
     // MARK: - Choice Filters
 
-    /// Year, Country, Dive type, Tags and Gas type: single-choice filters shown as the rows
+    /// Year, Country, Dive type, Tags, Buddies and Gas type: single-choice filters shown as the rows
     /// of one card, like a Settings list — icon and name leading, the current value trailing
     /// as a menu, with its Include/Exclude control underneath once a value is set. Each row
     /// stays short however many values the logbook holds, and every current choice is
@@ -219,6 +223,27 @@ struct DiveFilterSheet: View {
                         .tag(String?.some(""))
                     ForEach(availableTags, id: \.self) { tag in
                         Text(verbatim: tag).tag(String?.some(tag))
+                    }
+                }
+            }
+
+            if !availableBuddies.isEmpty {
+                Divider()
+                FilterChoiceRow(
+                    Text("Buddies"),
+                    icon: "person.2.fill",
+                    value: choiceLabel(filterBuddy, none: NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no buddy recorded")),
+                    color: .indigo,
+                    selection: choiceSelection($filterBuddy, negate: $filterBuddyNegate),
+                    negate: $filterBuddyNegate,
+                    hasValue: filterBuddy?.isEmpty == false
+                ) {
+                    Text(NSLocalizedString("All", bundle: Bundle.forAppLanguage(), comment: "Filter menu option for selecting all items"))
+                        .tag(String?.none)
+                    Text(NSLocalizedString("None", bundle: Bundle.forAppLanguage(), comment: "Filter option to show dives with no buddy recorded"))
+                        .tag(String?.some(""))
+                    ForEach(availableBuddies, id: \.self) { buddy in
+                        Text(verbatim: buddy).tag(String?.some(buddy))
                     }
                 }
             }
@@ -714,6 +739,8 @@ struct DiveFilterSheet: View {
                         filterDiveTypeNegate = false
                         filterTag            = nil
                         filterTagNegate      = false
+                        filterBuddy          = nil
+                        filterBuddyNegate    = false
                         filterMarineLife     = []
                         filterMarineLifeMode = .any
                         marineLifeInput      = ""

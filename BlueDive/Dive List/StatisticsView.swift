@@ -55,6 +55,8 @@ struct StatisticsView: View {
     @State private var filterDiveTypeNegate: Bool = false
     @State private var filterTag: String? = nil
     @State private var filterTagNegate: Bool = false
+    @State private var filterBuddy: String? = nil
+    @State private var filterBuddyNegate: Bool = false
     @State private var filterMarineLife: [String] = []
     @State private var filterMarineLifeMode: FilterMarineLifeMode = .any
     @State private var filterSortOrder: DiveSortOrder = .dateDesc
@@ -139,6 +141,7 @@ struct StatisticsView: View {
             country: filterCountry, countryNegate: filterCountryNegate,
             diveType: filterDiveType, diveTypeNegate: filterDiveTypeNegate,
             tag: filterTag, tagNegate: filterTagNegate,
+            buddy: filterBuddy, buddyNegate: filterBuddyNegate,
             marineLife: filterMarineLife, marineLifeMode: filterMarineLifeMode
         )
     }
@@ -173,6 +176,11 @@ struct StatisticsView: View {
         }
         return tags.sorted()
     }
+    private func availableBuddies(in diverDives: [Dive]) -> [String] {
+        var buddies = Set<String>()
+        for dive in diverDives { DiverFilter.buddyNames(dive.buddies).forEach { buddies.insert($0) } }
+        return buddies.sorted()
+    }
     private func availableMarineLife(in diverDives: [Dive]) -> [String] {
         var species = Set<String>()
         for dive in diverDives { dive.seenFish?.forEach { s in let n = s.name.trimmingCharacters(in: .whitespaces); if !n.isEmpty { species.insert(n) } } }
@@ -188,13 +196,14 @@ struct StatisticsView: View {
         if filterCountry != nil         { count += 1 }
         if filterDiveType != nil        { count += 1 }
         if filterTag != nil             { count += 1 }
+        if filterBuddy != nil           { count += 1 }
         if !filterMarineLife.isEmpty    { count += 1 }
         if filterMarineLifeMode != .any { count += 1 }
         return count
     }
 
     private var filterTaskId: String {
-        "\(store.dives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(filterGasType ?? ""):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(filterCountry ?? ""):\(filterCountryNegate):\(filterDiveType ?? ""):\(filterDiveTypeNegate):\(filterTag ?? ""):\(filterTagNegate):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(statsVersion):\(store.liveDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
+        "\(store.dives.count):\(selectedDiver):\(filterYear ?? -1):\(filterYearNegate):\(String(describing: filterGasType)):\(filterGasTypeNegate):\(filterMinDepth):\(filterMaxDepth):\(filterMinRating):\(String(describing: filterCountry)):\(filterCountryNegate):\(String(describing: filterDiveType)):\(filterDiveTypeNegate):\(String(describing: filterTag)):\(filterTagNegate):\(String(describing: filterBuddy)):\(filterBuddyNegate):\(filterMarineLife.joined(separator: ",")):\(filterMarineLifeMode):\(locale.identifier):\(statsVersion):\(store.liveDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
     }
 
     private func computeStats(_ dives: [Dive], locale: Locale) async {
@@ -726,6 +735,7 @@ struct StatisticsView: View {
                     availableCountries: availableCountries(in: diverDives),
                     availableDiveTypes: availableDiveTypes(in: diverDives),
                     availableTags: availableTags(in: diverDives),
+                    availableBuddies: availableBuddies(in: diverDives),
                     availableMarineLife: availableMarineLife(in: diverDives),
                     showSort: false,
                     filterYear: $filterYear,
@@ -741,6 +751,8 @@ struct StatisticsView: View {
                     filterDiveTypeNegate: $filterDiveTypeNegate,
                     filterTag: $filterTag,
                     filterTagNegate: $filterTagNegate,
+                    filterBuddy: $filterBuddy,
+                    filterBuddyNegate: $filterBuddyNegate,
                     filterMarineLife: $filterMarineLife,
                     filterMarineLifeMode: $filterMarineLifeMode,
                     sortOrder: $filterSortOrder

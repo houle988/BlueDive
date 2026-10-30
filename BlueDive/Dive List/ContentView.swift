@@ -375,6 +375,7 @@ struct ContentView: View {
                     availableCountries: store.cachedAvailableCountries,
                     availableDiveTypes: store.cachedAvailableDiveTypes,
                     availableTags: store.cachedAvailableTags,
+                    availableBuddies: store.cachedAvailableBuddies,
                     availableMarineLife: store.cachedAvailableMarineLife,
                     filterYear: $store.filterYear,
                     filterYearNegate: $store.filterYearNegate,
@@ -389,6 +390,8 @@ struct ContentView: View {
                     filterDiveTypeNegate: $store.filterDiveTypeNegate,
                     filterTag: $store.filterTag,
                     filterTagNegate: $store.filterTagNegate,
+                    filterBuddy: $store.filterBuddy,
+                    filterBuddyNegate: $store.filterBuddyNegate,
                     filterMarineLife: $store.filterMarineLife,
                     filterMarineLifeMode: $store.filterMarineLifeMode,
                     sortOrder: $store.sortOrder
@@ -698,6 +701,8 @@ struct ContentView: View {
             .onChange(of: store.filterDiveTypeNegate) { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterTag)            { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterTagNegate)      { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterBuddy)          { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterBuddyNegate)    { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterMarineLife)     { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterMarineLifeMode) { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.sortOrder)            { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
