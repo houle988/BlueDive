@@ -369,7 +369,7 @@ struct DiveCountWidgetView: View {
 
     private var formattedDiveCount: String {
         let nf = NumberFormatter()
-        nf.locale = entry.locale
+        nf.locale = .current // Numbers follow the OS region, not the in-app language
         nf.numberStyle = .decimal
         let count = max(0, entry.diveCount)
         return nf.string(from: NSNumber(value: count)) ?? "\(count)"
@@ -476,9 +476,15 @@ struct DiverStatsEntry: TimelineEntry {
 }
 
 private extension DiverStatsEntry {
+    // One literal key per unit: a key chosen by a ternary is invisible to Xcode's
+    // string extraction, which marks it stale and drops it from the catalog.
     var depthSymbol: String {
-        NSLocalizedString(depthUnit == "feet" ? "unit.depth.symbol.feet" : "unit.depth.symbol.meters",
-                          bundle: .forWidgetLocale(locale), comment: "Depth unit symbol")
+        if depthUnit == "feet" {
+            return NSLocalizedString("unit.depth.symbol.feet", bundle: .forWidgetLocale(locale),
+                                     value: "ft", comment: "Depth unit symbol for feet")
+        }
+        return NSLocalizedString("unit.depth.symbol.meters", bundle: .forWidgetLocale(locale),
+                                 value: "m", comment: "Depth unit symbol for metres")
     }
 
     func convertDepth(_ meters: Double) -> Double {
@@ -603,7 +609,7 @@ struct DiverStatsWidgetView: View {
     private var formattedDiveCount: String {
         guard entry.diveCount > 0 else { return "—" }
         let nf = NumberFormatter()
-        nf.locale = entry.locale
+        nf.locale = .current // Numbers follow the OS region, not the in-app language
         nf.numberStyle = .decimal
         return nf.string(from: NSNumber(value: entry.diveCount)) ?? "\(entry.diveCount)"
     }
@@ -611,7 +617,7 @@ struct DiverStatsWidgetView: View {
     private func formatMinutes(_ minutes: Int) -> String {
         let bundle = Bundle.forWidgetLocale(entry.locale)
         let nf = NumberFormatter()
-        nf.locale = entry.locale
+        nf.locale = .current // Numbers follow the OS region, not the in-app language
         nf.numberStyle = .decimal
         func fmt(_ n: Int) -> String { nf.string(from: NSNumber(value: n)) ?? "\(n)" }
         if minutes >= 60 {
@@ -641,7 +647,7 @@ struct DiverStatsWidgetView: View {
         guard entry.maxDepthMeters > 0 else { return "—" }
         let value = entry.convertDepth(entry.maxDepthMeters)
         let nf = NumberFormatter()
-        nf.locale = entry.locale
+        nf.locale = .current // Numbers follow the OS region, not the in-app language
         nf.numberStyle = .decimal
         let decimals = entry.depthUnit == "feet" ? 0 : 1
         nf.minimumFractionDigits = decimals
@@ -659,7 +665,7 @@ struct DiverStatsWidgetView: View {
         let to = cal.startOfDay(for: entry.date)
         let days = max(0, cal.dateComponents([.day], from: from, to: to).day ?? 0)
         let nf = NumberFormatter()
-        nf.locale = entry.locale
+        nf.locale = .current // Numbers follow the OS region, not the in-app language
         nf.numberStyle = .decimal
         return nf.string(from: NSNumber(value: days)) ?? "\(days)"
     }
