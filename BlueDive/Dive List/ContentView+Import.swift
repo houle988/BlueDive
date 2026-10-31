@@ -1061,6 +1061,7 @@ extension ContentView {
             siteAltitude: diveData.site?.altitude,
             siteLatitude: diveData.site?.latitude,
             siteLongitude: diveData.site?.longitude,
+            surfacePressure: diveData.surfacePressure,
             profileSamples: profilePoints
         )
 
@@ -1440,6 +1441,9 @@ extension ContentView {
         // stop lists concatenate directly with no time offset.
         earlier.decoStops = earlier.decoStops + later.decoStops
         earlier.isDecompressionDive = earlier.isDecompressionDive || later.isDecompressionDive
+        if earlier.surfacePressure == nil {
+            earlier.surfacePressure = later.surfacePressure
+        }
         if earlier.decompressionAlgorithm == nil {
             earlier.decompressionAlgorithm = later.decompressionAlgorithm
         }

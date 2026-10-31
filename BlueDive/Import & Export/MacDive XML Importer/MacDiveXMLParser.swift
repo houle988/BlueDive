@@ -40,6 +40,10 @@ struct BlueDiveGlobalData: Sendable {
     // when the exported dive had one). nil for every other format, whose `duration` is the
     // file's own dive time. `var` with a nil default so the other parsers can omit it.
     var exportedDurationSeconds: Int? = nil
+    /// The surface (atmospheric) pressure the file records for the dive, in bar (BlueDive XML
+    /// `<surfacePressure>`, Subsurface `<surface pressure>`, UDDF `<surfacepressure>`); nil when
+    /// the format or the dive has none. `var` with a nil default so other parsers can omit it.
+    var surfacePressure: Double? = nil
     let interval: Int?
 
     // MARK: Decompression

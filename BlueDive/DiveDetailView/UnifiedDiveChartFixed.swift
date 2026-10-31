@@ -1853,8 +1853,9 @@ struct UnifiedDiveChartOptimized: View {
         let profile: ProfileCacheID
         let tanksO2Hash: Int
         let hideClearedDecoStops: Bool
-        /// Helium, altitude, water type and depth unit, so the PPO₂ caches (which read altitude
-        /// and water type) are rebuilt when one is edited. (GF has its own key, in `GFTissueFeeder`.)
+        /// Helium, altitude, surface pressure, water type and depth unit, so the PPO₂ caches (which
+        /// read them through `PPO2Setup`) are rebuilt when one changes. (GF has its own key, in
+        /// `GFTissueFeeder`.)
         let tissueInputsHash: Int
     }
 
@@ -1864,12 +1865,13 @@ struct UnifiedDiveChartOptimized: View {
                       tissueInputsHash: tissueInputsHash)
     }
 
-    /// Fingerprint of the tanks' He fractions, the site altitude and water type, and the depth
-    /// unit, for `ChartCacheKey`. Read during body so @Observable tracks these as dependencies.
+    /// Fingerprint of the tanks' He fractions, the site altitude, the recorded surface pressure,
+    /// the water type and the depth unit, for `ChartCacheKey`. Read during body so @Observable tracks these as dependencies.
     private var tissueInputsHash: Int {
         var hasher = Hasher()
         for tank in dive.tanks { hasher.combine(tank.he) }
         hasher.combine(dive.siteAltitude)
+        hasher.combine(dive.surfacePressure)
         hasher.combine(dive.siteWaterType)
         hasher.combine(dive.importDistanceUnit)
         return hasher.finalize()
@@ -3625,6 +3627,7 @@ private struct GFTissueFeeder: View {
             hasher.combine(tank.he)
         }
         hasher.combine(dive.siteAltitude)
+        hasher.combine(dive.surfacePressure)
         hasher.combine(dive.siteWaterType)
         hasher.combine(dive.importDistanceUnit)
         let ready = candidatesDiveID == dive.id

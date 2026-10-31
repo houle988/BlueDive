@@ -92,6 +92,9 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
     private var tempAirTemp:    Double? = nil
     private var tempWaterTemp:  Double? = nil
     private var tempDCAirTemp:  Double? = nil
+    /// `<surface pressure='1.013 bar'/>` of the first dive computer: the surface pressure it
+    /// recorded, in bar.
+    private var tempDCSurfacePressure: Double? = nil
     private var tempDCWaterTemp: Double? = nil
 
     // Dive stats from first <divecomputer><depth>
@@ -256,6 +259,10 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         case "depth" where isInDiveComputer && tempMaxDepth == nil:
             tempMaxDepth  = attributeDict["max"].flatMap { parseSubsurfaceValue($0) }
             tempMeanDepth = attributeDict["mean"].flatMap { parseSubsurfaceValue($0) }
+
+        case "surface" where isInDiveComputer && tempDCSurfacePressure == nil:
+            // Subsurface writes the surface pressure in bar ('1.031 bar').
+            tempDCSurfacePressure = attributeDict["pressure"].flatMap { parseSubsurfaceValue($0) }
 
         case "temperature" where isInDiveComputer && tempDCAirTemp == nil:
             tempDCAirTemp   = attributeDict["air"].flatMap   { parseSubsurfaceValue($0) }
@@ -906,6 +913,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             maxDepth:          tempMaxDepth ?? 0.0,
             averageDepth:      tempMeanDepth,
             duration:          tempDuration,
+            surfacePressure:   Dive.validatedSurfacePressure(tempDCSurfacePressure),
             interval:          nil,
             cns:               tempCNS ?? tempMaxSampleCNS,
             decoModel:         tempDecoModel,
@@ -959,6 +967,7 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         tempAirTemp      = nil
         tempWaterTemp    = nil
         tempDCAirTemp    = nil
+        tempDCSurfacePressure = nil
         tempDCWaterTemp  = nil
         tempMaxDepth     = nil
         tempMeanDepth    = nil

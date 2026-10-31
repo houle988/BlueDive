@@ -42,6 +42,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private var currentAverageDepth: Double?
     private var currentDuration: Int = 0
     private var currentDurationSeconds: Int?   // <durationSeconds>: the dive computer's time
+    private var currentSurfacePressure: Double? // <surfacePressure>: bar, as recorded
     private var currentInterval: Int?
     private var currentCNS: Double?
     private var currentDecoModel: String?
@@ -651,6 +652,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         case "averageDepth":     currentAverageDepth = Double(text)
         case "duration":         currentDuration = parseSeconds(text) ?? 0
         case "durationSeconds":  currentDurationSeconds = parseSeconds(text)
+        case "surfacePressure":  currentSurfacePressure = Dive.validatedSurfacePressure(Double(text))
         case "surfaceInterval":  currentSurfaceInterval = parseSeconds(text) ?? 0
         case "cns":              currentCNS = Double(text)
         case "decoModel":        currentDecoModel = text.nilIfEmpty
@@ -707,6 +709,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
                 averageDepth: currentAverageDepth,
                 duration: currentDuration,
                 exportedDurationSeconds: currentDurationSeconds,
+                surfacePressure: currentSurfacePressure,
                 interval: currentInterval,
                 cns: currentCNS,
                 decoModel: currentDecoModel,
@@ -763,6 +766,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         currentAverageDepth = nil
         currentDuration = 0
         currentDurationSeconds = nil
+        currentSurfacePressure = nil
         currentInterval = nil
         currentCNS = nil
         currentDecoModel = nil

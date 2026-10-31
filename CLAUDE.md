@@ -126,6 +126,17 @@ Rules:
 - `DiveSummary.durationSeconds` holds `consistentDurationSeconds`. List rows do not show it, but it makes a seconds-only change (a re-download on another device with the same minutes) change the summary, so views keyed on `cachedSummaries` that show `formattedDuration` (Statistics longest/shortest, Trips) refresh. `\Dive.durationSeconds` is therefore in the row set of `classifyRemoteHistory`; it is not in the list set (sorting uses `duration`).
 - **Statistics shortest dive** counts a dive with `duration` 0 when it has `consistentDurationSeconds` (a dive under 30 s), as `isShorterDuration` orders it by its seconds.
 
+## Surface Pressure
+
+`Dive.surfacePressure` (optional) is the surface (atmospheric) pressure recorded by the dive computer (LibDCSwift's `DiveData.atmospheric`, `DC_FIELD_ATMOSPHERIC`) or by the imported file (UDDF `<surfacepressure>` in pascals, Subsurface `<surface pressure='… bar'>`, BlueDive XML `<surfacePressure>`). It is **always stored in bar**, whatever the dive's `importPressureUnit` (a weather quantity, not a tank pressure), and is **never estimated**: it is never filled from `siteAltitude`, and dives whose computer or file reports none have none.
+
+- **Write only validated values:** every path that stores it goes through `Dive.validatedSurfacePressure(_:)` (`Dive.validSurfacePressure`, 0.4–1.2 bar; `Dive.init` applies it). Out-of-range values (e.g. the 0 some computers report) store nothing. The library applies the same range (`GenericParser.validAtmosphericRange`).
+- **Bluetooth:** a download stores the computer's value; a re-download replaces it only when the computer reports one. **Merge Dives** keeps the earlier dive's value, else takes the later one's.
+- **Exports:** BlueDive XML writes `String(surfacePressure)` (lossless) and only when set; UDDF writes pascals. A file without the element (older exports) gives nil.
+- **Display:** only through `formattedSurfacePressure` ("1.013 bar", fixed in bar, locale decimals): the Conditions card and the PDF Site Details show it, "—" when nil.
+- **Calculations:** `PPO2Setup` (PPO₂ and the GF99 / Surface GF tissue model) uses it when set, else `atmosphericPressure(forAltitudeMeters:)` from the site altitude. That fallback lives only there; do not add another. Any cache key of a calculation that uses `PPO2Setup` (`tissueInputsHash`, the `GFTissueFeeder` key, `buhlmannPriorFingerprint`) must hash `surfacePressure`.
+- It is not part of `DiveSummary`, so remote edits to it need no `classifyRemoteHistory` entry. A new model attribute needs the CloudKit schema step below (`CD_surfacePressure`, DOUBLE).
+
 ## macOS Support (Native Universal App)
 
 BlueDive is a universal app: the same SwiftUI code builds for iOS/iPadOS and as a **native macOS** app (the "My Mac" destination). "Designed for iPad" is disabled (`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO`), so the iOS build never runs on a Mac and `ProcessInfo.processInfo.isiOSAppOnMac` is always `false` — do not use it.

@@ -931,6 +931,12 @@ extension BluetoothScannerView {
             dive.siteWaterType = waterType(forSalinity: sal)
         }
 
+        // Surface pressure, only when the computer reports one: a value from an earlier import
+        // is kept when this computer records none.
+        if let pressure = Dive.validatedSurfacePressure(diveData.atmospheric) {
+            dive.surfacePressure = pressure
+        }
+
         // Decompression stops
         dive.decoStops = Self.extractDecoStops(from: diveData)
 

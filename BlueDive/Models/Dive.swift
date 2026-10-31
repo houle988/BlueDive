@@ -385,6 +385,15 @@ final class Dive {
     var minTemperature: Double?
     var airTemperature: Double? // Air temperature
     var maxTemperature: Double? // Maximum water temperature
+
+    // MARK: Surface Pressure
+
+    /// The surface (atmospheric) pressure recorded by the dive computer or an imported file, in
+    /// bar, exactly as reported: always bar, whatever `importPressureUnit` is (that unit is for
+    /// tank pressures). Nil when none was recorded; never estimated from the altitude, which
+    /// `PPO2Setup` uses only in its calculation when this is nil. Stored through
+    /// `validatedSurfacePressure(_:)`; shown with `formattedSurfacePressure`.
+    var surfacePressure: Double?
     
     // MARK: Gas & Cylinder — stored in TankData array
     
@@ -1407,6 +1416,7 @@ final class Dive {
         siteAltitude: Double? = nil,
         siteLatitude: Double? = nil,
         siteLongitude: Double? = nil,
+        surfacePressure: Double? = nil,
         profileSamples: [DiveProfilePoint] = [],
         decoStops: [DecoStop] = []
     ) {
@@ -1461,6 +1471,7 @@ final class Dive {
         self.siteAltitude = siteAltitude
         self.siteLatitude = siteLatitude
         self.siteLongitude = siteLongitude
+        self.surfacePressure = Self.validatedSurfacePressure(surfacePressure)
         self.photosData = []
         self.seenFish = []
         self.usedGear = []
@@ -1485,6 +1496,24 @@ extension Dive {
     // or the imported file's own dive time, when one was provided. Every writer goes through
     // `setDuration(seconds:)`, `setDuration(minutes:)` or `setImportedDuration(...)`, so the
     // two fields never disagree.
+
+    /// Accepted surface pressures in bar, the same range as LibDCSwift's
+    /// `GenericParser.validAtmosphericRange`: about 6 000 m of altitude up to the strongest
+    /// sea-level highs. A value outside it (e.g. 0 in a file) is a placeholder, not a reading.
+    static let validSurfacePressure: ClosedRange<Double> = 0.4...1.2
+
+    /// `value` when it is a plausible surface pressure (finite, within `validSurfacePressure`),
+    /// else nil. Used by every path that stores `surfacePressure` from a computer or a file.
+    static func validatedSurfacePressure(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, validSurfacePressure.contains(value) else { return nil }
+        return value
+    }
+
+    /// The recorded surface pressure for display, in bar with 3 decimals in the OS region's
+    /// format (e.g. "1.013 bar"), or nil when none was recorded.
+    var formattedSurfacePressure: String? {
+        surfacePressure.map { $0.localizedString(decimals: 3, minDecimals: 3) + " bar" }
+    }
 
     /// Accepted dive times in seconds: below the value that would round to 3600 minutes
     /// (60 hours, which the legacy "≥ 3600 is seconds" rule would misread). Anything else is

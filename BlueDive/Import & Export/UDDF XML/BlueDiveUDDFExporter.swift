@@ -471,6 +471,10 @@ enum BlueDiveUDDFExporter {
             lines.append("            <passedtime>\(si * 60)</passedtime>")
             lines.append("          </surfaceintervalbeforedive>")
         }
+        // Surface pressure recorded by the computer or a file: UDDF wants pascals.
+        if let surfacePressure = dive.surfacePressure {
+            lines.append("          <surfacepressure>\(formatDouble(surfacePressure * 100_000))</surfacepressure>")
+        }
         // Site link
         if let siteId = siteMap.first(where: { $0.value.id == dive.id })?.key {
             lines.append("          <link ref=\"\(xmlEscape(siteId))\"/>")

@@ -226,6 +226,11 @@ enum BlueDiveXMLExporter {
         if let computerSeconds = dive.consistentDurationSeconds {
             lines.append(xmlTag("durationSeconds", String(computerSeconds),                                        indent: 4))
         }
+        // The surface pressure the computer or a file recorded (bar), only when the dive has one,
+        // written in full (`String(Double)`, the shortest exact form) so a re-import keeps it.
+        if let surfacePressure = dive.surfacePressure {
+            lines.append(xmlTag("surfacePressure", String(surfacePressure),                                         indent: 4))
+        }
         lines.append(xmlTag("surfaceInterval", surfaceIntervalMinutes(from: dive.surfaceInterval).map(String.init) ?? "", indent: 4))
 
         // Decompression

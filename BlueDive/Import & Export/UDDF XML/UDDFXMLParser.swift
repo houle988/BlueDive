@@ -113,6 +113,9 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var currentDuration: Int = 0
     private var currentCNS: Double?
     private var currentTempAir: Double?
+    /// `<informationbeforedive><surfacepressure>`: the surface pressure at the dive spot, in bar
+    /// (UDDF stores pascals).
+    private var currentSurfacePressure: Double?
     private var currentTempLow: Double?
     private var currentVisibility: String?
     private var currentWeight: Double?
@@ -617,6 +620,12 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             if isInInformationBeforeDive {
                 if let k = Double(text) { currentTempAir = kelvinToCelsius(k) }
             }
+        case "surfacepressure":
+            // UDDF: pascals (e.g. 102000.0 for 1 020 mbar); stored in bar, like every pressure
+            // this parser reads.
+            if isInInformationBeforeDive, let pascals = Double(text) {
+                currentSurfacePressure = Dive.validatedSurfacePressure(pascals / 100_000)
+            }
         case "platform":
             if isInInformationBeforeDive { currentEntryType = text.nilIfEmpty }
         case "purpose":
@@ -893,6 +902,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             maxDepth: currentMaxDepth,
             averageDepth: currentAverageDepth,
             duration: currentDuration,
+            surfacePressure: currentSurfacePressure,
             interval: nil,
             cns: currentCNS,
             decoModel: decoModelName,
@@ -985,6 +995,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         currentDuration = 0
         currentCNS = nil
         currentTempAir = nil
+        currentSurfacePressure = nil
         currentTempLow = nil
         currentVisibility = nil
         currentWeight = nil

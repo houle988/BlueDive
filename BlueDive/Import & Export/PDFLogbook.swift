@@ -236,7 +236,7 @@ struct PDFDiveLogbook {
         let siteDetailWidth = contentWidth - infoWidth - infoGap
         let siteDetailX = margin + infoWidth + infoGap
         let topSectionMinH = max(fieldGridHeight(fieldCount: 8, columns: 2),
-                                 fieldGridHeight(fieldCount: 15, columns: 3))
+                                 fieldGridHeight(fieldCount: 16, columns: 3))
         let infoY = drawDiveInfo(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: y, width: infoWidth, tempUnit: tempUnit, minHeight: topSectionMinH)
         let siteDetailY = drawSiteDetails(ctx: ctx, dive: dive, x: siteDetailX, y: y, width: siteDetailWidth, minHeight: topSectionMinH)
         y = min(infoY, siteDetailY)
@@ -523,6 +523,8 @@ struct PDFDiveLogbook {
             (NSLocalizedString("GPS Entry", bundle: loc, comment: ""),      gpsStr,                                     accentGreen),
             (NSLocalizedString("GPS Exit", bundle: loc, comment: ""),      gpsExitStr,                                 accentTeal),
             (NSLocalizedString("Altitude", bundle: loc, comment: ""),      altStr,                                     accentOrange),
+            // Recorded by the dive computer or the imported file (bar), never estimated.
+            (NSLocalizedString("Surface Pressure", bundle: loc, value: "Surface Pressure", comment: "Logbook PDF site field: the surface (atmospheric) pressure recorded by the dive computer or the imported file, in bar"), dive.formattedSurfacePressure ?? "—", accentCyan),
         ]
 
         return drawFieldGrid(ctx: ctx, title: NSLocalizedString("SITE DETAILS", bundle: loc, comment: ""), titleColor: accentGreen,

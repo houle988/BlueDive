@@ -75,9 +75,9 @@ extension DiveDetailView {
 
             #if os(macOS)
             // The Mac window is wide enough for two columns: the air conditions (air
-            // temperature, weather, wind) on the left, the water conditions on the right. A
-            // Grid keeps each pair of rows aligned, while each column draws its own dividers
-            // and a vertical line separates them.
+            // temperature, weather, wind, surface pressure) on the left, the water conditions on
+            // the right. A Grid keeps each pair of rows aligned, while each column draws its own
+            // dividers and a vertical line separates them.
             Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
                 GridRow {
                     conditionsAirTempRow.detailGridCell(column: 0, row: 0)
@@ -108,11 +108,11 @@ extension DiveDetailView {
                     conditionsCurrentRow.detailGridCell(column: 1, row: 3)
                 }
                 GridRow {
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    detailColumnDivider
                     detailColumnDivider
                 }
                 GridRow {
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    conditionsSurfacePressureRow.detailGridCell(column: 0, row: 4)
                     conditionsVisibilityRow.detailGridCell(column: 1, row: 4)
                 }
             }
@@ -137,6 +137,10 @@ extension DiveDetailView {
             Divider().background(.primary.opacity(0.2))
 
             conditionsWindDirectionRow
+
+            Divider().background(.primary.opacity(0.2))
+
+            conditionsSurfacePressureRow
 
             Divider().background(.primary.opacity(0.2))
 
@@ -211,6 +215,12 @@ extension DiveDetailView {
     private var conditionsWindDirectionRow: some View {
         ConditionRow(icon: "location.north", color: .indigo, label: "Wind Direction",
                     value: dive.windDirection.map { DiveConditionOptions.localizedWindDirection($0) } ?? "—")
+    }
+
+    // Surface pressure recorded by the dive computer or the imported file (bar, read-only)
+    private var conditionsSurfacePressureRow: some View {
+        ConditionRow(icon: "barometer", color: .brown, label: "Surface Pressure",
+                    value: dive.formattedSurfacePressure ?? "—")
     }
 
     // Surface conditions

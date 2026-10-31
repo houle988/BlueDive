@@ -839,6 +839,7 @@ extension BluetoothScannerView {
             siteAltitude: altitude,
             siteLatitude: latitude,
             siteLongitude: longitude,
+            surfacePressure: diveData.atmospheric,
             profileSamples: profileSamples
         )
 

@@ -13,8 +13,15 @@ nonisolated struct PPO2Setup {
     init(dive: Dive) {
         let isFeet = dive.importDistanceUnit == "feet"
         depthToMetres = isFeet ? 0.3048 : 1.0
-        let altMeters = isFeet ? (dive.siteAltitude ?? 0) * 0.3048 : (dive.siteAltitude ?? 0)
-        surfacePressure = atmosphericPressure(forAltitudeMeters: altMeters)
+        // The surface pressure the computer or a file recorded, else the site altitude's
+        // standard-atmosphere pressure (sea level without one). Only this calculation falls
+        // back to the altitude: nothing is stored from it.
+        if let recorded = dive.surfacePressure {
+            surfacePressure = recorded
+        } else {
+            let altMeters = isFeet ? (dive.siteAltitude ?? 0) * 0.3048 : (dive.siteAltitude ?? 0)
+            surfacePressure = atmosphericPressure(forAltitudeMeters: altMeters)
+        }
         waterDivisor = waterPressureDivisor(forWaterTypeString: dive.siteWaterType)
     }
 
@@ -543,6 +550,7 @@ func buhlmannPriorFingerprint(_ ids: [UUID], in store: DiveStore) -> Int {
         hasher.combine(dive.timestamp)
         hasher.combine(dive.resolvedDurationSeconds)
         hasher.combine(dive.siteAltitude)
+        hasher.combine(dive.surfacePressure)
         hasher.combine(dive.siteWaterType)
         hasher.combine(dive.importDistanceUnit)
         for tank in dive.tanks {
