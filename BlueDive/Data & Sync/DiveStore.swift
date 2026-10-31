@@ -1809,6 +1809,15 @@ final class DiveStore {
         }
     }
 
+    /// The listed dive `id` when it may be read, by the same rule as `liveDives` (not deleted,
+    /// not pending a remote deletion), else nil. For code that reads a few listed dives'
+    /// attributes by identifier (e.g. the GF tissue model's earlier dives).
+    func liveDive(id: UUID) -> Dive? {
+        guard let dive = diveByID[id], !dive.isDeleted, dive.modelContext != nil,
+              !pendingRemoteDeletedPIDs.contains(dive.persistentModelID) else { return nil }
+        return dive
+    }
+
     /// Schedules the debounced search pass, which reads the notes matches again, while a notes
     /// search is active.
     private func scheduleNotesSearch() {

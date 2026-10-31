@@ -112,6 +112,11 @@ extension Color {
         readableOnTint(darkMode: .pink, lightMode: (red: 0.62, green: 0.10, blue: 0.30))
     }
 
+    /// Magenta (`gfMagenta`): GF chip.
+    static var readableMagenta: Color {
+        readableOnTint(darkMode: Color(red: 0.80, green: 0.20, blue: 0.70), lightMode: (red: 0.52, green: 0.08, blue: 0.44))
+    }
+
     /// Text colour for a label drawn on a light tint of its own colour (badges, chart chips):
     /// keeps `darkMode` unchanged in dark mode and uses the deeper sRGB `lightMode` colour in
     /// light mode, where the original colour on its own light tint is hard to read.

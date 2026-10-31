@@ -34,6 +34,9 @@ struct ChartInterpolatedPoint {
     /// where that sample reported none (e.g. on open-circuit bailout).
     let setpoint: Double?
     let ascentSpeed: Double?
+    /// GF99 and Surface GF calculated by BlueDive's ZHL-16C tissue model at the cursor time
+    /// (`BuhlmannProfile`); nil when the dive's gases do not allow the calculation.
+    let gradientFactors: BuhlmannZHL16C.Values?
 }
 
 /// Configuration de visibilité des lignes du graphique
@@ -43,6 +46,8 @@ struct ChartLineVisibility {
     var showPressure: Bool = false
     var showNDL: Bool = false
     var showPPO2: Bool = false
+    /// GF99 and Surface GF calculated by BlueDive (`BuhlmannProfile`).
+    var showGF: Bool = false
     /// Independent of the exclusive secondary metrics — deco event bands can be shown
     /// alongside any other overlay because they are background shading, not axis-mapped lines.
     var showDeco: Bool = false
@@ -58,6 +63,7 @@ struct ChartLineVisibility {
         case "pressure":    v.showPressure = true
         case "ndl":         v.showNDL = true
         case "ppo2":        v.showPPO2 = true
+        case "gf":          v.showGF = true
         default:            break
         }
         v.showDeco = UserDefaults.standard.bool(forKey: decoKey)
@@ -71,6 +77,7 @@ struct ChartLineVisibility {
         else if showTemperature { value = "temperature" }
         else if showPressure    { value = "pressure" }
         else if showNDL         { value = "ndl" }
+        else if showGF          { value = "gf" }
         else                    { value = "none" }
         UserDefaults.standard.set(value, forKey: Self.defaultsKey)
         UserDefaults.standard.set(showDeco, forKey: Self.decoKey)
@@ -84,65 +91,6 @@ struct ChartLineVisibility {
 final class SharedChartLineVisibility {
     static let shared = SharedChartLineVisibility()
     var value = ChartLineVisibility.restored()
-}
-
-// MARK: - PPO₂ computation helpers (shared by chart layer and tooltip cache)
-
-/// Per-dive constants used for Dalton's-Law PPO₂ computation.
-/// Build once per dive; call ppo2(o2Fraction:rawDepth:) per sample.
-fileprivate struct PPO2Setup {
-    let depthToMetres: Double
-    let surfacePressure: Double
-    let waterDivisor: Double
-
-    init(dive: Dive) {
-        let isFeet = dive.importDistanceUnit == "feet"
-        depthToMetres = isFeet ? 0.3048 : 1.0
-        let altMeters = isFeet ? (dive.siteAltitude ?? 0) * 0.3048 : (dive.siteAltitude ?? 0)
-        surfacePressure = atmosphericPressure(forAltitudeMeters: altMeters)
-        waterDivisor = waterPressureDivisor(forWaterTypeString: dive.siteWaterType)
-    }
-
-    func ppo2(o2Fraction: Double, rawDepth: Double) -> Double {
-        o2Fraction * (rawDepth * depthToMetres / waterDivisor + surfacePressure)
-    }
-}
-
-/// Builds a per-sample representative PPO₂ map for all profile samples in `dive`.
-/// Priority per sample: device voted/controller PPO₂ (DC_SENSOR_NONE) →
-/// median of physical O₂ cells → computed from gas mix + depth (Dalton's Law), the last only
-/// for open-circuit samples: a sample with a CCR setpoint is on the loop, where the breathed
-/// PPO₂ is not the diluent's, so it gets no PPO₂ unless the computer reported one.
-fileprivate func buildPPO2Map(for dive: Dive) -> [UUID: Double] {
-    let tanks = dive.tanks
-    let setup = tanks.isEmpty ? nil : PPO2Setup(dive: dive)
-    var lastKnownGasIdx: Int? = tanks.count > 1 ? 0 : nil
-    var result: [UUID: Double] = [:]
-    for sample in dive.profileSamples {
-        if let g = sample.currentGas, g >= 0, g < tanks.count { lastKnownGasIdx = g }
-        if let voted = sample.ppo2 {
-            // Device-provided voted/controller value (DC_SENSOR_NONE) — Shearwater, Divesoft, Oceanic, etc.
-            result[sample.id] = voted
-        } else if let sensors = sample.sensorPPO2, !sensors.isEmpty {
-            // Physical sensors only (OSTC, Halcyon Symbios, etc.): compute median on the fly.
-            // Median is robust to a single degraded/outlier cell without a tuning threshold.
-            let sorted = sensors.values.sorted()
-            let mid = sorted.count / 2
-            result[sample.id] = sorted.count.isMultiple(of: 2)
-                ? (sorted[mid - 1] + sorted[mid]) / 2.0
-                : sorted[mid]
-        } else if let s = setup, sample.setpoint == nil {
-            // OC fallback: no sensor data — compute from gas mix + depth (Dalton's Law).
-            let gasIdx: Int?
-            if let idx = sample.currentGas, idx >= 0, idx < tanks.count { gasIdx = idx }
-            else if tanks.count == 1 { gasIdx = 0 }
-            else { gasIdx = lastKnownGasIdx }
-            if let idx = gasIdx, tanks[idx].o2 > 0 {
-                result[sample.id] = s.ppo2(o2Fraction: tanks[idx].o2, rawDepth: sample.depth)
-            }
-        }
-    }
-    return result
 }
 
 /// Sorted O2 sensor indices that have per-sensor PPO2 data across all profile samples.
@@ -264,10 +212,21 @@ fileprivate struct ProfileCacheID: Equatable {
     }
 }
 
+/// A gradient factor as a whole percentage in the OS region's format ("78 %" or "78%"), or
+/// "≤ 0 %" at or below 0, while the tissues are not supersaturated (tooltip and legend).
+fileprivate func gradientFactorText(_ value: Double) -> String {
+    let percent = FloatingPointFormatStyle<Double>.Percent.percent.precision(.fractionLength(0)).locale(.current)
+    guard value.isFinite, value > 0 else { return "≤ " + 0.0.formatted(percent) }
+    return (value / 100).formatted(percent)
+}
+
 extension Color {
     /// Colour of the CCR setpoint: the chart's markers, line, legend entry and tooltip row, and
     /// the Samples table's SP column.
     static var ccrSetpoint: Color { .mint }
+
+    /// Colour of GF99 and Surface GF: the chip, lines, legend entries and tooltip rows.
+    static var gfMagenta: Color { Color(red: 0.80, green: 0.20, blue: 0.70) }
 }
 
 /// Line colour per physical O2 sensor index — cycles for N > 5.
@@ -347,10 +306,15 @@ struct ToggleButton: View {
     /// False for an icon-only chip where the row has no room for the label; the caller then
     /// sets the accessibility label.
     var showsLabel: Bool = true
+    /// True to show `shortLabel` (when there is one) without first trying `label`, for a row
+    /// laid out in its compact form.
+    var usesShortLabel: Bool = false
 
     @ViewBuilder
     private var labelText: some View {
-        if let shortLabel {
+        if usesShortLabel, let shortLabel {
+            Text(shortLabel).lineLimit(1).minimumScaleFactor(0.7)
+        } else if let shortLabel {
             ViewThatFits(in: .horizontal) {
                 Text(label).lineLimit(1)
                 Text(shortLabel).lineLimit(1).minimumScaleFactor(0.7)
@@ -501,6 +465,11 @@ private struct StaticChartLayer: View, Equatable {
     /// The profile's fingerprint, so the layer redraws when the samples are replaced (e.g. a
     /// re-download that adds setpoints) even though `dive.id` is stable.
     let profileID: ProfileCacheID
+    /// GF99 / Surface GF along the profile (built by the chart in `.task`, with the loading
+    /// carried over from earlier dives), drawn by the GF lines.
+    let tissueProfile: BuhlmannProfile?
+    /// Changes each time `tissueProfile` is rebuilt, so the Equatable check redraws the lines.
+    let tissueProfileVersion: Int
     #if os(macOS)
     /// How the plot height follows the window: the dive detail view's rule by default, a
     /// lower one for the dive list's profile preview.
@@ -513,6 +482,7 @@ private struct StaticChartLayer: View, Equatable {
         #endif
         return lhs.dive.id == rhs.dive.id &&
         lhs.profileID == rhs.profileID &&
+        lhs.tissueProfileVersion == rhs.tissueProfileVersion &&
         lhs.tanksO2Hash == rhs.tanksO2Hash &&
         lhs.unitsHash == rhs.unitsHash &&
         lhs.hideClearedDecoStops == rhs.hideClearedDecoStops &&
@@ -520,6 +490,7 @@ private struct StaticChartLayer: View, Equatable {
         lhs.visibility.showTemperature == rhs.visibility.showTemperature &&
         lhs.visibility.showPressure == rhs.visibility.showPressure &&
         lhs.visibility.showNDL == rhs.visibility.showNDL &&
+        lhs.visibility.showGF == rhs.visibility.showGF &&
         lhs.visibility.showPPO2 == rhs.visibility.showPPO2 &&
         lhs.visibility.showDeco == rhs.visibility.showDeco &&
         lhs.xMax == rhs.xMax &&
@@ -735,6 +706,9 @@ private struct StaticChartLayer: View, Equatable {
             if let top = ndlTopLabel(atY: y, scale: scale) { return top }
             return value.localizedString(decimals: decimals) + "min"
         }
+        if visibility.showGF {
+            return (value / 100).formatted(.percent.precision(.fractionLength(decimals)).locale(.current))
+        }
         return ""
     }
 
@@ -743,6 +717,7 @@ private struct StaticChartLayer: View, Equatable {
         if visibility.showPressure { return .red }
         if visibility.showTemperature { return .green }
         if visibility.showNDL { return Color.ndlYellow }
+        if visibility.showGF { return Color.gfMagenta }
         return .secondary
     }
 
@@ -774,8 +749,11 @@ private struct StaticChartLayer: View, Equatable {
         let pressureScale = visibility.showPressure ? pressureAxis(tankIndices: pressureTanks) : nil
         let temperatureScale = visibility.showTemperature ? temperatureAxis : nil
         let ndlScale = visibility.showNDL ? ndlAxis(series: ndlSeries) : nil
+        let gfSeries = visibility.showGF ? gfRenderData : []
+        // No % axis without a GF line (calculation pending, or a dive that cannot be calculated).
+        let gfScale = visibility.showGF && !gfSeries.isEmpty ? gfAxis(series: gfSeries) : nil
         // Same order as `secondaryAxisLabel` and `secondaryAxisColor`.
-        let rightAxisScale = ppo2Scale ?? pressureScale ?? temperatureScale ?? ndlScale
+        let rightAxisScale = ppo2Scale ?? pressureScale ?? temperatureScale ?? ndlScale ?? gfScale
         return Chart {
             legacyDecoBand
             depthMarks
@@ -785,6 +763,7 @@ private struct StaticChartLayer: View, Equatable {
             if let temperatureScale { temperatureMarks(scale: temperatureScale) }
             if let pressureScale { pressureMarks(scale: pressureScale, tankIndices: pressureTanks) }
             if let ndlScale { ndlMarks(scale: ndlScale, series: ndlSeries) }
+            if let gfScale { gfMarks(scale: gfScale, series: gfSeries) }
             if let ppo2Scale { ppo2Marks(scale: ppo2Scale, sensorIndices: ppo2Sensors, data: ppo2Data, setpointLine: setpoints.linePoints) }
         }
         // Explicit domain from yDomainMin (deepest, negative) to 0 (surface).
@@ -1130,6 +1109,70 @@ private struct StaticChartLayer: View, Equatable {
                     .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     .foregroundStyle(Color.ndlYellow)
             }
+        }
+    }
+
+    // MARK: - GF overlay (calculated by BlueDive's ZHL-16C tissue model)
+
+    /// GF99 and Surface GF at each profile sample (`BuhlmannProfile`), for the GF lines and
+    /// their scale. A value at or below 0 (the tissues are not supersaturated) is drawn at 0,
+    /// the bottom of the plot, so both lines run through the whole dive; the tooltip shows it as
+    /// "≤ 0 %". A line is broken only where the value cannot be calculated (each line starts a
+    /// new run there), never bridged across samples with no value.
+    private var gfRenderData: [(time: Double, value: Double, run: Int, surface: Bool)] {
+        guard let profile = tissueProfile else { return [] }
+        let inputs = profile.inputs
+        var data: [(time: Double, value: Double, run: Int, surface: Bool)] = []
+        var gf99Run = 0, surfaceRun = 0
+        var gf99Drawn = false, surfaceDrawn = false
+        for index in inputs.times.indices {
+            let values = profile.values(atSample: index)
+            let time = inputs.times[index]
+            if let gf99 = values?.gf99, gf99.isFinite {
+                data.append((time: time, value: max(0, gf99), run: gf99Run, surface: false))
+                gf99Drawn = true
+            } else if gf99Drawn {
+                gf99Run += 1
+                gf99Drawn = false
+            }
+            if let surfaceGF = values?.surfaceGF, surfaceGF.isFinite {
+                data.append((time: time, value: max(0, surfaceGF), run: surfaceRun, surface: true))
+                surfaceDrawn = true
+            } else if surfaceDrawn {
+                surfaceRun += 1
+                surfaceDrawn = false
+            }
+        }
+        return data
+    }
+
+    /// GF scale in whole percent: from 0 to the highest GF99 or Surface GF the chart draws,
+    /// never below 100 % so the raw Bühlmann limit (the 100 % line) is always on the plot.
+    private func gfAxis(series: [(time: Double, value: Double, run: Int, surface: Bool)]) -> SecondaryAxisScale {
+        let hi = series.map(\.value).max() ?? 0
+        return .rounded(low: 0, high: max(hi, 100), multipliers: [1, 2, 5], minimumStep: 10)
+    }
+
+    /// GF99 as a solid line and Surface GF as a dashed one, in magenta, with a thin dotted
+    /// line at 100 %, the raw Bühlmann M-value.
+    @ChartContentBuilder
+    private func gfMarks(scale: SecondaryAxisScale,
+                         series: [(time: Double, value: Double, run: Int, surface: Bool)]) -> some ChartContent {
+        if !series.isEmpty {
+            RuleMark(y: .value("GF 100 %", plotY(100, on: scale)))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
+                .foregroundStyle(Color.gfMagenta.opacity(0.7))
+        }
+        ForEach(Array(series.enumerated()), id: \.offset) { _, point in
+            LineMark(
+                x: .value("Time", point.time),
+                y: .value("GF", plotY(point.value, on: scale)),
+                series: .value("Sequence", point.surface ? "SurfaceGF-\(point.run)" : "GF99-\(point.run)")
+            )
+            .interpolationMethod(.linear)
+            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round,
+                                   dash: point.surface ? [6, 3] : []))
+            .foregroundStyle(Color.gfMagenta)
         }
     }
 
@@ -1669,6 +1712,28 @@ struct LegendDiamond: View {
     }
 }
 
+/// Short line swatch (solid or dashed) with a label and value, for line legend entries (GF).
+struct LegendLine: View {
+    let color: Color
+    let dashed: Bool
+    let text: Text
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 1))
+                path.addLine(to: CGPoint(x: 14, y: 1))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dashed ? [4, 2] : []))
+            .frame(width: 14, height: 2)
+            (text + Text(": \(value)"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 struct MetricLegendRow: View {
     let color: Color
     let label: Text
@@ -1788,11 +1853,41 @@ struct UnifiedDiveChartOptimized: View {
         let profile: ProfileCacheID
         let tanksO2Hash: Int
         let hideClearedDecoStops: Bool
+        /// Helium, altitude, water type and depth unit, so the PPO₂ caches (which read altitude
+        /// and water type) are rebuilt when one is edited. (GF has its own key, in `GFTissueFeeder`.)
+        let tissueInputsHash: Int
     }
 
     private var chartCacheKey: ChartCacheKey {
         ChartCacheKey(profile: profileCacheID, tanksO2Hash: tanksO2Hash,
-                      hideClearedDecoStops: prefs.hideClearedDecoStops)
+                      hideClearedDecoStops: prefs.hideClearedDecoStops,
+                      tissueInputsHash: tissueInputsHash)
+    }
+
+    /// Fingerprint of the tanks' He fractions, the site altitude and water type, and the depth
+    /// unit, for `ChartCacheKey`. Read during body so @Observable tracks these as dependencies.
+    private var tissueInputsHash: Int {
+        var hasher = Hasher()
+        for tank in dive.tanks { hasher.combine(tank.he) }
+        hasher.combine(dive.siteAltitude)
+        hasher.combine(dive.siteWaterType)
+        hasher.combine(dive.importDistanceUnit)
+        return hasher.finalize()
+    }
+
+    /// GF99 / Surface GF results, written by `GFTissueFeeder` (which owns the calculation and its
+    /// triggers, so cursor moves never re-evaluate them) and read through the accessors below.
+    @State private var gfCache = GFTissueCache()
+
+    /// The tissue profile when it was built for the dive shown, else nil: the same chart can
+    /// show another dive (the macOS dive-list preview, previous/next dive).
+    private var tissueProfile: BuhlmannProfile? {
+        gfCache.diveID == dive.id ? gfCache.profile : nil
+    }
+
+    /// The GF maxima when they were built for the dive shown, else nil.
+    private var gfMaxima: BuhlmannZHL16C.Values? {
+        gfCache.diveID == dive.id ? gfCache.maxima : nil
     }
     /// Sorted (time, pressure) readings for single-tank dives — enables interpolation across sparse AI transmitter gaps.
     @State private var cachedSinglePressureReadings: [(time: Double, pressure: Double)] = []
@@ -1840,6 +1935,7 @@ struct UnifiedDiveChartOptimized: View {
             buildDecoStopCache()
             if visibility.showPPO2 { rebuildPPO2Cache() }
         }
+        .background(GFTissueFeeder(dive: dive, showGF: visibility.showGF && hasGFData, cache: gfCache))
         .task(id: profileCacheID) {
             cachedSetpointRange = SetpointProfile.range(for: dive)
             cachedSensorIndices = sensorPPO2Indices(for: dive)
@@ -2075,6 +2171,7 @@ struct UnifiedDiveChartOptimized: View {
                     visibility.showPressure = false
                     visibility.showNDL = false
                     visibility.showPPO2 = false
+                    visibility.showGF = false
                 }
                 visibility[keyPath: keyPath] = newValue
                 visibility.save()
@@ -2082,9 +2179,11 @@ struct UnifiedDiveChartOptimized: View {
         )
     }
     
-    /// First group of chips: Depth, Temperature, NDL.
+    /// First group of chips: Depth, Temperature, NDL, GF. `shortLabels` shows Depth and
+    /// Temperature by their short labels; `gfShowsLabel` false makes the GF chip icon only, for a
+    /// row that has no room for a fourth labelled chip even then.
     @ViewBuilder
-    private var primaryToggleChips: some View {
+    private func primaryToggleChips(shortLabels: Bool = false, gfShowsLabel: Bool = true) -> some View {
         // Depth button - always on, non-interactive (using a constant binding)
         ToggleButton(
             isOn: .constant(true),
@@ -2093,7 +2192,8 @@ struct UnifiedDiveChartOptimized: View {
             shortLabel: "Prof.",
             color: .cyan,
             textColor: Color.readableCyan,
-            isAvailable: true
+            isAvailable: true,
+            usesShortLabel: shortLabels
         )
 
         ToggleButton(
@@ -2103,7 +2203,8 @@ struct UnifiedDiveChartOptimized: View {
             shortLabel: "Temp.",
             color: .green,
             textColor: Color.readableGreen,
-            isAvailable: hasTemperatureData
+            isAvailable: hasTemperatureData,
+            usesShortLabel: shortLabels
         )
 
         ToggleButton(
@@ -2114,6 +2215,17 @@ struct UnifiedDiveChartOptimized: View {
             textColor: Color.readableAmber,
             isAvailable: hasNDLData
         )
+
+        ToggleButton(
+            isOn: exclusiveBinding(for: \.showGF),
+            icon: "gauge.with.dots.needle.67percent",
+            label: "GF",
+            color: .gfMagenta,
+            textColor: Color.readableMagenta,
+            isAvailable: hasGFData,
+            showsLabel: gfShowsLabel
+        )
+        .accessibilityLabel(Text("GF"))
     }
 
     /// Second group of chips: Pressure, PPO₂, Deco.
@@ -2183,12 +2295,12 @@ struct UnifiedDiveChartOptimized: View {
             // when no chip would have to switch to its short label.
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
-                    primaryToggleChips
+                    primaryToggleChips()
                     secondaryToggleChips
                     photosChip(showsLabel: true)
                 }
                 VStack(spacing: 12) {
-                    HStack(spacing: 12) { primaryToggleChips }
+                    HStack(spacing: 12) { primaryToggleChips() }
                     HStack(spacing: 12) {
                         secondaryToggleChips
                         photosChip(showsLabel: true)
@@ -2196,7 +2308,14 @@ struct UnifiedDiveChartOptimized: View {
                 }
             }
             #else
-            HStack(spacing: 12) { primaryToggleChips }
+            // Full labels when the row has room; else Depth and Temperature by their short labels
+            // with GF still labelled; GF icon only where even that does not fit (a small iPhone,
+            // a long language, large text).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { primaryToggleChips() }
+                HStack(spacing: 12) { primaryToggleChips(shortLabels: true) }
+                HStack(spacing: 12) { primaryToggleChips(shortLabels: true, gfShowsLabel: false) }
+            }
 
             // Labelled like the other chips when the row has room; icon only where a fourth
             // labelled chip would not fit (a small iPhone).
@@ -2232,9 +2351,9 @@ struct UnifiedDiveChartOptimized: View {
         let depthBase = max(dive.displayMaxDepth, deepestSampleDepth)
 
         #if os(macOS)
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, heightRule: chartHeightRule)
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, tissueProfile: tissueProfile, tissueProfileVersion: gfCache.version, heightRule: chartHeightRule)
         #else
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID)
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, tissueProfile: tissueProfile, tissueProfileVersion: gfCache.version)
         #endif
         return layer
             .equatable()
@@ -2547,7 +2666,8 @@ struct UnifiedDiveChartOptimized: View {
             currentGas: gasSource.currentGas,
             // Step-hold from the earlier real sample, like the ceiling.
             setpoint: prev.setpoint,
-            ascentSpeed: ascentSpeed
+            ascentSpeed: ascentSpeed,
+            gradientFactors: tissueProfile?.values(atMinutes: cursorTime)
         )
     }
 
@@ -2566,7 +2686,8 @@ struct UnifiedDiveChartOptimized: View {
             events: sample.events,
             currentGas: sample.currentGas,
             setpoint: sample.setpoint,
-            ascentSpeed: ascentSpeed
+            ascentSpeed: ascentSpeed,
+            gradientFactors: tissueProfile?.values(atMinutes: cursorTime)
         )
     }
 
@@ -2650,6 +2771,7 @@ struct UnifiedDiveChartOptimized: View {
                 if showsTemperatureLegend { temperatureLegendGroup }
                 if showsPressureLegend { pressureLegendGroup(wrapping: true) }
                 if showsNDLLegend { ndlLegendGroup }
+                if showsGFLegend { gfLegendGroup(wrapping: true) }
                 if showsPPO2Legend { ppo2LegendGroup(wrapping: true) }
                 if showsDecoLegend { decoLegendGroup }
                 if hasGasChangeData { gasSwitchLegendGroup }
@@ -2659,11 +2781,11 @@ struct UnifiedDiveChartOptimized: View {
     }
 
     #if os(macOS)
-    /// Indices (0 = depth … 6 = gas switch, 7 = setpoint, the stacked legend's order) of the legend
+    /// Indices (0 = depth … 7 = gas switch, 8 = setpoint, the stacked legend's order) of the legend
     /// groups currently shown (macOS only).
     private var shownLegendGroups: [Int] {
         let shown = [showsDepthLegend, showsTemperatureLegend, showsPressureLegend,
-                     showsNDLLegend, showsPPO2Legend, showsDecoLegend, hasGasChangeData,
+                     showsNDLLegend, showsGFLegend, showsPPO2Legend, showsDecoLegend, hasGasChangeData,
                      hasSetpointData]
         return shown.indices.filter { shown[$0] }
     }
@@ -2685,9 +2807,10 @@ struct UnifiedDiveChartOptimized: View {
         case 1: temperatureLegendGroup
         case 2: pressureLegendGroup(wrapping: false)
         case 3: ndlLegendGroup
-        case 4: ppo2LegendGroup(wrapping: false)
-        case 5: decoLegendGroup
-        case 6: gasSwitchLegendGroup
+        case 4: gfLegendGroup(wrapping: false)
+        case 5: ppo2LegendGroup(wrapping: false)
+        case 6: decoLegendGroup
+        case 7: gasSwitchLegendGroup
         default: setpointLegendGroup(wrapping: false)
         }
     }
@@ -2708,6 +2831,7 @@ struct UnifiedDiveChartOptimized: View {
     private var showsTemperatureLegend: Bool { visibility.showTemperature && hasTemperatureData }
     private var showsPressureLegend: Bool { visibility.showPressure && hasPressureData }
     private var showsNDLLegend: Bool { visibility.showNDL && hasNDLData }
+    private var showsGFLegend: Bool { visibility.showGF && hasGFData }
     private var showsPPO2Legend: Bool { visibility.showPPO2 && ppo2Available && ppo2LegendHasRow }
 
     /// The voted or computed PPO₂ range the legend shows when there are no O₂ sensors. Cached
@@ -2762,6 +2886,63 @@ struct UnifiedDiveChartOptimized: View {
 
     private var ndlLegendGroup: some View {
         MetricLegendRow(color: .ndlYellow, label: "NDL", range: ndlRange)
+    }
+
+    /// GF99 (solid) and Surface GF (dashed) with the highest value of each, and a note that
+    /// BlueDive calculated them. With `wrapping` (the stacked legend) the entries wrap onto
+    /// further lines as needed, like the PPO₂ sensor entries.
+    @ViewBuilder
+    private func gfLegendGroup(wrapping: Bool) -> some View {
+        if wrapping {
+            WrappingChipLayout(spacing: 8) { gfLegendEntries }
+        } else {
+            HStack(spacing: 8) { gfLegendEntries }
+        }
+    }
+
+    /// The entries, with "max —" and no notes until something was calculated for the dive.
+    @ViewBuilder
+    private var gfLegendEntries: some View {
+        let maxima = gfMaxima
+        LegendLine(color: .gfMagenta, dashed: false, text: Text("GF99"),
+                   value: gfMaximumText(maxima?.gf99))
+        LegendLine(color: .gfMagenta, dashed: true, text: Text("Surface GF"),
+                   value: gfMaximumText(maxima?.surfaceGF))
+        if maxima != nil {
+            Text("Calculated by BlueDive (Bühlmann ZHL-16C)", comment: "Dive chart legend note: GF99 and Surface GF are calculated by BlueDive with the Bühlmann ZHL-16C model, not reported by the dive computer")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        if maxima != nil, let residual = tissueProfile?.residual {
+            if residual.missingDive {
+                Text("An earlier dive in the repetitive series could not be included: clean tissues at the start", comment: "Dive chart legend note: one of the same diver's earlier dives (each less than 48 hours before the next) has no profile or known gas, so GF99 and Surface GF start with clean tissues instead of including the earlier dives' nitrogen loading")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            } else if residual.includedDives > 0 {
+                Text(verbatim: String(format: NSLocalizedString("Earlier dives included: %@", bundle: .forAppLanguage(), value: "Earlier dives included: %@", comment: "Dive chart legend note: number of the same diver's earlier dives (less than 48 hours apart) whose nitrogen loading GF99 and Surface GF include; %@ is the number"),
+                                          Double(residual.includedDives).localizedString(decimals: 0)))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if maxima == nil, gfCache.diveID == dive.id, gfCache.notCalculable {
+            Text("GF could not be calculated for this dive", comment: "Dive chart legend note: the dive's gas is unknown from its first stretch (e.g. a tank with no O₂ recorded, or on the CCR loop with no gas that holds inert gas), so no GF99 or Surface GF could be calculated")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        if maxima != nil, tissueProfile?.inputs.usesSetpointAsPPO2 == true
+            || tissueProfile?.residual.usesSetpointAsPPO2 == true {
+            Text("Setpoint used where no PPO₂ was recorded", comment: "Dive chart legend note: on a CCR dive, GF99 and Surface GF use the setpoint as the breathed oxygen partial pressure where the dive computer recorded no PPO₂ (no voted value, no O₂ cell)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// "max 78 %" for the GF legend, "max ≤ 0 %" when the value never rises above 0, "max —"
+    /// while nothing is calculated or when nothing can be (never a value that was not calculated).
+    private func gfMaximumText(_ value: Double?) -> String {
+        String(format: NSLocalizedString("max %@", bundle: .forAppLanguage(), value: "max %@", comment: "Dive chart legend: highest GF99 or Surface GF of the dive; %@ is a percentage (e.g. '78 %'), '≤ 0 %', or '—' while nothing is calculated"),
+               value.map(gradientFactorText) ?? "—")
     }
 
     /// One entry per PPO₂ sensor when the dive has sensor readings, each with the range
@@ -2904,6 +3085,13 @@ struct UnifiedDiveChartOptimized: View {
         dive.profileSamples.contains { $0.tankPressure != nil }
     }
     
+    /// Whether the dive has what GF99 and Surface GF need: a known gas (a tank with O₂) and a
+    /// profile of at least two samples (see `buhlmannInputs`). A cheap check, so the chip's state
+    /// is known before any tissue calculation, which runs only while the chip is on.
+    private var hasGFData: Bool {
+        dive.tanks.contains { $0.o2 > 0 } && dive.profileSamples.count > 1
+    }
+
     private var hasNDLData: Bool {
         dive.profileSamples.contains { $0.ndl != nil && ($0.ndl ?? 0) < ndlSentinel }
     }
@@ -3157,6 +3345,14 @@ struct ChartTooltipView: View {
                 TooltipRow(icon: "timer", color: .ndlYellow, label: nLabel)
             }
 
+            // GF99 and Surface GF, calculated by BlueDive (ZHL-16C) — shown if enabled.
+            if visibility.showGF, let gf = point.gradientFactors {
+                TooltipRow(icon: "gauge.with.dots.needle.67percent", color: .gfMagenta,
+                           label: String(format: NSLocalizedString("GF99 %@", bundle: .forAppLanguage(), value: "GF99 %@", comment: "Dive chart tooltip row: GF99 calculated by BlueDive (Bühlmann ZHL-16C), the current supersaturation as a percentage of the M-value gradient; %@ is the percentage (e.g. '78 %') or '≤ 0 %' when the tissues are not supersaturated"), gradientFactorText(gf.gf99)))
+                TooltipRow(icon: "arrow.up.to.line", color: .gfMagenta,
+                           label: String(format: NSLocalizedString("Surface GF %@", bundle: .forAppLanguage(), value: "Surface GF %@", comment: "Dive chart tooltip row: Surface GF calculated by BlueDive (Bühlmann ZHL-16C), the supersaturation the diver would have on surfacing now, as a percentage of the M-value gradient; %@ is the percentage (e.g. '85 %') or '≤ 0 %' when the tissues would not be supersaturated"), gradientFactorText(gf.surfaceGF)))
+            }
+
             // PPO2 — shown if enabled; voted row always shown, then per-sensor rows for CCR
             if visibility.showPPO2 {
                 if let sensorData = point.sensorPPO2, !sensorData.isEmpty {
@@ -3351,4 +3547,196 @@ struct TooltipRow: View {
             .padding()
     }
     .background(Color.platformBackground)
+}
+
+// MARK: - GF tissue calculation (GF99 and Surface GF)
+
+/// GF99 / Surface GF results for one chart, shared between the chart (which reads them) and
+/// `GFTissueFeeder` (which writes them).
+@Observable
+final class GFTissueCache {
+    /// Tissue states along the profile, nil while the GF chip is off or when the dive cannot be
+    /// calculated.
+    var profile: BuhlmannProfile?
+    /// Highest GF99 and Surface GF at the calculated samples; nil when no more than the first
+    /// sample could be calculated.
+    var maxima: BuhlmannZHL16C.Values?
+    /// True when the dive was calculated but no more than its starting point is known (e.g. an
+    /// unknown mix or an unknown diluent from the first stretch): no line is drawn, and the
+    /// legend says so.
+    var notCalculable = false
+    /// The dive `profile` and `maxima` were built for.
+    var diveID: UUID?
+    /// Bumped when `profile` changes (the static chart layer's redraw signal).
+    var version = 0
+}
+
+/// Calculates the tissue profile for the chart's dive while the GF chip is on, starting from
+/// the loading left by the same diver's earlier dives, and recalculates it only when what it
+/// reads changes. A separate view, attached in the background, so the chart's cursor moves
+/// (which re-evaluate the chart's body) never re-evaluate the triggers below: its body reads
+/// only the dive, the chip and the candidate earlier dives, and so is re-evaluated only when
+/// one of them changes.
+private struct GFTissueFeeder: View {
+    let dive: Dive
+    let showGF: Bool
+    let cache: GFTissueCache
+
+    /// Optional so the chart previews run without a store; the app always provides one.
+    @Environment(DiveStore.self) private var store: DiveStore?
+    @Environment(\.modelContext) private var modelContext
+
+    /// The same diver's dives the calculation may carry loading from
+    /// (`buhlmannPriorCandidateIDs`), looked up while the chip is on, and the dive they were
+    /// looked up for: no calculation runs until they belong to the dive shown.
+    @State private var candidateIDs: [UUID] = []
+    @State private var candidatesDiveID: UUID?
+    /// Bumped when the store's dive summaries change while the chip is on, so the candidates
+    /// are looked up again.
+    @State private var summariesVersion = 0
+
+    /// What the candidates depend on: the dive, its start and diver, the logbook's dives and
+    /// the chip.
+    private struct CandidateKey: Equatable {
+        let diveID: UUID
+        let start: Date
+        let diver: String
+        let summariesVersion: Int
+        let showGF: Bool
+    }
+
+    /// What the calculation reads: the dive's samples (`ProfileCacheID`), start, gases, altitude,
+    /// water type and depth unit, the candidates (`buhlmannPriorFingerprint`, so an edit to an
+    /// unrelated dive recalculates nothing) and the chip.
+    private struct TissueKey: Equatable {
+        let diveID: UUID
+        let profile: ProfileCacheID
+        let start: Date
+        let inputsHash: Int
+        let candidatesReady: Bool
+        let priorsFingerprint: Int
+        let showGF: Bool
+    }
+
+    private var tissueKey: TissueKey {
+        var hasher = Hasher()
+        for tank in dive.tanks {
+            hasher.combine(tank.o2)
+            hasher.combine(tank.he)
+        }
+        hasher.combine(dive.siteAltitude)
+        hasher.combine(dive.siteWaterType)
+        hasher.combine(dive.importDistanceUnit)
+        let ready = candidatesDiveID == dive.id
+        let fingerprint = showGF && ready ? store.map { buhlmannPriorFingerprint(candidateIDs, in: $0) } ?? 0 : 0
+        return TissueKey(diveID: dive.id, profile: ProfileCacheID(dive: dive), start: dive.timestamp,
+                         inputsHash: hasher.finalize(), candidatesReady: ready,
+                         priorsFingerprint: fingerprint, showGF: showGF)
+    }
+
+    var body: some View {
+        Color.clear
+            .task(id: CandidateKey(diveID: dive.id, start: dive.timestamp, diver: dive.diverName,
+                                   summariesVersion: summariesVersion, showGF: showGF)) {
+                let ids = showGF ? (store.map { buhlmannPriorCandidateIDs(for: dive, in: $0) } ?? []) : []
+                if ids != candidateIDs { candidateIDs = ids }
+                // Ready only once looked up with the chip on, so turning it on calculates once.
+                candidatesDiveID = showGF ? dive.id : nil
+            }
+            .task(id: tissueKey) {
+                await rebuild()
+            }
+            // Only while the chip is on: with it off, logbook changes concern no chart.
+            .onChange(of: showGF ? store?.cachedSummaries : nil) { _, _ in
+                summariesVersion &+= 1
+            }
+    }
+
+    /// Builds the tissue profile while the chip is on, once the candidates belong to the dive;
+    /// clears it while the chip is off. The inputs are read here, on the main actor; the tissue
+    /// states are calculated off it, and that work stops when this task is cancelled (the
+    /// dive, its data or the chip changed meanwhile).
+    private func rebuild() async {
+        let diveID = dive.id
+        guard showGF, let inputs = buhlmannInputs(for: dive) else {
+            cache.diveID = diveID
+            cache.notCalculable = false
+            guard cache.profile != nil || cache.maxima != nil else { return }
+            cache.profile = nil
+            cache.maxima = nil
+            cache.version &+= 1
+            return
+        }
+        // Wait for this dive's candidates (the candidate task runs next and changes the key).
+        guard candidatesDiveID == diveID else { return }
+        // Read before any await. The task is cancelled when the dive, its data or the chip change,
+        // so after an await only cancellation is checked (no attribute of `dive` is read again).
+        let diveStart = dive.timestamp
+        guard let priors = await priorDives(), !Task.isCancelled else { return }
+        let work = Task.detached(priority: .userInitiated) { () -> (BuhlmannProfile, BuhlmannZHL16C.Values?)? in
+            let residual = BuhlmannZHL16C.residual(priorDives: priors, diveStart: diveStart,
+                                                   surfacePressure: inputs.surfacePressure)
+            guard !Task.isCancelled else { return nil }
+            let profile = BuhlmannProfile(inputs: inputs, residual: residual)
+            guard !Task.isCancelled else { return nil }
+            var gf99 = -Double.greatestFiniteMagnitude, surface = -Double.greatestFiniteMagnitude
+            var calculated = 0
+            for index in profile.states.indices {
+                guard let values = profile.values(atSample: index) else { continue }
+                calculated += 1
+                gf99 = max(gf99, values.gf99)
+                surface = max(surface, values.surfaceGF)
+            }
+            // The first sample alone is the starting state, not a calculation of the dive.
+            let maxima = calculated > 1 ? BuhlmannZHL16C.Values(gf99: gf99, surfaceGF: surface) : nil
+            return (profile, maxima)
+        }
+        let result = await withTaskCancellationHandler {
+            await work.value
+        } onCancel: {
+            work.cancel()
+        }
+        guard let result, !Task.isCancelled else { return }
+        // Only the starting point known: nothing of the dive was calculated, so nothing is drawn.
+        let profile = result.1 != nil ? result.0 : nil
+        if profile != cache.profile || cache.diveID != diveID {
+            cache.profile = profile
+            cache.version &+= 1
+        }
+        cache.maxima = result.1
+        cache.notCalculable = result.1 == nil
+        cache.diveID = diveID
+    }
+
+    /// The candidate earlier dives as `PriorDive`s, or nil when cancelled. The saved ones are read
+    /// off the main thread (`BuhlmannPriorReader`); a dive with unsaved changes (an edit waiting
+    /// for autosave), or one the reader could not read, is built here so its current values count.
+    private func priorDives() async -> [BuhlmannZHL16C.PriorDive]? {
+        guard let store else { return [] }
+        let candidates = candidateIDs.compactMap { store.liveDive(id: $0) }
+        guard !candidates.isEmpty else { return [] }
+        // Their identifiers, so no attribute of a candidate is read after the await (iCloud can
+        // delete one meanwhile; `liveDive(id:)` then re-checks each by identifier).
+        let ids = candidates.map(\.id)
+        let unsaved = Set((modelContext.insertedModelsArray + modelContext.changedModelsArray)
+            .compactMap { ($0 as? Dive)?.persistentModelID })
+        let toRead = candidates.map(\.persistentModelID).filter { !unsaved.contains($0) }
+        let container = modelContext.container
+        let reader = Task.detached(priority: .userInitiated) {
+            BuhlmannPriorReader.read(container: container, ids: toRead)
+        }
+        let read = await withTaskCancellationHandler {
+            await reader.value
+        } onCancel: {
+            reader.cancel()
+        }
+        guard let read, !Task.isCancelled else { return nil }
+        var priors: [BuhlmannZHL16C.PriorDive] = []
+        for id in ids {
+            // Re-checked after the await: iCloud can delete a dive meanwhile.
+            guard let dive = store.liveDive(id: id) else { continue }
+            priors.append(read[dive.persistentModelID] ?? buhlmannPriorDive(for: dive))
+        }
+        return priors
+    }
 }
