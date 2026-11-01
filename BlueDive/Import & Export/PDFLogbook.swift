@@ -286,12 +286,31 @@ struct PDFDiveLogbook {
         // Notes
         y -= 6
         let footerY = margin + 62
-        y = drawNotesSection(ctx: ctx, dive: dive, x: margin, y: y, width: contentWidth, footerY: footerY)
+        var notesLeft = drawNotesSection(ctx: ctx, dive: dive, x: margin, y: y, width: contentWidth, footerY: footerY)
 
         // Footer
         drawBrandedFooter(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: margin - 4, width: contentWidth, pageWidth: pageWidth)
 
         ctx.endPage()
+
+        // Notes too long for the first page continue on further pages, each with the same header
+        // and footer (signatures and brand bar) as the first, so every printed page identifies its
+        // dive and can be signed. The page cap only guards against a note that could never fit
+        // (Core Text places no line), which would otherwise loop forever.
+        var extraPages = 0
+        while let continuation = notesLeft, extraPages < 50 {
+            extraPages += 1
+            ctx.beginPage(mediaBox: &mediaBox)
+            drawPageBackground(ctx: ctx, width: pageWidth, height: pageHeight)
+            let notesTop = drawHeader(ctx: ctx, dive: dive, allDives: allDives, x: margin,
+                                      y: pageHeight - margin, width: contentWidth) - 6
+            notesLeft = drawNotesContinuation(continuation, ctx: ctx, x: margin, y: notesTop,
+                                              width: contentWidth, footerY: footerY)
+            drawBrandedFooter(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: margin - 4,
+                              width: contentWidth, pageWidth: pageWidth)
+            ctx.endPage()
+        }
+
         ctx.closePDF()
 
         return pdfData as Data
@@ -1310,65 +1329,114 @@ struct PDFDiveLogbook {
 
     // MARK: - Notes
 
-    private static func drawNotesSection(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat, footerY: CGFloat) -> CGFloat {
-        let notes = dive.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayNotes = notes.isEmpty ? NSLocalizedString("No notes", bundle: loc, comment: "") : notes
+    /// The part of the notes still to draw on the next page: the formatted text (at the size
+    /// it is drawn in) and where it continues. `startsNotes` when nothing was drawn yet.
+    private struct NotesContinuation {
+        let text: NSAttributedString
+        let location: Int
+        let startsNotes: Bool
+    }
 
+    private static let notesPalette = PDFNotesText.Palette(
+        text: textWhite, muted: textMuted,
+        quote: CGColor(red: 0.36, green: 0.38, blue: 0.42, alpha: 1.0),
+        accent: accentCyan, rule: divider,
+        codeBackground: CGColor(red: 0.90, green: 0.92, blue: 0.94, alpha: 1.0)
+    )
+
+    /// The notes at a base font size: "No notes" when empty, formatted as Markdown when Settings
+    /// → Dive Profile → Format notes as Markdown is on (as on the dive page), else plain text.
+    private static func notesText(for dive: Dive, size: CGFloat, width: CGFloat) -> NSAttributedString {
+        let notes = dive.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if notes.isEmpty {
+            return PDFNotesText.plain(NSLocalizedString("No notes", bundle: loc, comment: ""), size: size, color: textMuted)
+        }
+        if UserPreferences.shared.formatNotesAsMarkdown {
+            return PDFNotesText.markdown(notes, size: size, width: width, palette: notesPalette)
+        }
+        return PDFNotesText.plain(notes, size: size, color: textWhite)
+    }
+
+    /// Draws the notes card below the other sections of the first page. Notes that fit — at the
+    /// normal size or shrunk down to 4.5 pt, as before — are drawn whole. Longer notes are drawn at
+    /// the normal size and the rest is returned for the following pages; when the page has no
+    /// room for the card, all the notes are.
+    private static func drawNotesSection(ctx: CGContext, dive: Dive, x: CGFloat, y: CGFloat, width: CGFloat, footerY: CGFloat) -> NotesContinuation? {
         let titleH: CGFloat = 14
         let padBottom: CGFloat = 6
         let maxCardH = y - footerY - 4
-
-        guard maxCardH > 25 else { return y }
-
         let textAreaWidth = width - 20
-        let textAreaMaxHeight = maxCardH - titleH - padBottom
-
-        var currentFontSize: CGFloat = 7.5
+        let normalFontSize: CGFloat = 7.5
         let minFontSize: CGFloat = 4.5
 
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 0.5
-        paragraphStyle.lineBreakMode = .byWordWrapping
+        guard maxCardH > 25 else {
+            return NotesContinuation(text: notesText(for: dive, size: normalFontSize, width: textAreaWidth),
+                                     location: 0, startsNotes: true)
+        }
+        let textAreaMaxHeight = maxCardH - titleH - padBottom
 
-        func measureHeight(for size: CGFloat, text: String) -> CGFloat {
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: font(size: size),
-                .paragraphStyle: paragraphStyle
-            ]
-            let attrStr = NSAttributedString(string: text, attributes: attrs)
-            let framesetter = CTFramesetterCreateWithAttributedString(attrStr as CFAttributedString)
-            let constraints = CGSize(width: textAreaWidth, height: CGFloat.greatestFiniteMagnitude)
-            let suggestedSize = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRangeMake(0, 0), nil, constraints, nil)
-            return suggestedSize.height
+        var fontSize = normalFontSize
+        var text = notesText(for: dive, size: fontSize, width: textAreaWidth)
+        var textH = PDFNotesText.height(text, from: 0, width: textAreaWidth)
+        while textH > textAreaMaxHeight && fontSize > minFontSize {
+            fontSize -= 0.5
+            text = notesText(for: dive, size: fontSize, width: textAreaWidth)
+            textH = PDFNotesText.height(text, from: 0, width: textAreaWidth)
         }
 
-        var textH = measureHeight(for: currentFontSize, text: displayNotes)
-
-        while textH > textAreaMaxHeight && currentFontSize > minFontSize {
-            currentFontSize -= 0.5
-            textH = measureHeight(for: currentFontSize, text: displayNotes)
+        if textH <= textAreaMaxHeight {
+            drawNotesCard(text, from: 0, title: NSLocalizedString("NOTES", bundle: loc, comment: ""),
+                          ctx: ctx, x: x, y: y, width: width, textHeight: textH)
+            return nil
         }
 
-        let finalDrawingHeight = min(textH, textAreaMaxHeight)
-        let cardH = min(finalDrawingHeight + titleH + padBottom, maxCardH)
+        // Too long even at the smallest size: the normal size, continued on the next pages. When
+        // not even one line fits in the room left, the whole notes go to the next page rather
+        // than an empty card here.
+        text = notesText(for: dive, size: normalFontSize, width: textAreaWidth)
+        guard PDFNotesText.fittingEnd(text, from: 0, width: textAreaWidth, height: textAreaMaxHeight) > 0 else {
+            return NotesContinuation(text: text, location: 0, startsNotes: true)
+        }
+        let next = drawNotesCard(text, from: 0, title: NSLocalizedString("NOTES", bundle: loc, comment: ""),
+                                 ctx: ctx, x: x, y: y, width: width, textHeight: textAreaMaxHeight)
+        return next < text.length ? NotesContinuation(text: text, location: next, startsNotes: next == 0) : nil
+    }
+
+    /// Draws the notes on a further page, from the top margin down to `footerY`, and returns what
+    /// is left for the next one.
+    private static func drawNotesContinuation(_ continuation: NotesContinuation, ctx: CGContext, x: CGFloat, y: CGFloat,
+                                              width: CGFloat, footerY: CGFloat) -> NotesContinuation? {
+        let titleH: CGFloat = 14
+        let padBottom: CGFloat = 6
+        let textAreaWidth = width - 20
+        let textAreaMaxHeight = y - footerY - 4 - titleH - padBottom
+        let textH = min(PDFNotesText.height(continuation.text, from: continuation.location, width: textAreaWidth), textAreaMaxHeight)
+        let title = continuation.startsNotes
+            ? NSLocalizedString("NOTES", bundle: loc, comment: "")
+            : NSLocalizedString("NOTES (CONTINUED)", bundle: loc, value: "NOTES (CONTINUED)", comment: "PDF logbook: title of the notes card on a page after the first")
+        let next = drawNotesCard(continuation.text, from: continuation.location, title: title,
+                                 ctx: ctx, x: x, y: y, width: width, textHeight: textH)
+        // Nothing placed on a whole page: stop rather than repeat the same page.
+        guard next > continuation.location, next < continuation.text.length else { return nil }
+        return NotesContinuation(text: continuation.text, location: next, startsNotes: false)
+    }
+
+    /// Draws one notes card (title and text from `location`, `textHeight` points of it) with its
+    /// top at `y`, and returns where the text continues.
+    @discardableResult
+    private static func drawNotesCard(_ text: NSAttributedString, from location: Int, title: String, ctx: CGContext,
+                                      x: CGFloat, y: CGFloat, width: CGFloat, textHeight: CGFloat) -> Int {
+        let titleH: CGFloat = 14
+        let padBottom: CGFloat = 6
+        let cardH = textHeight + titleH + padBottom
         let cardRect = CGRect(x: x, y: y - cardH, width: width, height: cardH)
 
         drawRoundedRect(ctx: ctx, rect: cardRect, radius: 8, fill: bgCard)
         drawCardBorder(ctx: ctx, rect: cardRect, radius: 8)
+        drawSectionTitle(ctx: ctx, title: title, x: x + 10, y: y - 10, color: textGray)
 
-        drawSectionTitle(ctx: ctx, title: NSLocalizedString("NOTES", bundle: loc, comment: ""), x: x + 10, y: y - 10, color: textGray)
-
-        let textColor = notes.isEmpty ? textMuted : textWhite
-        let textAttrs: [NSAttributedString.Key: Any] = [
-            .font: font(size: currentFontSize),
-            .foregroundColor: platformColor(textColor),
-            .paragraphStyle: paragraphStyle
-        ]
-        let attrStr = NSAttributedString(string: displayNotes, attributes: textAttrs)
-        let textDrawingRect = CGRect(x: x + 10, y: y - cardH + padBottom, width: textAreaWidth, height: finalDrawingHeight)
-        drawWrappedText(attrStr, in: ctx, rect: textDrawingRect)
-
-        return y - cardH
+        let textRect = CGRect(x: x + 10, y: y - cardH + padBottom, width: width - 20, height: textHeight)
+        return PDFNotesText.drawFrame(text, from: location, in: textRect, ctx: ctx, palette: notesPalette)
     }
 
     // MARK: - Footer (signatures + branding)

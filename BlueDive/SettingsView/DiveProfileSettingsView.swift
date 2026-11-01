@@ -137,6 +137,37 @@ struct DiveProfileSettingsView: View {
                 )
                 .padding(.horizontal)
 
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $prefs.formatNotesAsMarkdown) {
+                            Label {
+                                Text("Format notes as Markdown")
+                            } icon: {
+                                Image(systemName: "textformat")
+                                    .foregroundStyle(.purple)
+                            }
+                        }
+                        .fullWidthSwitch()
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    Text("When on, the dive details and the PDF logbook show notes with Markdown formatting: headings, bold and italic text, lists, quotes, code blocks and tables. Notes are still saved and exported exactly as typed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
+
                 #if os(macOS)
                 // The dive list's profile preview exists only on macOS (also toggled from
                 // View → Show Profile Preview).

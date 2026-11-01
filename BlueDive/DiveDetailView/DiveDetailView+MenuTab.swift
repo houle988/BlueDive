@@ -1837,9 +1837,13 @@ extension DiveDetailView {
             Label("Notes", systemImage: "note.text")
                 .font(.headline)
                 .foregroundStyle(.gray)
-            Text(dive.notes.isEmpty ? "—" : dive.notes)
-                .font(.body)
-                .foregroundStyle(dive.notes.isEmpty ? Color.secondary : Color.primary)
+            if prefs.formatNotesAsMarkdown && !dive.notes.isEmpty {
+                MarkdownText(dive.notes)
+            } else {
+                Text(dive.notes.isEmpty ? "—" : dive.notes)
+                    .font(.body)
+                    .foregroundStyle(dive.notes.isEmpty ? Color.secondary : Color.primary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()

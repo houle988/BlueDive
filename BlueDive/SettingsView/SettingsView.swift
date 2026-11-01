@@ -487,6 +487,13 @@ class UserPreferences {
     var searchDiveNotes: Bool {
         didSet { UserDefaults.standard.set(searchDiveNotes, forKey: "searchDiveNotes") }
     }
+    /// When true, the dive page (`MarkdownText`) and the PDF logbook (`PDFNotesText`) show notes
+    /// formatted as Markdown. Display only: notes are stored, searched and exported as typed. Off
+    /// by default, so notes typed or imported with `*`, `#` or `1.` keep their look.
+    /// No App Group write: the widget does not show notes.
+    var formatNotesAsMarkdown: Bool {
+        didSet { UserDefaults.standard.set(formatNotesAsMarkdown, forKey: "formatNotesAsMarkdown") }
+    }
     /// When true, species photos are shown in a 3:2 format (`SpeciesImageView.wideAspectRatio`)
     /// in the Marine Life list, on the species page and in Edit Species, instead of squares.
     /// Display only: stored images are unchanged. On by default. No App Group write: the
@@ -517,6 +524,7 @@ class UserPreferences {
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
         self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
+        self.formatNotesAsMarkdown = UserDefaults.standard.bool(forKey: "formatNotesAsMarkdown")
         // On by default: an absent key reads as true.
         self.wideSpeciesImages = UserDefaults.standard.object(forKey: "wideSpeciesImages") as? Bool ?? true
         self.showPhotosOnProfile = UserDefaults.standard.object(forKey: "showPhotosOnProfile") as? Bool ?? true
@@ -547,6 +555,7 @@ class UserPreferences {
         hideClearedDecoStops = false
         showSamplesTab = false
         searchDiveNotes = false
+        formatNotesAsMarkdown = false
         wideSpeciesImages = true
         showPhotosOnProfile = true
         fetchWeatherOnline = false

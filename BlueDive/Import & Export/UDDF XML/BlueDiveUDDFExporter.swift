@@ -606,11 +606,14 @@ enum BlueDiveUDDFExporter {
 
         // Notes
         if !dive.notes.isEmpty {
+            // The whole note in one <para>, its line breaks, blank lines and indentation kept as
+            // typed (they matter to notes written in Markdown), so a re-import gives back the
+            // exact note (UDDFXMLParser trims only the ends, and notes are saved trimmed). One
+            // <para> per line lost blank lines and indentation, and Subsurface, whose UDDF import
+            // reads only the first <para>, kept only the first line; Subsurface's own UDDF export
+            // also writes the whole note in a single <para>.
             lines.append("          <notes>")
-            // Split on newlines to create separate <para> elements
-            for paragraph in dive.notes.components(separatedBy: "\n").filter({ !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
-                lines.append("            <para>\(xmlEscape(paragraph))</para>")
-            }
+            lines.append("            <para>\(xmlEscape(dive.notes))</para>")
             lines.append("          </notes>")
         }
 
