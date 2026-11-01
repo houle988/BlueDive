@@ -5,7 +5,7 @@ import SwiftData
 import PhotosUI
 import UniformTypeIdentifiers
 
-// MARK: - Overview Tab (chart + twin tank checkbox + stats + info), Marine Life, Photos and Notes Tabs
+// MARK: - Overview Tab (chart + twin tank checkbox + stats + info), Equipment, Marine Life, Photos and Notes Tabs
 
 extension DiveDetailView {
 
@@ -18,7 +18,10 @@ extension DiveDetailView {
             depthProfileSection
             statsGrid
             diveInfoSection
-            equipmentSection
+            if !isEquipmentMovedBannerDismissed {
+                equipmentMovedBanner
+                    .transition(.opacity)
+            }
             if !isNotesMovedBannerDismissed {
                 notesMovedBanner
                     .transition(.opacity)
@@ -942,18 +945,6 @@ extension DiveDetailView {
     }
 
     @MainActor
-    func removeGearFromDive(_ gear: Gear) {
-        // By record: a gear item sharing this one's id (e.g. imported on two devices before
-        // they synced) stays on the dive.
-        dive.usedGear?.removeAll { $0.persistentModelID == gear.persistentModelID }
-        try? modelContext.save()
-        // Exit edit mode if no gear left
-        if (dive.usedGear ?? []).isEmpty {
-            isEditingEquipment = false
-        }
-    }
-
-    @MainActor
     func removeFishFromDive(_ fish: MarineSight) {
         modelContext.delete(fish)
         try? modelContext.save()
@@ -964,81 +955,17 @@ extension DiveDetailView {
         }
     }
 
-    @MainActor
-    func applyGearGroup(_ group: GearGroup) {
-        guard let groupGear = group.gear, !groupGear.isEmpty else { return }
-        if dive.usedGear == nil { dive.usedGear = [] }
-        // By record, not by `Gear.id` (two gear items can share an id).
-        let existingIds = Set((dive.usedGear ?? []).map { $0.persistentModelID })
-        var addedCount = 0
-        for gear in groupGear {
-            if !existingIds.contains(gear.persistentModelID) {
-                dive.usedGear!.append(gear)
-                addedCount += 1
-            }
-        }
-        if addedCount > 0 {
-            try? modelContext.save()
-        }
-    }
-
+    /// The Equipment tab: the dive's gear laid out like the main Equipment list — collapsible
+    /// category sections in category order, each a card of `GearRow`s (one-line columns on a
+    /// wide Mac window, under the column header pinned above the scroll view). View only: gear
+    /// is added and removed in the Edit Equipment sheet (the Edit button); a row opens the
+    /// gear's service sheet.
     var equipmentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Equipment Used", systemImage: "wrench.and.screwdriver")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                Spacer()
-                if !(dive.usedGear ?? []).isEmpty {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isEditingEquipment.toggle()
-                        }
-                    } label: {
-                        // Three-control cluster (Edit / Gear group / Add) at 8 pt spacing:
-                        // each control grows only 4 pt (half a gap) toward its neighbour, so
-                        // the three targets tile without overlapping. 40 × 44 pt.
-                        TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
-                            Image(systemName: "minus.circle")
-                                .font(.title3)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text("Edit Equipment"))
-                }
-                if !gearGroups.isEmpty {
-                    Menu {
-                        ForEach(gearGroups) { group in
-                            Button {
-                                applyGearGroup(group)
-                            } label: {
-                                Label("\(group.name) (\(group.gearCount))", systemImage: "tray.2")
-                            }
-                        }
-                    } label: {
-                        // Middle control of the cluster: neighbours on both sides, so 4 pt
-                        // (half the 8 pt gap) each way. 36 × 47 pt.
-                        TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 4) {
-                            Image(systemName: "tray.2")
-                                .font(.title3)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .accessibilityLabel(Text("Apply Gear Group"))
-                }
-                Button(action: { showAddGear = true }) {
-                    // Last control of the cluster: 4 pt toward its neighbour, 12 pt
-                    // trailing into the card's 16 pt padding. 40 × 44 pt.
-                    TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
-                        Image(systemName: "plus.circle")
-                            .font(.title3)
-                            .foregroundStyle(.orange)
-                    }
-                }
-                .accessibilityLabel(Text("Add Equipment"))
-                .borderlessButton()
-            }
+            Label("Equipment Used", systemImage: "wrench.and.screwdriver")
+                .font(.headline)
+                .foregroundStyle(DiveTab.equipment.color)
+                .padding(.horizontal)
 
             if (dive.usedGear ?? []).isEmpty {
                 VStack(spacing: 8) {
@@ -1052,82 +979,85 @@ extension DiveDetailView {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding()
+                .detailCardBackground()
             } else {
-                // Liste des équipements
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
-                        ForEach(dive.usedGear ?? []) { gear in
-                            ZStack(alignment: .topTrailing) {
-                                GearChipView(gear: gear)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        if !isEditingEquipment {
-                                            selectedGearForDetail = gear
-                                        }
-                                    }
-                                    #if os(iOS)
-                                    .onLongPressGesture {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            isEditingEquipment.toggle()
-                                        }
-                                    }
-                                    #endif
-                                    .accessibilityHint(Text("Opens gear details"))
-                                    .help("Show gear details")
-                                if isEditingEquipment {
-                                    Button {
-                                        gearToDelete = gear
-                                        showDeleteGearAlert = true
-                                    } label: {
-                                        // Same geometry as the photo badge: 6 pt trailing (half
-                                        // of the 12 pt gap to the next chip), inward over the
-                                        // chip, and nothing upward. 40 × 34 pt.
-                                        TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
-                                            Image(systemName: "minus.circle.fill")
-                                                .font(.system(size: 18))
-                                                .symbolRenderingMode(.palette)
-                                                .foregroundStyle(.white, .red)
-                                        }
-                                    }
-                                    #if os(macOS)
-                                    .buttonStyle(.plain)
-                                    #endif
-                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), gear.name)))
-                                    .offset(x: 6, y: -6)
-                                    .transition(.scale.combined(with: .opacity))
-                                }
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    // Room for the remove badge, which sits 6 pt above and 6 pt past the
-                    // chip's corner (its tap target 6 pt further on iOS): the scroll view
-                    // clips its content, so the last chip's badge was cut in half.
-                    .padding(.top, 2)
-                    .padding(.trailing, 12)
+                ForEach(gearCategorySections(dive.usedGear ?? [], locale: locale), id: \.key) { section in
+                    gearSection(key: section.key, items: section.items)
                 }
             }
         }
-        .padding()
-        .detailCardBackground()
+        #if os(macOS)
+        // The main Equipment list's side margin, so its rows get the same width there and here
+        // and switch to the stacked row at the same window width (`OneLineRowsLayout.rowWidth`):
+        // `MacListCard.margin` plus the sidebar list's own 16 pt (measured: the main list's rows
+        // are 96 pt narrower than the window, these 64 pt with the 16 pt padding of other tabs).
+        .padding(.horizontal, MacListCard.margin + 16)
+        .environment(gearListLayout)
+        #else
         .padding(.horizontal)
-        #if os(iOS)
-        .onTapGesture {
-            if isEditingEquipment {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isEditingEquipment = false
-                }
-            }
-        }
         #endif
-        .alert("Remove Equipment", isPresented: $showDeleteGearAlert, presenting: gearToDelete) { gear in
-            Button("Remove", role: .destructive) {
-                removeGearFromDive(gear)
+    }
+
+    /// One category of the Equipment tab: its header (the main list's, with a chevron that
+    /// collapses it) above a card of its rows.
+    private func gearSection(key: String, items: [Gear]) -> some View {
+        let isExpanded = !collapsedGearSections.contains(key)
+        #if os(macOS)
+        let cornerRadius = MacListCard.cornerRadius
+        let rowInset = MacListCard.rowInsets.leading
+        #else
+        let cornerRadius: CGFloat = 15
+        let rowInset: CGFloat = 16
+        #endif
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isExpanded {
+                        collapsedGearSections.insert(key)
+                    } else {
+                        collapsedGearSections.remove(key)
+                    }
+                }
+            } label: {
+                HStack {
+                    GearCategorySectionTitle(key: key, showsIcon: true)
+                        .font(.headline)
+                        .foregroundStyle(.cyan)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, rowInset)
+                // The whole header toggles, not only its text.
+                .contentShape(Rectangle())
             }
-            Button("Cancel", role: .cancel) { }
-        } message: { gear in
-            Text("Remove \(gear.name) from this dive?")
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
+
+            if isExpanded {
+                VStack(spacing: 0) {
+                    // By record, not by `Gear.id`: two gear items can share an id.
+                    ForEach(items, id: \.persistentModelID) { gear in
+                        if gear.persistentModelID != items.first?.persistentModelID {
+                            Divider()
+                        }
+                        Button {
+                            selectedGearForDetail = gear
+                        } label: {
+                            GearRow(gear: gear)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, rowInset)
+                .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .transition(.opacity)
+            }
         }
     }
 
@@ -1835,26 +1765,52 @@ extension DiveDetailView {
         }
     }
 
+    /// Where the Equipment card used to be: tells that equipment now has its own tab, until dismissed.
+    var equipmentMovedBanner: some View {
+        movedToTabBanner(
+            tab: .equipment,
+            title: "Equipment Has Moved",
+            message: "Equipment now has its own tab, after Gas.",
+            hint: Text("Opens the Equipment tab.", comment: "VoiceOver hint of the Overview banner saying equipment moved to its own tab"),
+            dismissLabel: Text("Dismiss Equipment Notice", comment: "Accessibility label of the X button that permanently hides the Overview banner saying equipment moved to its own tab"),
+            isDismissed: $isEquipmentMovedBannerDismissed
+        )
+    }
+
     /// Where the Notes card used to be: tells that notes now have their own tab, until dismissed.
     var notesMovedBanner: some View {
+        movedToTabBanner(
+            tab: .notes,
+            title: "Notes Have Moved",
+            message: "Notes now have their own tab, after Marine Life.",
+            hint: Text("Opens the Notes tab.", comment: "VoiceOver hint of the Overview banner saying notes moved to their own tab"),
+            dismissLabel: Text("Dismiss Notes Notice", comment: "Accessibility label of the X button that permanently hides the Overview banner saying notes moved to their own tab"),
+            isDismissed: $isNotesMovedBannerDismissed
+        )
+    }
+
+    /// A banner in the tab's colour telling that a card moved from the Overview to `tab`.
+    /// Tapping it opens that tab at its top; its X hides it for good (`isDismissed` is stored).
+    private func movedToTabBanner(tab: DiveTab, title: LocalizedStringKey, message: LocalizedStringKey,
+                                  hint: Text, dismissLabel: Text, isDismissed: Binding<Bool>) -> some View {
         HStack {
-            // The whole banner except its X opens the Notes tab.
+            // The whole banner except its X opens the tab.
             Button {
                 scrollsToTopOnTabChange = true
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedTab = .notes
+                    selectedTab = tab
                 }
             } label: {
                 HStack {
-                    Image(systemName: "note.text")
-                        .foregroundStyle(DiveTab.notes.color)
+                    Image(systemName: tab.icon)
+                        .foregroundStyle(tab.color)
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Notes Have Moved")
+                        Text(title)
                             .font(.subheadline)
                             .fontWeight(.bold)
-                        Text("Notes now have their own tab, after Marine Life.")
+                        Text(message)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -1864,11 +1820,11 @@ extension DiveDetailView {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityHint(Text("Opens the Notes tab.", comment: "VoiceOver hint of the Overview banner saying notes moved to their own tab"))
+            .accessibilityHint(hint)
 
             Button {
                 withAnimation(.easeInOut(duration: 0.3)) {
-                    isNotesMovedBannerDismissed = true
+                    isDismissed.wrappedValue = true
                 }
             } label: {
                 // A 44 pt tap target (at least: it grows with Dynamic Type). The negative padding
@@ -1882,10 +1838,10 @@ extension DiveDetailView {
             .borderlessButton()
             .padding(.vertical, -6)
             .padding(.trailing, -10)
-            .accessibilityLabel(Text("Dismiss Notes Notice", comment: "Accessibility label of the X button that permanently hides the Overview banner saying notes moved to their own tab"))
+            .accessibilityLabel(dismissLabel)
         }
         .padding()
-        .background(DiveTab.notes.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .background(tab.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .padding(.horizontal)
     }
 

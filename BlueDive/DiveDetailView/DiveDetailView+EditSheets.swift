@@ -871,6 +871,331 @@ struct EditNotesView: View {
     }
 }
 
+/// Edit sheet for the Equipment tab: Quick Add (a gear group's items, or another dive's), the
+/// gear on the dive (each with a remove button), then the active gear that can be added (by
+/// category, each with an add button). Changes are kept in `workingGear` and stored on Save;
+/// Cancel drops them.
+struct EditEquipmentView: View {
+    @Bindable var dive: Dive
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
+    @Environment(DiveStore.self) private var store
+    @Query private var allGear: [Gear]
+    @Query(sort: \GearGroup.name) private var gearGroups: [GearGroup]
+
+    /// The gear on the dive while editing: its stored order, then the items added.
+    @State private var workingGear: [Gear]
+    /// The dive's gear when the sheet opened: Save applies only the difference from it, so gear
+    /// added to this dive on another device meanwhile is kept.
+    @State private var originalGearIDs: Set<PersistentIdentifier>
+    /// Identifiers of the dives that have gear, read once when the sheet opens (one store query).
+    @State private var divesWithGear: Set<PersistentIdentifier> = []
+    /// "From Another Dive" candidates, built when the sheet opens and again only when the
+    /// store's summaries change, not on every redraw (adding or removing an item).
+    @State private var copyCandidates: [DiveSummary] = []
+    /// The dive chosen in Quick Add's "From Another Dive".
+    @State private var copySource: DiveSummary?
+    /// The gear group chosen in Quick Add's "From a Gear Group".
+    @State private var selectedGroupID: PersistentIdentifier?
+
+    init(dive: Dive) {
+        self.dive = dive
+        _workingGear = State(initialValue: dive.usedGear ?? [])
+        _originalGearIDs = State(initialValue: Set((dive.usedGear ?? []).map(\.persistentModelID)))
+    }
+
+    /// `workingGear` without items deleted since the sheet opened (on another device): the
+    /// draft is kept across redraws, so a deleted item is dropped before any attribute is read
+    /// (reading a deleted SwiftData object crashes) and is never saved back.
+    private var liveWorkingGear: [Gear] {
+        workingGear.filter { !$0.isDeleted && $0.modelContext != nil }
+    }
+
+    /// By record, not by `Gear.id`: a gear item sharing an id with one already on the dive
+    /// (e.g. imported on two devices before they synced) stays available.
+    private var workingIDs: Set<PersistentIdentifier> {
+        Set(liveWorkingGear.map(\.persistentModelID))
+    }
+
+    /// The gear on the dive in category order, as the Equipment tab shows it.
+    private var usedGear: [Gear] {
+        gearCategorySections(liveWorkingGear, locale: locale).flatMap(\.items)
+    }
+
+    /// Active gear not on the dive, by category, sorted by name within each category.
+    private var availableSections: [(key: String, items: [Gear])] {
+        let ids = workingIDs
+        let available = allGear
+            .filter { !ids.contains($0.persistentModelID) && !$0.isInactive }
+            .sorted { $0.name.compare($1.name, locale: locale) == .orderedAscending }
+        return gearCategorySections(available, locale: locale)
+    }
+
+    /// Other dives of this dive's diver that have gear, newest first: plain summaries, so the
+    /// search reads no dive's gear (only the dive copied from is read).
+    private func buildCopyCandidates() -> [DiveSummary] {
+        guard !divesWithGear.isEmpty else { return [] }
+        // Trimmed as `DiveSummary.diverName` is, so the names compare equal.
+        let diver = dive.diverName.trimmingCharacters(in: .whitespaces)
+        return store.cachedSummaries
+            .filter { summary in
+                guard summary.id != dive.id, summary.diverName == diver,
+                      let source = store.diveByID[summary.id] else { return false }
+                return divesWithGear.contains(source.persistentModelID)
+            }
+            .sorted { $0.timestamp > $1.timestamp }
+    }
+
+    /// The 3 dives just before this one (consecutive dives often use the same gear).
+    private func recentCopyCandidates(_ candidates: [DiveSummary]) -> [DiveSummary] {
+        Array(candidates.filter { $0.timestamp < dive.timestamp }.prefix(3))
+    }
+
+    /// Reads which dives have gear: identifiers only, matched by the store, so no dive or gear
+    /// is loaded. `contains(where:)`, not `isEmpty`: a to-many `isEmpty` predicate crashes.
+    private func loadDivesWithGear() {
+        let descriptor = FetchDescriptor<Dive>(predicate: #Predicate { dive in
+            dive.usedGear?.contains(where: { _ in true }) ?? false
+        })
+        divesWithGear = Set((try? modelContext.fetchIdentifiers(descriptor)) ?? [])
+        copyCandidates = buildCopyCandidates()
+    }
+
+    /// Adds several items at once: a gear group's (when there are groups) or another dive's
+    /// (when another dive of this diver has gear). Hidden when neither is available.
+    @ViewBuilder
+    private var quickAddSection: some View {
+        let candidates = copyCandidates
+        if !gearGroups.isEmpty || !candidates.isEmpty {
+            Section {
+                // Each way of adding has its own caption, so the two read as separate options.
+                if !gearGroups.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        quickAddCaption("From a Gear Group")
+                        // Chosen first, then added with the button below (as a dive, or a
+                        // tank template in Edit Gas).
+                        Picker("Gear Group", selection: $selectedGroupID) {
+                            Text("Select a gear group...").tag(PersistentIdentifier?.none)
+                            ForEach(gearGroups) { group in
+                                Text(verbatim: "\(group.name) (\(Double(group.gearCount).localizedString(decimals: 0)))")
+                                    .tag(Optional(group.persistentModelID))
+                            }
+                        }
+                        .tint(DiveTab.equipment.color)
+                        // Only the pop-up, under its caption (the label stays for VoiceOver).
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    quickAddButton("Apply Gear Group", systemImage: "tray.2", isEnabled: selectedGroup != nil) {
+                        if let group = selectedGroup { applyGearGroup(group) }
+                    }
+                }
+                if !candidates.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        quickAddCaption("From Another Dive")
+                        DiveCopySearchField(selection: $copySource,
+                                            recents: recentCopyCandidates(candidates),
+                                            candidates: candidates)
+                    }
+
+                    quickAddButton("Copy Equipment", systemImage: "doc.on.doc", isEnabled: copySource != nil) {
+                        copyEquipment()
+                    }
+                }
+            } header: {
+                MenuSectionHeader(title: "Quick Add", icon: "bolt", color: DiveTab.equipment.color)
+            }
+        }
+    }
+
+    /// The gear group chosen in Quick Add, nil when none is (or it was deleted meanwhile).
+    private var selectedGroup: GearGroup? {
+        guard let id = selectedGroupID else { return nil }
+        return gearGroups.first { $0.persistentModelID == id }
+    }
+
+    /// A Quick Add option's action row, dimmed and disabled until its source is chosen.
+    private func quickAddButton(_ title: LocalizedStringKey, systemImage: String, isEnabled: Bool,
+                                action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+            }
+            // Inside the label: on macOS the row button style colours the label with the accent
+            // colour otherwise.
+            .foregroundStyle(isEnabled ? DiveTab.equipment.color : Color.secondary)
+        }
+        .disabled(!isEnabled)
+        .listRowButton()
+    }
+
+    /// A Quick Add option's small grey caption.
+    private func quickAddCaption(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Adds the chosen dive's active gear that is not on this dive yet (inactive gear, retired
+    /// since, is skipped, as the add list only offers active gear). Saved on Save, like any edit.
+    private func copyEquipment() {
+        guard let summary = copySource,
+              let source = store.diveByID[summary.id], !source.isDeleted, source.modelContext != nil else {
+            copySource = nil
+            return
+        }
+        let ids = workingIDs
+        let added = (source.usedGear ?? []).filter { !$0.isInactive && !ids.contains($0.persistentModelID) }
+        guard !added.isEmpty else { return }
+        withAnimation {
+            workingGear.append(contentsOf: added)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground().ignoresSafeArea()
+
+                groupedList {
+                    quickAddSection
+
+                    Section {
+                        if usedGear.isEmpty {
+                            Text("No Equipment Recorded")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .listRowBackground(Color.primary.opacity(0.05))
+                        } else {
+                            ForEach(usedGear) { gear in
+                                gearRow(gear, isOnDive: true)
+                            }
+                        }
+                    } header: {
+                        MenuSectionHeader(title: "Equipment Used", icon: "wrench.and.screwdriver", color: DiveTab.equipment.color)
+                    }
+
+                    if availableSections.isEmpty {
+                        Section {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("No Equipment Available")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text("All your equipment is already added to this dive or you haven't created any equipment yet.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .listRowBackground(Color.primary.opacity(0.05))
+                        }
+                    } else {
+                        ForEach(availableSections, id: \.key) { section in
+                            Section {
+                                ForEach(section.items) { gear in
+                                    gearRow(gear, isOnDive: false)
+                                }
+                            } header: {
+                                GearCategorySectionTitle(key: section.key)
+                            }
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Edit Equipment")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .task { loadDivesWithGear() }
+            .onChange(of: store.cachedSummaries) { copyCandidates = buildCopyCandidates() }
+            // A chosen group deleted meanwhile (on another device) leaves the picker on no option.
+            .onChange(of: gearGroups.map(\.persistentModelID)) { _, ids in
+                if let id = selectedGroupID, !ids.contains(id) { selectedGroupID = nil }
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .bold()
+                        .confirmationActionForeground(DiveTab.equipment.color)
+                }
+            }
+        }
+    }
+
+    /// One gear row: the whole row adds the item (`isOnDive` false) or removes it from the dive.
+    private func gearRow(_ gear: Gear, isOnDive: Bool) -> some View {
+        Button {
+            withAnimation {
+                if isOnDive {
+                    workingGear.removeAll { $0.persistentModelID == gear.persistentModelID }
+                } else {
+                    workingGear.append(gear)
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                // The main Equipment list's row (stacked: this list has no column header).
+                gearListRow(gear)
+
+                Image(systemName: isOnDive ? "minus.circle.fill" : "plus.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(isOnDive ? Color.red : DiveTab.equipment.color)
+                    .accessibilityHidden(true)
+            }
+        }
+        .listRowBackground(Color.primary.opacity(0.05))
+        .listRowButton()
+        .accessibilityLabel(isOnDive
+            ? Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), gear.name))
+            : Text(verbatim: String(format: NSLocalizedString("Add %@", bundle: .forAppLanguage(), value: "Add %@", comment: "Accessibility label of the button that adds a gear item to the dive in Edit Equipment, naming the item"), gear.name)))
+    }
+
+    private func gearListRow(_ gear: Gear) -> some View {
+        #if os(macOS)
+        GearRow(gear: gear, allowsOneLine: false)
+        #else
+        GearRow(gear: gear)
+        #endif
+    }
+
+    private func applyGearGroup(_ group: GearGroup) {
+        let ids = workingIDs
+        let added = (group.gear ?? []).filter { !ids.contains($0.persistentModelID) }
+        guard !added.isEmpty else { return }
+        withAnimation {
+            workingGear.append(contentsOf: added)
+        }
+    }
+
+    private func save() {
+        // Only the items removed or added here change, applied to the dive's current gear: gear
+        // added to this dive on another device while the sheet was open stays. Nothing is written
+        // when nothing changed (the tab shows gear in category order, so order is not an edit).
+        let edited = liveWorkingGear
+        let editedIDs = Set(edited.map(\.persistentModelID))
+        let removedIDs = originalGearIDs.subtracting(editedIDs)
+        let added = edited.filter { !originalGearIDs.contains($0.persistentModelID) }
+        if !removedIDs.isEmpty || !added.isEmpty {
+            var current = (dive.usedGear ?? []).filter { !removedIDs.contains($0.persistentModelID) }
+            let currentIDs = Set(current.map(\.persistentModelID))
+            current.append(contentsOf: added.filter { !currentIDs.contains($0.persistentModelID) })
+            dive.usedGear = current
+            try? modelContext.save()
+        }
+        // The gear on a dive is not shown in list rows and does not affect order or badges.
+        store.commit(dive, affects: .nothing)
+        dismiss()
+    }
+}
+
 struct EditSiteDetailsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss

@@ -15,6 +15,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
     case siteDetails = "Site Details"
     case conditions  = "Conditions"
     case gaz         = "Gas"
+    case equipment   = "Equipment"
     case photos      = "Photos"
     case marineLife  = "Marine Life"
     case notes       = "Notes"
@@ -30,6 +31,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return "Site Details"
         case .conditions:  return "Conditions"
         case .gaz:         return "Gas"
+        case .equipment:   return "Equipment (tab)"
         case .marineLife:  return "Marine Life"
         case .notes:       return "Notes"
         case .photos:      return "Photos"
@@ -50,6 +52,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return "mappin.and.ellipse.circle"
         case .conditions:  return "cloud.sun"
         case .gaz:         return "bubbles.and.sparkles"
+        case .equipment:   return "wrench.and.screwdriver"
         case .marineLife:  return "fish"
         case .notes:       return "note.text"
         case .photos:      return "photo.on.rectangle"
@@ -65,6 +68,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return .blue
         case .conditions:  return .yellow
         case .gaz:         return .green
+        case .equipment:   return .purple
         case .marineLife:  return .orange
         case .notes:       return .brown
         case .photos:      return .pink
@@ -85,16 +89,16 @@ struct DiveDetailView: View {
     @Environment(\.locale) var locale
     @Environment(\.dismiss) private var dismiss
     @Environment(DiveStore.self) var store
-    @Query(sort: \GearGroup.name) var gearGroups: [GearGroup]
 
     @State var showEditSheet = false
     /// Hides the Overview's "Notes have moved" banner for good once its X is tapped.
     @AppStorage("notesMovedBannerDismissed") var isNotesMovedBannerDismissed = false
-    /// Set with a tab change that must show the new tab from its top (the Overview's
-    /// "Notes have moved" banner sits at the bottom of a long page); the tab bar keeps the offset.
+    /// Hides the Overview's "Equipment has moved" banner for good once its X is tapped.
+    @AppStorage("equipmentMovedBannerDismissed") var isEquipmentMovedBannerDismissed = false
+    /// Set with a tab change that must show the new tab from its top (the Overview's "has moved"
+    /// banners sit at the bottom of a long page); the tab bar keeps the offset.
     @State var scrollsToTopOnTabChange = false
     @State var showAddFish = false
-    @State var showAddGear = false
     @State var selectedPhotos: [PhotosPickerItem] = []
     @State var prefs = UserPreferences.shared
     @State var selectedTab: DiveTab = .menu
@@ -103,10 +107,13 @@ struct DiveDetailView: View {
     @State private var tabBarHiddenLeading = false
     @State private var tabBarHiddenTrailing = false
     @State private var fullyVisibleTabs: Set<DiveTab> = []
-    @State var isEditingEquipment = false
-    @State var gearToDelete: Gear?
-    @State var showDeleteGearAlert = false
     @State var selectedGearForDetail: Gear?
+    /// Equipment tab categories the user collapsed, for the dive shown (reset for each dive).
+    @State var collapsedGearSections: Set<String> = []
+    #if os(macOS)
+    /// Whether the Equipment tab's rows show their one-line version (its column header).
+    @State var gearListLayout = OneLineRowsLayout()
+    #endif
     @State var isEditingPhotos = false
     /// The photo (`DivePhotoEntry.id`) the Remove alert is about. An id, not a position: an
     /// import still running can add photos that sort ahead of it while the alert is open.
@@ -301,6 +308,7 @@ struct DiveDetailView: View {
                                 case .siteDetails: siteDetailsTabContent
                                 case .conditions:  conditionsTabContent
                                 case .gaz:         gazTabContent
+                                case .equipment:   equipmentSection
                                 case .marineLife:  marineSightingsSection
                                 case .notes:       notesTabContent
                                 case .photos:      photosSection
@@ -313,6 +321,14 @@ struct DiveDetailView: View {
                             .animation(.easeInOut(duration: 0.25), value: selectedTab)
                         }
                         .scrollDisabled(scrollLocked)
+                        #if os(macOS)
+                        // The Equipment tab's column labels, pinned above the scrolling rows as
+                        // in the main Equipment list (only while its rows are one-line).
+                        .pinnedColumnHeader(gearListLayout,
+                                            isShown: selectedTab == .equipment && !(dive.usedGear ?? []).isEmpty) {
+                            GearListColumnHeader()
+                        }
+                        #endif
                         .onChange(of: dive) { _, _ in
                             showAllSamples = false
                             proxy.scrollTo("diveTop", anchor: .top)
@@ -509,10 +525,6 @@ struct DiveDetailView: View {
             SpeciesSheet(species: species, numberMap: speciesPageNumberMap, showDiveList: nil)
                 .standardSheetPresentation()
         }
-        .sheet(isPresented: $showAddGear) {
-            AddGearToDiveView(dive: dive)
-                .standardSheetPresentation()
-        }
         .sheet(item: $selectedGearForDetail) { gear in
             GearServiceView(gear: gear)
                 .standardSheetPresentation()
@@ -535,7 +547,6 @@ struct DiveDetailView: View {
             selectedTankIndex = 0
             showEditSheet = false
             showAddFish = false
-            showAddGear = false
             showFullScreenSiteMap = false
             selectedPhotos = []
             showPhotosPicker = false
@@ -545,17 +556,15 @@ struct DiveDetailView: View {
             pendingPhotoImportResult = nil
             showConvertLegacyPhotosAlert = false
             speciesProposals = []
-            isEditingEquipment = false
             isEditingPhotos = false
             isEditingMarineLife = false
             selectedGearForDetail = nil
+            collapsedGearSections = []
             // Also clear transient targets so they can't point to the previous dive's items.
             selectedPhotoForPreview = nil
-            gearToDelete = nil
             photoIDToDelete = nil
             fishToDelete = nil
             fishToEdit = nil
-            showDeleteGearAlert = false
             showDeletePhotoAlert = false
             showDeleteFishAlert = false
             #if os(iOS)
@@ -877,6 +886,8 @@ struct DiveDetailView: View {
             EditGazView(dive: dive, tankIndex: selectedTankIndex) { newIndex in
                 selectedTankIndex = newIndex
             }
+        case .equipment:
+            EditEquipmentView(dive: dive)
         case .marineLife:
             // Marine life is added and removed with its card's own buttons.
             noEditAvailableView(title: DiveTab.marineLife.localizedName,

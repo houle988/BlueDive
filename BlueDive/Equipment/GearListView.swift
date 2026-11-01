@@ -1226,6 +1226,8 @@ struct GearListView: View {
 struct GearRow: View {
     let gear: Gear
     #if os(macOS)
+    /// false: always the stacked row (a list without a column header, e.g. a sheet's picker).
+    var allowsOneLine = true
     @Environment(\.locale) private var locale
     @Environment(OneLineRowsLayout.self) private var oneLineLayout: OneLineRowsLayout?
     #endif
@@ -1236,12 +1238,16 @@ struct GearRow: View {
         // rows line up, falling back to the stacked iOS row when the window is too narrow.
         // Each version tells the list which one is shown, so its pinned column header is only
         // there with one-line rows (`OneLineRowsLayout`), at their width.
-        ViewThatFits(in: .horizontal) {
-            wideRow
-                .reportsOneLine(true, to: oneLineLayout)
-                .reportsRowContentWidth(to: oneLineLayout)
+        if allowsOneLine {
+            ViewThatFits(in: .horizontal) {
+                wideRow
+                    .reportsOneLine(true, to: oneLineLayout)
+                    .reportsRowContentWidth(to: oneLineLayout)
+                stackedRow
+                    .reportsOneLine(false, to: oneLineLayout)
+            }
+        } else {
             stackedRow
-                .reportsOneLine(false, to: oneLineLayout)
         }
         #else
         stackedRow

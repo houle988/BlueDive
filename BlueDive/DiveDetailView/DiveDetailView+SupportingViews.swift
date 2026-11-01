@@ -299,57 +299,6 @@ struct DetailCard: View {
     }
 }
 
-// MARK: - Gear Chip View
-
-struct GearChipView: View {
-    let gear: Gear
-
-    private var categoryColor: Color {
-        GearCategory(exportKeyOrRawValue: gear.category)?.swiftUIColor ?? .secondary
-    }
-
-    private var categoryIcon: String {
-        GearCategory(exportKeyOrRawValue: gear.category)?.icon ?? "wrench.and.screwdriver.fill"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(gear.isInactive ? .red : .green)
-                    .frame(width: 6, height: 6)
-                    .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
-
-                Image(systemName: categoryIcon)
-                    .font(.caption)
-                    .foregroundStyle(categoryColor)
-                    .accessibilityHidden(true)
-
-                Text(gear.gearCategory?.localizedName ?? LocalizedStringKey(gear.category))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(gear.name)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.primary)
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .frame(width: 140, height: 90, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(categoryColor.opacity(0.15))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(categoryColor.opacity(0.3), lineWidth: 1)
-        )
-    }
-}
-
 // MARK: - Equipment Info Card
 
 struct EquipmentInfoCard: View {
@@ -391,165 +340,6 @@ struct EquipmentInfoCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(color.opacity(0.3), lineWidth: 1)
         )
-    }
-}
-
-// MARK: - Add Gear To Dive View
-
-struct AddGearToDiveView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Bindable var dive: Dive
-
-    @Query private var allGear: [Gear]
-
-    // Équipements déjà utilisés dans cette plongée
-    // By record, not by `Gear.id`: a gear item sharing an id with one already on the dive
-    // (e.g. imported on two devices before they synced) stays available.
-    private var usedGearIds: Set<PersistentIdentifier> {
-        Set((dive.usedGear ?? []).map { $0.persistentModelID })
-    }
-
-    // Équipements disponibles (non encore ajoutés)
-    private var availableGear: [Gear] {
-        allGear.filter { !usedGearIds.contains($0.persistentModelID) && !$0.isInactive }
-    }
-
-    /// Gear items grouped by category, sorted A-Z within each group.
-    private var groupedAvailableGear: [(key: String, items: [Gear])] {
-        let grouped = Dictionary(grouping: availableGear) { gear in
-            GearCategory(rawValue: gear.category)?.rawValue ?? gear.category
-        }
-        return grouped.sorted { $0.key < $1.key }.map { (key: $0.key, items: $0.value.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) }
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                AppBackground().ignoresSafeArea()
-
-                if availableGear.isEmpty {
-                    emptyStateView
-                } else {
-                    gearList
-                }
-            }
-            .navigationTitle("Add Equipment")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .confirmationActionForeground(.orange)
-                }
-            }
-        }
-    }
-
-    private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "tray")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-
-            Text("No Equipment Available")
-                .font(.headline)
-                .foregroundStyle(.primary)
-
-            Text("All your equipment is already added to this dive or you haven't created any equipment yet.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-    }
-
-    private var gearList: some View {
-        groupedList {
-            ForEach(groupedAvailableGear, id: \.key) { category, items in
-                Section {
-                    ForEach(items) { gear in
-                        Button(action: {
-                            withAnimation {
-                                addGear(gear)
-                            }
-                        }) {
-                            HStack(spacing: 12) {
-                                // Icône de catégorie
-                                ZStack {
-                                    Circle()
-                                        .fill(categoryColor(for: gear.category).opacity(0.2))
-                                        .frame(width: 40, height: 40)
-
-                                    Image(systemName: categoryIcon(for: gear.category))
-                                        .foregroundStyle(categoryColor(for: gear.category))
-                                }
-
-                                // Info de l'équipement
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(gear.name)
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-
-                                    HStack(spacing: 8) {
-                                        Text(gear.gearCategory?.localizedName ?? LocalizedStringKey(gear.category))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-
-                                        if gear.weightContribution > 0 {
-                                            Text("• \(UserPreferences.shared.weightUnit.formatted(gear.weightContribution, from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)))")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-
-                                        Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
-                                            .font(.caption)
-                                            .foregroundStyle(.cyan)
-                                    }
-
-                                    if !gear.diverName.isEmpty {
-                                        Text(gear.diverName)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-
-                                Spacer()
-
-                                // Bouton ajouter
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-                        .listRowBackground(Color.primary.opacity(0.05))
-                        .listRowButton()
-                    }
-                } header: {
-                    Text(GearCategory(rawValue: category)?.localizedName ?? LocalizedStringKey(category))
-                }
-            }
-        }
-        .scrollContentBackground(.hidden)
-    }
-
-    @MainActor
-    private func addGear(_ gear: Gear) {
-        if dive.usedGear == nil { dive.usedGear = [] }
-        dive.usedGear!.append(gear)
-        try? modelContext.save()
-    }
-
-    private func categoryColor(for category: String) -> Color {
-        GearCategory(exportKeyOrRawValue: category)?.swiftUIColor ?? .secondary
-    }
-
-    private func categoryIcon(for category: String) -> String {
-        GearCategory(exportKeyOrRawValue: category)?.icon ?? "wrench.and.screwdriver.fill"
     }
 }
 
@@ -874,6 +664,146 @@ struct SiteSearchField: View {
 }
 
 
+
+// MARK: - Dive Copy Search Field
+
+/// Picks another dive to copy from, as `SiteSearchField` picks a site: the field shows `recents`
+/// while empty and focused, and the `candidates` matching the typed text (site, location,
+/// country or dive number) otherwise. Reads only `DiveSummary` values.
+struct DiveCopySearchField: View {
+    @Binding var selection: DiveSummary?
+    let recents: [DiveSummary]
+    let candidates: [DiveSummary]
+
+    @Environment(\.locale) private var locale
+    @State private var searchText: String = ""
+    @State private var showSuggestions: Bool = false
+    @FocusState private var isFocused: Bool
+
+    /// "#153 · Flintkote · 1 Aug 2026" (the number as the region formats it, the date in the
+    /// app language; parts left out when empty).
+    private func label(for summary: DiveSummary) -> String {
+        var parts: [String] = []
+        if let number = summary.diveNumber {
+            parts.append("#" + Double(number).localizedString(decimals: 0))
+        }
+        if !summary.siteName.isEmpty { parts.append(summary.siteName) }
+        parts.append(summary.timestamp.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale)))
+        return parts.joined(separator: " · ")
+    }
+
+    private var filtered: [DiveSummary] {
+        // Trimmed, so a leading or trailing space still finds the dive.
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard selection == nil, !query.isEmpty else { return [] }
+        return candidates.filter { summary in
+            let number = summary.diveNumber.map(String.init) ?? ""
+            let haystack = [summary.siteName, summary.location, summary.siteCountry ?? "", number].joined(separator: " ")
+            return haystack.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: selection == nil ? "magnifyingglass" : "checkmark.circle.fill")
+                    .foregroundStyle(DiveTab.equipment.color)
+                    .frame(width: 24)
+                formTextField("Search dives…", text: $searchText)
+                    .foregroundStyle(.primary)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+                    .onChange(of: searchText) {
+                        // Editing the text of a chosen dive starts a new search.
+                        if let chosen = selection, searchText != label(for: chosen) {
+                            selection = nil
+                            searchText = ""
+                        }
+                        showSuggestions = isFocused
+                    }
+                    .onChange(of: isFocused) {
+                        if isFocused {
+                            showSuggestions = true
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                if !isFocused { showSuggestions = false }
+                            }
+                        }
+                    }
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        selection = nil
+                        showSuggestions = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if showSuggestions {
+                if searchText.isEmpty {
+                    if !recents.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Recent")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 6)
+                                .padding(.bottom, 2)
+                            ForEach(recents) { summary in
+                                row(summary, icon: "clock", iconColor: DiveTab.equipment.color)
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                        .padding(.top, 4)
+                    }
+                } else if !filtered.isEmpty {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(filtered) { summary in
+                                row(summary, icon: "magnifyingglass", iconColor: .secondary)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 260)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private func row(_ summary: DiveSummary, icon: String, iconColor: Color) -> some View {
+        Button {
+            searchText = label(for: summary)
+            selection = summary
+            showSuggestions = false
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(iconColor)
+                    .accessibilityHidden(true)
+                Text(verbatim: label(for: summary))
+                    .foregroundStyle(DiveTab.equipment.color)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            // The whole suggestion responds, not only its text (a plain Button only responds
+            // where something is drawn).
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 // MARK: - Array Extension
 
