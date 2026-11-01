@@ -1204,7 +1204,9 @@ struct EditSiteDetailsView: View {
     private var allDivesByDate: [Dive] { store.dives }
 
     @State private var selectedSite: Dive? = nil
-    @State private var copyGPSCoordinates: Bool = true
+    /// Starts as Settings → Dive Profile says (off, on or the last choice) each time the sheet
+    /// opens; each change is recorded as the last choice.
+    @State private var copyGPSCoordinates: Bool
     @State private var workingCountry: String
     @State private var workingLocation: String
     @State private var workingSiteName: String
@@ -1396,6 +1398,7 @@ struct EditSiteDetailsView: View {
 
     init(dive: Dive) {
         self.dive = dive
+        _copyGPSCoordinates = State(initialValue: UserPreferences.shared.initialCopySiteGPSCoordinates)
         _workingCountry     = State(initialValue: dive.siteCountry ?? "")
         _workingLocation    = State(initialValue: dive.location)
         _workingSiteName    = State(initialValue: dive.siteName)
@@ -1556,6 +1559,10 @@ struct EditSiteDetailsView: View {
                 }
                 .tint(.green)
                 .fullWidthSwitch()
+                // Recorded whatever the mode, so Settings' Last Used starts from the latest choice.
+                .onChange(of: copyGPSCoordinates) { _, newValue in
+                    UserPreferences.shared.copySiteGPSLastChoice = newValue
+                }
 
                 Button {
                     if let source = liveSelectedSite {
@@ -1949,8 +1956,9 @@ struct EditConditionsView: View {
     /// Set when a fetch fails; presents the error alert.
     @State private var weatherFetchFailure: WeatherFetchFailure?
     /// When on, Fetch Weather replaces values already in the fields; when off, it fills only
-    /// empty ones. Per sheet, on by default (like Site Details' "Include GPS Coordinates").
-    @State private var replaceExistingWeather = true
+    /// empty ones. Starts as Settings → Online Services says (off, on or the last choice) each
+    /// time the sheet opens; each change is recorded as the last choice.
+    @State private var replaceExistingWeather: Bool
     /// The running fetch, cancelled when the sheet closes.
     @State private var weatherFetchTask: Task<Void, Never>?
 
@@ -1960,6 +1968,7 @@ struct EditConditionsView: View {
 
     init(dive: Dive) {
         self.dive = dive
+        _replaceExistingWeather = State(initialValue: UserPreferences.shared.initialReplaceExistingWeather)
         _workingWaterTemp  = State(initialValue: dive.waterTemperature)
         let minTemp = PrefilledDouble.decimals(dive.minTemperature, 1)
         let airTemp = PrefilledDouble.decimals(dive.airTemperature, 1)
@@ -2024,8 +2033,12 @@ struct EditConditionsView: View {
                             // Read when the response arrives, so locked like the fields it governs.
                             .disabled(isFetchingWeather)
                             // The last result described the previous mode; let the footer
-                            // explain what the next fetch will do instead.
-                            .onChange(of: replaceExistingWeather) { weatherFetchResult = nil }
+                            // explain what the next fetch will do instead. Recorded whatever the
+                            // mode, so Settings' Last Used starts from the latest choice.
+                            .onChange(of: replaceExistingWeather) { _, newValue in
+                                weatherFetchResult = nil
+                                UserPreferences.shared.replaceWeatherLastChoice = newValue
+                            }
                         } header: {
                             // Same key as the Settings → Online Services switch it depends on.
                             ConditionsSectionHeader(title: "Fetch weather online", icon: "cloud.sun", color: .orange)
