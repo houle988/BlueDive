@@ -1159,7 +1159,8 @@ private struct StaticChartLayer: View, Equatable {
     private func gfMarks(scale: SecondaryAxisScale,
                          series: [(time: Double, value: Double, run: Int, surface: Bool)]) -> some ChartContent {
         if !series.isEmpty {
-            RuleMark(y: .value("GF 100 %", plotY(100, on: scale)))
+            // The percentage is formatted in code (region-dependent spacing before %).
+            RuleMark(y: .value(Text(verbatim: String(format: NSLocalizedString("GF %@", bundle: .forAppLanguage(), value: "GF %@", comment: "Dive chart: accessibility label of the dotted line at 100 % of the GF, the raw Bühlmann M-value; %@ is the percentage (e.g. '100 %')"), gradientFactorText(100))), plotY(100, on: scale)))
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
                 .foregroundStyle(Color.gfMagenta.opacity(0.7))
         }
@@ -2181,23 +2182,12 @@ struct UnifiedDiveChartOptimized: View {
         )
     }
     
-    /// First group of chips: Depth, Temperature, NDL, GF. `shortLabels` shows Depth and
-    /// Temperature by their short labels; `gfShowsLabel` false makes the GF chip icon only, for a
-    /// row that has no room for a fourth labelled chip even then.
+    /// First group of chips: Temperature, NDL, GF. Depth has no chip: it is always drawn, as the
+    /// note under the chips says. `shortLabels` shows Temperature by its short label;
+    /// `gfShowsLabel` false makes the GF chip icon only, for a row that has no room for a third
+    /// labelled chip even then.
     @ViewBuilder
     private func primaryToggleChips(shortLabels: Bool = false, gfShowsLabel: Bool = true) -> some View {
-        // Depth button - always on, non-interactive (using a constant binding)
-        ToggleButton(
-            isOn: .constant(true),
-            icon: "arrow.down.circle.fill",
-            label: "Depth",
-            shortLabel: "Prof.",
-            color: .cyan,
-            textColor: Color.readableCyan,
-            isAvailable: true,
-            usesShortLabel: shortLabels
-        )
-
         ToggleButton(
             isOn: exclusiveBinding(for: \.showTemperature),
             icon: "thermometer",
@@ -2310,8 +2300,8 @@ struct UnifiedDiveChartOptimized: View {
                 }
             }
             #else
-            // Full labels when the row has room; else Depth and Temperature by their short labels
-            // with GF still labelled; GF icon only where even that does not fit (a small iPhone,
+            // Full labels when the row has room; else Temperature by its short label with GF
+            // still labelled; GF icon only where even that does not fit (a small iPhone,
             // a long language, large text).
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) { primaryToggleChips() }
@@ -2332,9 +2322,20 @@ struct UnifiedDiveChartOptimized: View {
                 }
             }
             #endif
-            Text("Depth is always displayed on the chart")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            // Preceded by a swatch of the depth line (same colour and width as `depthMarks`),
+            // drawn like the legend's line swatches; decorative, the text already says it.
+            HStack(spacing: 6) {
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: 1))
+                    path.addLine(to: CGPoint(x: 14, y: 1))
+                }
+                .stroke(Color.cyan, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .frame(width: 14, height: 2)
+                .accessibilityHidden(true)
+                Text("Depth is always displayed on the chart")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal)
     }
