@@ -356,12 +356,12 @@ struct ToggleButton: View {
     }
 }
 
-// MARK: - Secondary axis scale
+// MARK: - Round axis scale (PDF logbook)
 
-/// Range and label spacing of the secondary (right-axis) metric, in its display unit.
-/// `lower` and `upper` are the metric values at the two ends of the plot; both are
-/// multiples of `step`, so every right-axis label shows a round value. The PDF logbook's
-/// profile uses the same rounding for its depth and time labels.
+/// Round range and label spacing of a value, in its display unit: `lower` and `upper`
+/// are multiples of `step`, so every label shows a round value. Used by the PDF logbook's
+/// profile for its depth and time labels; the dive chart's right axis uses
+/// `GridAlignedScale` instead (its labels sit on the depth gridlines).
 struct SecondaryAxisScale {
     let lower: Double
     let upper: Double
@@ -369,7 +369,7 @@ struct SecondaryAxisScale {
 
     var span: Double { upper - lower }
 
-    /// Values that get a right-axis label, from `lower` to `upper` in `step` increments.
+    /// Values that get a label, from `lower` to `upper` in `step` increments.
     var labelValues: [Double] {
         guard step > 0, span > 0, (span / step).isFinite else { return [lower] }
         let count = min(Int((span / step).rounded()), 50)
@@ -389,9 +389,8 @@ struct SecondaryAxisScale {
 
     /// Scale covering `low...high`, with both ends rounded outward to a round step chosen
     /// to give about `targetIntervals` (by default five) intervals. `multipliers` are the allowed leading digits of the
-    /// step (`[1, 2, 5]` keeps whole values, `[1, 2, 2.5, 5]` also allows 25 bar or
-    /// 0.25 bar); `minimumStep` is the smallest step allowed (1 for whole degrees or
-    /// minutes). A flat series still spans one step. `topHeadroom` adds a step when the
+    /// step (`[1, 2, 5]` keeps whole values, `[1, 2, 2.5, 5]` also allows 25 or 0.25);
+    /// `minimumStep` is the smallest step allowed (1 for whole values). A flat series still spans one step. `topHeadroom` adds a step when the
     /// highest value lands on the top of the scale (see below); pass false when `high`
     /// is already padded. `targetIntervals` sets how many intervals the step aims for.
     static func rounded(low: Double, high: Double,
@@ -409,12 +408,102 @@ struct SecondaryAxisScale {
         let step = max(multiplier * magnitude, minimumStep)
         let lower = (low / step).rounded(.down) * step
         var upper = (high / step).rounded(.up) * step
-        // The top of the scale is the plot's clipped top edge for pressure, temperature
-        // and NDL: when the highest value lands on (or just below) a round value, add one
-        // step so the trace is not drawn along that edge.
+        // When the highest value lands on (or just below) a round value, add one step so
+        // it is not drawn along the top edge of the scale.
         if topHeadroom, upper - high < step * 0.05 { upper += step }
         if upper <= lower { upper = lower + step }
         return SecondaryAxisScale(lower: lower, upper: upper, step: step)
+    }
+}
+
+// MARK: - Grid-aligned right-axis scale
+
+/// Scale of the dive profile chart's right-hand metric, aligned with the depth gridlines:
+/// the metric changes by one round `step` per depth gridline (`depthStep` apart, in the
+/// depth display unit), starting from `surfaceValue` on the surface line. Every right-axis
+/// label therefore sits on a depth gridline and shows a round value. PPO₂ increases
+/// downward (0 on the surface line); the other metrics have their highest value there.
+private struct GridAlignedScale {
+    let surfaceValue: Double
+    let step: Double
+    let depthStep: Double
+    let increasesDownward: Bool
+
+    /// The metric value on depth gridline `index` (0 = the surface line), computed from the
+    /// index so a label never shows floating-point error.
+    func value(atGridline index: Int) -> Double {
+        let value = surfaceValue + Double(index) * step * (increasesDownward ? 1 : -1)
+        // Normalise negative zero so a label never reads "-0".
+        return value == 0 ? 0 : value
+    }
+
+    /// Depth (display unit, positive downward) at which `value` is drawn.
+    func depth(of value: Double) -> Double {
+        let steps = increasesDownward ? (value - surfaceValue) / step : (surfaceValue - value) / step
+        return steps * depthStep
+    }
+
+    /// Decimals needed to show every multiple of `step` exactly (0.2 → 1, 20 → 0).
+    var labelDecimals: Int {
+        var decimals = 0
+        var scaled = step
+        while decimals < 3, abs(scaled - scaled.rounded()) > 1e-9 {
+            scaled *= 10
+            decimals += 1
+        }
+        return decimals
+    }
+
+    /// Steps `multipliers × 10ⁿ` from `minimumStep` upward, ascending (1, 2, 5, 10, 20, 50…).
+    static func candidateSteps(minimumStep: Double, multipliers: [Double] = [1, 2, 5]) -> [Double] {
+        // A step must be positive and finite, or no candidate would ever be added.
+        guard minimumStep > 0, minimumStep.isFinite, multipliers.contains(where: { $0 > 0 }) else { return [1] }
+        var steps: [Double] = []
+        var magnitude = pow(10.0, (log10(minimumStep)).rounded(.down))
+        while steps.count < 60 {
+            for multiplier in multipliers where multiplier * magnitude >= minimumStep * (1 - 1e-9) {
+                steps.append(multiplier * magnitude)
+            }
+            magnitude *= 10
+        }
+        return steps
+    }
+
+    /// The scale with the finest of `candidates` (ascending) for which the readings
+    /// `low...high` fit between the surface line and `chartDepth` (a whole number of
+    /// `depthStep` intervals), with a value on every gridline: the surface value is the
+    /// highest reading rounded up to the step (the lowest, rounded down, when the metric
+    /// increases downward), raised when needed so the bottom gridline's value is not below
+    /// `minimumValue`; a step whose surface value would exceed `maximumSurfaceValue` (NDL
+    /// cannot read above 100) is skipped. Steps more than ten times the readings' size are
+    /// not tried: their rounding tolerance could pass a meaningless scale (e.g. a 1 m dive
+    /// from −1.5 to 28.3 °C, which no round step fits on one interval, read as 2 000 000 000 → 0).
+    /// Nil when no candidate fits.
+    static func fitted(low: Double, high: Double, candidates: [Double], depthStep: Double,
+                       chartDepth: Double, increasesDownward: Bool = false,
+                       minimumValue: Double? = nil, maximumSurfaceValue: Double? = nil) -> GridAlignedScale? {
+        let intervals = max((chartDepth / depthStep).rounded(), 1)
+        let largestStep = max(abs(low), abs(high), 1) * 10
+        for step in candidates where step > 0 {
+            if step > largestStep { break }
+            let tolerance = step * 1e-9
+            if increasesDownward {
+                var surface = (low / step).rounded(.down) * step
+                if let minimumValue { surface = max(surface, (minimumValue / step - 1e-9).rounded(.up) * step) }
+                guard surface + intervals * step >= high - tolerance else { continue }
+                return GridAlignedScale(surfaceValue: surface, step: step, depthStep: depthStep, increasesDownward: true)
+            } else {
+                var surface = (high / step - 1e-9).rounded(.up) * step
+                if let minimumValue {
+                    // Raise the surface value so the bottom gridline's value is not below the minimum.
+                    surface = max(surface, ((minimumValue + intervals * step) / step - 1e-9).rounded(.up) * step)
+                }
+                if let maximumSurfaceValue, surface > maximumSurfaceValue + tolerance { continue }
+                guard surface - intervals * step <= low + tolerance else { continue }
+                return GridAlignedScale(surfaceValue: surface, step: step, depthStep: depthStep, increasesDownward: false)
+            }
+        }
+        return nil
     }
 }
 
@@ -499,20 +588,22 @@ private struct StaticChartLayer: View, Equatable {
 
     // MARK: - Secondary axis scales
 
-    // Each secondary metric's scale comes from the dive's own samples, in the display
-    // unit, rounded outward to a round step (see `SecondaryAxisScale.rounded`). The right
-    // axis labels those round values at their own heights, so a label always names the
-    // trace value at its height. The scales only position marks and labels; no sample
-    // value is altered.
+    // Each secondary metric's scale comes from the dive's own samples, in the display unit,
+    // and is aligned with the depth gridlines (see `GridAlignedScale`): the finest round
+    // step for which the dive's readings fit between the surface line and the chart depth,
+    // one step per depth gridline. The right-axis labels sit on the depth gridlines, each
+    // naming the trace value at its height. The scales only position marks and labels; no
+    // sample value is altered.
 
     /// Pressure scale: the lowest to the highest reading across every tank the chart
     /// draws (the per-tank pressures when there are several tanks, the single tank
     /// pressure otherwise — the same samples `pressureMarks` plots), in the display unit.
-    /// Falls back to 0–300 bar, in the display unit, when the dive has no pressure samples.
+    /// Falls back to 0–300 bar, in the display unit, when the dive has no pressure samples or
+    /// a pressure that never changes.
     /// The step is at least 10 bar (100 psi, 1 000 000 Pa), so a nearly flat trace — a short
     /// dive or a tank barely breathed from — is not labelled in fractions of a bar.
     /// `tankIndices` is computed once in `body` and shared with `pressureMarks`.
-    private func pressureAxis(tankIndices: [Int]) -> SecondaryAxisScale {
+    private func pressureAxis(tankIndices: [Int]) -> GridAlignedScale {
         let minimumStep: Double
         switch prefs.pressureUnit {
         case .bar: minimumStep = 10
@@ -523,6 +614,8 @@ private struct StaticChartLayer: View, Equatable {
         var hi = -Double.greatestFiniteMagnitude
         func include(_ raw: Double) {
             let value = dive.displayProfilePressure(raw)
+            // A corrupt non-finite reading would make the scale unusable.
+            guard value.isFinite else { return }
             if value < lo { lo = value }
             if value > hi { hi = value }
         }
@@ -536,17 +629,22 @@ private struct StaticChartLayer: View, Equatable {
                 include(raw)
             }
         }
-        guard lo <= hi else {
-            return .rounded(low: 0, high: prefs.pressureUnit.convert(300, from: .bar), minimumStep: minimumStep)
+        // 25 bar (250 psi) steps too, so a grid that cannot fit 20 bar steps gets 25 rather than 50.
+        let candidates = GridAlignedScale.candidateSteps(minimumStep: minimumStep, multipliers: [1, 2, 2.5, 5])
+        // No samples, or a pressure that never changes (e.g. always 0 with no transmitter):
+        // the standard 0–300 bar scale rather than a scale fitted to a single value.
+        guard lo < hi else {
+            return fittedScale(low: 0, high: prefs.pressureUnit.convert(300, from: .bar), candidates: candidates,
+                               minimumValue: 0)
         }
-        return .rounded(low: lo, high: hi, minimumStep: minimumStep)
+        return fittedScale(low: lo, high: hi, candidates: candidates, minimumValue: 0)
     }
 
-    /// Temperature scale in whole degrees. Derived from the dive's own temperature samples
-    /// with padding (10 % of the span, at least 2°) so the trace never touches the plot
-    /// edges, then rounded outward to a step of 1, 2, 5 or 10 degrees. Falls back to a
-    /// fixed range per unit when the dive has no temperature samples.
-    private var temperatureAxis: SecondaryAxisScale {
+    /// Temperature scale in whole degrees (steps of 1, 2, 5 or 10…), fitted to the dive's
+    /// own lowest-to-highest temperature with no padding, so the step follows the data. A
+    /// trace touching the top or bottom stays fully drawn (the plot's 1 pt clip outset).
+    /// Falls back to a fixed range per unit when the dive has no temperature samples.
+    private var temperatureAxis: GridAlignedScale {
         // Single allocation-free pass over the samples to find the display-unit
         // temperature extremes.
         var lo = Double.greatestFiniteMagnitude
@@ -554,26 +652,28 @@ private struct StaticChartLayer: View, Equatable {
         for sample in dive.profileSamples {
             guard let raw = sample.temperature else { continue }
             let value = dive.displayProfileTemperature(raw)
+            guard value.isFinite else { continue }
             if value < lo { lo = value }
             if value > hi { hi = value }
         }
+        let candidates = GridAlignedScale.candidateSteps(minimumStep: 1)
         guard lo <= hi else {
             switch prefs.temperatureUnit {
-            case .celsius:    return .rounded(low: -10, high: 30, multipliers: [1, 2, 5], minimumStep: 1, topHeadroom: false)
-            case .fahrenheit: return .rounded(low: 14, high: 86, multipliers: [1, 2, 5], minimumStep: 1, topHeadroom: false)
-            case .kelvin:     return .rounded(low: 263, high: 303, multipliers: [1, 2, 5], minimumStep: 1, topHeadroom: false)
+            case .celsius:    return fittedScale(low: -10, high: 30, candidates: candidates)
+            case .fahrenheit: return fittedScale(low: 14, high: 86, candidates: candidates)
+            case .kelvin:     return fittedScale(low: 263, high: 303, candidates: candidates)
             }
         }
-        let span = max(hi - lo, 1.0)
-        let pad = max(span * 0.1, 2.0)
-        return .rounded(low: lo - pad, high: hi + pad, multipliers: [1, 2, 5], minimumStep: 1, topHeadroom: false)
+        return fittedScale(low: lo, high: hi, candidates: candidates)
     }
 
-    /// NDL scale in whole minutes: the lowest to the highest value `ndlMarks` plots
-    /// (0 while a deco stop is owed; readings capped at 99 as in `ndlMarks`). Falls back
-    /// to 0–100 min when the dive has no NDL samples.
+    /// NDL scale in whole minutes (steps of 1, 2, 5, 10, 20, 25, 50…), fitted to the lowest
+    /// to the highest value `ndlMarks` plots (0 while a deco stop is owed; readings capped at
+    /// 99). When the trace reaches the cap, the surface value is 100, labelled "99min",
+    /// and capped readings are drawn on the surface line. Falls back to 0–100 min when the
+    /// dive has no NDL samples or an NDL that never changes.
     /// `series` (`ndlSeriesSamples`) is computed once in `body` and shared with `ndlMarks`.
-    private func ndlAxis(series: [DiveProfilePoint]) -> SecondaryAxisScale {
+    private func ndlAxis(series: [DiveProfilePoint]) -> GridAlignedScale {
         var lo = Double.greatestFiniteMagnitude
         var hi = -Double.greatestFiniteMagnitude
         for sample in series {
@@ -582,105 +682,198 @@ private struct StaticChartLayer: View, Equatable {
             if value < lo { lo = value }
             if value > hi { hi = value }
         }
-        guard lo <= hi else {
-            return .rounded(low: 0, high: 100, multipliers: [1, 2, 5], minimumStep: 1)
+        let candidates: [Double] = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000]
+        // No samples, or an NDL that never changes (e.g. 0 for the whole dive when the computer
+        // recorded none): the standard 0–100 min scale rather than one fitted to a single value.
+        guard lo < hi else {
+            return fittedScale(low: 0, high: 100, candidates: candidates, minimumValue: 0, maximumSurfaceValue: 100)
         }
-        let scale = SecondaryAxisScale.rounded(low: lo, high: hi, multipliers: [1, 2, 5], minimumStep: 1)
-        // When the trace reaches the cap (99, readings above it included), the scale ends
-        // at the cap rather than at the rounded 100, so the capped line and its top label
-        // sit on the plot's top edge instead of just below it. The other labels keep their
-        // round values.
-        guard hi >= ndlPlotCap else { return scale }
-        return SecondaryAxisScale(lower: scale.lower, upper: ndlPlotCap, step: scale.step)
+        return fittedScale(low: lo, high: hi, candidates: candidates, minimumValue: 0, maximumSurfaceValue: 100)
     }
 
     /// PPO₂ scale: from 0 to the highest value `ppo2Marks` plots (every O₂ sensor when the
-    /// dive has per-sensor readings, and the voted or computed PPO₂ in `data`), never below
-    /// 1.6 bar so a low-PPO₂ dive is still drawn against the usual working limits.
+    /// dive has per-sensor readings, the voted or computed PPO₂ in `data`, and the setpoint),
+    /// in quarter-bar steps (0.25, 0.5, 1…), fitted to the dive's own values: e.g. a peak of
+    /// 0.91 bar on a 9 m dive gives 0 / 0.25 … 1.25. 1.5 bar only when the dive has no PPO₂.
     /// `sensorIndices` and `data` are computed once in `body` and shared with `ppo2Marks`;
     /// `setpointRange` comes from the body's `SetpointProfile`.
     private func ppo2Axis(sensorIndices: [Int], data: [(time: Double, ppo2: Double, run: Int, joinsPrevious: Bool)],
-                          setpointRange: ClosedRange<Double>?) -> SecondaryAxisScale {
+                          setpointRange: ClosedRange<Double>?) -> GridAlignedScale {
         var hi = 0.0
         if !sensorIndices.isEmpty {
             for sample in dive.profileSamples {
                 guard let readings = sample.sensorPPO2 else { continue }
                 for idx in sensorIndices {
-                    if let ppo2 = readings[idx], ppo2 > hi { hi = ppo2 }
+                    if let ppo2 = readings[idx], ppo2.isFinite, ppo2 > hi { hi = ppo2 }
                 }
             }
         }
-        for point in data where point.ppo2 > hi { hi = point.ppo2 }
+        // Non-finite (corrupt) readings are left out, so they cannot make the scale unusable.
+        for point in data where point.ppo2.isFinite && point.ppo2 > hi { hi = point.ppo2 }
         // The setpoint line is drawn on the same scale.
-        if let setpointRange, setpointRange.upperBound > hi { hi = setpointRange.upperBound }
-        return .rounded(low: 0, high: max(hi, ppo2AxisMinimumMax))
+        if let setpointRange, setpointRange.upperBound.isFinite, setpointRange.upperBound > hi { hi = setpointRange.upperBound }
+        return fittedScale(low: 0, high: hi > 0 ? hi : ppo2AxisFallbackMax,
+                           candidates: GridAlignedScale.candidateSteps(minimumStep: 0.25, multipliers: [1, 2, 2.5, 5]),
+                           increasesDownward: true, minimumValue: 0)
     }
 
-    /// Lowest top of the PPO₂ scale, in bar.
-    private let ppo2AxisMinimumMax: Double = 1.6
+    /// Top of the PPO₂ scale, in bar, for a dive with no PPO₂ value to fit.
+    private let ppo2AxisFallbackMax: Double = 1.5
 
-    /// PPO₂ is drawn from 0 at the surface line growing downward; the other metrics put
-    /// their highest value at the surface line.
-    private var secondaryAxisIncreasesDownward: Bool { visibility.showPPO2 }
+    // MARK: - Depth grid
 
-    /// Plot Y of a secondary-metric value: `scale.upper` at the surface line (y = 0) and
-    /// `scale.lower` at the chart depth (y = -depthBase), or the reverse when
-    /// `increasesDownward`. Values outside the scale are clamped to the plot.
-    private func plotY(_ value: Double, on scale: SecondaryAxisScale, increasesDownward: Bool = false) -> Double {
-        guard scale.span > 0 else { return 0 }
-        let normalised = ((value - scale.lower) / scale.span).clamped(to: 0...1)
-        return -depthBase * (increasesDownward ? normalised : 1.0 - normalised)
+    /// Most depth intervals the chart shows, so its gridlines (and the right-axis labels
+    /// on them) stay readable: 10 on the dive detail chart (about 28 pt apart at its
+    /// 300 pt minimum height), 5 on the shorter macOS dive-list preview.
+    private var maxDepthIntervals: Double {
+        #if os(macOS)
+        return heightRule == .listPreview ? 5 : 10
+        #else
+        return 10
+        #endif
     }
 
-    /// Inverse of `plotY`: the metric value at a right-axis mark, snapped to the scale's
-    /// step so floating-point error never shows in a label.
-    private func secondaryValue(atY y: Double, on scale: SecondaryAxisScale) -> Double {
-        guard depthBase > 0 else { return scale.lower }
-        let fraction = (-y) / depthBase
-        let normalised = secondaryAxisIncreasesDownward ? fraction : 1.0 - fraction
-        let value = scale.lower + normalised * scale.span
-        var snapped = (value / scale.step).rounded() * scale.step
-        // Normalise negative zero so a label never reads "-0".
-        if snapped == 0 { snapped = 0 }
-        return snapped
+    /// Depth below the surface line that the plot shows on a grid `step` apart (display
+    /// unit): the chart depth rounded up to the next gridline, so the plot ends on a
+    /// labelled line and every reading, down to the deepest, lies on or above it.
+    private func plotDepth(step: Double) -> Double {
+        guard depthBase > 0, depthBase.isFinite, step > 0, step.isFinite else { return 1 }
+        return max((depthBase / step - 1e-9).rounded(.up), 1) * step
     }
 
-    /// Plot Y positions of the right-axis labels.
-    private func secondaryAxisMarks(_ scale: SecondaryAxisScale?) -> [Double] {
-        // With no depth (every sample at 0 m) all values would map to the same height.
-        guard let scale, depthBase > 0 else { return [] }
-        var values = scale.labelValues
-        if ndlIsRightAxisMetric, values.contains(where: { $0 >= ndlPlotCap }) {
-            // NDL is plotted up to `ndlPlotCap` (99 min), so the top label of a scale
-            // reaching it sits at the height of 99 and reads 99 (see `ndlTopLabel`). A label
-            // within half a step below it (98 on a 2-minute step) would crowd it, so it is
-            // left out.
-            values = values.map { min($0, ndlPlotCap) }
-            values.removeAll { $0 < ndlPlotCap && ndlPlotCap - $0 <= scale.step / 2 }
+    /// Depth steps the grid may use, finest first: `multipliers × 10ⁿ` (display unit;
+    /// 1, 2, 5, 10, 20, 50… by default) giving between `minimumIntervals` and
+    /// `maxDepthIntervals` intervals over the chart depth. A chart too shallow for the
+    /// minimum gets the finest step within the maximum.
+    private func depthGridCandidates(multipliers: [Double] = [1, 2, 5], minimumIntervals: Double = 3) -> [Double] {
+        guard depthBase > 0, depthBase.isFinite else { return [1] }
+        // Whole steps only (a 1.5 multiplier gives 15 and 150, never 1.5).
+        let steps = GridAlignedScale.candidateSteps(minimumStep: 1, multipliers: multipliers)
+            .filter { $0 == $0.rounded() }
+        guard let finest = steps.first(where: { depthBase / $0 <= maxDepthIntervals }) else { return [depthBase] }
+        let usable = steps.filter { $0 >= finest && depthBase / $0 >= minimumIntervals }
+        return usable.isEmpty ? [finest] : usable
+    }
+
+    /// Depth grids tried in turn by `fittedScale`, until one labels every line: the round
+    /// 1-2-5 steps; then also 3, 4, 6, 8 and 15 (e.g. NDL 99 → 0 needs 4, 5 or 10 intervals, which
+    /// a 26 m dive gets with lines every 6 m); then, last, as few as 2 intervals (a 6 m dive:
+    /// lines every 3 m, NDL 99 / 50 / 0).
+    private var depthGridTiers: [[Double]] {
+        [depthGridCandidates(),
+         depthGridCandidates(multipliers: Self.extraDepthGridMultipliers),
+         // A step up to two-thirds of the dive depth: the plot, which ends on the next
+         // gridline, then has at least 2 intervals (a 5.6 m dive, lines every 3 m: 0 / 3 / 6).
+         depthGridCandidates(multipliers: Self.extraDepthGridMultipliers, minimumIntervals: 1.5)]
+    }
+
+    /// Depth steps beyond the round 1-2-5 ones: 3, 4, 6, 8 and 15 (× 10ⁿ; 15 gives a dive
+    /// just over 50 m lines every 15 m, so NDL 99 → 0 reads 99 / 75 / 50 / 25 / 0 rather than needing
+    /// lines every 30 m).
+    private static let extraDepthGridMultipliers: [Double] = [1, 1.5, 2, 3, 4, 5, 6, 8]
+
+    /// The depth grid with no right-axis metric: the finest allowed step.
+    private var defaultDepthGridStep: Double { depthGridCandidates().first ?? 1 }
+
+    /// Plot Y (negated depth) of every depth gridline `step` apart, from the surface to
+    /// the bottom of the plot (itself a gridline).
+    private func depthGridValues(step: Double) -> [Double] {
+        guard depthBase > 0, depthBase.isFinite, step > 0 else { return [0] }
+        let count = min(Int(exactly: (plotDepth(step: step) / step + 1e-9).rounded(.down)) ?? 0, 100)
+        return (0...max(count, 0)).map { -Double($0) * step }
+    }
+
+    /// The scale for `low...high` on the depth grid whose labels the readings fill best.
+    /// Each allowed grid is tried (finest first) with the finest round step that fits the
+    /// readings and leaves a value on every gridline (none below `minimumValue`, e.g. 0 for
+    /// a pressure; a surface value not above `maximumSurfaceValue`, 100 for NDL). A coarser
+    /// grid is kept only when the readings span clearly more of its scale (at least 15 % of
+    /// it more). Constraints alone can decide, e.g. NDL 0–99 on a 39 m dive: every 10 m
+    /// (99 / 75 / 50 / 25 / 0), since every 5 m (8 intervals) has no round step from at most
+    /// 100 down to 0. When no grid of a tier (`depthGridTiers`) labels every line, the next
+    /// tier is tried. When the round grids leave more than half of the scale empty, the
+    /// extra grids (3, 4, 6, 8, 15…) are tried as well and kept when clearly fuller, e.g.
+    /// PPO₂ peaking at 0.74 bar on a 14.8 m dive: lines every 3 m, 0 … 1.25, rather than every
+    /// 2 m, 0 … 2. The depth axis then uses the chosen grid too (`body`).
+    private func fittedScale(low: Double, high: Double, candidates: [Double], increasesDownward: Bool = false,
+                             minimumValue: Double? = nil, maximumSurfaceValue: Double? = nil) -> GridAlignedScale {
+        let tiers = depthGridTiers
+        for (index, tier) in tiers.enumerated() {
+            guard let fit = bestFittedScale(low: low, high: high, candidates: candidates, depthSteps: tier,
+                                            increasesDownward: increasesDownward, minimumValue: minimumValue,
+                                            maximumSurfaceValue: maximumSurfaceValue) else { continue }
+            if index == 0, fit.fill < 0.5, tiers.count > 1,
+               let fuller = bestFittedScale(low: low, high: high, candidates: candidates, depthSteps: tiers[1],
+                                            increasesDownward: increasesDownward, minimumValue: minimumValue,
+                                            maximumSurfaceValue: maximumSurfaceValue),
+               fuller.fill > fit.fill + 0.15 {
+                return fuller.scale
+            }
+            return fit.scale
         }
-        return values.map { plotY($0, on: scale, increasesDownward: secondaryAxisIncreasesDownward) }
+        // No grid can label every line: drop the bounds rather than show no scale. Rare,
+        // e.g. NDL on a dive just over 2 m and under 3 m deep, whose only grid (every 1 m,
+        // 3 intervals) cannot hold a 0–100 scale in round steps: 99 / 50 / 0, the lowest
+        // line blank.
+        let depthStep = defaultDepthGridStep
+        return GridAlignedScale.fitted(low: low, high: high, candidates: candidates, depthStep: depthStep,
+                                       chartDepth: plotDepth(step: depthStep), increasesDownward: increasesDownward)
+            ?? GridAlignedScale(surfaceValue: increasesDownward ? low : high, step: max(high - low, 1),
+                                depthStep: depthStep, increasesDownward: increasesDownward)
     }
 
-    /// True when NDL is the right axis's metric: shown, and not overridden by a metric
-    /// that comes first in `secondaryAxisLabel`'s order (PPO₂, pressure, temperature).
-    private var ndlIsRightAxisMetric: Bool {
-        visibility.showNDL && !visibility.showPPO2 && !visibility.showPressure && !visibility.showTemperature
+    /// The best of `depthSteps` for `fittedScale`, with the share of its scale the readings
+    /// span, or nil when none labels every line.
+    private func bestFittedScale(low: Double, high: Double, candidates: [Double], depthSteps: [Double],
+                                 increasesDownward: Bool, minimumValue: Double?,
+                                 maximumSurfaceValue: Double?) -> (scale: GridAlignedScale, fill: Double)? {
+        var best: (scale: GridAlignedScale, fill: Double)?
+        for depthStep in depthSteps {
+            let chartDepth = plotDepth(step: depthStep)
+            guard let scale = GridAlignedScale.fitted(low: low, high: high, candidates: candidates,
+                                                      depthStep: depthStep, chartDepth: chartDepth,
+                                                      increasesDownward: increasesDownward, minimumValue: minimumValue,
+                                                      maximumSurfaceValue: maximumSurfaceValue) else { continue }
+            // Share of the scale (surface line to bottom gridline) the readings span.
+            let fill = min(max((high - low) / (scale.step * (chartDepth / depthStep).rounded()), 0), 1)
+            if best == nil || fill > (best?.fill ?? 0) + 0.15 {
+                best = (scale, fill)
+            }
+        }
+        return best
     }
 
-    /// Highest NDL the chart plots, in minutes: readings above it are drawn at this value,
-    /// as dive computers such as Shearwater display them.
+    /// Plot Y of a secondary-metric value on its grid-aligned scale. Values outside the
+    /// plot are clamped to it.
+    private func plotY(_ value: Double, on scale: GridAlignedScale) -> Double {
+        guard depthBase > 0 else { return 0 }
+        return -scale.depth(of: value).clamped(to: 0...plotDepth(step: scale.depthStep))
+    }
+
+    /// Index of the depth gridline at plot Y `y` (0 = the surface line) on `scale`'s grid.
+    private func gridlineIndex(atY y: Double, on scale: GridAlignedScale) -> Int {
+        Int(exactly: ((-y) / scale.depthStep).rounded()) ?? 0
+    }
+
+    /// Whether the right axis's metric can be negative: only temperature (shown, and not
+    /// overridden by PPO₂ or pressure, which come first in `secondaryAxisLabel`'s order).
+    private var rightAxisAllowsNegative: Bool {
+        visibility.showTemperature && !visibility.showPPO2 && !visibility.showPressure
+    }
+
+    /// Plot Y positions of the right-axis labels: the depth gridlines, except those whose
+    /// value would be below 0 for a metric that cannot be negative.
+    private func secondaryAxisMarks(_ scale: GridAlignedScale?) -> [Double] {
+        // With no depth (every sample at 0 m) there is no grid to label.
+        guard let scale, depthBase > 0 else { return [] }
+        return depthGridValues(step: scale.depthStep).filter { y in
+            rightAxisAllowsNegative || scale.value(atGridline: gridlineIndex(atY: y, on: scale)) >= -1e-9
+        }
+    }
+
+    /// Highest NDL the chart plots, in minutes, as dive computers such as Shearwater display
+    /// it: readings at or above it are drawn on the scale's surface line (100, labelled 99).
     private let ndlPlotCap: Double = 99
-
-    /// Text of the top NDL label when the scale reaches `ndlPlotCap` ("99min"), or nil
-    /// for an ordinary label. The top label is recognised by its position (the height of
-    /// the cap), not by its value: snapped to the step, 99 can round to 100 and the label
-    /// below it to 98.
-    private func ndlTopLabel(atY y: Double, scale: SecondaryAxisScale) -> String? {
-        guard scale.upper >= ndlPlotCap else { return nil }
-        let capY = plotY(ndlPlotCap, on: scale)
-        guard abs(y - capY) < max(depthBase, 1) * 1e-6 else { return nil }
-        return ndlPlotCap.localizedString(decimals: 0) + "min"
-    }
 
     // MARK: - Right-axis label builders
 
@@ -688,9 +881,9 @@ private struct StaticChartLayer: View, Equatable {
     /// are mutually exclusive in the toggle UI, so only one branch is ever live — but this
     /// stays a plain value computation rather than branching inside the axis's ViewBuilder
     /// content, which is what keeps that content's view-tree shape stable across toggles.
-    private func secondaryAxisLabel(for y: Double, scale: SecondaryAxisScale?) -> String {
+    private func secondaryAxisLabel(for y: Double, scale: GridAlignedScale?) -> String {
         guard let scale else { return "" }
-        let value = secondaryValue(atY: y, on: scale)
+        let value = scale.value(atGridline: gridlineIndex(atY: y, on: scale))
         let decimals = scale.labelDecimals
         if visibility.showPPO2 {
             return value.localizedString(decimals: decimals, minDecimals: decimals) + " bar"
@@ -702,9 +895,10 @@ private struct StaticChartLayer: View, Equatable {
             return value.localizedString(decimals: decimals, minDecimals: decimals) + prefs.temperatureUnit.symbol
         }
         if visibility.showNDL {
-            // The top label names the plotted cap (99), not the rounded step above it.
-            if let top = ndlTopLabel(atY: y, scale: scale) { return top }
-            return value.localizedString(decimals: decimals) + "min"
+            // The surface line is labelled at most 99 (the plotted cap, where readings of 99
+            // or more are drawn), even when its round value is 100.
+            let shown = min(value, ndlPlotCap)
+            return shown.localizedString(decimals: decimals) + "min"
         }
         if visibility.showGF {
             return (value / 100).formatted(.percent.precision(.fractionLength(decimals)).locale(.current))
@@ -723,13 +917,9 @@ private struct StaticChartLayer: View, Equatable {
 
     // The Y domain — depth values are negated so deeper = more negative = lower on chart.
     // Swift Charts naturally puts smaller values at the bottom, so negating gives us
-    // surface (0) at top and max depth at bottom with no reversal tricks needed.
-    // The 5% extra ensures the deepest line isn't clipped at the plot edge.
-    private var yDomainMin: Double {
-        let base = depthBase
-        guard base > 0 else { return -1 }
-        return -(base * 1.05)
-    }
+    // surface (0) at top and max depth at bottom with no reversal tricks needed. The
+    // bottom is the gridline at or below the chart depth (`plotDepth(step:)`) on the depth
+    // grid in use, so the plot ends on a labelled line.
 
     var body: some View {
         // Compute each shown metric's scale once per render, then thread it into its marks
@@ -754,8 +944,10 @@ private struct StaticChartLayer: View, Equatable {
         let gfScale = visibility.showGF && !gfSeries.isEmpty ? gfAxis(series: gfSeries) : nil
         // Same order as `secondaryAxisLabel` and `secondaryAxisColor`.
         let rightAxisScale = ppo2Scale ?? pressureScale ?? temperatureScale ?? ndlScale ?? gfScale
+        // The depth grid of the right-axis metric (its labels sit on these lines), else the finest.
+        let depthGridStepShown = rightAxisScale?.depthStep ?? defaultDepthGridStep
         return Chart {
-            legacyDecoBand
+            legacyDecoBand(bottom: -plotDepth(step: depthGridStepShown))
             depthMarks
             decoMarks
             gasChangeMarks
@@ -766,9 +958,9 @@ private struct StaticChartLayer: View, Equatable {
             if let gfScale { gfMarks(scale: gfScale, series: gfSeries) }
             if let ppo2Scale { ppo2Marks(scale: ppo2Scale, sensorIndices: ppo2Sensors, data: ppo2Data, setpointLine: setpoints.linePoints) }
         }
-        // Explicit domain from yDomainMin (deepest, negative) to 0 (surface).
-        // No automatic padding — the chart fills exactly to the data.
-        .chartYScale(domain: yDomainMin...0)
+        // Explicit domain from the bottom gridline (deepest, negative) to 0 (surface).
+        // No automatic padding — the chart fills exactly to that line.
+        .chartYScale(domain: -plotDepth(step: depthGridStepShown)...0)
         .chartXScale(domain: 0...xMax)
         .chartPlotStyle { plotArea in
             // Clip 1 pt outside the plot (half the 2 pt trace width), so a trace running
@@ -802,7 +994,9 @@ private struct StaticChartLayer: View, Equatable {
         }
         .chartYAxis {
             // ── Left axis: depth, shown as positive numbers increasing downward ──
-            AxisMarks(position: .leading, values: .automatic) { value in
+            // Explicit round depths on the right-axis metric's grid (`fittedScale`), so its
+            // labels sit on these lines; the finest grid when no metric is shown.
+            AxisMarks(position: .leading, values: depthGridValues(step: depthGridStepShown)) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                     // Appearance-adaptive: primary is white in dark mode (unchanged
                     // look) and black in light mode, so the grid stays visible on
@@ -821,10 +1015,10 @@ private struct StaticChartLayer: View, Equatable {
             }
 
             // ── Right axis: secondary metrics ──
-            // The labels sit at the metric's own round values (`secondaryAxisMarks`), not
-            // on the depth gridlines, and carry no tick or gridline: a short tick beside a
-            // number reads as a minus sign. A small left-pointing triangle outline points each
-            // label at the height it names instead.
+            // The labels sit on the depth gridlines (`secondaryAxisMarks`), each showing the
+            // metric's round value at that height, and carry no tick of their own: a short
+            // tick beside a number reads as a minus sign. A small left-pointing triangle
+            // outline points each label at its gridline instead.
             if let rightAxisScale {
                 AxisMarks(position: .trailing, values: secondaryAxisMarks(rightAxisScale)) { value in
                     // A structurally-stable label, not a branching one: Swift Charts does not
@@ -962,15 +1156,15 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private func temperatureMarks(scale: SecondaryAxisScale) -> some ChartContent {
+    private func temperatureMarks(scale: GridAlignedScale) -> some ChartContent {
         let samplesWithTemp = dive.profileSamples.filter { $0.temperature != nil }
         ForEach(samplesWithTemp) { sample in
             if let temp = sample.temperature {
-                // Top of the scale (warmest) at the surface line, bottom (coldest) at the
-                // chart depth.
+                // Each reading at its value's height on the scale: warmer higher, one round
+                // step per depth gridline.
                 let value = plotY(dive.displayProfileTemperature(temp), on: scale)
                 LineMark(x: .value("Time", sample.time), y: .value("Temp.", value), series: .value("Sequence", "Temperature"))
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
                     .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     .foregroundStyle(Color.green)
             }
@@ -1003,7 +1197,7 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private func pressureMarks(scale: SecondaryAxisScale, tankIndices: [Int]) -> some ChartContent {
+    private func pressureMarks(scale: GridAlignedScale, tankIndices: [Int]) -> some ChartContent {
 
         if tankIndices.count > 1 {
             // Multi-tank: one line per tank index
@@ -1017,7 +1211,7 @@ private struct StaticChartLayer: View, Equatable {
                             y: .value("Press.", value),
                             series: .value("Sequence", "Pressure-T\(tankIdx)")
                         )
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
                         .lineStyle(StrokeStyle(
                             lineWidth: 2,
                             lineCap: .round,
@@ -1035,7 +1229,7 @@ private struct StaticChartLayer: View, Equatable {
                 if let pressure = sample.tankPressure {
                     let value = plotY(dive.displayProfilePressure(pressure), on: scale)
                     LineMark(x: .value("Time", sample.time), y: .value("Press.", value), series: .value("Sequence", "Pressure"))
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                         .foregroundStyle(Color.red)
                 }
@@ -1078,7 +1272,7 @@ private struct StaticChartLayer: View, Equatable {
     /// obligation: libdc gates the per-sample NDL on the deco type (`DC_DECO_NDL` vs
     /// `DC_DECO_DECOSTOP`), so the NDL goes absent exactly while a mandatory stop is owed.
     /// Those samples plot as 0 — the bottom of the NDL band — the same nil-to-0 mapping
-    /// `decoMarks` applies to `ceilingDepth`. Dropping them instead let `.catmullRom`
+    /// `decoMarks` applies to `ceilingDepth`. Dropping them instead let the line
     /// bridge straight from the last pre-deco point to the first post-deco point, drawing
     /// the NDL as if it were gradually recovering across the whole obligation.
     ///
@@ -1096,16 +1290,18 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private func ndlMarks(scale: SecondaryAxisScale, series: [DiveProfilePoint]) -> some ChartContent {
+    private func ndlMarks(scale: GridAlignedScale, series: [DiveProfilePoint]) -> some ChartContent {
         ForEach(series) { sample in
             if let ndl = ndlPlotValue(for: sample) {
-                // Readings above 99 min are drawn at 99. When the trace reaches it, `ndlAxis`
-                // ends the scale there, so the capped line runs along the top edge (drawn at
-                // full width thanks to the plot's 1 pt clip outset).
-                // `ndlAxis` reads the same capped values.
-                let value = plotY(min(ndl, ndlPlotCap), on: scale)
+                // Readings of 99 min or more are drawn on the surface line, which the scale
+                // labels "99min" when the trace reaches the cap (see `ndlAxis`); the capped
+                // line runs along the top edge at full width (the plot's 1 pt clip outset).
+                // `.monotone` (as the pressure, temperature and PPO₂ traces): the curve never overshoots its
+                // samples, so a jump from 99 to 0 at the plot's edges stays inside the plot
+                // instead of bulging past the edge and being clipped (`.catmullRom` did).
+                let value = plotY(ndl >= ndlPlotCap ? scale.surfaceValue : ndl, on: scale)
                 LineMark(x: .value("Time", sample.time), y: .value("NDL", value), series: .value("Sequence", "NDL"))
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
                     .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     .foregroundStyle(Color.ndlYellow)
             }
@@ -1148,15 +1344,17 @@ private struct StaticChartLayer: View, Equatable {
 
     /// GF scale in whole percent: from 0 to the highest GF99 or Surface GF the chart draws,
     /// never below 100 % so the raw Bühlmann limit (the 100 % line) is always on the plot.
-    private func gfAxis(series: [(time: Double, value: Double, run: Int, surface: Bool)]) -> SecondaryAxisScale {
+    private func gfAxis(series: [(time: Double, value: Double, run: Int, surface: Bool)]) -> GridAlignedScale {
         let hi = series.map(\.value).max() ?? 0
-        return .rounded(low: 0, high: max(hi, 100), multipliers: [1, 2, 5], minimumStep: 10)
+        // 25 % steps too, so a grid that cannot fit 20 % steps gets 25 rather than 50.
+        return fittedScale(low: 0, high: max(hi, 100),
+                           candidates: GridAlignedScale.candidateSteps(minimumStep: 10, multipliers: [1, 2, 2.5, 5]), minimumValue: 0)
     }
 
     /// GF99 as a solid line and Surface GF as a dashed one, in magenta, with a thin dotted
     /// line at 100 %, the raw Bühlmann M-value.
     @ChartContentBuilder
-    private func gfMarks(scale: SecondaryAxisScale,
+    private func gfMarks(scale: GridAlignedScale,
                          series: [(time: Double, value: Double, run: Int, surface: Bool)]) -> some ChartContent {
         if !series.isEmpty {
             // The percentage is formatted in code (region-dependent spacing before %).
@@ -1182,8 +1380,8 @@ private struct StaticChartLayer: View, Equatable {
     /// Produces (time, ppo2, run, joinsPrevious) for each profile sample using the shared
     /// `buildPPO2Map` helper. Per-sample: sensor value if available, else Dalton's-Law from gas
     /// mix + depth. The smoothed line starts a new run where the breathing mode changes (a
-    /// setpoint starts or stops: loop ↔ open circuit), so its curve never bulges past the two
-    /// values at the switch; `joinsPrevious` marks the first point after such a change when the
+    /// setpoint starts or stops: loop ↔ open circuit), so the two sections are not smoothed
+    /// into one curve; `joinsPrevious` marks the first point after such a change when the
     /// sample just before it has a value too, and the two are joined by a straight segment, so
     /// the line stays continuous across a gas switch. It also starts a new run at a loop sample
     /// (with a setpoint) that has no reported PPO₂, so it never bridges a loop section with
@@ -1269,7 +1467,7 @@ private struct StaticChartLayer: View, Equatable {
     }
 
     @ChartContentBuilder
-    private func ppo2Marks(scale: SecondaryAxisScale, sensorIndices: [Int],
+    private func ppo2Marks(scale: GridAlignedScale, sensorIndices: [Int],
                            data: [(time: Double, ppo2: Double, run: Int, joinsPrevious: Bool)],
                            setpointLine: [(run: Int, time: Double, setpoint: Double)]) -> some ChartContent {
         let base = depthBase
@@ -1287,10 +1485,10 @@ private struct StaticChartLayer: View, Equatable {
                     ForEach(Array(points.enumerated()), id: \.offset) { _, point in
                         LineMark(
                             x: .value("Time", point.time),
-                            y: .value("PPO₂", plotY(point.ppo2, on: scale, increasesDownward: true)),
+                            y: .value("PPO₂", plotY(point.ppo2, on: scale)),
                             series: .value("Sequence", "PPO2-S\(sensorIdx)-\(point.run)")
                         )
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: dash))
                         .foregroundStyle(ppo2SensorColor(for: sensorIdx))
                     }
@@ -1299,7 +1497,7 @@ private struct StaticChartLayer: View, Equatable {
                     ForEach(Array(points.enumerated().filter { loneRuns.contains($0.element.run) }), id: \.offset) { _, point in
                         PointMark(
                             x: .value("Time", point.time),
-                            y: .value("PPO₂", plotY(point.ppo2, on: scale, increasesDownward: true))
+                            y: .value("PPO₂", plotY(point.ppo2, on: scale))
                         )
                         .symbolSize(16)
                         .foregroundStyle(ppo2SensorColor(for: sensorIdx))
@@ -1317,13 +1515,13 @@ private struct StaticChartLayer: View, Equatable {
                 : StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
             if !data.isEmpty {
                 ForEach(Array(data.enumerated()), id: \.offset) { _, point in
-                    let y = plotY(point.ppo2, on: scale, increasesDownward: true)
+                    let y = plotY(point.ppo2, on: scale)
                     LineMark(
                         x: .value("Time", point.time),
                         y: .value("PPO₂", y),
                         series: .value("Sequence", "PPO2-\(point.run)")
                     )
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
                     .lineStyle(ppo2LineStyle)
                     .foregroundStyle(ppo2LineColor)
                 }
@@ -1333,7 +1531,7 @@ private struct StaticChartLayer: View, Equatable {
                         let point = data[pointIndex]
                         LineMark(
                             x: .value("Time", point.time),
-                            y: .value("PPO₂", plotY(point.ppo2, on: scale, increasesDownward: true)),
+                            y: .value("PPO₂", plotY(point.ppo2, on: scale)),
                             series: .value("Sequence", "PPO2-switch-\(index)")
                         )
                         .interpolationMethod(.linear)
@@ -1354,7 +1552,7 @@ private struct StaticChartLayer: View, Equatable {
                     let point = data[index]
                     PointMark(
                         x: .value("Time", point.time),
-                        y: .value("PPO₂", plotY(point.ppo2, on: scale, increasesDownward: true))
+                        y: .value("PPO₂", plotY(point.ppo2, on: scale))
                     )
                     .symbolSize(16)
                     .foregroundStyle(ppo2LineColor)
@@ -1363,7 +1561,7 @@ private struct StaticChartLayer: View, Equatable {
             ForEach(Array(setpointLine.enumerated()), id: \.offset) { _, point in
                 LineMark(
                     x: .value("Time", point.time),
-                    y: .value("PPO₂", plotY(point.setpoint, on: scale, increasesDownward: true)),
+                    y: .value("PPO₂", plotY(point.setpoint, on: scale)),
                     series: .value("Sequence", "Setpoint-\(point.run)")
                 )
                 .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [4, 3]))
@@ -1373,7 +1571,7 @@ private struct StaticChartLayer: View, Equatable {
             ForEach(Array(setpointLine.enumerated().filter { loneSetpointRuns.contains($0.element.run) }), id: \.offset) { _, point in
                 PointMark(
                     x: .value("Time", point.time),
-                    y: .value("PPO₂", plotY(point.setpoint, on: scale, increasesDownward: true))
+                    y: .value("PPO₂", plotY(point.setpoint, on: scale))
                 )
                 .symbolSize(12)
                 .foregroundStyle(Color.ccrSetpoint)
@@ -1535,10 +1733,9 @@ private struct StaticChartLayer: View, Equatable {
     /// stays behind the depth curve and its translucent cyan fill, matching its original
     /// full-dive-height appearance.
     @ChartContentBuilder
-    private var legacyDecoBand: some ChartContent {
+    private func legacyDecoBand(bottom yMin: Double) -> some ChartContent {
         if visibility.showDeco && !hasCeilingData {
             let blocks = decoBlocks
-            let yMin   = yDomainMin
             // Draw a semi-transparent orange band for each contiguous deco period so the
             // shading sits behind all other chart lines.
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
