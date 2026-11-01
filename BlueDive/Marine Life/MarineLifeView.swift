@@ -150,7 +150,7 @@ struct MarineLifeView: View {
     }
 
     /// Ranks offered in the taxonomy filter.
-    private static let filterRanks = ["class", "order", "family", "genus"]
+    fileprivate static let filterRanks = ["class", "order", "family", "genus"]
 
     private var taxonFilterParts: (rank: String, name: String)? {
         let parts = taxonFilter.split(separator: "|", maxSplits: 1).map(String.init)
@@ -173,9 +173,22 @@ struct MarineLifeView: View {
     /// Names at `rank` used by the catalogue's iNaturalist classifications, limited to the
     /// species the Category filter keeps (in the category, or outside it while excluding).
     private func taxonNames(rank: String) -> [String] {
-        guard !categoryFilter.isEmpty else { return cachedTaxonNames[rank] ?? [] }
+        Self.taxonNames(rank: rank, categoryFilter: categoryFilter, categoryNegate: categoryNegate,
+                        allNames: cachedTaxonNames, namesByCategory: cachedTaxonNamesByCategory)
+    }
+
+    /// `taxonNames(rank:)` from given caches, shared with the filter sheet, which keeps the
+    /// caches as they were when it opened.
+    fileprivate static func taxonNames(
+        rank: String,
+        categoryFilter: String,
+        categoryNegate: Bool,
+        allNames: [String: [String]],
+        namesByCategory: [String: [String: Set<String>]]
+    ) -> [String] {
+        guard !categoryFilter.isEmpty else { return allNames[rank] ?? [] }
         var names = Set<String>()
-        for (category, ranks) in cachedTaxonNamesByCategory where (category == categoryFilter) != categoryNegate {
+        for (category, ranks) in namesByCategory where (category == categoryFilter) != categoryNegate {
             names.formUnion(ranks[rank] ?? [])
         }
         return names.sorted()
@@ -559,7 +572,8 @@ struct MarineLifeView: View {
             .sheet(isPresented: $showFilterSheet) {
                 MarineLifeFilterSheet(
                     categories: usedCategories,
-                    taxonNames: Self.filterRanks.map { (rank: $0, names: taxonNames(rank: $0)) },
+                    allTaxonNames: cachedTaxonNames,
+                    taxonNamesByCategory: cachedTaxonNamesByCategory,
                     groupCommonNames: cachedGroupCommonNames,
                     showsNotLinked: UserPreferences.shared.fetchTaxonomyOnline,
                     // Offered while a species has a former name, or the filter is on (so it
@@ -574,6 +588,7 @@ struct MarineLifeView: View {
                     formerNameFilter: $formerNameFilter,
                     reset: resetFilters
                 )
+                .equatable()
                 .standardSheetPresentation()
             }
             .sheet(isPresented: Binding(
@@ -1316,12 +1331,19 @@ struct UnlinkedSightingsView: View {
 
 /// The Marine Life tab's filters, laid out like the Dives tab's filter sheet (a reset button
 /// at the top, switch cards, then one card of single-choice rows).
-struct MarineLifeFilterSheet: View {
-    /// Categories used in the catalogue.
-    let categories: [String]
-    /// Group names per rank ("class", "order", "family", "genus"), in display order.
-    let taxonNames: [(rank: String, names: [String])]
-    let groupCommonNames: [String: String]
+///
+/// The menu choices are kept as they were when the sheet opened, and the sheet redraws only
+/// when what it shows changes (`==`). An iNaturalist lookup saves a species every second,
+/// which redraws the Marine Life tab; redrawing an open menu here would scroll it back to the
+/// top, so a long list could not be scrolled while lookups run.
+struct MarineLifeFilterSheet: View, Equatable {
+    /// Categories used in the catalogue, when the sheet opened.
+    @State private var categories: [String]
+    /// Group names per rank ("class", "order", "family", "genus"), and per category then rank,
+    /// when the sheet opened. The names offered follow the Category filter (`taxonNames`).
+    @State private var allTaxonNames: [String: [String]]
+    @State private var taxonNamesByCategory: [String: [String: Set<String>]]
+    @State private var groupCommonNames: [String: String]
     /// The "not linked" filter is offered only while iNaturalist lookups are on.
     let showsNotLinked: Bool
     /// The "former name" filter is offered only while a species has one (or it is on).
@@ -1336,12 +1358,85 @@ struct MarineLifeFilterSheet: View {
     @Binding var formerNameFilter: Bool
     let reset: () -> Void
 
+    /// The filter values when the parent built this view, compared by `==` (a binding's own
+    /// value cannot be compared reliably between two builds).
+    private let shownValues: ShownValues
+
+    private struct ShownValues: Equatable {
+        let categoryFilter: String
+        let categoryNegate: Bool
+        let taxonFilter: String
+        let taxonNegate: Bool
+        let notLinkedFilter: Bool
+        let formerNameFilter: Bool
+    }
+
     @Environment(\.dismiss) private var dismiss
+
+    init(
+        categories: [String],
+        allTaxonNames: [String: [String]],
+        taxonNamesByCategory: [String: [String: Set<String>]],
+        groupCommonNames: [String: String],
+        showsNotLinked: Bool,
+        showsFormerName: Bool,
+        activeFilterCount: Int,
+        categoryFilter: Binding<String>,
+        categoryNegate: Binding<Bool>,
+        taxonFilter: Binding<String>,
+        taxonNegate: Binding<Bool>,
+        notLinkedFilter: Binding<Bool>,
+        formerNameFilter: Binding<Bool>,
+        reset: @escaping () -> Void
+    ) {
+        _categories = State(initialValue: categories)
+        _allTaxonNames = State(initialValue: allTaxonNames)
+        _taxonNamesByCategory = State(initialValue: taxonNamesByCategory)
+        _groupCommonNames = State(initialValue: groupCommonNames)
+        self.showsNotLinked = showsNotLinked
+        self.showsFormerName = showsFormerName
+        self.activeFilterCount = activeFilterCount
+        _categoryFilter = categoryFilter
+        _categoryNegate = categoryNegate
+        _taxonFilter = taxonFilter
+        _taxonNegate = taxonNegate
+        _notLinkedFilter = notLinkedFilter
+        _formerNameFilter = formerNameFilter
+        self.reset = reset
+        shownValues = ShownValues(
+            categoryFilter: categoryFilter.wrappedValue,
+            categoryNegate: categoryNegate.wrappedValue,
+            taxonFilter: taxonFilter.wrappedValue,
+            taxonNegate: taxonNegate.wrappedValue,
+            notLinkedFilter: notLinkedFilter.wrappedValue,
+            formerNameFilter: formerNameFilter.wrappedValue
+        )
+    }
+
+    /// Equal while the sheet would show the same thing: the menu choices are kept from the
+    /// opening, and `reset` (a new closure on every build of the parent) is not compared.
+    static func == (lhs: MarineLifeFilterSheet, rhs: MarineLifeFilterSheet) -> Bool {
+        lhs.shownValues == rhs.shownValues
+            && lhs.showsNotLinked == rhs.showsNotLinked
+            && lhs.showsFormerName == rhs.showsFormerName
+            && lhs.activeFilterCount == rhs.activeFilterCount
+    }
 
     /// The categories offered, plus the selected one if no species uses it any more, so a
     /// filter left on an unused value can still be seen and cleared.
     private var categoryChoices: [String] {
         categoryFilter.isEmpty || categories.contains(categoryFilter) ? categories : categories + [categoryFilter]
+    }
+
+    /// Group names per rank, in display order, limited to the species the Category filter
+    /// keeps, as on the Marine Life tab.
+    private var taxonNames: [(rank: String, names: [String])] {
+        MarineLifeView.filterRanks.map { rank in
+            (rank: rank, names: MarineLifeView.taxonNames(rank: rank, categoryFilter: categoryFilter,
+                                                          categoryNegate: categoryNegate,
+                                                          allNames: allTaxonNames,
+                                                          namesByCategory: taxonNamesByCategory))
+        }
     }
 
     /// The groups offered per rank, plus the selected one if no species is in it any more.
