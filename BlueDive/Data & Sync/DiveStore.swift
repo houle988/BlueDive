@@ -1785,7 +1785,7 @@ final class DiveStore {
     // edit (notesMayHaveChanged), a change in dive membership, a remote notes edit, the setting.
     // A trigger never restarts a pending pass (it reads anyway), so saves cannot postpone what
     // the user typed; a read once started always completes, one at a time (a trigger or pass
-    // arriving meanwhile asks for one more). The Dive Information sheet saves when the notes
+    // arriving meanwhile asks for one more). The Edit Notes sheet saves when the notes
     // changed (setting on), so its edit reaches the store at once. A single-consumer reader:
     // nothing to share by key, so it does not go through a shared-read helper like sightingValues.
 
@@ -1836,7 +1836,7 @@ final class DiveStore {
     }
 
     /// The store may hold new notes: dives inserted by a save (DiveDataFeeder, while the
-    /// setting is on) or a notes edit just saved (the Dive Information sheet).
+    /// setting is on) or a notes edit just saved (the Edit Notes sheet).
     func notesMayHaveChanged() {
         scheduleNotesSearch()
     }

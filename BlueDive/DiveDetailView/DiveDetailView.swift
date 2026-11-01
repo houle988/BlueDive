@@ -17,6 +17,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
     case gaz         = "Gas"
     case photos      = "Photos"
     case marineLife  = "Marine Life"
+    case notes       = "Notes"
     case samples     = "Samples"
     case xmlExport   = "XML Export"
     case uddfExport  = "UDDF Export"
@@ -30,6 +31,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .conditions:  return "Conditions"
         case .gaz:         return "Gas"
         case .marineLife:  return "Marine Life"
+        case .notes:       return "Notes"
         case .photos:      return "Photos"
         case .samples:     return "Samples"
         case .xmlExport:   return "XML Export"
@@ -49,6 +51,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .conditions:  return "cloud.sun"
         case .gaz:         return "bubbles.and.sparkles"
         case .marineLife:  return "fish"
+        case .notes:       return "note.text"
         case .photos:      return "photo.on.rectangle"
         case .samples:     return "waveform.path.ecg"
         case .xmlExport:   return "doc.text.magnifyingglass"
@@ -63,6 +66,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .conditions:  return .yellow
         case .gaz:         return .green
         case .marineLife:  return .orange
+        case .notes:       return .brown
         case .photos:      return .pink
         case .samples:     return .teal
         case .xmlExport:   return .indigo
@@ -84,6 +88,11 @@ struct DiveDetailView: View {
     @Query(sort: \GearGroup.name) var gearGroups: [GearGroup]
 
     @State var showEditSheet = false
+    /// Hides the Overview's "Notes have moved" banner for good once its X is tapped.
+    @AppStorage("notesMovedBannerDismissed") var isNotesMovedBannerDismissed = false
+    /// Set with a tab change that must show the new tab from its top (the Overview's
+    /// "Notes have moved" banner sits at the bottom of a long page); the tab bar keeps the offset.
+    @State var scrollsToTopOnTabChange = false
     @State var showAddFish = false
     @State var showAddGear = false
     @State var selectedPhotos: [PhotosPickerItem] = []
@@ -293,6 +302,7 @@ struct DiveDetailView: View {
                                 case .conditions:  conditionsTabContent
                                 case .gaz:         gazTabContent
                                 case .marineLife:  marineSightingsSection
+                                case .notes:       notesTabContent
                                 case .photos:      photosSection
                                 case .samples:     samplesTabContent
                                 case .xmlExport:   xmlExportTabContent
@@ -315,6 +325,10 @@ struct DiveDetailView: View {
                         .onChange(of: selectedTab) { _, _ in
                             isEditingPhotos = false
                             isEditingMarineLife = false
+                            if scrollsToTopOnTabChange {
+                                scrollsToTopOnTabChange = false
+                                proxy.scrollTo("diveTop", anchor: .top)
+                            }
                         }
                     }
                 }
@@ -867,6 +881,8 @@ struct DiveDetailView: View {
             // Marine life is added and removed with its card's own buttons.
             noEditAvailableView(title: DiveTab.marineLife.localizedName,
                                 message: "Add or remove marine life with the buttons on its card.")
+        case .notes:
+            EditNotesView(dive: dive)
         case .photos:
             // Photos are added and removed with their card's own buttons.
             noEditAvailableView(title: DiveTab.photos.localizedName,

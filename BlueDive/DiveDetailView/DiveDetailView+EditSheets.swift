@@ -22,7 +22,6 @@ struct EditMenuStatsView: View {
     @State private var workingBuddies: String
     @State private var workingTypes: String
     @State private var workingRating: Int
-    @State private var workingNotes: String
     @State private var workingTags: String
     @State private var workingDiveNumber: String
     @State private var workingDiveMaster: String
@@ -61,7 +60,6 @@ struct EditMenuStatsView: View {
         _workingBuddies   = State(initialValue: dive.buddies)
         _workingTypes = State(initialValue: dive.diveTypes ?? "")
         _workingRating    = State(initialValue: dive.rating)
-        _workingNotes     = State(initialValue: dive.notes)
         _workingTags      = State(initialValue: dive.tags ?? "")
         _workingDiveNumber = State(initialValue: dive.diveNumber.map { "\($0)" } ?? "")
         _workingDiveMaster = State(initialValue: dive.diveMaster ?? "")
@@ -694,15 +692,6 @@ struct EditMenuStatsView: View {
                     } header: {
                         MenuSectionHeader(title: "Tags", icon: "tag", color: .pink)
                     }
-
-                    Section {
-                        TextEditor(text: $workingNotes)
-                            .frame(minHeight: 100)
-                            .scrollContentBackground(.hidden)
-                            .foregroundStyle(.primary)
-                    } header: {
-                        MenuSectionHeader(title: "Notes", icon: "note.text", color: .orange)
-                    }
                 }
                 .groupedFormStyleOnMac()
                 .scrollContentBackground(.hidden)
@@ -762,11 +751,6 @@ struct EditMenuStatsView: View {
         dive.diveTypes = types.isEmpty ? nil : types.joined(separator: ", ")
 
         dive.rating       = workingRating
-        let trimmedNotes  = workingNotes.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Only matters to the dive list's notes search (a store query): with it off, notes are
-        // left to autosave as before.
-        let notesNeedSave = dive.notes != trimmedNotes && UserPreferences.shared.searchDiveNotes
-        dive.notes        = trimmedNotes
         dive.tags         = workingTags.isEmpty ? nil : workingTags
         dive.diveNumber   = Int(workingDiveNumber.trimmingCharacters(in: .whitespaces))
         let trimmedDiveMaster  = workingDiveMaster.trimmingCharacters(in: .whitespaces)
@@ -800,13 +784,11 @@ struct EditMenuStatsView: View {
                 timestampDidChange = true
             }
         }
-        if timestampDidChange || diverNameDidChange || notesNeedSave {
+        if timestampDidChange || diverNameDidChange {
             // Flush changes to the persistent store so the background context sees
-            // the updated values when it fetches all dives for recalculation, and the dive
-            // list's notes search (a store query) sees new notes at once rather than after autosave.
+            // the updated values when it fetches all dives for recalculation.
             try? modelContext.save()
-            if notesNeedSave { store.notesMayHaveChanged() }
-            if (timestampDidChange || diverNameDidChange) && autoSequenceEnabled {
+            if autoSequenceEnabled {
                 store.recalcSequencesInBackground(
                     container: modelContext.container,
                     newDiverName: dive.diverName,
@@ -817,6 +799,74 @@ struct EditMenuStatsView: View {
         // First commit triggers an immediate list rebuild; surface intervals update
         // via the second commit from the background task when applicable.
         store.commit(dive, affects: .list)
+        dismiss()
+    }
+}
+
+/// Edit sheet for the Notes tab: the dive's notes in a full-height editor.
+struct EditNotesView: View {
+    @Bindable var dive: Dive
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(DiveStore.self) private var store
+
+    @State private var workingNotes: String
+
+    init(dive: Dive) {
+        self.dive = dive
+        _workingNotes = State(initialValue: dive.notes)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground().ignoresSafeArea()
+
+                // The same card header as the Notes tab.
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Notes", systemImage: "note.text")
+                        .font(.headline)
+                        .foregroundStyle(DiveTab.notes.color)
+                    TextEditor(text: $workingNotes)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .foregroundStyle(.primary)
+                }
+                .padding()
+                .detailCardBackground()
+                .padding()
+            }
+            .navigationTitle("Edit Notes")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .bold()
+                        .confirmationActionForeground(.brown)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let trimmedNotes = workingNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Only matters to the dive list's notes search (a store query): with it off, notes are
+        // left to autosave as before.
+        let notesNeedSave = dive.notes != trimmedNotes && UserPreferences.shared.searchDiveNotes
+        dive.notes = trimmedNotes
+        if notesNeedSave {
+            // Flush to the persistent store so the notes search sees the new notes at once
+            // rather than after autosave.
+            try? modelContext.save()
+            store.notesMayHaveChanged()
+        }
+        // Notes are not shown in list rows and do not affect order or badges.
+        store.commit(dive, affects: .nothing)
         dismiss()
     }
 }

@@ -66,7 +66,7 @@ struct DiveDataFeeder: View {
             // The notes search asks the store, which sees imported dives only once they are saved
             // (an import may list them before saving): while the setting is on, a save inserting
             // dives schedules a re-read (nothing happens without an active search). Notes edits
-            // tell the store themselves (the Dive Information sheet), so other saves are ignored.
+            // tell the store themselves (the Edit Notes sheet), so other saves are ignored.
             .task(id: prefs.searchDiveNotes) {
                 guard prefs.searchDiveNotes else { return }
                 for await _ in Self.diveInsertions() {

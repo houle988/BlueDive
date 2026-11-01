@@ -5,7 +5,7 @@ import SwiftData
 import PhotosUI
 import UniformTypeIdentifiers
 
-// MARK: - Overview Tab (chart + twin tank checkbox + stats + info), Marine Life and Photos Tabs
+// MARK: - Overview Tab (chart + twin tank checkbox + stats + info), Marine Life, Photos and Notes Tabs
 
 extension DiveDetailView {
 
@@ -19,7 +19,10 @@ extension DiveDetailView {
             statsGrid
             diveInfoSection
             equipmentSection
-            notesSection
+            if !isNotesMovedBannerDismissed {
+                notesMovedBanner
+                    .transition(.opacity)
+            }
         }
         .task(id: dive.id) {
             profileSamplesLoaded = true
@@ -1832,11 +1835,66 @@ extension DiveDetailView {
         }
     }
 
-    var notesSection: some View {
+    /// Where the Notes card used to be: tells that notes now have their own tab, until dismissed.
+    var notesMovedBanner: some View {
+        HStack {
+            // The whole banner except its X opens the Notes tab.
+            Button {
+                scrollsToTopOnTabChange = true
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = .notes
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "note.text")
+                        .foregroundStyle(DiveTab.notes.color)
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Notes Have Moved")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        Text("Notes now have their own tab, after Marine Life.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(Text("Opens the Notes tab.", comment: "VoiceOver hint of the Overview banner saying notes moved to their own tab"))
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isNotesMovedBannerDismissed = true
+                }
+            } label: {
+                // A 44 pt tap target (at least: it grows with Dynamic Type). The negative padding
+                // keeps it from making the banner taller and keeps the glyph near the trailing edge.
+                Image(systemName: "xmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .borderlessButton()
+            .padding(.vertical, -6)
+            .padding(.trailing, -10)
+            .accessibilityLabel(Text("Dismiss Notes Notice", comment: "Accessibility label of the X button that permanently hides the Overview banner saying notes moved to their own tab"))
+        }
+        .padding()
+        .background(DiveTab.notes.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .padding(.horizontal)
+    }
+
+    /// The Notes tab: the dive's notes in full, as plain text or Markdown, selectable for copying.
+    var notesTabContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Notes", systemImage: "note.text")
                 .font(.headline)
-                .foregroundStyle(.gray)
+                .foregroundStyle(DiveTab.notes.color)
             if prefs.formatNotesAsMarkdown && !dive.notes.isEmpty {
                 MarkdownText(dive.notes)
             } else {
@@ -1845,6 +1903,7 @@ extension DiveDetailView {
                     .foregroundStyle(dive.notes.isEmpty ? Color.secondary : Color.primary)
             }
         }
+        .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .detailCardBackground()
