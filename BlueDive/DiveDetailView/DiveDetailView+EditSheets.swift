@@ -962,52 +962,61 @@ struct EditEquipmentView: View {
         copyCandidates = buildCopyCandidates()
     }
 
-    /// Adds several items at once: a gear group's (when there are groups) or another dive's
-    /// (when another dive of this diver has gear). Hidden when neither is available.
+    /// Adds several items at once, each way in a card of its own under the "Quick Add" title: a
+    /// gear group's items (when there are groups), then another dive's (when another dive of
+    /// this diver has gear). The title goes on the first card shown; nothing when neither is.
     @ViewBuilder
     private var quickAddSection: some View {
         let candidates = copyCandidates
-        if !gearGroups.isEmpty || !candidates.isEmpty {
+        if !gearGroups.isEmpty {
             Section {
-                // Each way of adding has its own caption, so the two read as separate options.
-                if !gearGroups.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        quickAddCaption("From a Gear Group")
-                        // Chosen first, then added with the button below (as a dive, or a
-                        // tank template in Edit Gas).
-                        Picker("Gear Group", selection: $selectedGroupID) {
-                            Text("Select a gear group...").tag(PersistentIdentifier?.none)
-                            ForEach(gearGroups) { group in
-                                Text(verbatim: "\(group.name) (\(Double(group.gearCount).localizedString(decimals: 0)))")
-                                    .tag(Optional(group.persistentModelID))
-                            }
+                VStack(alignment: .leading, spacing: 6) {
+                    quickAddCaption("From a Gear Group")
+                    // Chosen first, then added with the button below (as a dive, or a
+                    // tank template in Edit Gas).
+                    Picker("Gear Group", selection: $selectedGroupID) {
+                        Text("Select a gear group...").tag(PersistentIdentifier?.none)
+                        ForEach(gearGroups) { group in
+                            Text(verbatim: "\(group.name) (\(Double(group.gearCount).localizedString(decimals: 0)))")
+                                .tag(Optional(group.persistentModelID))
                         }
-                        .tint(DiveTab.equipment.color)
-                        // Only the pop-up, under its caption (the label stays for VoiceOver).
-                        .labelsHidden()
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-
-                    quickAddButton("Apply Gear Group", systemImage: "tray.2", isEnabled: selectedGroup != nil) {
-                        if let group = selectedGroup { applyGearGroup(group) }
-                    }
+                    .tint(DiveTab.equipment.color)
+                    // Only the pop-up, under its caption (the label stays for VoiceOver).
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                if !candidates.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        quickAddCaption("From Another Dive")
-                        DiveCopySearchField(selection: $copySource,
-                                            recents: recentCopyCandidates(candidates),
-                                            candidates: candidates)
-                    }
 
-                    quickAddButton("Copy Equipment", systemImage: "doc.on.doc", isEnabled: copySource != nil) {
-                        copyEquipment()
-                    }
+                quickAddButton("Apply Gear Group", systemImage: "tray.2", isEnabled: selectedGroup != nil) {
+                    if let group = selectedGroup { applyGearGroup(group) }
                 }
             } header: {
-                MenuSectionHeader(title: "Quick Add", icon: "bolt", color: DiveTab.equipment.color)
+                quickAddHeader
             }
         }
+        if !candidates.isEmpty {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    quickAddCaption("From Another Dive")
+                    DiveCopySearchField(selection: $copySource,
+                                        recents: recentCopyCandidates(candidates),
+                                        candidates: candidates)
+                }
+
+                quickAddButton("Copy Equipment", systemImage: "doc.on.doc", isEnabled: copySource != nil) {
+                    copyEquipment()
+                }
+            } header: {
+                // The title only when the gear-group card above is not shown.
+                if gearGroups.isEmpty {
+                    quickAddHeader
+                }
+            }
+        }
+    }
+
+    private var quickAddHeader: some View {
+        MenuSectionHeader(title: "Quick Add", icon: "bolt", color: DiveTab.equipment.color)
     }
 
     /// The gear group chosen in Quick Add, nil when none is (or it was deleted meanwhile).

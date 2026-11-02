@@ -955,19 +955,19 @@ extension DiveDetailView {
         }
     }
 
-    /// The Equipment tab: the dive's gear laid out like the main Equipment list — collapsible
-    /// category sections in category order, each a card of `GearRow`s (one-line columns on a
-    /// wide Mac window, under the column header pinned above the scroll view). View only: gear
-    /// is added and removed in the Edit Equipment sheet (the Edit button); a row opens the
-    /// gear's service sheet.
+    /// The Equipment tab: one card in the dive page's style (as Site Details, Conditions and
+    /// Gas), not a copy of the main Equipment list — the gear used on this dive, by collapsible
+    /// category in category order, as compact rows (one column on iPhone, more as the window
+    /// widens), and the weight of that gear. View only: gear is added and removed in the Edit
+    /// Equipment sheet (the Edit button); a row opens the gear's service sheet.
     var equipmentSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let gear = dive.usedGear ?? []
+        return VStack(alignment: .leading, spacing: 12) {
             Label("Equipment Used", systemImage: "wrench.and.screwdriver")
                 .font(.headline)
                 .foregroundStyle(DiveTab.equipment.color)
-                .padding(.horizontal)
 
-            if (dive.usedGear ?? []).isEmpty {
+            if gear.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "tray")
                         .font(.title2)
@@ -979,37 +979,34 @@ extension DiveDetailView {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding()
-                .detailCardBackground()
+                .padding(.vertical, 8)
             } else {
-                ForEach(gearCategorySections(dive.usedGear ?? [], locale: locale), id: \.key) { section in
-                    gearSection(key: section.key, items: section.items)
+                if let weight = gearWeightText(gear) {
+                    HStack {
+                        Label("Gear Weight", systemImage: "scalemass")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(verbatim: weight)
+                            .fontWeight(.semibold)
+                    }
+                    .font(.subheadline)
+                    .accessibilityElement(children: .combine)
+                }
+
+                ForEach(gearCategorySections(gear, locale: locale), id: \.key) { section in
+                    gearCategory(key: section.key, items: section.items)
                 }
             }
         }
-        #if os(macOS)
-        // The main Equipment list's side margin, so its rows get the same width there and here
-        // and switch to the stacked row at the same window width (`OneLineRowsLayout.rowWidth`):
-        // `MacListCard.margin` plus the sidebar list's own 16 pt (measured: the main list's rows
-        // are 96 pt narrower than the window, these 64 pt with the 16 pt padding of other tabs).
-        .padding(.horizontal, MacListCard.margin + 16)
-        .environment(gearListLayout)
-        #else
+        .padding()
+        .detailCardBackground()
         .padding(.horizontal)
-        #endif
     }
 
-    /// One category of the Equipment tab: its header (the main list's, with a chevron that
-    /// collapses it) above a card of its rows.
-    private func gearSection(key: String, items: [Gear]) -> some View {
+    /// One category of the Equipment card: its subheading, with a chevron that collapses it,
+    /// above its rows.
+    private func gearCategory(key: String, items: [Gear]) -> some View {
         let isExpanded = !collapsedGearSections.contains(key)
-        #if os(macOS)
-        let cornerRadius = MacListCard.cornerRadius
-        let rowInset = MacListCard.rowInsets.leading
-        #else
-        let cornerRadius: CGFloat = 15
-        let rowInset: CGFloat = 16
-        #endif
         return VStack(alignment: .leading, spacing: 8) {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -1022,8 +1019,8 @@ extension DiveDetailView {
             } label: {
                 HStack {
                     GearCategorySectionTitle(key: key, showsIcon: true)
-                        .font(.headline)
-                        .foregroundStyle(.cyan)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
@@ -1031,8 +1028,7 @@ extension DiveDetailView {
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .accessibilityHidden(true)
                 }
-                .padding(.horizontal, rowInset)
-                // The whole header toggles, not only its text.
+                // The whole subheading toggles, not only its text.
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1040,25 +1036,42 @@ extension DiveDetailView {
             .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
 
             if isExpanded {
-                VStack(spacing: 0) {
+                LazyVGrid(columns: gearRowColumns, alignment: .leading, spacing: 8) {
                     // By record, not by `Gear.id`: two gear items can share an id.
-                    ForEach(items, id: \.persistentModelID) { gear in
-                        if gear.persistentModelID != items.first?.persistentModelID {
-                            Divider()
-                        }
+                    ForEach(items, id: \.persistentModelID) { item in
                         Button {
-                            selectedGearForDetail = gear
+                            selectedGearForDetail = item
                         } label: {
-                            GearRow(gear: gear)
+                            DiveGearRow(gear: item)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, rowInset)
-                .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .transition(.opacity)
             }
         }
+    }
+
+    /// Columns of the Equipment card's rows: at least 350 pt each, so one on iPhone and more as
+    /// the window widens, with no maximum (as `photoGridColumns`), from the width the dive
+    /// screen tracks (less the card's 16 pt padding inside and out).
+    private var gearRowColumns: [GridItem] {
+        let gridWidth = max(0, viewWidth - 64)
+        let count = max(1, Int((gridWidth + 8) / 358))
+        return Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: count)
+    }
+
+    /// The summed weight of the gear on the dive, each item converted from its own stored unit to
+    /// the display unit (a sum of stored values, nothing estimated); nil when none has a weight.
+    private func gearWeightText(_ gear: [Gear]) -> String? {
+        let unit = prefs.weightUnit
+        let weighted = gear.filter { $0.weightContribution > 0 }
+        guard !weighted.isEmpty else { return nil }
+        let total = weighted.reduce(0.0) { sum, item in
+            sum + unit.convert(item.weightContribution,
+                               from: WeightUnit.from(importFormat: item.weightContributionUnit ?? unit.symbol))
+        }
+        return unit.formatted(total, from: unit)
     }
 
     var marineSightingsSection: some View {

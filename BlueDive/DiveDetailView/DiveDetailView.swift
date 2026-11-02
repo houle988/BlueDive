@@ -31,7 +31,7 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return "Site Details"
         case .conditions:  return "Conditions"
         case .gaz:         return "Gas"
-        case .equipment:   return "Equipment (tab)"
+        case .equipment:   return "Equipment"
         case .marineLife:  return "Marine Life"
         case .notes:       return "Notes"
         case .photos:      return "Photos"
@@ -110,10 +110,6 @@ struct DiveDetailView: View {
     @State var selectedGearForDetail: Gear?
     /// Equipment tab categories the user collapsed, for the dive shown (reset for each dive).
     @State var collapsedGearSections: Set<String> = []
-    #if os(macOS)
-    /// Whether the Equipment tab's rows show their one-line version (its column header).
-    @State var gearListLayout = OneLineRowsLayout()
-    #endif
     @State var isEditingPhotos = false
     /// The photo (`DivePhotoEntry.id`) the Remove alert is about. An id, not a position: an
     /// import still running can add photos that sort ahead of it while the alert is open.
@@ -321,14 +317,6 @@ struct DiveDetailView: View {
                             .animation(.easeInOut(duration: 0.25), value: selectedTab)
                         }
                         .scrollDisabled(scrollLocked)
-                        #if os(macOS)
-                        // The Equipment tab's column labels, pinned above the scrolling rows as
-                        // in the main Equipment list (only while its rows are one-line).
-                        .pinnedColumnHeader(gearListLayout,
-                                            isShown: selectedTab == .equipment && !(dive.usedGear ?? []).isEmpty) {
-                            GearListColumnHeader()
-                        }
-                        #endif
                         .onChange(of: dive) { _, _ in
                             showAllSamples = false
                             proxy.scrollTo("diveTop", anchor: .top)

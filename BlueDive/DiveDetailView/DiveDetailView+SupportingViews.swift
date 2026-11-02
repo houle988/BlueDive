@@ -299,6 +299,87 @@ struct DetailCard: View {
     }
 }
 
+// MARK: - Dive Gear Row
+
+/// One gear item in a dive's Equipment card: the brand logo or category symbol, the name, its
+/// weight and next service date underneath, and the service indicator or "Inactive" trailing.
+/// Compact, for the dive page (the main Equipment list's `GearRow` shows the inventory details).
+struct DiveGearRow: View {
+    let gear: Gear
+    @Environment(\.locale) private var locale
+
+    /// "0.54 kg · Service: 12 Mar 2027": the weight in the display unit and the next service date
+    /// in the app language, each only when set (empty when neither is).
+    private var detailText: String {
+        var parts: [String] = []
+        if gear.weightContribution > 0 {
+            let unit = UserPreferences.shared.weightUnit
+            parts.append(unit.formatted(gear.weightContribution,
+                                        from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? unit.symbol)))
+        }
+        if let due = gear.nextServiceDue {
+            let date = due.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale))
+            parts.append(String(format: NSLocalizedString("Service: %@", bundle: .forAppLanguage(), value: "Service: %@",
+                                                          comment: "A gear item's next service date in a dive's Equipment tab, e.g. Service: 12 Mar 2027"),
+                                date))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory, size: 36)
+
+            // Every row has the height of a two-line name plus a details line (an invisible copy
+            // of that layout sizes it, exact at every text size), with the visible text centred in
+            // it: a short name or a row without details sits beside the icon, not at the top.
+            ZStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: " ")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .lineLimit(2, reservesSpace: true)
+                    Text(verbatim: " ")
+                        .font(.caption)
+                        .lineLimit(1, reservesSpace: true)
+                }
+                .hidden()
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(gear.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(gear.isInactive ? .secondary : .primary)
+                        .lineLimit(2)
+                    if !detailText.isEmpty {
+                        Text(verbatim: detailText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            if gear.isInactive {
+                Text("Inactive")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            } else {
+                GearServiceIndicator(gear: gear)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        // The whole row opens the item, not only what is drawn.
+        .contentShape(Rectangle())
+    }
+}
+
 // MARK: - Equipment Info Card
 
 struct EquipmentInfoCard: View {

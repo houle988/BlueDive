@@ -1323,7 +1323,7 @@ struct GearRow: View {
                 if let due = gear.nextServiceDue {
                     Text(due, format: .dateTime.day().month().year().locale(locale))
                         .font(.caption)
-                        .foregroundStyle(serviceIndicatorColor ?? .secondary)
+                        .foregroundStyle(GearServiceIndicator.color(for: gear) ?? .secondary)
                         .lineLimit(1)
                 }
             }
@@ -1379,14 +1379,8 @@ struct GearRow: View {
     }
 
     /// Indicateur d'entretien — orange within 30 days, red when due/past
-    @ViewBuilder
     private var serviceIndicator: some View {
-        if let indicatorColor = serviceIndicatorColor {
-            Image(systemName: "exclamationmark.circle")
-                .foregroundStyle(indicatorColor)
-                .font(.title3)
-                .accessibilityLabel(indicatorColor == .red ? Text("Service Overdue") : Text("Service Due Soon"))
-        }
+        GearServiceIndicator(gear: gear)
     }
     
     @ViewBuilder
@@ -1414,8 +1408,24 @@ struct GearRow: View {
             .foregroundStyle(.cyan)
     }
     
+}
+
+/// A gear item's service indicator (the Equipment list's rows and a dive's Equipment tab):
+/// orange within 30 days of the next service, red when due or past, nothing otherwise.
+struct GearServiceIndicator: View {
+    let gear: Gear
+
+    var body: some View {
+        if let indicatorColor = Self.color(for: gear) {
+            Image(systemName: "exclamationmark.circle")
+                .foregroundStyle(indicatorColor)
+                .font(.title3)
+                .accessibilityLabel(indicatorColor == .red ? Text("Service Overdue") : Text("Service Due Soon"))
+        }
+    }
+
     /// Returns red if service is due/past, orange if within 30 days, nil otherwise.
-    private var serviceIndicatorColor: Color? {
+    static func color(for gear: Gear) -> Color? {
         guard let due = gear.nextServiceDue else { return nil }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -1431,7 +1441,6 @@ struct GearRow: View {
         }
         return nil
     }
-    
 }
 
 #if os(macOS)
