@@ -44831,6 +44831,40 @@
         }
       }
     },
+    "Norwegian Translation, Testing and ideas for new features" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Norwegische Übersetzung, Tests und Ideen für neue Funktionen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Traducción al noruego, pruebas e ideas para nuevas funciones"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduction norvégienne, tests et idées de nouvelles fonctionnalités"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Norsk oversettelse, testing og ideer til nye funksjoner"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Noorse vertaling, testen en ideeën voor nieuwe functies"
+          }
+        }
+      }
+    },
     "Not %@" : {
       "comment" : "Filter value shown when the filter excludes the selected value, e.g. “Not Egypt”",
       "localizations" : {
@@ -59148,6 +59182,40 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "SP %@"
+          }
+        }
+      }
+    },
+    "Spanish Translation" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Spanische Übersetzung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Traducción al español"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduction espagnole"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Spansk oversettelse"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Spaanse vertaling"
           }
         }
       }
