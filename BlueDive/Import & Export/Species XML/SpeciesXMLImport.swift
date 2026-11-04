@@ -103,7 +103,7 @@ enum SpeciesXMLImport {
             return (index, data)
         }
         guard !jobs.isEmpty else { return }
-        let thumbnails = await Task.detached(priority: .userInitiated) {
+        let thumbnails = await PhotoMetadataReader.onImageQueue {
             jobs.compactMap { job -> (index: Int, data: Data)? in
                 guard let source = CGImageSourceCreateWithData(job.data as CFData, nil),
                       longestSide(of: source).map({ $0 > PhotoMetadataReader.thumbnailMaxPixelSize }) ?? true,
@@ -112,7 +112,7 @@ enum SpeciesXMLImport {
                       thumbnail.count < job.data.count else { return nil }
                 return (job.index, thumbnail)
             }
-        }.value
+        }
         for thumbnail in thumbnails {
             // The species and its image record were created by this import, before the wait.
             guard let image = species[thumbnail.index].image, image.thumbnailData == nil else { continue }

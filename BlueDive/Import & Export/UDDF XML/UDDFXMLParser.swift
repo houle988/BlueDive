@@ -113,6 +113,9 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var currentDuration: Int = 0
     private var currentCNS: Double?
     private var currentTempAir: Double?
+    /// `<informationbeforedive><surfacepressure>`: the surface pressure at the dive spot, in bar
+    /// (UDDF stores pascals).
+    private var currentSurfacePressure: Double?
     private var currentTempLow: Double?
     private var currentVisibility: String?
     private var currentWeight: Double?
@@ -142,6 +145,18 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var tankIdToIndex: [String: Int] = [:]
     private var tempWaypointTemperature: Double?
     private var tempWaypointPPO2: Double?
+    /// Last <setpo2> value of the dive (bar). UDDF writes <setpo2> where the setpoint is set and
+    /// it stays in effect until the next <setpo2>, or until a waypoint's <divemode> leaves closed
+    /// circuit (e.g. open-circuit bailout); it applies again when a <divemode> returns to the
+    /// loop without a new <setpo2> (the setpoint is unchanged, so it need not be written again).
+    /// Reset for each dive's samples.
+    private var lastReportedSetpoint: Double?
+    /// True after a <divemode> leaves the loop: a <setpo2> logged then (e.g. an automatic
+    /// setpoint switch during a bailout) is recorded but not applied until back on the loop,
+    /// as on the Bluetooth path.
+    private var onOpenCircuit = false
+    /// The CCR setpoint in effect at the current waypoint: none while off the loop.
+    private var setpointInEffect: Double? { onOpenCircuit ? nil : lastReportedSetpoint }
     private var tempWaypointNDT: Int?
     private var tempWaypointCNS: Double?
 
@@ -304,12 +319,29 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             isInInformationAfterDive = true
 
         case "samples":
-            if isInDive { isInSamples = true }
+            if isInDive {
+                isInSamples = true
+                lastReportedSetpoint = nil
+                onOpenCircuit = false
+            }
 
         case "waypoint":
             if isInSamples {
                 isInWaypoint = true
                 resetTempWaypoint()
+            }
+
+        case "divemode":
+            // Open circuit or apnoe: no setpoint in effect. Back on the loop (closed or
+            // semi-closed circuit): the last setpoint applies again. A <divemode> without a
+            // type changes nothing.
+            if isInWaypoint, let type = attributeDict["type"]?.lowercased() {
+                switch type {
+                case "closedcircuit", "semiclosedcircuit":
+                    onOpenCircuit = false
+                default:
+                    onOpenCircuit = true
+                }
             }
 
         case "tankdata":
@@ -588,6 +620,12 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             if isInInformationBeforeDive {
                 if let k = Double(text) { currentTempAir = kelvinToCelsius(k) }
             }
+        case "surfacepressure":
+            // UDDF: pascals (e.g. 102000.0 for 1 020 mbar); stored in bar, like every pressure
+            // this parser reads.
+            if isInInformationBeforeDive, let pascals = Double(text) {
+                currentSurfacePressure = Dive.validatedSurfacePressure(pascals / 100_000)
+            }
         case "platform":
             if isInInformationBeforeDive { currentEntryType = text.nilIfEmpty }
         case "purpose":
@@ -700,6 +738,12 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             }
         case "calculatedpo2":
             if isInWaypoint, let pa = Double(text) { tempWaypointPPO2 = pascalToBar(pa) }
+        case "setpo2":
+            // CCR setpoint in Pa; stored in bar like the PPO2 samples, through the rule every
+            // import path shares (0 or non-finite = no setpoint). Applied only on the loop.
+            if isInWaypoint, let pa = Double(text) {
+                lastReportedSetpoint = DiveProfilePoint.validSetpoint(pascalToBar(pa))
+            }
         case "nodecotime":
             // UDDF nodecotime is in seconds; convert to minutes for BlueDiveSamplesData.ndt
             if isInWaypoint, let seconds = parseSeconds(text), seconds > 0 {
@@ -724,7 +768,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                         temperature: tempWaypointTemperature,
                         ppo2: tempWaypointPPO2,
                         ndt: tempWaypointNDT,
-                        cns: tempWaypointCNS
+                        cns: tempWaypointCNS,
+                        setpoint: setpointInEffect
                     ))
                 }
                 // Track max CNS across all waypoints
@@ -857,6 +902,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             maxDepth: currentMaxDepth,
             averageDepth: currentAverageDepth,
             duration: currentDuration,
+            surfacePressure: currentSurfacePressure,
             interval: nil,
             cns: currentCNS,
             decoModel: decoModelName,
@@ -949,6 +995,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         currentDuration = 0
         currentCNS = nil
         currentTempAir = nil
+        currentSurfacePressure = nil
         currentTempLow = nil
         currentVisibility = nil
         currentWeight = nil
@@ -996,7 +1043,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private func parseSeconds(_ text: String) -> Int? {
         guard !text.isEmpty else { return nil }
         if let intValue = Int(text) { return intValue }
-        if let doubleValue = Double(text) { return Int(doubleValue) }
+        // Truncated as before; Int(exactly:) returns nil instead of trapping on "1e30" or "inf".
+        if let doubleValue = Double(text) { return Int(exactly: doubleValue.rounded(.towardZero)) }
         return nil
     }
 }

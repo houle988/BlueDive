@@ -6,6 +6,20 @@ func appVersionBuild() -> String {
     return "\(v)-\(b)"
 }
 
+/// The app's marketing version (`CFBundleShortVersionString`) without the build number.
+func appMarketingVersion() -> String {
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+}
+
+/// True when a stored "last shown/accepted" value belongs to the current app version, whatever
+/// its build. The intro, the disclaimer and the calculator safety warnings store
+/// "<version>-<build>" (`appVersionBuild()`) but are shown again only when the version changes,
+/// not on every new build. A value holding the version alone is also accepted.
+func isCurrentAppVersion(_ stored: String) -> Bool {
+    let version = appMarketingVersion()
+    return stored == version || stored.hasPrefix(version + "-")
+}
+
 struct DisclaimerView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""

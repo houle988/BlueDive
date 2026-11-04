@@ -80,25 +80,27 @@ enum PhotoBlobSweeper {
 
         await sweep(thumbnails, container: container, ownerID: { (record: DivePhotoThumbnail) in record.photoID }) { ids, context in
             let owners = (try? context.fetch(FetchDescriptor<DivePhoto>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
-            return Dictionary(owners.map { ($0.id, $0.thumbnail?.persistentModelID) }, uniquingKeysWith: { first, _ in first })
+            return Dictionary(grouping: owners, by: \.id).mapValues { $0.map { $0.thumbnail?.persistentModelID } }
         }
         await sweep(originals, container: container, ownerID: { (record: DivePhotoOriginal) in record.photoID }) { ids, context in
             let owners = (try? context.fetch(FetchDescriptor<DivePhoto>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
-            return Dictionary(owners.map { ($0.id, $0.original?.persistentModelID) }, uniquingKeysWith: { first, _ in first })
+            return Dictionary(grouping: owners, by: \.id).mapValues { $0.map { $0.original?.persistentModelID } }
         }
         await sweep(images, container: container, ownerID: { (record: SpeciesImage) in record.speciesID }) { ids, context in
             let owners = (try? context.fetch(FetchDescriptor<Species>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
-            return Dictionary(owners.map { ($0.id, $0.image?.persistentModelID) }, uniquingKeysWith: { first, _ in first })
+            return Dictionary(grouping: owners, by: \.id).mapValues { $0.map { $0.image?.persistentModelID } }
         }
     }
 
     /// Deletes the records in `orphans` whose owner exists and links another record.
-    /// `linkedRecords` maps each existing owner id to the record it links (nil = none).
+    /// `linkedRecords` maps each existing owner id to the records its owners link (nil = none):
+    /// two owners can share an id (e.g. the same file imported on two devices before they
+    /// synced), so a record is deleted only when every owner with its id links another record.
     private static func sweep<Record: PersistentModel>(
         _ orphans: [PersistentIdentifier],
         container: ModelContainer,
         ownerID: (Record) -> UUID?,
-        linkedRecords: ([UUID], ModelContext) -> [UUID: PersistentIdentifier?]
+        linkedRecords: ([UUID], ModelContext) -> [UUID: [PersistentIdentifier?]]
     ) async {
         for start in stride(from: 0, to: orphans.count, by: 50) {
             guard !Task.isCancelled else { return }
@@ -108,8 +110,8 @@ enum PhotoBlobSweeper {
             let owners = linkedRecords(Array(Set(records.compactMap(ownerID))), context)
             var deleted = false
             for record in records {
-                guard let id = ownerID(record), let linked = owners[id], let kept = linked,
-                      kept != record.persistentModelID else { continue }
+                guard let id = ownerID(record), let linked = owners[id], !linked.isEmpty,
+                      linked.allSatisfy({ $0 != nil && $0 != record.persistentModelID }) else { continue }
                 context.delete(record)
                 deleted = true
             }

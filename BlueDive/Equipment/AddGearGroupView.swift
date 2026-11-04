@@ -11,7 +11,9 @@ struct AddGearGroupView: View {
     // MARK: - Form State
 
     @State private var name = ""
-    @State private var selectedGearIds: Set<UUID> = []
+    // By record, not by `Gear.id`: two gear items can share an id (e.g. the same file imported
+    // on two devices before they synced), and ticking one must not select both.
+    @State private var selectedGearIds: Set<PersistentIdentifier> = []
 
     // Validation
     @State private var showValidationError = false
@@ -153,7 +155,7 @@ struct AddGearGroupView: View {
     }
 
     private func gearSelectionRow(_ gear: Gear) -> some View {
-        let isSelected = selectedGearIds.contains(gear.id)
+        let isSelected = selectedGearIds.contains(gear.persistentModelID)
         let gearCategory = displayCategory(of: gear)
 
         return Button {
@@ -258,10 +260,10 @@ struct AddGearGroupView: View {
     // MARK: - Actions
 
     private func toggleGearSelection(_ gear: Gear) {
-        if selectedGearIds.contains(gear.id) {
-            selectedGearIds.remove(gear.id)
+        if selectedGearIds.contains(gear.persistentModelID) {
+            selectedGearIds.remove(gear.persistentModelID)
         } else {
-            selectedGearIds.insert(gear.id)
+            selectedGearIds.insert(gear.persistentModelID)
         }
     }
 
@@ -272,7 +274,7 @@ struct AddGearGroupView: View {
             return
         }
 
-        let selectedGear = allGear.filter { selectedGearIds.contains($0.id) }
+        let selectedGear = allGear.filter { selectedGearIds.contains($0.persistentModelID) }
         let group = GearGroup(name: trimmedName, gear: selectedGear)
 
         withAnimation {

@@ -22,7 +22,6 @@ struct EditMenuStatsView: View {
     @State private var workingBuddies: String
     @State private var workingTypes: String
     @State private var workingRating: Int
-    @State private var workingNotes: String
     @State private var workingTags: String
     @State private var workingDiveNumber: String
     @State private var workingDiveMaster: String
@@ -31,6 +30,8 @@ struct EditMenuStatsView: View {
     @State private var workingDiveCenter: String
     @State private var workingEntryType: String
     @State private var newTag: String = ""
+    /// Suggestions for the single-value fields, built once when the sheet appears.
+    @State private var fieldSuggestions = DiveFieldSuggestions()
     @State private var newBuddy: String = ""
     @State private var newType: String = ""
     @State private var workingMaxDepthText: String
@@ -59,7 +60,6 @@ struct EditMenuStatsView: View {
         _workingBuddies   = State(initialValue: dive.buddies)
         _workingTypes = State(initialValue: dive.diveTypes ?? "")
         _workingRating    = State(initialValue: dive.rating)
-        _workingNotes     = State(initialValue: dive.notes)
         _workingTags      = State(initialValue: dive.tags ?? "")
         _workingDiveNumber = State(initialValue: dive.diveNumber.map { "\($0)" } ?? "")
         _workingDiveMaster = State(initialValue: dive.diveMaster ?? "")
@@ -110,7 +110,8 @@ struct EditMenuStatsView: View {
         guard !trimmed.isEmpty else { return }
 
         var tags = tagsArray
-        if !tags.contains(trimmed) {
+        // A tag already on the dive with different capitals ("reef" vs "Reef") is not added again.
+        if !tags.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             tags.append(trimmed)
             workingTags = tags.joined(separator: ", ")
         }
@@ -127,7 +128,8 @@ struct EditMenuStatsView: View {
         guard !trimmed.isEmpty else { return }
 
         var buddies = buddiesArray
-        if !buddies.contains(trimmed) {
+        // A buddy already on the dive with different capitals is not added again.
+        if !buddies.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             buddies.append(trimmed)
             workingBuddies = buddies.joined(separator: ", ")
         }
@@ -144,7 +146,8 @@ struct EditMenuStatsView: View {
         guard !trimmed.isEmpty, trimmed != "None" else { return }
 
         var types = diveTypesArray
-        if !types.contains(trimmed) {
+        // A dive type already on the dive with different capitals is not added again.
+        if !types.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             types.append(trimmed)
             workingTypes = types.joined(separator: ", ")
         }
@@ -156,61 +159,47 @@ struct EditMenuStatsView: View {
         workingTypes = types.joined(separator: ", ")
     }
 
-    private func uniqueOptionalValues(for keyPath: KeyPath<Dive, String?>) -> [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            guard let val = d[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces),
-                  !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
-    private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            let val = d[keyPath: keyPath].trimmingCharacters(in: .whitespaces)
-            guard !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
     // DiveStore's complete diver list (dives, gear, certifications, insurance).
     private var uniqueDiverNames: [String] { store.cachedUniqueDivers }
 
-    private var uniqueBuddyNames: [String] {
+    // Buddy, dive type and tag suggestions read the store's summaries (plain values, already
+    // split and trimmed for types and tags) rather than Dive objects, so no attribute is
+    // faulted and a dive deleted on another device is never read.
+    private func uniqueNames(_ names: [String]) -> [String] {
         var seen = Set<String>()
-        return store.dives.flatMap { d -> [String] in
-            d.buddies
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-        }.compactMap { name -> String? in
+        return names.compactMap { name -> String? in
             let key = name.lowercased()
             guard seen.insert(key).inserted else { return nil }
             return name
         }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    private var uniqueDiveTypeNames: [String] {
-        var seen = Set<String>()
-        return store.dives.flatMap { d -> [String] in
-            (d.diveTypes ?? "")
+    private var uniqueBuddyNames: [String] {
+        uniqueNames(store.cachedSummaries.flatMap { summary in
+            summary.buddies
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
-        }.compactMap { name -> String? in
-            let key = name.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return name
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        })
+    }
+
+    private var uniqueDiveTypeNames: [String] {
+        uniqueNames(store.cachedSummaries.flatMap(\.diveTypes))
+    }
+
+    private var uniqueTagNames: [String] {
+        uniqueNames(store.cachedSummaries.flatMap(\.tags))
     }
 
     var body: some View {
         iOSBody
+            .onAppear {
+                fieldSuggestions = DiveFieldSuggestions(
+                    dives: store.dives,
+                    fields: [\.computerName],
+                    optionalFields: [\.computerSerialNumber, \.diveOperator, \.diveMaster,
+                                     \.skipper, \.boat, \.entryType])
+            }
     }
 
 
@@ -290,8 +279,8 @@ struct EditMenuStatsView: View {
                 .font(.caption2)
         }
         Section {
-            AutocompleteMenuTextField(label: "Computer Name", text: $workingComputerName, icon: "desktopcomputer", color: .purple, suggestions: uniqueValues(for: \.computerName))
-            AutocompleteMenuTextField(label: "Serial Number", text: $workingSerialNumber, icon: "number", color: .purple, suggestions: uniqueOptionalValues(for: \.computerSerialNumber))
+            AutocompleteMenuTextField(label: "Computer Name", text: $workingComputerName, icon: "desktopcomputer", color: .purple, suggestions: fieldSuggestions[\Dive.computerName])
+            AutocompleteMenuTextField(label: "Serial Number", text: $workingSerialNumber, icon: "number", color: .purple, suggestions: fieldSuggestions[\Dive.computerSerialNumber])
         } header: {
             MenuSectionHeader(title: "Dive Computer", icon: "desktopcomputer", color: .purple)
         }
@@ -338,11 +327,11 @@ struct EditMenuStatsView: View {
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2", color: .blue, suggestions: uniqueOptionalValues(for: \.diveOperator))
-                        AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark", color: .teal, suggestions: uniqueOptionalValues(for: \.diveMaster))
-                        AutocompleteMenuTextField(label: "Captain", text: $workingSkipper, icon: "person.fill.turn.right", color: .indigo, suggestions: uniqueOptionalValues(for: \.skipper))
-                        AutocompleteMenuTextField(label: "Boat", text: $workingBoat, icon: "ferry", color: .mint, suggestions: uniqueOptionalValues(for: \.boat))
-                        AutocompleteMenuTextField(label: "Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle", color: .yellow, suggestions: uniqueOptionalValues(for: \.entryType))
+                        AutocompleteMenuTextField(label: "Dive Center", text: $workingDiveCenter, icon: "building.2", color: .blue, suggestions: fieldSuggestions[\Dive.diveOperator])
+                        AutocompleteMenuTextField(label: "Guide/Instructor", text: $workingDiveMaster, icon: "person.badge.shield.checkmark", color: .teal, suggestions: fieldSuggestions[\Dive.diveMaster])
+                        AutocompleteMenuTextField(label: "Captain", text: $workingSkipper, icon: "person.fill.turn.right", color: .indigo, suggestions: fieldSuggestions[\Dive.skipper])
+                        AutocompleteMenuTextField(label: "Boat", text: $workingBoat, icon: "ferry", color: .mint, suggestions: fieldSuggestions[\Dive.boat])
+                        AutocompleteMenuTextField(label: "Entry Type", text: $workingEntryType, icon: "arrow.down.to.line.circle", color: .yellow, suggestions: fieldSuggestions[\Dive.entryType])
                     } header: {
                         MenuSectionHeader(title: "Operator", icon: "building.2", color: .teal)
                     }
@@ -413,8 +402,9 @@ struct EditMenuStatsView: View {
                                 .foregroundStyle(newBuddy.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.green)
                                 .disabled(newBuddy.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
-                            let filteredBuddySuggestions = newBuddy.isEmpty ? [] : uniqueBuddyNames.filter {
-                                $0.localizedCaseInsensitiveContains(newBuddy) && $0.lowercased() != newBuddy.lowercased() && !buddiesArray.contains($0)
+                            let filteredBuddySuggestions = newBuddy.isEmpty ? [] : uniqueBuddyNames.filter { name in
+                                name.localizedCaseInsensitiveContains(newBuddy) && name.lowercased() != newBuddy.lowercased()
+                                    && !buddiesArray.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
                             }
                             if !filteredBuddySuggestions.isEmpty {
                                 VStack(alignment: .leading, spacing: 0) {
@@ -543,8 +533,9 @@ struct EditMenuStatsView: View {
                                 .foregroundStyle(newType.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.purple)
                                 .disabled(newType.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
-                            let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter {
-                                $0.localizedCaseInsensitiveContains(newType) && $0.lowercased() != newType.lowercased() && !diveTypesArray.contains($0)
+                            let filteredDiveTypeSuggestions = newType.isEmpty ? [] : uniqueDiveTypeNames.filter { name in
+                                name.localizedCaseInsensitiveContains(newType) && name.lowercased() != newType.lowercased()
+                                    && !diveTypesArray.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
                             }
                             if !filteredDiveTypeSuggestions.isEmpty {
                                 VStack(alignment: .leading, spacing: 0) {
@@ -644,40 +635,62 @@ struct EditMenuStatsView: View {
                         }
 
                         // Add new tag
-                        HStack(spacing: 8) {
-                            Image(systemName: "plus.circle")
-                                .foregroundStyle(.cyan)
-                            formTextField("Add a tag", text: $newTag)
-                                .autocorrectionDisabled()
-                                .foregroundStyle(.primary)
-                            if !newTag.isEmpty {
-                                Button {
-                                    newTag = ""
-                                } label: {
-                                    ClearButtonGlyph()
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(.cyan)
+                                formTextField("Add a tag", text: $newTag)
+                                    .autocorrectionDisabled()
+                                    .foregroundStyle(.primary)
+                                if !newTag.isEmpty {
+                                    Button {
+                                        newTag = ""
+                                    } label: {
+                                        ClearButtonGlyph()
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
-                            }
-                            Button("Add") {
-                                withAnimation {
-                                    addTag(newTag)
-                                    newTag = ""
+                                Button("Add") {
+                                    withAnimation {
+                                        addTag(newTag)
+                                        newTag = ""
+                                    }
                                 }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(newTag.trimmingCharacters(in: .whitespaces).isEmpty ? Color.secondary : Color.cyan)
+                                .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
+                            let filteredTagSuggestions = newTag.isEmpty ? [] : uniqueTagNames.filter { name in
+                                name.localizedCaseInsensitiveContains(newTag) && name.lowercased() != newTag.lowercased()
+                                    && !tagsArray.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
+                            }
+                            if !filteredTagSuggestions.isEmpty {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    ForEach(filteredTagSuggestions.prefix(5), id: \.self) { suggestion in
+                                        Button {
+                                            addTag(suggestion)
+                                            newTag = ""
+                                        } label: {
+                                            Text(suggestion)
+                                                .foregroundStyle(.primary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.vertical, 6)
+                                                .padding(.horizontal, 8)
+                                                // The whole suggestion responds, not only its text
+                                                // (a plain Button only responds where something is drawn).
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .background(Color.primary.opacity(0.05))
+                                        .cornerRadius(4)
+                                    }
+                                }
+                                .padding(.leading, 28)
+                                .padding(.top, 4)
+                            }
                         }
                     } header: {
                         MenuSectionHeader(title: "Tags", icon: "tag", color: .pink)
-                    }
-
-                    Section {
-                        TextEditor(text: $workingNotes)
-                            .frame(minHeight: 100)
-                            .scrollContentBackground(.hidden)
-                            .foregroundStyle(.primary)
-                    } header: {
-                        MenuSectionHeader(title: "Notes", icon: "note.text", color: .orange)
                     }
                 }
                 .groupedFormStyleOnMac()
@@ -719,8 +732,13 @@ struct EditMenuStatsView: View {
         // An untouched field keeps the stored duration exactly; an emptied one clears it (0, as
         // before); an entry that cannot be read, or is out of range, keeps the stored duration.
         let trimmedDuration = workingDurationText.trimmingCharacters(in: .whitespaces)
+        // Changed minutes go through setDuration(minutes:), which also clears a computer time
+        // that would no longer match; the same minutes typed differently ("45" → "45.0") keep it.
         if trimmedDuration != initialDurationText {
-            dive.duration = trimmedDuration.isEmpty ? 0 : (Self.durationMinutes(trimmedDuration) ?? dive.duration)
+            let minutes = trimmedDuration.isEmpty ? 0 : (Self.durationMinutes(trimmedDuration) ?? dive.duration)
+            if minutes != dive.duration {
+                dive.setDuration(minutes: minutes)
+            }
         }
         dive.weights      = workingWeights
         let originalDiverName = dive.diverName
@@ -733,11 +751,6 @@ struct EditMenuStatsView: View {
         dive.diveTypes = types.isEmpty ? nil : types.joined(separator: ", ")
 
         dive.rating       = workingRating
-        let trimmedNotes  = workingNotes.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Only matters to the dive list's notes search (a store query): with it off, notes are
-        // left to autosave as before.
-        let notesNeedSave = dive.notes != trimmedNotes && UserPreferences.shared.searchDiveNotes
-        dive.notes        = trimmedNotes
         dive.tags         = workingTags.isEmpty ? nil : workingTags
         dive.diveNumber   = Int(workingDiveNumber.trimmingCharacters(in: .whitespaces))
         let trimmedDiveMaster  = workingDiveMaster.trimmingCharacters(in: .whitespaces)
@@ -771,13 +784,11 @@ struct EditMenuStatsView: View {
                 timestampDidChange = true
             }
         }
-        if timestampDidChange || diverNameDidChange || notesNeedSave {
+        if timestampDidChange || diverNameDidChange {
             // Flush changes to the persistent store so the background context sees
-            // the updated values when it fetches all dives for recalculation, and the dive
-            // list's notes search (a store query) sees new notes at once rather than after autosave.
+            // the updated values when it fetches all dives for recalculation.
             try? modelContext.save()
-            if notesNeedSave { store.notesMayHaveChanged() }
-            if (timestampDidChange || diverNameDidChange) && autoSequenceEnabled {
+            if autoSequenceEnabled {
                 store.recalcSequencesInBackground(
                     container: modelContext.container,
                     newDiverName: dive.diverName,
@@ -792,6 +803,408 @@ struct EditMenuStatsView: View {
     }
 }
 
+/// Edit sheet for the Notes tab: the dive's notes in a full-height editor.
+struct EditNotesView: View {
+    @Bindable var dive: Dive
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(DiveStore.self) private var store
+
+    @State private var workingNotes: String
+
+    init(dive: Dive) {
+        self.dive = dive
+        _workingNotes = State(initialValue: dive.notes)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground().ignoresSafeArea()
+
+                // The same card header as the Notes tab.
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Notes", systemImage: "note.text")
+                        .font(.headline)
+                        .foregroundStyle(DiveTab.notes.color)
+                    TextEditor(text: $workingNotes)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .foregroundStyle(.primary)
+                }
+                .padding()
+                .detailCardBackground()
+                .padding()
+            }
+            .navigationTitle("Edit Notes")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .bold()
+                        .confirmationActionForeground(.brown)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let trimmedNotes = workingNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Only matters to the dive list's notes search (a store query): with it off, notes are
+        // left to autosave as before.
+        let notesNeedSave = dive.notes != trimmedNotes && UserPreferences.shared.searchDiveNotes
+        dive.notes = trimmedNotes
+        if notesNeedSave {
+            // Flush to the persistent store so the notes search sees the new notes at once
+            // rather than after autosave.
+            try? modelContext.save()
+            store.notesMayHaveChanged()
+        }
+        // Notes are not shown in list rows and do not affect order or badges.
+        store.commit(dive, affects: .nothing)
+        dismiss()
+    }
+}
+
+/// Edit sheet for the Equipment tab: Quick Add (a gear group's items, or another dive's), the
+/// gear on the dive (each with a remove button), then the active gear that can be added (by
+/// category, each with an add button). Changes are kept in `workingGear` and stored on Save;
+/// Cancel drops them.
+struct EditEquipmentView: View {
+    @Bindable var dive: Dive
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
+    @Environment(DiveStore.self) private var store
+    @Query private var allGear: [Gear]
+    @Query(sort: \GearGroup.name) private var gearGroups: [GearGroup]
+
+    /// The gear on the dive while editing: its stored order, then the items added.
+    @State private var workingGear: [Gear]
+    /// The dive's gear when the sheet opened: Save applies only the difference from it, so gear
+    /// added to this dive on another device meanwhile is kept.
+    @State private var originalGearIDs: Set<PersistentIdentifier>
+    /// Identifiers of the dives that have gear, read once when the sheet opens (one store query).
+    @State private var divesWithGear: Set<PersistentIdentifier> = []
+    /// "From Another Dive" candidates, built when the sheet opens and again only when the
+    /// store's summaries change, not on every redraw (adding or removing an item).
+    @State private var copyCandidates: [DiveSummary] = []
+    /// The dive chosen in Quick Add's "From Another Dive".
+    @State private var copySource: DiveSummary?
+    /// The gear group chosen in Quick Add's "From a Gear Group".
+    @State private var selectedGroupID: PersistentIdentifier?
+
+    init(dive: Dive) {
+        self.dive = dive
+        _workingGear = State(initialValue: dive.usedGear ?? [])
+        _originalGearIDs = State(initialValue: Set((dive.usedGear ?? []).map(\.persistentModelID)))
+    }
+
+    /// `workingGear` without items deleted since the sheet opened (on another device): the
+    /// draft is kept across redraws, so a deleted item is dropped before any attribute is read
+    /// (reading a deleted SwiftData object crashes) and is never saved back.
+    private var liveWorkingGear: [Gear] {
+        workingGear.filter { !$0.isDeleted && $0.modelContext != nil }
+    }
+
+    /// By record, not by `Gear.id`: a gear item sharing an id with one already on the dive
+    /// (e.g. imported on two devices before they synced) stays available.
+    private var workingIDs: Set<PersistentIdentifier> {
+        Set(liveWorkingGear.map(\.persistentModelID))
+    }
+
+    /// The gear on the dive in category order, as the Equipment tab shows it.
+    private var usedGear: [Gear] {
+        gearCategorySections(liveWorkingGear, locale: locale).flatMap(\.items)
+    }
+
+    /// Active gear not on the dive, by category, sorted by name within each category.
+    private var availableSections: [(key: String, items: [Gear])] {
+        let ids = workingIDs
+        let available = allGear
+            .filter { !ids.contains($0.persistentModelID) && !$0.isInactive }
+            .sorted { $0.name.compare($1.name, locale: locale) == .orderedAscending }
+        return gearCategorySections(available, locale: locale)
+    }
+
+    /// Other dives of this dive's diver that have gear, newest first: plain summaries, so the
+    /// search reads no dive's gear (only the dive copied from is read).
+    private func buildCopyCandidates() -> [DiveSummary] {
+        guard !divesWithGear.isEmpty else { return [] }
+        // Trimmed as `DiveSummary.diverName` is, so the names compare equal.
+        let diver = dive.diverName.trimmingCharacters(in: .whitespaces)
+        return store.cachedSummaries
+            .filter { summary in
+                guard summary.id != dive.id, summary.diverName == diver,
+                      let source = store.diveByID[summary.id] else { return false }
+                return divesWithGear.contains(source.persistentModelID)
+            }
+            .sorted { $0.timestamp > $1.timestamp }
+    }
+
+    /// The 3 dives just before this one (consecutive dives often use the same gear).
+    private func recentCopyCandidates(_ candidates: [DiveSummary]) -> [DiveSummary] {
+        Array(candidates.filter { $0.timestamp < dive.timestamp }.prefix(3))
+    }
+
+    /// Reads which dives have gear: identifiers only, matched by the store, so no dive or gear
+    /// is loaded. `contains(where:)`, not `isEmpty`: a to-many `isEmpty` predicate crashes.
+    private func loadDivesWithGear() {
+        let descriptor = FetchDescriptor<Dive>(predicate: #Predicate { dive in
+            dive.usedGear?.contains(where: { _ in true }) ?? false
+        })
+        divesWithGear = Set((try? modelContext.fetchIdentifiers(descriptor)) ?? [])
+        copyCandidates = buildCopyCandidates()
+    }
+
+    /// Adds several items at once, each way in a card of its own under the "Quick Add" title: a
+    /// gear group's items (when there are groups), then another dive's (when another dive of
+    /// this diver has gear). The title goes on the first card shown; nothing when neither is.
+    @ViewBuilder
+    private var quickAddSection: some View {
+        let candidates = copyCandidates
+        if !gearGroups.isEmpty {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    quickAddCaption("From a Gear Group")
+                    // Chosen first, then added with the button below (as a dive, or a
+                    // tank template in Edit Gas).
+                    Picker("Gear Group", selection: $selectedGroupID) {
+                        Text("Select a gear group...").tag(PersistentIdentifier?.none)
+                        ForEach(gearGroups) { group in
+                            Text(verbatim: "\(group.name) (\(Double(group.gearCount).localizedString(decimals: 0)))")
+                                .tag(Optional(group.persistentModelID))
+                        }
+                    }
+                    .tint(DiveTab.equipment.color)
+                    // Only the pop-up, under its caption (the label stays for VoiceOver).
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                quickAddButton("Apply Gear Group", systemImage: "tray.2", isEnabled: selectedGroup != nil) {
+                    if let group = selectedGroup { applyGearGroup(group) }
+                }
+            } header: {
+                quickAddHeader
+            }
+        }
+        if !candidates.isEmpty {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    quickAddCaption("From Another Dive")
+                    DiveCopySearchField(selection: $copySource,
+                                        recents: recentCopyCandidates(candidates),
+                                        candidates: candidates)
+                }
+
+                quickAddButton("Copy Equipment", systemImage: "doc.on.doc", isEnabled: copySource != nil) {
+                    copyEquipment()
+                }
+            } header: {
+                // The title only when the gear-group card above is not shown.
+                if gearGroups.isEmpty {
+                    quickAddHeader
+                }
+            }
+        }
+    }
+
+    private var quickAddHeader: some View {
+        MenuSectionHeader(title: "Quick Add", icon: "bolt", color: DiveTab.equipment.color)
+    }
+
+    /// The gear group chosen in Quick Add, nil when none is (or it was deleted meanwhile).
+    private var selectedGroup: GearGroup? {
+        guard let id = selectedGroupID else { return nil }
+        return gearGroups.first { $0.persistentModelID == id }
+    }
+
+    /// A Quick Add option's action row, dimmed and disabled until its source is chosen.
+    private func quickAddButton(_ title: LocalizedStringKey, systemImage: String, isEnabled: Bool,
+                                action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+            }
+            // Inside the label: on macOS the row button style colours the label with the accent
+            // colour otherwise.
+            .foregroundStyle(isEnabled ? DiveTab.equipment.color : Color.secondary)
+        }
+        .disabled(!isEnabled)
+        .listRowButton()
+    }
+
+    /// A Quick Add option's small grey caption.
+    private func quickAddCaption(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Adds the chosen dive's active gear that is not on this dive yet (inactive gear, retired
+    /// since, is skipped, as the add list only offers active gear). Saved on Save, like any edit.
+    private func copyEquipment() {
+        guard let summary = copySource,
+              let source = store.diveByID[summary.id], !source.isDeleted, source.modelContext != nil else {
+            copySource = nil
+            return
+        }
+        let ids = workingIDs
+        let added = (source.usedGear ?? []).filter { !$0.isInactive && !ids.contains($0.persistentModelID) }
+        guard !added.isEmpty else { return }
+        withAnimation {
+            workingGear.append(contentsOf: added)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground().ignoresSafeArea()
+
+                groupedList {
+                    quickAddSection
+
+                    Section {
+                        if usedGear.isEmpty {
+                            Text("No Equipment Recorded")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .listRowBackground(Color.primary.opacity(0.05))
+                        } else {
+                            ForEach(usedGear) { gear in
+                                gearRow(gear, isOnDive: true)
+                            }
+                        }
+                    } header: {
+                        MenuSectionHeader(title: "Equipment Used", icon: "wrench.and.screwdriver", color: DiveTab.equipment.color)
+                    }
+
+                    if availableSections.isEmpty {
+                        Section {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("No Equipment Available")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text("All your equipment is already added to this dive or you haven't created any equipment yet.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .listRowBackground(Color.primary.opacity(0.05))
+                        }
+                    } else {
+                        ForEach(availableSections, id: \.key) { section in
+                            Section {
+                                ForEach(section.items) { gear in
+                                    gearRow(gear, isOnDive: false)
+                                }
+                            } header: {
+                                GearCategorySectionTitle(key: section.key)
+                            }
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Edit Equipment")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .task { loadDivesWithGear() }
+            .onChange(of: store.cachedSummaries) { copyCandidates = buildCopyCandidates() }
+            // A chosen group deleted meanwhile (on another device) leaves the picker on no option.
+            .onChange(of: gearGroups.map(\.persistentModelID)) { _, ids in
+                if let id = selectedGroupID, !ids.contains(id) { selectedGroupID = nil }
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .bold()
+                        .confirmationActionForeground(DiveTab.equipment.color)
+                }
+            }
+        }
+    }
+
+    /// One gear row: the whole row adds the item (`isOnDive` false) or removes it from the dive.
+    private func gearRow(_ gear: Gear, isOnDive: Bool) -> some View {
+        Button {
+            withAnimation {
+                if isOnDive {
+                    workingGear.removeAll { $0.persistentModelID == gear.persistentModelID }
+                } else {
+                    workingGear.append(gear)
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                // The main Equipment list's row (stacked: this list has no column header).
+                gearListRow(gear)
+
+                Image(systemName: isOnDive ? "minus.circle.fill" : "plus.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(isOnDive ? Color.red : DiveTab.equipment.color)
+                    .accessibilityHidden(true)
+            }
+        }
+        .listRowBackground(Color.primary.opacity(0.05))
+        .listRowButton()
+        .accessibilityLabel(isOnDive
+            ? Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), gear.name))
+            : Text(verbatim: String(format: NSLocalizedString("Add %@", bundle: .forAppLanguage(), value: "Add %@", comment: "Accessibility label of the button that adds a gear item to the dive in Edit Equipment, naming the item"), gear.name)))
+    }
+
+    private func gearListRow(_ gear: Gear) -> some View {
+        #if os(macOS)
+        GearRow(gear: gear, allowsOneLine: false)
+        #else
+        GearRow(gear: gear)
+        #endif
+    }
+
+    private func applyGearGroup(_ group: GearGroup) {
+        let ids = workingIDs
+        let added = (group.gear ?? []).filter { !ids.contains($0.persistentModelID) }
+        guard !added.isEmpty else { return }
+        withAnimation {
+            workingGear.append(contentsOf: added)
+        }
+    }
+
+    private func save() {
+        // Only the items removed or added here change, applied to the dive's current gear: gear
+        // added to this dive on another device while the sheet was open stays. Nothing is written
+        // when nothing changed (the tab shows gear in category order, so order is not an edit).
+        let edited = liveWorkingGear
+        let editedIDs = Set(edited.map(\.persistentModelID))
+        let removedIDs = originalGearIDs.subtracting(editedIDs)
+        let added = edited.filter { !originalGearIDs.contains($0.persistentModelID) }
+        if !removedIDs.isEmpty || !added.isEmpty {
+            var current = (dive.usedGear ?? []).filter { !removedIDs.contains($0.persistentModelID) }
+            let currentIDs = Set(current.map(\.persistentModelID))
+            current.append(contentsOf: added.filter { !currentIDs.contains($0.persistentModelID) })
+            dive.usedGear = current
+            try? modelContext.save()
+        }
+        // The gear on a dive is not shown in list rows and does not affect order or badges.
+        store.commit(dive, affects: .nothing)
+        dismiss()
+    }
+}
+
 struct EditSiteDetailsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
@@ -800,7 +1213,9 @@ struct EditSiteDetailsView: View {
     private var allDivesByDate: [Dive] { store.dives }
 
     @State private var selectedSite: Dive? = nil
-    @State private var copyGPSCoordinates: Bool = true
+    /// Starts as Settings → Dive Profile says (off, on or the last choice) each time the sheet
+    /// opens; each change is recorded as the last choice.
+    @State private var copyGPSCoordinates: Bool
     @State private var workingCountry: String
     @State private var workingLocation: String
     @State private var workingSiteName: String
@@ -824,6 +1239,21 @@ struct EditSiteDetailsView: View {
     @State private var showEntryCoordinatePicker = false
     @State private var showExitCoordinatePicker = false
     @State private var showSameAsEntryConfirm = false
+    /// Suggestions for the site name, country, location and body of water fields, built once
+    /// when the sheet appears.
+    @State private var fieldSuggestions = DiveFieldSuggestions()
+
+    /// Which GPS section a "Use Current Location" action fills.
+    private enum GPSTarget { case entry, exit }
+    /// The section whose current-location lookup is running (both rows are disabled meanwhile).
+    @State private var locatingTarget: GPSTarget? = nil
+    /// The section waiting for the user to confirm replacing its coordinates with the current
+    /// location; the alert hands it to its Replace button through `presenting:`.
+    @State private var currentLocationReplaceTarget: GPSTarget? = nil
+    @State private var showCurrentLocationReplaceConfirm = false
+    @State private var currentLocationFailure: CurrentLocationFetcher.Failure? = nil
+    /// The running lookup, cancelled when the sheet closes.
+    @State private var currentLocationTask: Task<Void, Never>? = nil
 
     /// The entry coordinate currently in the form fields, or nil if unset/invalid — mirrors
     /// `Dive.hasGPSCoordinates`'s (0, 0)-sentinel handling.
@@ -840,6 +1270,31 @@ struct EditSiteDetailsView: View {
               let lon = parseFlexibleDouble(workingExitLongitude),
               !(lat == 0 && lon == 0) else { return nil }
         return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    /// Whether a coordinate field would save a number outside ±`limit` (90 for latitude,
+    /// 180 for longitude) that differs from the dive's stored `original`. A stored value kept
+    /// as is (e.g. one imported out of range) never blocks an unrelated edit. Compared with the
+    /// stored value rather than the field's pre-fill text, because the +/− button and copying
+    /// a site replace that text (a typed 91 flipped to −91 must still be caught).
+    private func isOutOfRange(_ text: String, prefilled: PrefilledDouble, original: Double?,
+                              limit: Double) -> Bool {
+        guard let value = prefilled.resolve(text) else { return false }
+        return abs(value) > limit && value != original
+    }
+
+    private var entryGPSOutOfRange: Bool {
+        isOutOfRange(workingLatitude, prefilled: prefilledLatitude,
+                     original: dive.siteLatitude, limit: 90)
+            || isOutOfRange(workingLongitude, prefilled: prefilledLongitude,
+                            original: dive.siteLongitude, limit: 180)
+    }
+
+    private var exitGPSOutOfRange: Bool {
+        isOutOfRange(workingExitLatitude, prefilled: prefilledExitLatitude,
+                     original: dive.exitLatitude, limit: 90)
+            || isOutOfRange(workingExitLongitude, prefilled: prefilledExitLongitude,
+                            original: dive.exitLongitude, limit: 180)
     }
 
     private func copyEntryToExit() {
@@ -895,8 +1350,9 @@ struct EditSiteDetailsView: View {
 
     private var uniqueSites: [Dive] {
         var seen = Set<String>()
+        // store.dives may briefly hold a dive deleted on another device; skip it before reading.
         return store.dives.compactMap { d -> Dive? in
-            guard d.id != dive.id,
+            guard !d.isDeleted, d.modelContext != nil, d.id != dive.id,
                   !d.siteName.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
             let key = d.siteName.trimmingCharacters(in: .whitespaces).lowercased()
             guard seen.insert(key).inserted else { return nil }
@@ -905,11 +1361,19 @@ struct EditSiteDetailsView: View {
     }
 
     /// The 3 most recently dived sites (by date, unique by name)
+    /// The chosen site's dive, or nil once it is deleted (on another device, while the sheet is
+    /// open): the selection is kept across redraws, so it is checked before it is read.
+    private var liveSelectedSite: Dive? {
+        guard let site = selectedSite, !site.isDeleted, site.modelContext != nil else { return nil }
+        return site
+    }
+
     private var recentSites: [Dive] {
         var seen = Set<String>()
         var result: [Dive] = []
+        // store.dives may briefly hold a dive deleted on another device; skip it before reading.
         for d in allDivesByDate {
-            guard d.id != dive.id,
+            guard !d.isDeleted, d.modelContext != nil, d.id != dive.id,
                   !d.siteName.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
             let key = d.siteName.trimmingCharacters(in: .whitespaces).lowercased()
             guard seen.insert(key).inserted else { continue }
@@ -919,27 +1383,6 @@ struct EditSiteDetailsView: View {
         return result
     }
 
-    private func uniqueValues(for keyPath: KeyPath<Dive, String>) -> [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            let val = d[keyPath: keyPath].trimmingCharacters(in: .whitespaces)
-            guard !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
-    private func uniqueOptionalValues(for keyPath: KeyPath<Dive, String?>) -> [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            guard let val = d[keyPath: keyPath]?.trimmingCharacters(in: .whitespaces),
-                  !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
 
     private func applySite(from source: Dive) {
         workingCountry     = source.siteCountry ?? ""
@@ -964,6 +1407,7 @@ struct EditSiteDetailsView: View {
 
     init(dive: Dive) {
         self.dive = dive
+        _copyGPSCoordinates = State(initialValue: UserPreferences.shared.initialCopySiteGPSCoordinates)
         _workingCountry     = State(initialValue: dive.siteCountry ?? "")
         _workingLocation    = State(initialValue: dive.location)
         _workingSiteName    = State(initialValue: dive.siteName)
@@ -990,6 +1434,17 @@ struct EditSiteDetailsView: View {
     var body: some View {
         Group {
             iOSBody
+        }
+        // A chosen site whose dive was deleted on another device is cleared once the list
+        // drops it, so the field no longer shows it as selected.
+        .onChange(of: store.dives) {
+            if selectedSite != nil && liveSelectedSite == nil { selectedSite = nil }
+        }
+        .onAppear {
+            fieldSuggestions = DiveFieldSuggestions(
+                dives: store.dives,
+                fields: [\.siteName, \.location],
+                optionalFields: [\.siteCountry, \.siteBodyOfWater])
         }
         .sheet(isPresented: $showEntryCoordinatePicker) {
             CoordinatePickerView(
@@ -1029,6 +1484,71 @@ struct EditSiteDetailsView: View {
         } message: {
             Text("This will replace the existing exit coordinates with the entry coordinates.")
         }
+        .alert("Replace Coordinates", isPresented: $showCurrentLocationReplaceConfirm,
+               presenting: currentLocationReplaceTarget) { target in
+            Button("Replace", role: .destructive) { fetchCurrentLocation(for: target) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This will replace the existing coordinates with your current location.")
+        }
+        .alert("Location Unavailable", isPresented: Binding(
+            get: { currentLocationFailure != nil },
+            set: { if !$0 { currentLocationFailure = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if currentLocationFailure == .denied {
+                Text("BlueDive doesn't have access to your location. Allow it in Privacy & Security → Location Services.")
+            } else {
+                Text("Your current position couldn't be determined accurately enough. Try again outdoors, or pick the position on the map.")
+            }
+        }
+        // Stop a running lookup when the sheet closes, so Location Services do not keep running.
+        .onDisappear { currentLocationTask?.cancel() }
+    }
+
+    /// "Use Current Location": asks before replacing coordinates already in the section.
+    private func useCurrentLocation(for target: GPSTarget) {
+        let existing = target == .entry ? entryCoordinate : exitCoordinate
+        if existing != nil {
+            currentLocationReplaceTarget = target
+            showCurrentLocationReplaceConfirm = true
+        } else {
+            fetchCurrentLocation(for: target)
+        }
+    }
+
+    private func fetchCurrentLocation(for target: GPSTarget) {
+        guard locatingTarget == nil else { return }
+        locatingTarget = target
+        currentLocationTask = Task {
+            defer {
+                locatingTarget = nil
+                currentLocationTask = nil
+            }
+            do {
+                let coordinate = try await CurrentLocationFetcher.fetch()
+                // Replace the whole PrefilledDouble so the exact fix is saved, not its "%.6f" text.
+                switch target {
+                case .entry:
+                    prefilledLatitude  = .coordinate(coordinate.latitude)
+                    prefilledLongitude = .coordinate(coordinate.longitude)
+                    workingLatitude  = prefilledLatitude.text
+                    workingLongitude = prefilledLongitude.text
+                case .exit:
+                    prefilledExitLatitude  = .coordinate(coordinate.latitude)
+                    prefilledExitLongitude = .coordinate(coordinate.longitude)
+                    workingExitLatitude  = prefilledExitLatitude.text
+                    workingExitLongitude = prefilledExitLongitude.text
+                }
+            } catch is CancellationError {
+                // The sheet closed during the lookup: nothing to fill or report.
+            } catch let failure as CurrentLocationFetcher.Failure {
+                currentLocationFailure = failure
+            } catch {
+                currentLocationFailure = .unavailable
+            }
+        }
     }
 
 
@@ -1048,10 +1568,16 @@ struct EditSiteDetailsView: View {
                 }
                 .tint(.green)
                 .fullWidthSwitch()
+                // Recorded whatever the mode, so Settings' Last Used starts from the latest choice.
+                .onChange(of: copyGPSCoordinates) { _, newValue in
+                    UserPreferences.shared.copySiteGPSLastChoice = newValue
+                }
 
                 Button {
-                    if let source = selectedSite {
+                    if let source = liveSelectedSite {
                         applySite(from: source)
+                    } else {
+                        selectedSite = nil
                     }
                 } label: {
                     HStack {
@@ -1059,7 +1585,7 @@ struct EditSiteDetailsView: View {
                         Text("Copy Site Information")
                     }
                 }
-                .disabled(selectedSite == nil)
+                .disabled(liveSelectedSite == nil)
                 .foregroundStyle(.orange)
                 .listRowButton()
             } header: {
@@ -1077,9 +1603,9 @@ struct EditSiteDetailsView: View {
                     copyFromSiteSection
 
                     Section {
-                        AutocompleteMenuTextField(label: "Site Name", text: $workingSiteName, icon: "location", color: .cyan, suggestions: uniqueValues(for: \.siteName))
-                        AutocompleteMenuTextField(label: "Country", text: $workingCountry, icon: "flag", color: .blue, suggestions: uniqueOptionalValues(for: \.siteCountry))
-                        AutocompleteMenuTextField(label: "Location", text: $workingLocation, icon: "mappin.and.ellipse", color: .orange, suggestions: uniqueValues(for: \.location))
+                        AutocompleteMenuTextField(label: "Site Name", text: $workingSiteName, icon: "location", color: .cyan, suggestions: fieldSuggestions[\Dive.siteName])
+                        AutocompleteMenuTextField(label: "Country", text: $workingCountry, icon: "flag", color: .blue, suggestions: fieldSuggestions[\Dive.siteCountry])
+                        AutocompleteMenuTextField(label: "Location", text: $workingLocation, icon: "mappin.and.ellipse", color: .orange, suggestions: fieldSuggestions[\Dive.location])
                         Picker(selection: $workingDifficulty) {
                             Text("—").tag("")
                             ForEach(Self.difficultyScale, id: \.level) { item in
@@ -1118,13 +1644,15 @@ struct EditSiteDetailsView: View {
                             }
                         }
                         .tint(.blue)
-                        AutocompleteMenuTextField(label: "Body of Water", text: $workingBodyOfWater, icon: "water.waves", color: .teal, suggestions: uniqueOptionalValues(for: \.siteBodyOfWater))
+                        AutocompleteMenuTextField(label: "Body of Water", text: $workingBodyOfWater, icon: "water.waves", color: .teal, suggestions: fieldSuggestions[\Dive.siteBodyOfWater])
                     } header: {
                         MenuSectionHeader(title: "Water", icon: "drop", color: .teal)
                     }
 
                     Section {
-                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showEntryCoordinatePicker = true }
+                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse", showsChevron: true) { showEntryCoordinatePicker = true }
+                        gpsActionRow("Use Current Location", icon: "location", enabled: locatingTarget == nil,
+                                     isBusy: locatingTarget == .entry) { useCurrentLocation(for: .entry) }
                         HStack(spacing: 12) {
                             Image(systemName: "arrow.up.arrow.down")
                                 .foregroundStyle(.green)
@@ -1197,12 +1725,19 @@ struct EditSiteDetailsView: View {
                             }
                         }
                     } footer: {
-                        Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
-                            .font(.caption2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            if entryGPSOutOfRange {
+                                coordinateRangeMessage
+                            }
+                            Text("Unit (\(DepthUnit(rawValue: dive.importDistanceUnit)?.symbol ?? dive.importDistanceUnit)) matches the original import format and cannot be changed.")
+                                .font(.caption2)
+                        }
                     }
 
                     Section {
-                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse") { showExitCoordinatePicker = true }
+                        gpsActionRow("Pick on Map", icon: "mappin.and.ellipse", showsChevron: true) { showExitCoordinatePicker = true }
+                        gpsActionRow("Use Current Location", icon: "location", enabled: locatingTarget == nil,
+                                     isBusy: locatingTarget == .exit) { useCurrentLocation(for: .exit) }
                         gpsActionRow("Same as Entry", icon: "arrow.turn.right.up", enabled: entryCoordinate != nil) {
                             if exitCoordinate != nil {
                                 showSameAsEntryConfirm = true
@@ -1263,6 +1798,10 @@ struct EditSiteDetailsView: View {
                                 .borderlessButton()
                             }
                         }
+                    } footer: {
+                        if exitGPSOutOfRange {
+                            coordinateRangeMessage
+                        }
                     }
                 }
                 .groupedFormStyleOnMac()
@@ -1280,9 +1819,18 @@ struct EditSiteDetailsView: View {
                     Button("Save") { save() }
                         .bold()
                         .confirmationActionForeground(.blue)
+                        .disabled(entryGPSOutOfRange || exitGPSOutOfRange)
                 }
             }
         }
+    }
+
+    /// Shown under a GPS section while one of its edited coordinates is out of range;
+    /// Save stays disabled until it is fixed or cleared.
+    private var coordinateRangeMessage: some View {
+        Text("Latitude must be between −90 and 90, and longitude between −180 and 180.")
+            .font(.caption)
+            .foregroundStyle(.red)
     }
 
     /// A "+/−" button that toggles the sign of a GPS coordinate string, keeping the decimal pad usable.
@@ -1313,9 +1861,11 @@ struct EditSiteDetailsView: View {
         #endif
     }
 
-    /// A full-width tappable row for GPS actions (Pick on Map, Same as Entry) inside a Form
-    /// section — a larger, more discoverable target than a small header text link.
-    private func gpsActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    /// A full-width tappable row for GPS actions (Pick on Map, Use Current Location, Same as Entry)
+    /// inside a Form section — a larger, more discoverable target than a small header text link.
+    /// `isBusy` shows a spinner while the action runs. `showsChevron` is only for a row that
+    /// opens another screen (Pick on Map); rows that act in place show none.
+    private func gpsActionRow(_ title: LocalizedStringKey, icon: String, enabled: Bool = true, isBusy: Bool = false, showsChevron: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -1324,18 +1874,23 @@ struct EditSiteDetailsView: View {
                 Text(title)
                     .foregroundStyle(enabled ? .blue : .secondary)
                 Spacer()
-                if enabled {
+                if isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if enabled && showsChevron {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            // The whole row responds, including the space before the chevron (a plain Button
+            // The whole row responds, including the empty space after the title (a plain Button
             // only responds where something is drawn).
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        // VoiceOver announces the running action, which the spinner only shows visually.
+        .accessibilityValue(isBusy ? Text("Locating…") : Text(verbatim: ""))
     }
 
     private func resetEntryGPS() {
@@ -1410,25 +1965,19 @@ struct EditConditionsView: View {
     /// Set when a fetch fails; presents the error alert.
     @State private var weatherFetchFailure: WeatherFetchFailure?
     /// When on, Fetch Weather replaces values already in the fields; when off, it fills only
-    /// empty ones. Per sheet, on by default (like Site Details' "Include GPS Coordinates").
-    @State private var replaceExistingWeather = true
+    /// empty ones. Starts as Settings → Online Services says (off, on or the last choice) each
+    /// time the sheet opens; each change is recorded as the last choice.
+    @State private var replaceExistingWeather: Bool
     /// The running fetch, cancelled when the sheet closes.
     @State private var weatherFetchTask: Task<Void, Never>?
 
 
-    private var visibilitySuggestions: [String] {
-        var seen = Set<String>()
-        return store.dives.compactMap { d -> String? in
-            guard let val = d.visibility?.trimmingCharacters(in: .whitespaces),
-                  !val.isEmpty else { return nil }
-            let key = val.lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return val
-        }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
+    /// Suggestions for the Visibility field, built once when the sheet appears.
+    @State private var fieldSuggestions = DiveFieldSuggestions()
 
     init(dive: Dive) {
         self.dive = dive
+        _replaceExistingWeather = State(initialValue: UserPreferences.shared.initialReplaceExistingWeather)
         _workingWaterTemp  = State(initialValue: dive.waterTemperature)
         let minTemp = PrefilledDouble.decimals(dive.minTemperature, 1)
         let airTemp = PrefilledDouble.decimals(dive.airTemperature, 1)
@@ -1493,8 +2042,12 @@ struct EditConditionsView: View {
                             // Read when the response arrives, so locked like the fields it governs.
                             .disabled(isFetchingWeather)
                             // The last result described the previous mode; let the footer
-                            // explain what the next fetch will do instead.
-                            .onChange(of: replaceExistingWeather) { weatherFetchResult = nil }
+                            // explain what the next fetch will do instead. Recorded whatever the
+                            // mode, so Settings' Last Used starts from the latest choice.
+                            .onChange(of: replaceExistingWeather) { _, newValue in
+                                weatherFetchResult = nil
+                                UserPreferences.shared.replaceWeatherLastChoice = newValue
+                            }
                         } header: {
                             // Same key as the Settings → Online Services switch it depends on.
                             ConditionsSectionHeader(title: "Fetch weather online", icon: "cloud.sun", color: .orange)
@@ -1543,7 +2096,7 @@ struct EditConditionsView: View {
                     }
 
                     Section {
-                        AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye", color: .green, suggestions: visibilitySuggestions)
+                        AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye", color: .green, suggestions: fieldSuggestions[\Dive.visibility])
                     } header: {
                         ConditionsSectionHeader(title: "Visibility", icon: "eye", color: .green)
                     }
@@ -1552,6 +2105,9 @@ struct EditConditionsView: View {
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Edit Conditions")
+            .onAppear {
+                fieldSuggestions = DiveFieldSuggestions(dives: store.dives, optionalFields: [\.visibility])
+            }
             .onDisappear { weatherFetchTask?.cancel() }
             // `presenting:` keeps the failure for the alert's content while it animates out,
             // after the binding has cleared `weatherFetchFailure`.
@@ -2380,7 +2936,8 @@ struct EditGazView: View {
                 ppo2: point.ppo2,
                 sensorPPO2: point.sensorPPO2,
                 events: point.events,
-                currentGas: newCurrentGas
+                currentGas: newCurrentGas,
+                setpoint: point.setpoint
             )
         }
     }

@@ -11,8 +11,14 @@ import Testing
 @MainActor
 struct PhotoReimportImportTests {
 
+    /// The tester's home folder on the Mac: the simulator's host home when the tests run in a
+    /// simulator (its own home is the app's container), else the user's home. No user name in
+    /// the source, and no sample file in the repository.
+    nonisolated static let testerHome = URL(fileURLWithPath:
+        ProcessInfo.processInfo.environment["SIMULATOR_HOST_HOME"] ?? NSHomeDirectory())
+
     /// Nonisolated: read by the `.enabled(if:)` condition, outside the main actor.
-    nonisolated static let sample = URL(fileURLWithPath: "/Users/stevehoule/Downloads/DiveBlueImages/PANA0202.jpg")
+    nonisolated static let sample = testerHome.appendingPathComponent("Downloads/DiveBlueImages/PANA0202.jpg")
 
     /// A copy of the sample in a folder of its own (same file name), with the edit and export
     /// dates set to `edited` and an added keyword when given.
@@ -49,7 +55,7 @@ struct PhotoReimportImportTests {
         // The sample was taken 2026-08-22 11:38:26 (wall clock): a dive around it.
         let start = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let dive = Dive(timestamp: start)
-        dive.duration = 60
+        dive.setDuration(minutes: 60)
         context.insert(dive)
         try context.save()
         let diveID = dive.persistentModelID
@@ -100,7 +106,7 @@ struct PhotoReimportImportTests {
                                                                               cloudKitDatabase: .none))
         let start = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let dive = Dive(timestamp: start)
-        dive.duration = 60
+        dive.setDuration(minutes: 60)
         container.mainContext.insert(dive)
         try container.mainContext.save()
         let diveID = dive.persistentModelID
@@ -126,7 +132,7 @@ struct PhotoReimportImportTests {
                                                                               cloudKitDatabase: .none))
         let start = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let dive = Dive(timestamp: start)
-        dive.duration = 60
+        dive.setDuration(minutes: 60)
         container.mainContext.insert(dive)
         try container.mainContext.save()
         let diveID = dive.persistentModelID
@@ -147,7 +153,7 @@ struct PhotoReimportImportTests {
 
     /// Re-imported with another camera-clock correction: the photo's time now falls on another
     /// dive. The question defaults to Skip (nothing moves); Update moves the stored photo there
-    /// with the new correction, keeping its record (Espen's case).
+    /// with the new correction, keeping its record (a reported case).
     @Test(.enabled(if: FileManager.default.fileExists(atPath: sample.path)))
     func updateMovesThePhotoWithTheNewCorrection() async throws {
         let container = try ModelContainer(for: Schema(BlueDiveApp.appModelTypes),
@@ -158,9 +164,9 @@ struct PhotoReimportImportTests {
         let startA = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let startB = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 12, minute: 25, second: 0)))
         let diveA = Dive(timestamp: startA)
-        diveA.duration = 60
+        diveA.setDuration(minutes: 60)
         let diveB = Dive(timestamp: startB)
-        diveB.duration = 60
+        diveB.setDuration(minutes: 60)
         container.mainContext.insert(diveA)
         container.mainContext.insert(diveB)
         try container.mainContext.save()
@@ -196,7 +202,7 @@ struct PhotoReimportImportTests {
                                                                               cloudKitDatabase: .none))
         let start = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let dive = Dive(timestamp: start)
-        dive.duration = 60
+        dive.setDuration(minutes: 60)
         container.mainContext.insert(dive)
         try container.mainContext.save()
         let diveID = dive.persistentModelID
@@ -228,9 +234,9 @@ struct PhotoReimportImportTests {
         let startA = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let startB = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 12, minute: 25, second: 0)))
         let diveA = Dive(timestamp: startA)
-        diveA.duration = 60
+        diveA.setDuration(minutes: 60)
         let diveB = Dive(timestamp: startB)
-        diveB.duration = 60
+        diveB.setDuration(minutes: 60)
         container.mainContext.insert(diveA)
         container.mainContext.insert(diveB)
         try container.mainContext.save()
@@ -265,7 +271,7 @@ struct PhotoReimportImportTests {
                                                                               cloudKitDatabase: .none))
         let start = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let dive = Dive(timestamp: start)
-        dive.duration = 60
+        dive.setDuration(minutes: 60)
         container.mainContext.insert(dive)
         try container.mainContext.save()
         let diveID = dive.persistentModelID
@@ -290,7 +296,7 @@ struct PhotoReimportImportTests {
                                                                               cloudKitDatabase: .none))
         let start = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let dive = Dive(timestamp: start)
-        dive.duration = 60
+        dive.setDuration(minutes: 60)
         container.mainContext.insert(dive)
         try container.mainContext.save()
         let diveID = dive.persistentModelID
@@ -326,9 +332,9 @@ struct PhotoReimportImportTests {
         let startA = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let startB = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 12, minute: 25, second: 0)))
         let diveA = Dive(timestamp: startA)
-        diveA.duration = 60
+        diveA.setDuration(minutes: 60)
         let diveB = Dive(timestamp: startB)
-        diveB.duration = 60
+        diveB.setDuration(minutes: 60)
         container.mainContext.insert(diveA)
         container.mainContext.insert(diveB)
         try container.mainContext.save()
@@ -356,7 +362,7 @@ struct PhotoReimportImportTests {
                                                                               cloudKitDatabase: .none))
         let start = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 8, day: 22, hour: 11, minute: 20, second: 0)))
         let dive = Dive(timestamp: start)
-        dive.duration = 60
+        dive.setDuration(minutes: 60)
         container.mainContext.insert(dive)
         try container.mainContext.save()
         let diveID = dive.persistentModelID
@@ -379,8 +385,8 @@ struct PhotoReimportImportTests {
     }
 
     /// The manual test set (BlueDive-ReimportTest/README.txt), checked against the README's
-    /// expected results with a copy of Espen's dive #580.
-    nonisolated static let testSet = URL(fileURLWithPath: "/Users/stevehoule/Downloads/BlueDive-ReimportTest")
+    /// expected results with a copy of one of a tester's dives.
+    nonisolated static let testSet = testerHome.appendingPathComponent("Downloads/BlueDive-ReimportTest")
 
     @Test(.enabled(if: FileManager.default.fileExists(atPath: testSet.path)))
     func manualTestSetGivesTheExpectedResults() async throws {
@@ -390,7 +396,7 @@ struct PhotoReimportImportTests {
         let context = container.mainContext
         let start = try #require(WallClock.storedDate(from: DateComponents(year: 2026, month: 3, day: 1, hour: 9, minute: 4, second: 0)))
         let dive = Dive(timestamp: start)
-        dive.duration = 70
+        dive.setDuration(minutes: 70)
         context.insert(dive)
         try context.save()
         func run(_ folder: String) async throws -> PhotoImporter.Result {

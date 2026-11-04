@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "Cressi_Neon.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

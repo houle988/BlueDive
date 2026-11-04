@@ -41,6 +41,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private var currentMaxDepth: Double = 0.0
     private var currentAverageDepth: Double?
     private var currentDuration: Int = 0
+    private var currentDurationSeconds: Int?   // <durationSeconds>: the dive computer's time
+    private var currentSurfacePressure: Double? // <surfacePressure>: bar, as recorded
     private var currentInterval: Int?
     private var currentCNS: Double?
     private var currentDecoModel: String?
@@ -543,6 +545,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         let ceilingTime = attributes["ceilingTime"].flatMap(Double.init)
         let cns         = attributes["cns"].flatMap(Double.init)
         let currentGas  = attributes["currentGas"].flatMap(Int.init)
+        // Stored through DiveProfilePoint's rule (0 or non-finite = no setpoint).
+        let setpoint    = attributes["setpoint"].flatMap(Double.init)
         let events: [DiveProfileEvent]
         if let eventsStr = attributes["events"], !eventsStr.isEmpty {
             events = eventsStr.split(separator: ",").compactMap { parseEvent(String($0)) }
@@ -550,7 +554,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             events = []
         }
 
-        // When per-tank pressures exist, derive primary pressure from tank 0 / lowest index
+        // When per-tank pressures exist, derive primary pressure from tank 0 / lowest index.
+        // The exporter writes tankPressure only when tankPressures is absent; files exported
+        // earlier carry both, and tankPressure there is the same tank 0 / lowest-index value.
         let effectivePressure: Double? = tankPressures.flatMap { dict in
             dict[0] ?? dict.min(by: { $0.key < $1.key })?.value
         } ?? pressure
@@ -568,7 +574,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             ceilingTime: ceilingTime,
             cns: cns,
             events: events,
-            currentGas: currentGas
+            currentGas: currentGas,
+            setpoint: setpoint
         ))
     }
 
@@ -644,6 +651,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         case "maxDepth":         currentMaxDepth = Double(text) ?? 0.0
         case "averageDepth":     currentAverageDepth = Double(text)
         case "duration":         currentDuration = parseSeconds(text) ?? 0
+        case "durationSeconds":  currentDurationSeconds = parseSeconds(text)
+        case "surfacePressure":  currentSurfacePressure = Dive.validatedSurfacePressure(Double(text))
         case "surfaceInterval":  currentSurfaceInterval = parseSeconds(text) ?? 0
         case "cns":              currentCNS = Double(text)
         case "decoModel":        currentDecoModel = text.nilIfEmpty
@@ -699,6 +708,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
                 maxDepth: currentMaxDepth,
                 averageDepth: currentAverageDepth,
                 duration: currentDuration,
+                exportedDurationSeconds: currentDurationSeconds,
+                surfacePressure: currentSurfacePressure,
                 interval: currentInterval,
                 cns: currentCNS,
                 decoModel: currentDecoModel,
@@ -754,6 +765,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         currentMaxDepth = 0.0
         currentAverageDepth = nil
         currentDuration = 0
+        currentDurationSeconds = nil
+        currentSurfacePressure = nil
         currentInterval = nil
         currentCNS = nil
         currentDecoModel = nil
@@ -878,7 +891,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private func parseSeconds(_ text: String) -> Int? {
         guard !text.isEmpty else { return nil }
         if let intValue = Int(text) { return intValue }
-        if let doubleValue = Double(text) { return Int(doubleValue) }
+        // Truncated as before; Int(exactly:) returns nil instead of trapping on "1e30" or "inf".
+        if let doubleValue = Double(text) { return Int(exactly: doubleValue.rounded(.towardZero)) }
         return nil
     }
 }

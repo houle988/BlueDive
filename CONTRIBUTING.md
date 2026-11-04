@@ -74,7 +74,7 @@ Most features (dive log, gear, import/export, Bluetooth sync) work without iClou
 ## Areas where help is especially welcome
 
 - **Dive computer support** — additional device support via libdivecomputer
-- **Localization** — translations beyond English (Canada), French (Canada), German, and Dutch
+- **Localization** — translations beyond English (Canada), French (Canada), German, Dutch, Norwegian Bokmål, and Spanish (one neutral Spanish for Spain and Latin America — not regional variants); to add a language, follow `ADDING_A_LANGUAGE.md`
 - **UI/UX** — SwiftUI improvements, accessibility
 - **Testing** — edge cases, device-specific bugs, import/export workflows
 
@@ -83,7 +83,7 @@ Most features (dive log, gear, import/export, Bluetooth sync) work without iClou
 See [`CLAUDE.md`](CLAUDE.md) in the repository root for the full conventions. Key points:
 
 - **SwiftUI / async** — use `async`/`await`; no Combine
-- **Localization** — in SwiftUI views, use `LocalizedStringKey` (`Text("My Key")`); for strings built in code, use `NSLocalizedString(_:bundle:value:comment:)` with `Bundle.forAppLanguage()` (not `String(localized:)`). Every new key needs `fr-CA`, `de`, and `nl` translations in the same PR. Never edit `Localizable.xcstrings` by hand — build so Xcode extracts the keys, then use `Scripts/xcstrings.py` (`missing`, `set-json`, `check`)
+- **Localization** — in SwiftUI views, use `LocalizedStringKey` (`Text("My Key")`); for strings built in code, use `NSLocalizedString(_:bundle:value:comment:)` with `Bundle.forAppLanguage()` (not `String(localized:)`). Every new key needs `fr-CA`, `de`, `nl`, `nb`, and `es` translations in the same PR; `es` is neutral Spanish ("tú", no regional words; see CLAUDE.md). Never edit `Localizable.xcstrings` by hand — build so Xcode extracts the keys, then use `Scripts/xcstrings.py` (`missing`, `set-json`, `check`)
 - **Number formatting** — use `localizedString(decimals:)` for displayed numbers and `editableString(decimals:)` to pre-fill text fields; never `String(format:)` or string interpolation for displayed numbers
 - **TextFields** — edit/add views require a clear button overlay and trimmed input; Double fields must be string-backed and accept both `.` and `,` as decimal separators
 - **Unit display** — always go through the `Dive` display helpers; never display raw stored values directly

@@ -5,17 +5,9 @@ import SwiftData
 import PhotosUI
 import UniformTypeIdentifiers
 
-// MARK: - Overview Tab (chart + twin tank checkbox + stats + info), Marine Life and Photos Tabs
+// MARK: - Overview Tab (chart + twin tank checkbox + stats + info), Equipment, Marine Life, Photos and Notes Tabs
 
 extension DiveDetailView {
-
-    private var formattedTimestamp: String {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: dive.timestamp)
-    }
 
     private var minAbbreviation: String {
         NSLocalizedString("min", bundle: Bundle.forAppLanguage(), comment: "Abbreviation for minutes on chart time axis")
@@ -26,8 +18,14 @@ extension DiveDetailView {
             depthProfileSection
             statsGrid
             diveInfoSection
-            equipmentSection
-            notesSection
+            if !isEquipmentMovedBannerDismissed {
+                equipmentMovedBanner
+                    .transition(.opacity)
+            }
+            if !isNotesMovedBannerDismissed {
+                notesMovedBanner
+                    .transition(.opacity)
+            }
         }
         .task(id: dive.id) {
             profileSamplesLoaded = true
@@ -91,22 +89,8 @@ extension DiveDetailView {
     }
 
     var depthProfileSection: some View {
+        // The dive's number, site and date are in the header strip under the tab bar.
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Text(verbatim: "#\(dive.diveNumber ?? diveNumber)")
-                    .font(.system(.caption, design: .monospaced))
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.cyan.opacity(0.2))
-                    .foregroundStyle(Color.readableCyan)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-
-                Text(dive.siteName)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-            }
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -131,9 +115,6 @@ extension DiveDetailView {
                         }
                     }
                     locationText
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(formattedTimestamp)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -964,16 +945,6 @@ extension DiveDetailView {
     }
 
     @MainActor
-    func removeGearFromDive(_ gear: Gear) {
-        dive.usedGear?.removeAll { $0.id == gear.id }
-        try? modelContext.save()
-        // Exit edit mode if no gear left
-        if (dive.usedGear ?? []).isEmpty {
-            isEditingEquipment = false
-        }
-    }
-
-    @MainActor
     func removeFishFromDive(_ fish: MarineSight) {
         modelContext.delete(fish)
         try? modelContext.save()
@@ -984,82 +955,19 @@ extension DiveDetailView {
         }
     }
 
-    @MainActor
-    func applyGearGroup(_ group: GearGroup) {
-        guard let groupGear = group.gear, !groupGear.isEmpty else { return }
-        if dive.usedGear == nil { dive.usedGear = [] }
-        let existingIds = Set((dive.usedGear ?? []).map { $0.id })
-        var addedCount = 0
-        for gear in groupGear {
-            if !existingIds.contains(gear.id) {
-                dive.usedGear!.append(gear)
-                addedCount += 1
-            }
-        }
-        if addedCount > 0 {
-            try? modelContext.save()
-        }
-    }
-
+    /// The Equipment tab: one card in the dive page's style (as Site Details, Conditions and
+    /// Gas), not a copy of the main Equipment list — the gear used on this dive, by collapsible
+    /// category in category order, as compact rows (one column on iPhone, more as the window
+    /// widens), and the weight of that gear. View only: gear is added and removed in the Edit
+    /// Equipment sheet (the Edit button); a row opens the gear's service sheet.
     var equipmentSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Equipment Used", systemImage: "wrench.and.screwdriver")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                Spacer()
-                if !(dive.usedGear ?? []).isEmpty {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isEditingEquipment.toggle()
-                        }
-                    } label: {
-                        // Three-control cluster (Edit / Gear group / Add) at 8 pt spacing:
-                        // each control grows only 4 pt (half a gap) toward its neighbour, so
-                        // the three targets tile without overlapping. 40 × 44 pt.
-                        TapTargetInset(top: 12, leading: 12, bottom: 12, trailing: 4) {
-                            Image(systemName: "minus.circle")
-                                .font(.title3)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text("Edit Equipment"))
-                }
-                if !gearGroups.isEmpty {
-                    Menu {
-                        ForEach(gearGroups) { group in
-                            Button {
-                                applyGearGroup(group)
-                            } label: {
-                                Label("\(group.name) (\(group.gearCount))", systemImage: "tray.2")
-                            }
-                        }
-                    } label: {
-                        // Middle control of the cluster: neighbours on both sides, so 4 pt
-                        // (half the 8 pt gap) each way. 36 × 47 pt.
-                        TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 4) {
-                            Image(systemName: "tray.2")
-                                .font(.title3)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .accessibilityLabel(Text("Apply Gear Group"))
-                }
-                Button(action: { showAddGear = true }) {
-                    // Last control of the cluster: 4 pt toward its neighbour, 12 pt
-                    // trailing into the card's 16 pt padding. 40 × 44 pt.
-                    TapTargetInset(top: 12, leading: 4, bottom: 12, trailing: 12) {
-                        Image(systemName: "plus.circle")
-                            .font(.title3)
-                            .foregroundStyle(.orange)
-                    }
-                }
-                .accessibilityLabel(Text("Add Equipment"))
-                .borderlessButton()
-            }
+        let gear = dive.usedGear ?? []
+        return VStack(alignment: .leading, spacing: 12) {
+            Label("Equipment Used", systemImage: "wrench.and.screwdriver")
+                .font(.headline)
+                .foregroundStyle(DiveTab.equipment.color)
 
-            if (dive.usedGear ?? []).isEmpty {
+            if gear.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "tray")
                         .font(.title2)
@@ -1073,76 +981,97 @@ extension DiveDetailView {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
             } else {
-                // Liste des équipements
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
-                        ForEach(dive.usedGear ?? []) { gear in
-                            ZStack(alignment: .topTrailing) {
-                                GearChipView(gear: gear)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        if !isEditingEquipment {
-                                            selectedGearForDetail = gear
-                                        }
-                                    }
-                                    #if os(iOS)
-                                    .onLongPressGesture {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            isEditingEquipment.toggle()
-                                        }
-                                    }
-                                    #endif
-                                    .accessibilityHint(Text("Opens gear details"))
-                                    .help("Show gear details")
-                                if isEditingEquipment {
-                                    Button {
-                                        gearToDelete = gear
-                                        showDeleteGearAlert = true
-                                    } label: {
-                                        // Same geometry as the photo badge: 6 pt trailing (half
-                                        // of the 12 pt gap to the next chip), inward over the
-                                        // chip, and nothing upward. 40 × 34 pt.
-                                        TapTargetInset(top: 0, leading: 16, bottom: 16, trailing: 6) {
-                                            Image(systemName: "minus.circle.fill")
-                                                .font(.system(size: 18))
-                                                .symbolRenderingMode(.palette)
-                                                .foregroundStyle(.white, .red)
-                                        }
-                                    }
-                                    #if os(macOS)
-                                    .buttonStyle(.plain)
-                                    #endif
-                                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), gear.name)))
-                                    .offset(x: 6, y: -6)
-                                    .transition(.scale.combined(with: .opacity))
-                                }
-                            }
-                        }
+                if let weight = gearWeightText(gear) {
+                    HStack {
+                        Label("Gear Weight", systemImage: "scalemass")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(verbatim: weight)
+                            .fontWeight(.semibold)
                     }
-                    .padding(.vertical, 4)
+                    .font(.subheadline)
+                    .accessibilityElement(children: .combine)
+                }
+
+                ForEach(gearCategorySections(gear, locale: locale), id: \.key) { section in
+                    gearCategory(key: section.key, items: section.items)
                 }
             }
         }
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
-        #if os(iOS)
-        .onTapGesture {
-            if isEditingEquipment {
+    }
+
+    /// One category of the Equipment card: its subheading, with a chevron that collapses it,
+    /// above its rows.
+    private func gearCategory(key: String, items: [Gear]) -> some View {
+        let isExpanded = !collapsedGearSections.contains(key)
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    isEditingEquipment = false
+                    if isExpanded {
+                        collapsedGearSections.insert(key)
+                    } else {
+                        collapsedGearSections.remove(key)
+                    }
                 }
+            } label: {
+                HStack {
+                    GearCategorySectionTitle(key: key, showsIcon: true)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
+                // The whole subheading toggles, not only its text.
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
+
+            if isExpanded {
+                LazyVGrid(columns: gearRowColumns, alignment: .leading, spacing: 8) {
+                    // By record, not by `Gear.id`: two gear items can share an id.
+                    ForEach(items, id: \.persistentModelID) { item in
+                        Button {
+                            selectedGearForDetail = item
+                        } label: {
+                            DiveGearRow(gear: item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .transition(.opacity)
             }
         }
-        #endif
-        .alert("Remove Equipment", isPresented: $showDeleteGearAlert, presenting: gearToDelete) { gear in
-            Button("Remove", role: .destructive) {
-                removeGearFromDive(gear)
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: { gear in
-            Text("Remove \(gear.name) from this dive?")
+    }
+
+    /// Columns of the Equipment card's rows: at least 350 pt each, so one on iPhone and more as
+    /// the window widens, with no maximum (as `photoGridColumns`), from the width the dive
+    /// screen tracks (less the card's 16 pt padding inside and out).
+    private var gearRowColumns: [GridItem] {
+        let gridWidth = max(0, viewWidth - 64)
+        let count = max(1, Int((gridWidth + 8) / 358))
+        return Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: count)
+    }
+
+    /// The summed weight of the gear on the dive, each item converted from its own stored unit to
+    /// the display unit (a sum of stored values, nothing estimated); nil when none has a weight.
+    private func gearWeightText(_ gear: [Gear]) -> String? {
+        let unit = prefs.weightUnit
+        let weighted = gear.filter { $0.weightContribution > 0 }
+        guard !weighted.isEmpty else { return nil }
+        let total = weighted.reduce(0.0) { sum, item in
+            sum + unit.convert(item.weightContribution,
+                               from: WeightUnit.from(importFormat: item.weightContributionUnit ?? unit.symbol))
         }
+        return unit.formatted(total, from: unit)
     }
 
     var marineSightingsSection: some View {
@@ -1183,7 +1112,7 @@ extension DiveDetailView {
             }
 
             if (dive.seenFish ?? []).isEmpty {
-                Text("No fish saved.")
+                Text("No marine life saved.")
                     .font(.caption)
                     .foregroundStyle(.gray)
             } else {
@@ -1344,12 +1273,25 @@ extension DiveDetailView {
                 color: .cyan
             )
 
+            // The dive time (computer or file): with its seconds when known, else the minutes
+            // shown in the dive list. Never the profile's length (Profile Time, below).
             DetailCard(
                 title: "DURATION",
                 value: dive.formattedDuration,
                 icon: "clock",
                 color: .green
             )
+
+            // Length of the recorded profile, which can run past the dive time when the
+            // computer keeps logging at the surface.
+            if dive.hasProfileTime {
+                DetailCard(
+                    title: "PROFILE TIME",
+                    value: dive.formattedProfileTime,
+                    icon: "clock.arrow.circlepath",
+                    color: .green
+                )
+            }
 
             DetailCard(
                 title: "REPETITIVE",
@@ -1836,15 +1778,101 @@ extension DiveDetailView {
         }
     }
 
-    var notesSection: some View {
+    /// Where the Equipment card used to be: tells that equipment now has its own tab, until dismissed.
+    var equipmentMovedBanner: some View {
+        movedToTabBanner(
+            tab: .equipment,
+            title: "Equipment Has Moved",
+            message: "Equipment now has its own tab, after Gas.",
+            hint: Text("Opens the Equipment tab.", comment: "VoiceOver hint of the Overview banner saying equipment moved to its own tab"),
+            dismissLabel: Text("Dismiss Equipment Notice", comment: "Accessibility label of the X button that permanently hides the Overview banner saying equipment moved to its own tab"),
+            isDismissed: $isEquipmentMovedBannerDismissed
+        )
+    }
+
+    /// Where the Notes card used to be: tells that notes now have their own tab, until dismissed.
+    var notesMovedBanner: some View {
+        movedToTabBanner(
+            tab: .notes,
+            title: "Notes Have Moved",
+            message: "Notes now have their own tab, after Marine Life.",
+            hint: Text("Opens the Notes tab.", comment: "VoiceOver hint of the Overview banner saying notes moved to their own tab"),
+            dismissLabel: Text("Dismiss Notes Notice", comment: "Accessibility label of the X button that permanently hides the Overview banner saying notes moved to their own tab"),
+            isDismissed: $isNotesMovedBannerDismissed
+        )
+    }
+
+    /// A banner in the tab's colour telling that a card moved from the Overview to `tab`.
+    /// Tapping it opens that tab at its top; its X hides it for good (`isDismissed` is stored).
+    private func movedToTabBanner(tab: DiveTab, title: LocalizedStringKey, message: LocalizedStringKey,
+                                  hint: Text, dismissLabel: Text, isDismissed: Binding<Bool>) -> some View {
+        HStack {
+            // The whole banner except its X opens the tab.
+            Button {
+                scrollsToTopOnTabChange = true
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = tab
+                }
+            } label: {
+                HStack {
+                    Image(systemName: tab.icon)
+                        .foregroundStyle(tab.color)
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(hint)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isDismissed.wrappedValue = true
+                }
+            } label: {
+                // A 44 pt tap target (at least: it grows with Dynamic Type). The negative padding
+                // keeps it from making the banner taller and keeps the glyph near the trailing edge.
+                Image(systemName: "xmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .borderlessButton()
+            .padding(.vertical, -6)
+            .padding(.trailing, -10)
+            .accessibilityLabel(dismissLabel)
+        }
+        .padding()
+        .background(tab.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .padding(.horizontal)
+    }
+
+    /// The Notes tab: the dive's notes in full, as plain text or Markdown, selectable for copying.
+    var notesTabContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Notes", systemImage: "note.text")
                 .font(.headline)
-                .foregroundStyle(.gray)
-            Text(dive.notes.isEmpty ? "—" : dive.notes)
-                .font(.body)
-                .foregroundStyle(dive.notes.isEmpty ? Color.secondary : Color.primary)
+                .foregroundStyle(DiveTab.notes.color)
+            if prefs.formatNotesAsMarkdown && !dive.notes.isEmpty {
+                MarkdownText(dive.notes)
+            } else {
+                Text(dive.notes.isEmpty ? "—" : dive.notes)
+                    .font(.body)
+                    .foregroundStyle(dive.notes.isEmpty ? Color.secondary : Color.primary)
+            }
         }
+        .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .detailCardBackground()
@@ -1960,13 +1988,13 @@ struct PhotoThumbnailTile: View {
         }
         .task(id: imageKey) {
             guard let data = load() else { image = nil; return }
-            let decoded = await Task.detached(priority: .userInitiated) { () -> PlatformImage? in
+            // Nil: the tile scrolled away while waiting for its turn (nothing decoded).
+            guard let decoded = await PhotoMetadataReader.onImageQueueUnlessCancelled({ () -> PlatformImage? in
                 guard let source = CGImageSourceCreateWithData(data as CFData, nil),
                       let thumbnail = PhotoMetadataReader.thumbnailJPEG(of: source, maxPixelSize: 450, quality: 0.85)
                 else { return PlatformImage(data: data) }
                 return PlatformImage(data: thumbnail)
-            }.value
-            guard !Task.isCancelled else { return }
+            }), !Task.isCancelled else { return }
             image = decoded
         }
     }

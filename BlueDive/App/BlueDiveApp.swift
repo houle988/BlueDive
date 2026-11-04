@@ -154,6 +154,13 @@ struct BlueDiveApp: App {
         #if os(iOS)
         BackgroundSyncTask.register()
         #endif
+        // Photo copies previous launches left in tmp for Quick Look (this launch's folder is
+        // kept, so a photo opened before the sweep runs keeps its copy), and the folders of a
+        // backup the app was stopped during.
+        Task.detached(priority: .utility) {
+            QuickLookCopies.removeLeftovers()
+            DatabaseBackup.removeLeftoverFolders()
+        }
         #if DEBUG
         // listPendingNotifications()
         // scheduleDebugNotification()

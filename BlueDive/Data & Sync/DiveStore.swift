@@ -133,6 +133,9 @@ final class DiveStore {
     var filterDiveType: String? = nil
     var filterDiveTypeNegate: Bool = false
     var filterTag: String? = nil
+    var filterTagNegate: Bool = false
+    var filterBuddy: String? = nil
+    var filterBuddyNegate: Bool = false
     var filterMarineLife: [String] = []
     var filterMarineLifeMode: FilterMarineLifeMode = .any
     var sortOrder: DiveSortOrder = .persisted {
@@ -164,6 +167,7 @@ final class DiveStore {
     private(set) var cachedAvailableCountries: [String] = []
     private(set) var cachedAvailableDiveTypes: [String] = []
     private(set) var cachedAvailableTags: [String] = []
+    private(set) var cachedAvailableBuddies: [String] = []
     private(set) var cachedAvailableMarineLife: [String] = []
     private var cachedInsurances: [DivingInsurance] = []
     private var cachedGear: [Gear] = []
@@ -316,6 +320,7 @@ final class DiveStore {
         if filterCountry != nil                     { count += 1 }
         if filterDiveType != nil                    { count += 1 }
         if filterTag != nil                         { count += 1 }
+        if filterBuddy != nil                       { count += 1 }
         if !filterMarineLife.isEmpty                { count += 1 }
         return count
     }
@@ -337,6 +342,9 @@ final class DiveStore {
         filterDiveType       = nil
         filterDiveTypeNegate = false
         filterTag            = nil
+        filterTagNegate      = false
+        filterBuddy          = nil
+        filterBuddyNegate    = false
         filterMarineLife     = []
         filterMarineLifeMode = .any
     }
@@ -646,6 +654,7 @@ final class DiveStore {
             self.cachedAvailableCountries = result.availableCountries
             self.cachedAvailableDiveTypes = result.availableDiveTypes
             self.cachedAvailableTags = result.availableTags
+            self.cachedAvailableBuddies = result.availableBuddies
         }
     }
 
@@ -700,6 +709,7 @@ final class DiveStore {
         !searchText.isEmpty
             || filterCountry  != nil || filterGasType  != nil
             || filterDiveType != nil || filterTag       != nil
+            || filterBuddy    != nil
             || filterMinDepth  > 0  || filterMaxDepth   > 0
             || filterMinRating > 0  || !filterMarineLife.isEmpty
     }
@@ -746,6 +756,7 @@ final class DiveStore {
         var countrySet    = Set<String>()
         var diveTypeSet   = Set<String>()
         var tagSet        = Set<String>()
+        var buddySet      = Set<String>()
         var marineLifeSet = Set<String>()
         for summary in cachedSummaries {
             yearSet.insert(summary.year)
@@ -753,6 +764,7 @@ final class DiveStore {
             if let c = summary.siteCountry, !c.isEmpty { countrySet.insert(c) }
             summary.diveTypes.forEach     { diveTypeSet.insert($0) }
             summary.tags.forEach          { tagSet.insert($0) }
+            DiverFilter.buddyNames(summary.buddies).forEach { buddySet.insert($0) }
             summary.seenFishNames.forEach { marineLifeSet.insert($0) }
         }
         cachedAvailableYears       = yearSet.sorted(by: >)
@@ -760,6 +772,7 @@ final class DiveStore {
         cachedAvailableCountries   = countrySet.sorted()
         cachedAvailableDiveTypes   = diveTypeSet.sorted()
         cachedAvailableTags        = tagSet.sorted()
+        cachedAvailableBuddies     = buddySet.sorted()
         cachedAvailableMarineLife  = marineLifeSet.sorted()
     }
 
@@ -1495,7 +1508,7 @@ final class DiveStore {
             \Dive.diveNumber, \Dive.timestamp, \Dive.diverName, \Dive.siteName, \Dive.location,
             \Dive.siteCountry, \Dive.siteLatitude, \Dive.siteLongitude, \Dive.exitLatitude,
             \Dive.exitLongitude, \Dive.maxDepth, \Dive.importDistanceUnit, \Dive.duration,
-            \Dive.surfaceInterval, \Dive.rating, \Dive.buddies, \Dive.diveTypes, \Dive.tags,
+            \Dive.durationSeconds, \Dive.surfaceInterval, \Dive.rating, \Dive.buddies, \Dive.diveTypes, \Dive.tags,
             Dive.tanksDataKeyPath
         ]
         // A photo record added or removed on another device comes with a `photos` update on its dive.
@@ -1772,7 +1785,7 @@ final class DiveStore {
     // edit (notesMayHaveChanged), a change in dive membership, a remote notes edit, the setting.
     // A trigger never restarts a pending pass (it reads anyway), so saves cannot postpone what
     // the user typed; a read once started always completes, one at a time (a trigger or pass
-    // arriving meanwhile asks for one more). The Dive Information sheet saves when the notes
+    // arriving meanwhile asks for one more). The Edit Notes sheet saves when the notes
     // changed (setting on), so its edit reaches the store at once. A single-consumer reader:
     // nothing to share by key, so it does not go through a shared-read helper like sightingValues.
 
@@ -1787,11 +1800,22 @@ final class DiveStore {
     }
 
     /// The listed dives that may be read: not deleted (here or merged from another device) and
-    /// not pending a remote deletion. For re-filters run outside the @Query delivery.
-    private var liveDives: [Dive] {
+    /// not pending a remote deletion. For re-filters run outside the @Query delivery, and for
+    /// view bodies that read dive attributes over the whole list (it reads `dives`, so a view
+    /// using it is still refreshed when the list changes).
+    var liveDives: [Dive] {
         dives.filter {
             !$0.isDeleted && $0.modelContext != nil && !pendingRemoteDeletedPIDs.contains($0.persistentModelID)
         }
+    }
+
+    /// The listed dive `id` when it may be read, by the same rule as `liveDives` (not deleted,
+    /// not pending a remote deletion), else nil. For code that reads a few listed dives'
+    /// attributes by identifier (e.g. the GF tissue model's earlier dives).
+    func liveDive(id: UUID) -> Dive? {
+        guard let dive = diveByID[id], !dive.isDeleted, dive.modelContext != nil,
+              !pendingRemoteDeletedPIDs.contains(dive.persistentModelID) else { return nil }
+        return dive
     }
 
     /// Schedules the debounced search pass, which reads the notes matches again, while a notes
@@ -1812,7 +1836,7 @@ final class DiveStore {
     }
 
     /// The store may hold new notes: dives inserted by a save (DiveDataFeeder, while the
-    /// setting is on) or a notes edit just saved (the Dive Information sheet).
+    /// setting is on) or a notes edit just saved (the Edit Notes sheet).
     func notesMayHaveChanged() {
         scheduleNotesSearch()
     }
@@ -1973,7 +1997,22 @@ final class DiveStore {
                     let diveTags = dive.tags?
                         .split(separator: ",")
                         .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if !diveTags.contains(tag) { return false }
+                    if filterTagNegate {
+                        if diveTags.contains(tag) { return false }
+                    } else {
+                        if !diveTags.contains(tag) { return false }
+                    }
+                }
+            }
+            // Buddy filter ("" = dives with no buddy recorded)
+            if let buddy = filterBuddy {
+                let names = DiverFilter.buddyNames(dive.buddies)
+                if buddy.isEmpty {
+                    if !names.isEmpty { return false }
+                } else if filterBuddyNegate {
+                    if names.contains(buddy) { return false }
+                } else {
+                    if !names.contains(buddy) { return false }
                 }
             }
             // Marine life filter
@@ -2071,6 +2110,7 @@ final class DiveStore {
         let availableCountries: [String]
         let availableDiveTypes: [String]
         let availableTags: [String]
+        let availableBuddies: [String]
         let availableMarineLife: [String]
     }
 
@@ -2086,6 +2126,7 @@ final class DiveStore {
         var countrySet = Set<String>()
         var diveTypeSet = Set<String>()
         var tagSet = Set<String>()
+        var buddySet = Set<String>()
         var marineLifeSet = Set<String>()
 
         for dive in snapshot {
@@ -2103,6 +2144,7 @@ final class DiveStore {
             if let country = dive.siteCountry, !country.isEmpty { countrySet.insert(country) }
             dive.diveTypes.forEach { diveTypeSet.insert($0) }
             dive.tags.forEach { tagSet.insert($0) }
+            DiverFilter.buddyNames(dive.buddies).forEach { buddySet.insert($0) }
         }
 
         return DiveAggregationResult(
@@ -2113,6 +2155,7 @@ final class DiveStore {
             availableCountries: countrySet.sorted(),
             availableDiveTypes: diveTypeSet.sorted(),
             availableTags: tagSet.sorted(),
+            availableBuddies: buddySet.sorted(),
             availableMarineLife: marineLifeSet.sorted()
         )
     }

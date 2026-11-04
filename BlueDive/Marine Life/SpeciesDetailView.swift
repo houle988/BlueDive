@@ -53,8 +53,16 @@ struct SpeciesDetailView: View {
         return DiverFilter.apply(selectedDiver, to: all).sorted { $0.timestamp > $1.timestamp }
     }
 
+    /// The species' photos (diver filter applied, as the dives are: a photo of another diver's
+    /// dive is left out, a photo with no dive is kept), oldest first.
     private var photos: [DivePhoto] {
-        (species.photos ?? []).sorted { ($0.captureDate ?? $0.createdAt) < ($1.captureDate ?? $1.createdAt) }
+        (species.photos ?? []).filter { photo in
+            guard !selectedDiver.isEmpty, let dive = photo.dive else { return true }
+            // A dive deleted and merged reports no context; its photo is not this diver's.
+            guard !dive.isDeleted, dive.modelContext != nil else { return false }
+            return !DiverFilter.apply(selectedDiver, to: [dive]).isEmpty
+        }
+        .sorted { ($0.captureDate ?? $0.createdAt) < ($1.captureDate ?? $1.createdAt) }
     }
 
     /// The species was deleted or merged from another page of it higher in the stack (e.g.
@@ -238,7 +246,10 @@ struct SpeciesDetailView: View {
 
     private var header: some View {
         VStack(spacing: 12) {
-            SpeciesImageView(species: species, size: 120)
+            // 240 × 160 pt in 3:2 (Settings → Wide species photos), close to the stored image's
+            // ~500 px so it is not enlarged much; else a 120 pt square.
+            SpeciesImageView(species: species, size: prefs.wideSpeciesImages ? 240 : 120,
+                             aspectRatio: prefs.wideSpeciesImages ? SpeciesImageView.wideAspectRatio : 1)
             VStack(spacing: 4) {
                 Text(verbatim: species.displayName)
                     .font(.title2.weight(.bold))
@@ -512,7 +523,14 @@ struct SpeciesDetailView: View {
     private var photosGrid: some View {
         let photos = photos
         if photos.isEmpty {
-            Text("No photo of this species yet. Photos whose caption or keywords name this species can be linked when you import them or scan your photos.")
+            Group {
+                // With a diver chosen, the filter may hide other divers' photos.
+                if selectedDiver.isEmpty {
+                    Text("No photo of this species yet. Photos whose caption or keywords name this species can be linked when you import them or scan your photos.")
+                } else {
+                    Text("No photo of this species on this diver's dives.")
+                }
+            }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -729,20 +747,30 @@ struct SpeciesSearchField: View {
 /// The species' featured image, or a fish symbol when it has none.
 struct SpeciesImageView: View {
     let species: Species?
-    /// Side of the square image, clipped to rounded corners. Nil fills the space it is given
-    /// (a grid tile, which clips it), the image then scaled down to a tile's size when decoded.
+    /// Width of the image (its side when `aspectRatio` is 1), clipped to rounded corners. Nil
+    /// fills the space it is given (a grid tile, which clips it), the image then scaled down to
+    /// a tile's size when decoded.
     let size: CGFloat?
+    /// Width over height when `size` is set: 1 (a square) or `wideAspectRatio`. `size` is then
+    /// the width; the image fills the frame and is cropped to it.
+    var aspectRatio: CGFloat = 1
     /// Decoded once per image record, off the main thread — not in `body`, which runs for
     /// every visible row on each keystroke of a search field.
     @State private var image: PlatformImage?
 
+    /// The 3:2 format of Settings → Appearance & Language → Wide species photos
+    /// (`UserPreferences.wideSpeciesImages`).
+    static let wideAspectRatio: CGFloat = 3 / 2
+
     var body: some View {
         if let size {
-            // Outlined from 64 pt (the species page header), as on the tiles; filled for the
-            // small list icons, where an outline reads poorly.
-            content(symbol: size >= 64 ? "fish" : "fish.fill", symbolFont: .system(size: size * 0.4))
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.2))
+            let height = size / aspectRatio
+            // Outlined from 64 pt high (the species page header), as on the tiles; filled for the
+            // small list icons, where an outline reads poorly. The symbol and corners follow
+            // the height, so a wide image keeps the proportions of the square one.
+            content(symbol: height >= 64 ? "fish" : "fish.fill", symbolFont: .system(size: height * 0.4))
+                .frame(width: size, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: height * 0.2))
         } else {
             // A tile: a larger outlined fish (the small icons keep the filled one, which reads
             // better at 32 pt).
@@ -775,7 +803,8 @@ struct SpeciesImageView: View {
                 return
             }
             let fillsTile = size == nil
-            let decoded = await Task.detached(priority: .userInitiated) { () -> PlatformImage? in
+            // Nil: the row or tile scrolled away while waiting for its turn (nothing decoded).
+            guard let decoded = await PhotoMetadataReader.onImageQueueUnlessCancelled({ () -> PlatformImage? in
                 // A tile: a large image (a user's own, kept without a thumbnail when it is
                 // smaller than one) is scaled down, as dive photo tiles are, not decoded in full.
                 if fillsTile, let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -783,8 +812,7 @@ struct SpeciesImageView: View {
                     return PlatformImage(data: thumbnail)
                 }
                 return PlatformImage(data: data)
-            }.value
-            guard !Task.isCancelled else { return }
+            }), !Task.isCancelled else { return }
             image = decoded
         }
     }

@@ -15,8 +15,10 @@ enum DiveTab: String, CaseIterable, Identifiable {
     case siteDetails = "Site Details"
     case conditions  = "Conditions"
     case gaz         = "Gas"
+    case equipment   = "Equipment"
     case photos      = "Photos"
     case marineLife  = "Marine Life"
+    case notes       = "Notes"
     case samples     = "Samples"
     case xmlExport   = "XML Export"
     case uddfExport  = "UDDF Export"
@@ -29,7 +31,9 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return "Site Details"
         case .conditions:  return "Conditions"
         case .gaz:         return "Gas"
+        case .equipment:   return "Equipment"
         case .marineLife:  return "Marine Life"
+        case .notes:       return "Notes"
         case .photos:      return "Photos"
         case .samples:     return "Samples"
         case .xmlExport:   return "XML Export"
@@ -48,7 +52,9 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return "mappin.and.ellipse.circle"
         case .conditions:  return "cloud.sun"
         case .gaz:         return "bubbles.and.sparkles"
+        case .equipment:   return "wrench.and.screwdriver"
         case .marineLife:  return "fish"
+        case .notes:       return "note.text"
         case .photos:      return "photo.on.rectangle"
         case .samples:     return "waveform.path.ecg"
         case .xmlExport:   return "doc.text.magnifyingglass"
@@ -62,7 +68,9 @@ enum DiveTab: String, CaseIterable, Identifiable {
         case .siteDetails: return .blue
         case .conditions:  return .yellow
         case .gaz:         return .green
+        case .equipment:   return .purple
         case .marineLife:  return .orange
+        case .notes:       return .brown
         case .photos:      return .pink
         case .samples:     return .teal
         case .xmlExport:   return .indigo
@@ -81,11 +89,16 @@ struct DiveDetailView: View {
     @Environment(\.locale) var locale
     @Environment(\.dismiss) private var dismiss
     @Environment(DiveStore.self) var store
-    @Query(sort: \GearGroup.name) var gearGroups: [GearGroup]
 
     @State var showEditSheet = false
+    /// Hides the Overview's "Notes have moved" banner for good once its X is tapped.
+    @AppStorage("notesMovedBannerDismissed") var isNotesMovedBannerDismissed = false
+    /// Hides the Overview's "Equipment has moved" banner for good once its X is tapped.
+    @AppStorage("equipmentMovedBannerDismissed") var isEquipmentMovedBannerDismissed = false
+    /// Set with a tab change that must show the new tab from its top (the Overview's "has moved"
+    /// banners sit at the bottom of a long page); the tab bar keeps the offset.
+    @State var scrollsToTopOnTabChange = false
     @State var showAddFish = false
-    @State var showAddGear = false
     @State var selectedPhotos: [PhotosPickerItem] = []
     @State var prefs = UserPreferences.shared
     @State var selectedTab: DiveTab = .menu
@@ -94,10 +107,9 @@ struct DiveDetailView: View {
     @State private var tabBarHiddenLeading = false
     @State private var tabBarHiddenTrailing = false
     @State private var fullyVisibleTabs: Set<DiveTab> = []
-    @State var isEditingEquipment = false
-    @State var gearToDelete: Gear?
-    @State var showDeleteGearAlert = false
     @State var selectedGearForDetail: Gear?
+    /// Equipment tab categories the user collapsed, for the dive shown (reset for each dive).
+    @State var collapsedGearSections: Set<String> = []
     @State var isEditingPhotos = false
     /// The photo (`DivePhotoEntry.id`) the Remove alert is about. An id, not a position: an
     /// import still running can add photos that sort ahead of it while the alert is open.
@@ -166,6 +178,8 @@ struct DiveDetailView: View {
     private static let swipeRejectionHapticIntensity: CGFloat = 0.35
 
     #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var hapticGenerator: UIImpactFeedbackGenerator = {
         let g = UIImpactFeedbackGenerator(style: .light)
         g.prepare()
@@ -229,6 +243,8 @@ struct DiveDetailView: View {
                 .background(Color.cyan.opacity(0.2))
                 .foregroundStyle(Color.readableCyan)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
+                // Never wraps: a long site name is shortened instead.
+                .fixedSize()
             Text(siteName)
                 .font(.headline)
                 .foregroundStyle(.primary)
@@ -274,16 +290,23 @@ struct DiveDetailView: View {
                     // an import finishing while another tab is open still presents them.
                     photoImportDialogs(diveTabBar)
 
+                    // The dive's number, site and date, shown on every tab (not scrolled).
+                    diveHeaderStrip
+
                     ScrollViewReader { proxy in
                         ScrollView {
-                            VStack(spacing: 20) {
+                            // No spacing: the first card sits the strip's 8 pt padding below it
+                            // (each tab spaces its own cards).
+                            VStack(spacing: 0) {
                                 Color.clear.frame(height: 0).id("diveTop")
                                 switch selectedTab {
                                 case .menu:        menuTabContent
                                 case .siteDetails: siteDetailsTabContent
                                 case .conditions:  conditionsTabContent
                                 case .gaz:         gazTabContent
+                                case .equipment:   equipmentSection
                                 case .marineLife:  marineSightingsSection
+                                case .notes:       notesTabContent
                                 case .photos:      photosSection
                                 case .samples:     samplesTabContent
                                 case .xmlExport:   xmlExportTabContent
@@ -306,6 +329,10 @@ struct DiveDetailView: View {
                         .onChange(of: selectedTab) { _, _ in
                             isEditingPhotos = false
                             isEditingMarineLife = false
+                            if scrollsToTopOnTabChange {
+                                scrollsToTopOnTabChange = false
+                                proxy.scrollTo("diveTop", anchor: .top)
+                            }
                         }
                     }
                 }
@@ -380,7 +407,8 @@ struct DiveDetailView: View {
                     }
                 }
         )
-        .modifier(NavTitleIfNotPreview(title: dive.siteName, isSlidePreview: isSlidePreview))
+        .modifier(NavTitleIfNotPreview(title: dive.siteName, isSlidePreview: isSlidePreview,
+                                       hasPrincipalDate: showsDateInNavigationBar))
         .background(AppBackground().ignoresSafeArea())
         #if os(iOS)
         // Disable the system interactive back-swipe so our own edge swipe can
@@ -433,18 +461,23 @@ struct DiveDetailView: View {
                     editDiveButton
                 }
                 #else
-                ToolbarItem(placement: .principal) {
-                    ZStack {
-                        diveTitleLabel(number: dive.diveNumber ?? diveNumber,
-                                       siteName: dive.siteName)
-                            .offset(x: dragOffset)
-                        if let pending = pendingDive {
-                            diveTitleLabel(number: pending.diveNumber ?? pendingDiveNumber(for: pending),
-                                           siteName: pending.siteName)
-                                .offset(x: dragOffset < 0
-                                        ? dragOffset + viewWidth
-                                        : dragOffset - viewWidth)
+                if showsDateInNavigationBar {
+                    // The date follows the page when swiping, like the header strip below it.
+                    ToolbarItem(placement: .principal) {
+                        ZStack {
+                            diveDateText(dive.timestamp, inNavigationBar: true)
+                                .offset(x: dragOffset)
+                            if let pending = pendingDive {
+                                diveDateText(pending.timestamp, inNavigationBar: true)
+                                    .offset(x: dragOffset < 0
+                                            ? dragOffset + viewWidth
+                                            : dragOffset - viewWidth)
+                            }
                         }
+                        // One element read as the current dive's date (not the hidden title,
+                        // nor the incoming dive's date during a swipe).
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text(dive.timestamp, format: diveDateFormat))
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -480,10 +513,6 @@ struct DiveDetailView: View {
             SpeciesSheet(species: species, numberMap: speciesPageNumberMap, showDiveList: nil)
                 .standardSheetPresentation()
         }
-        .sheet(isPresented: $showAddGear) {
-            AddGearToDiveView(dive: dive)
-                .standardSheetPresentation()
-        }
         .sheet(item: $selectedGearForDetail) { gear in
             GearServiceView(gear: gear)
                 .standardSheetPresentation()
@@ -506,7 +535,6 @@ struct DiveDetailView: View {
             selectedTankIndex = 0
             showEditSheet = false
             showAddFish = false
-            showAddGear = false
             showFullScreenSiteMap = false
             selectedPhotos = []
             showPhotosPicker = false
@@ -516,17 +544,15 @@ struct DiveDetailView: View {
             pendingPhotoImportResult = nil
             showConvertLegacyPhotosAlert = false
             speciesProposals = []
-            isEditingEquipment = false
             isEditingPhotos = false
             isEditingMarineLife = false
             selectedGearForDetail = nil
+            collapsedGearSections = []
             // Also clear transient targets so they can't point to the previous dive's items.
             selectedPhotoForPreview = nil
-            gearToDelete = nil
             photoIDToDelete = nil
             fishToDelete = nil
             fishToEdit = nil
-            showDeleteGearAlert = false
             showDeletePhotoAlert = false
             showDeleteFishAlert = false
             #if os(iOS)
@@ -589,7 +615,7 @@ struct DiveDetailView: View {
 
     #if os(macOS)
     // Previous / next dive buttons (macOS replaces the iOS swipe-between-dives gesture).
-    // Each is its own ToolbarItem so toolbar overflow can manage them independently.
+    // Both share one ToolbarItemGroup, so macOS draws them in one capsule.
     private var previousDiveButton: some View {
         Button {
             if let prev = previousDiveInList { navigateTo(prev, forward: false) }
@@ -614,6 +640,64 @@ struct DiveDetailView: View {
         .accessibilityLabel(Text("Next dive"))
     }
     #endif
+
+    /// Dive number and site under the tab bar, with the date on the right when it is not in
+    /// the navigation bar (see `showsDateInNavigationBar`). Part of the page content, so it
+    /// slides with the dive when swiping or using previous/next (the slide preview draws its own).
+    private var diveHeaderStrip: some View {
+        // At least 16 pt between the site name and the date, so a long name keeps its room.
+        HStack(spacing: 8) {
+            diveTitleLabel(number: dive.diveNumber ?? diveNumber, siteName: dive.siteName)
+            Spacer(minLength: 0)
+            if !showsDateInNavigationBar {
+                diveDateText(dive.timestamp)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        // Read as one element: "Dive 123, Site" (and the date when the strip shows it).
+        .accessibilityElement(children: .combine)
+    }
+
+    private var diveDateFormat: Date.FormatStyle {
+        .dateTime.day().month(.abbreviated).year().hour().minute().locale(locale)
+    }
+
+    /// The dive's date, in the header strip or (iPhone) the navigation bar.
+    @ViewBuilder
+    private func diveDateText(_ date: Date, inNavigationBar: Bool = false) -> some View {
+        if inNavigationBar {
+            // Large text on a small iPhone: the numeric date when the long one would reach the
+            // buttons. Both keep their natural width, so the bar can centre them when they fit.
+            ViewThatFits(in: .horizontal) {
+                dateLabel(Text(date, format: diveDateFormat))
+                dateLabel(Text(date, format: Date.FormatStyle(date: .numeric, time: .shortened).locale(locale)))
+            }
+        } else {
+            // A narrow width shortens the site name, never the date.
+            dateLabel(Text(date, format: diveDateFormat))
+        }
+    }
+
+    private func dateLabel(_ text: Text) -> some View {
+        text
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    /// True on iPhone in any orientation (compact width in portrait, compact height in
+    /// landscape) and in a narrow iPad Split View, where the navigation bar's title area is
+    /// free: the date moves there and the strip's whole width goes to the site name. A
+    /// full-screen iPad (its tab bar is in the navigation bar) and the Mac keep it in the strip.
+    private var showsDateInNavigationBar: Bool {
+        #if os(iOS)
+        return horizontalSizeClass == .compact || verticalSizeClass == .compact
+        #else
+        return false
+        #endif
+    }
 
     // Export / Edit toolbar controls, shared by the iOS and macOS toolbar layouts.
 
@@ -790,10 +874,14 @@ struct DiveDetailView: View {
             EditGazView(dive: dive, tankIndex: selectedTankIndex) { newIndex in
                 selectedTankIndex = newIndex
             }
+        case .equipment:
+            EditEquipmentView(dive: dive)
         case .marineLife:
             // Marine life is added and removed with its card's own buttons.
             noEditAvailableView(title: DiveTab.marineLife.localizedName,
                                 message: "Add or remove marine life with the buttons on its card.")
+        case .notes:
+            EditNotesView(dive: dive)
         case .photos:
             // Photos are added and removed with their card's own buttons.
             noEditAvailableView(title: DiveTab.photos.localizedName,
@@ -846,14 +934,20 @@ struct DiveDetailView: View {
 private struct NavTitleIfNotPreview: ViewModifier {
     let title: String
     let isSlidePreview: Bool
+    /// The navigation bar shows the dive's date in a `.principal` item, which replaces the
+    /// title by itself. Removing the title would also remove that item.
+    let hasPrincipalDate: Bool
 
     func body(content: Content) -> some View {
         if isSlidePreview {
             content
         } else {
+            // The title still names the page (e.g. the back-button menu), but is not drawn:
+            // the dive is identified by the header strip under the tab bar.
             content
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar(removing: hasPrincipalDate ? nil : .title)
         }
     }
 }

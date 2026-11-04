@@ -288,6 +288,36 @@ enum WeightUnit: String, CaseIterable {
     }
 }
 
+// MARK: - Switch Start Mode
+
+/// How a sheet's switch starts when the sheet opens: Edit Site Details' "Include GPS Coordinates
+/// (Entry & Exit)" (Settings → Dive Profile) and Edit Conditions' "Replace existing weather"
+/// (Settings → Online Services).
+enum SwitchStartMode: String, CaseIterable {
+    case off      = "off"
+    case on       = "on"
+    /// The state the user last gave the switch in the sheet; off until they have.
+    case lastUsed = "lastUsed"
+
+    var label: LocalizedStringKey {
+        switch self {
+        case .off:      "Off"
+        case .on:       "On"
+        case .lastUsed: "Last Used"
+        }
+    }
+
+    /// The switch's initial state, given the last choice recorded for it (nil until the user
+    /// first changes the switch).
+    func initialValue(lastChoice: Bool?) -> Bool {
+        switch self {
+        case .off:      false
+        case .on:       true
+        case .lastUsed: lastChoice ?? false
+        }
+    }
+}
+
 // MARK: - Appearance Mode
 
 enum AppearanceMode: String, CaseIterable {
@@ -337,6 +367,8 @@ enum AppLanguage: String, CaseIterable {
     case frenchCanada = "fr-CA"
     case german = "de"
     case dutch = "nl"
+    case norwegianBokmal = "nb"
+    case spanish = "es"
 
     /// Picker label. Language names are shown as endonyms (each in its own
     /// language) and are intentionally NOT localized — only "System" follows
@@ -349,6 +381,8 @@ enum AppLanguage: String, CaseIterable {
         case .frenchCanada: return "Français"
         case .german:       return "Deutsch"
         case .dutch:        return "Nederlands"
+        case .norwegianBokmal: return "Norsk bokmål"
+        case .spanish:      return "Español"
         }
     }
 
@@ -371,6 +405,8 @@ enum AppLanguage: String, CaseIterable {
         case .frenchCanada: return Locale(identifier: "fr-CA")
         case .german: return Locale(identifier: "de")
         case .dutch: return Locale(identifier: "nl")
+        case .norwegianBokmal: return Locale(identifier: "nb")
+        case .spanish: return Locale(identifier: "es")
         }
     }
 }
@@ -481,6 +517,69 @@ class UserPreferences {
     var searchDiveNotes: Bool {
         didSet { UserDefaults.standard.set(searchDiveNotes, forKey: "searchDiveNotes") }
     }
+    /// When true, the dive page (`MarkdownText`) and the PDF logbook (`PDFNotesText`) show notes
+    /// formatted as Markdown. Display only: notes are stored, searched and exported as typed. Off
+    /// by default, so notes typed or imported with `*`, `#` or `1.` keep their look.
+    /// No App Group write: the widget does not show notes.
+    var formatNotesAsMarkdown: Bool {
+        didSet { UserDefaults.standard.set(formatNotesAsMarkdown, forKey: "formatNotesAsMarkdown") }
+    }
+    /// When true, species photos are shown in a 3:2 format (`SpeciesImageView.wideAspectRatio`)
+    /// in the Marine Life list, on the species page and in Edit Species, instead of squares.
+    /// Display only: stored images are unchanged. On by default. No App Group write: the
+    /// widget does not show species.
+    var wideSpeciesImages: Bool {
+        didSet { UserDefaults.standard.set(wideSpeciesImages, forKey: "wideSpeciesImages") }
+    }
+    /// How Edit Site Details' "Include GPS Coordinates (Entry & Exit)" switch starts each time the
+    /// sheet opens (`initialCopySiteGPSCoordinates`). When the switch is on, Copy Site Information
+    /// also copies the entry/exit coordinates and altitude. Last Used by default.
+    /// No App Group write: the widget does not edit sites.
+    var copySiteGPSMode: SwitchStartMode {
+        didSet { UserDefaults.standard.set(copySiteGPSMode.rawValue, forKey: "copySiteGPSMode") }
+    }
+    /// The state the user last gave that switch in the sheet, recorded whatever the mode so that
+    /// choosing Last Used later starts from it. Absent (nil) until the switch is first changed,
+    /// so Last Used starts off and copying a site keeps the dive's own coordinates.
+    /// Not observed: no view shows it, and the sheet's `init` reads it, so a write on every flip
+    /// of the switch would otherwise redraw whatever view tracked that read (the dive page).
+    @ObservationIgnored var copySiteGPSLastChoice: Bool? {
+        didSet {
+            if let copySiteGPSLastChoice {
+                UserDefaults.standard.set(copySiteGPSLastChoice, forKey: "copySiteGPSLastChoice")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "copySiteGPSLastChoice")
+            }
+        }
+    }
+    /// The state Edit Site Details' "Include GPS Coordinates (Entry & Exit)" switch starts in.
+    var initialCopySiteGPSCoordinates: Bool {
+        copySiteGPSMode.initialValue(lastChoice: copySiteGPSLastChoice)
+    }
+    /// How Edit Conditions' "Replace existing weather" switch starts each time the sheet opens
+    /// (`initialReplaceExistingWeather`). When the switch is on, Fetch Weather replaces values
+    /// already in the fields; when off, it fills only empty ones. Last Used by default.
+    /// No App Group write: the widget shows no weather.
+    var replaceWeatherMode: SwitchStartMode {
+        didSet { UserDefaults.standard.set(replaceWeatherMode.rawValue, forKey: "replaceWeatherMode") }
+    }
+    /// The state the user last gave that switch in the sheet, recorded whatever the mode so that
+    /// choosing Last Used later starts from it. Absent (nil) until the switch is first changed,
+    /// so Last Used starts off and a fetch fills only empty fields.
+    /// Not observed, for the same reason as `copySiteGPSLastChoice`.
+    @ObservationIgnored var replaceWeatherLastChoice: Bool? {
+        didSet {
+            if let replaceWeatherLastChoice {
+                UserDefaults.standard.set(replaceWeatherLastChoice, forKey: "replaceWeatherLastChoice")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "replaceWeatherLastChoice")
+            }
+        }
+    }
+    /// The state Edit Conditions' "Replace existing weather" switch starts in.
+    var initialReplaceExistingWeather: Bool {
+        replaceWeatherMode.initialValue(lastChoice: replaceWeatherLastChoice)
+    }
     #if os(macOS)
     /// When true, the main dive list shows the profile chart of the selected dive above the
     /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
@@ -504,7 +603,13 @@ class UserPreferences {
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
         self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
+        self.formatNotesAsMarkdown = UserDefaults.standard.bool(forKey: "formatNotesAsMarkdown")
+        self.copySiteGPSMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "copySiteGPSMode") ?? "lastUsed") ?? .lastUsed
+        self.copySiteGPSLastChoice = UserDefaults.standard.object(forKey: "copySiteGPSLastChoice") as? Bool
+        self.replaceWeatherMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "replaceWeatherMode") ?? "lastUsed") ?? .lastUsed
+        self.replaceWeatherLastChoice = UserDefaults.standard.object(forKey: "replaceWeatherLastChoice") as? Bool
         // On by default: an absent key reads as true.
+        self.wideSpeciesImages = UserDefaults.standard.object(forKey: "wideSpeciesImages") as? Bool ?? true
         self.showPhotosOnProfile = UserDefaults.standard.object(forKey: "showPhotosOnProfile") as? Bool ?? true
         self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
         self.fetchTaxonomyOnline = UserDefaults.standard.bool(forKey: "fetchTaxonomyOnline")
@@ -533,7 +638,13 @@ class UserPreferences {
         hideClearedDecoStops = false
         showSamplesTab = false
         searchDiveNotes = false
+        formatNotesAsMarkdown = false
+        wideSpeciesImages = true
         showPhotosOnProfile = true
+        copySiteGPSMode = .lastUsed
+        copySiteGPSLastChoice = nil
+        replaceWeatherMode = .lastUsed
+        replaceWeatherLastChoice = nil
         fetchWeatherOnline = false
         fetchTaxonomyOnline = false
         taxonomyNameLanguage = ""
@@ -880,7 +991,7 @@ enum PlatformTextInputAutocapitalizationType {
 /// Works on both iOS and macOS. The content type is specified at the call site.
 struct ExportableFileDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.data] }
-    static var writableContentTypes: [UTType] { [.zip, .data, .xml, .uddf, .pdf, .plainText, .blueDiveXML] }
+    static var writableContentTypes: [UTType] { [.zip, .data, .xml, .uddf, .pdf, .plainText, .commaSeparatedText, .blueDiveXML] }
 
     let data: Data
 

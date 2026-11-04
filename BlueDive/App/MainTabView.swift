@@ -26,11 +26,11 @@ struct MainTabView: View {
     @Environment(FileImportCoordinator.self) private var importCoordinator
 
     private var shouldShowDisclaimer: Bool {
-        !introVisible && lastAcceptedDisclaimerVersion != DiveIntroConfig.currentVersion
+        !introVisible && !isCurrentAppVersion(lastAcceptedDisclaimerVersion)
     }
 
     private var shouldShowWelcome: Bool {
-        !introVisible && lastAcceptedDisclaimerVersion == DiveIntroConfig.currentVersion && !hasCompletedOnboarding
+        !introVisible && isCurrentAppVersion(lastAcceptedDisclaimerVersion) && !hasCompletedOnboarding
     }
 
     /// Asked once, after the intro, the disclaimer and the Welcome Wizard — so new users see it
@@ -59,7 +59,7 @@ struct MainTabView: View {
     /// After the intro, the disclaimer and the Welcome Wizard, and not while a sheet is up or
     /// in a session opened with a file or a widget link.
     private var canAskLaunchQuestion: Bool {
-        !introVisible && lastAcceptedDisclaimerVersion == DiveIntroConfig.currentVersion
+        !introVisible && isCurrentAppVersion(lastAcceptedDisclaimerVersion)
             && hasCompletedOnboarding
             // An alert cannot appear over another sheet on iOS and would be lost: wait for a
             // reminder deep-link sheet to close, and skip a session opened with a file or a

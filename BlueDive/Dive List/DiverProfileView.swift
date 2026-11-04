@@ -83,7 +83,7 @@ struct DiverProfileView: View {
     private var uniqueDivers: [String] { store.cachedUniqueDivers }
 
     private var filteredDives: [Dive] {
-        DiverFilter.apply(selectedDiver, to: store.dives)
+        DiverFilter.apply(selectedDiver, to: store.liveDives)
     }
 
     private var filteredCertifications: [Certification] {
@@ -272,7 +272,7 @@ struct DiverProfileView: View {
                     closeToolbarButton { dismiss() }
                 }
 
-                DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
+                DiverFilterToolbar.sheetItem(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
             }
             .sheet(item: $documentsSection) { section in
                 DocumentsView(initialSection: section, onClose: { documentsSection = nil })
@@ -1547,6 +1547,9 @@ struct AddInsuranceView: View {
                 notes: trimmedNotes.isEmpty ? nil : trimmedNotes
             )
             modelContext.insert(newInsurance)
+            // Saved at once, as Add Gear does: the Documents list identifies rows by
+            // persistentModelID, which changes when an unsaved record is first saved.
+            try? modelContext.save()
             newInsurance.scheduleExpirationReminder()
         }
         dismiss()

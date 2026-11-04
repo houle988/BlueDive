@@ -38,7 +38,7 @@ struct MarineLifeBenchmarkTests {
         let start = Date(timeIntervalSinceReferenceDate: 700_000_000)
         for diveIndex in 0..<Self.diveCount {
             let dive = Dive(timestamp: start.addingTimeInterval(Double(diveIndex) * 86_400))
-            dive.duration = 50
+            dive.setDuration(minutes: 50)
             context.insert(dive)
             for sightIndex in 0..<Self.sightingsPerDive {
                 let speciesIndex = (diveIndex * 7 + sightIndex * 13) % Self.speciesCount

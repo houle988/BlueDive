@@ -16,7 +16,7 @@ func waterType(forSalinity sal: Double) -> String {
 /// Physics: 100 / (density_g_cm3 × 9.81)
 /// Recognises both canonical BlueDive strings ("Freshwater", "EN13319") and
 /// MacDive XML vocabulary ("Fresh", "Brackish") via lowercased matching.
-func waterPressureDivisor(forWaterTypeString waterType: String?) -> Double {
+nonisolated func waterPressureDivisor(forWaterTypeString waterType: String?) -> Double {
     switch waterType?.lowercased() {
     case "freshwater", "fresh":  return 100.0 / (1.000 * 9.81)  // ~10.19 m/bar
     case "en13319",   "brackish": return 100.0 / (1.020 * 9.81)  // ~9.99 m/bar
@@ -27,7 +27,7 @@ func waterPressureDivisor(forWaterTypeString waterType: String?) -> Double {
 /// Returns atmospheric pressure (bar) for the given altitude (metres above sea level).
 /// Uses the standard atmosphere barometric formula. Returns 1.01325 bar at sea level.
 /// Handles negative altitudes (below-sea-level sites) correctly.
-func atmosphericPressure(forAltitudeMeters altitude: Double?) -> Double {
+nonisolated func atmosphericPressure(forAltitudeMeters altitude: Double?) -> Double {
     guard let alt = altitude, alt != 0, alt.isFinite else { return 1.01325 }
     return 1.01325 * pow(1.0 - 2.2558e-5 * alt, 5.2559)
 }

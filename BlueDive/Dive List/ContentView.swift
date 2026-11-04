@@ -375,6 +375,7 @@ struct ContentView: View {
                     availableCountries: store.cachedAvailableCountries,
                     availableDiveTypes: store.cachedAvailableDiveTypes,
                     availableTags: store.cachedAvailableTags,
+                    availableBuddies: store.cachedAvailableBuddies,
                     availableMarineLife: store.cachedAvailableMarineLife,
                     filterYear: $store.filterYear,
                     filterYearNegate: $store.filterYearNegate,
@@ -388,6 +389,9 @@ struct ContentView: View {
                     filterDiveType: $store.filterDiveType,
                     filterDiveTypeNegate: $store.filterDiveTypeNegate,
                     filterTag: $store.filterTag,
+                    filterTagNegate: $store.filterTagNegate,
+                    filterBuddy: $store.filterBuddy,
+                    filterBuddyNegate: $store.filterBuddyNegate,
                     filterMarineLife: $store.filterMarineLife,
                     filterMarineLifeMode: $store.filterMarineLifeMode,
                     sortOrder: $store.sortOrder
@@ -533,7 +537,7 @@ struct ContentView: View {
                     diveToDelete = nil
                 }
             } message: {
-                Text("This action is irreversible. All associated data (fish sightings, equipment) will also be deleted.")
+                Text("This action is irreversible. Its marine life sightings and photos will also be deleted. Your equipment is kept.")
             }
             .sheet(isPresented: $showManualDiveDatePicker) {
                 NavigationStack {
@@ -574,7 +578,7 @@ struct ContentView: View {
                     diveToDeleteDirectly = nil
                 }
             } message: { dive in
-                Text("\"\(dive.siteName)\" will be permanently deleted. All associated data (fish sightings, equipment) will also be deleted.")
+                Text("\"\(dive.siteName)\" will be permanently deleted, with its marine life sightings and photos. Your equipment is kept.")
             }
             .navigationDestination(for: DiveNavTarget.self) { target in
                 diveDetailDestination(target)
@@ -623,38 +627,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: isImporting)
         .animation(.linear(duration: 0.15), value: importProgressCurrent)
-        .overlay {
-            if isExporting {
-                ZStack {
-                    Color.black.opacity(0.6).ignoresSafeArea()
-                    VStack(spacing: 16) {
-                        if exportProgressTotal > 0 {
-                            ProgressView(value: Double(exportProgressCurrent), total: Double(exportProgressTotal))
-                                .progressViewStyle(.linear)
-                                .frame(width: 220)
-                            Text(String(format: NSLocalizedString("%@ of %@ dives exported", bundle: .forAppLanguage(), comment: "Progress label during dive export showing current and total count"),
-                                 Double(exportProgressCurrent).localizedString(decimals: 0),
-                                 Double(exportProgressTotal).localizedString(decimals: 0)))
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                                .monospacedDigit()
-                                .transaction { $0.animation = nil }
-                        } else {
-                            ProgressView().scaleEffect(1.5)
-                            Text("Exporting...")
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                        }
-                    }
-                    .padding(32)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-                }
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: isExporting)
-        .animation(.linear(duration: 0.15), value: exportProgressCurrent)
+        .exportProgressOverlay(isPresented: isExporting, current: exportProgressCurrent, total: exportProgressTotal)
         .onAppear {
             // DiveStore's caches are built and kept current by DiveDataFeeder (MainTabView).
             // Cold-launch: onOpenURL may fire before this view mounts, so check
@@ -672,6 +645,16 @@ struct ContentView: View {
         .onChange(of: store.cachedUniqueDivers) { _, newDivers in
             collapsedDiverSections.formIntersection(newDivers)
         }
+        #if os(macOS)
+        // Clear the profile preview's selection once its dive is no longer listed (diver
+        // filter, search or filter sheet), so the preview never shows a dive the list hides.
+        .onChange(of: store.cachedFilteredSummaries) { _, summaries in
+            if let selectedID = listSelection.diveID,
+               !summaries.contains(where: { $0.id == selectedID }) {
+                listSelection.diveID = nil
+            }
+        }
+        #endif
         .background(filterObservers)
         // Warm-launch: handle file URLs that arrive while the app is already running.
         .onChange(of: importCoordinator.pendingURL) { _, url in
@@ -717,6 +700,9 @@ struct ContentView: View {
             .onChange(of: store.filterDiveType)       { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterDiveTypeNegate) { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterTag)            { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterTagNegate)      { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterBuddy)          { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
+            .onChange(of: store.filterBuddyNegate)    { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterMarineLife)     { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.filterMarineLifeMode) { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
             .onChange(of: store.sortOrder)            { _, _ in store.rebuildFilteredDives(dives: dives, selectedDiver: selectedDiver) }
@@ -1187,8 +1173,9 @@ struct ContentView: View {
         let surfaceInterval: String = {
             let previous = dives.first(where: { $0.timestamp < date && $0.diverName == diverName })
             guard let prev = previous else { return "0h 00m" }
-            let durationSeconds = TimeInterval(prev.duration * 60)
-            let prevEnd = prev.timestamp.addingTimeInterval(durationSeconds)
+            // Previous dive's end: its computer/file time, else its minutes.
+            let prevDurationSeconds = TimeInterval(prev.consistentDurationSeconds ?? prev.duration * 60)
+            let prevEnd = prev.timestamp.addingTimeInterval(prevDurationSeconds)
             let gap = date.timeIntervalSince(prevEnd)
             guard gap > 0 else { return "0h 00m" }
             let totalMinutes = Int(gap / 60)

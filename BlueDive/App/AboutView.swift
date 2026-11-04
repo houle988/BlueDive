@@ -100,15 +100,17 @@ struct AboutView: View {
                         AboutSectionHeader(title: "Key Community Contributors", icon: "person.3.fill", color: .cyan)
 
                         VStack(spacing: 8) {
-                            ContributorRow(name: "Thomas MacDermott", role: "Testing and ideas for new features")
-                            Divider().opacity(0.3)
-                            ContributorRow(name: "Espen Moe", role: "Testing and ideas for new features")
-                            Divider().opacity(0.3)
-                            ContributorRow(name: "Lionel Prost", role: "Testing and ideas for new features")
+                            ContributorRow(name: "Espen Moe", role: "Norwegian Translation, Testing and ideas for new features")
                             Divider().opacity(0.3)
                             ContributorRow(name: "Mark Kuiphuis", role: "Dutch Translation, Testing and ideas for new features")
                             Divider().opacity(0.3)
                             ContributorRow(name: "Simone Ueberwasser", role: "German Translation, Testing and ideas for new features")
+                            Divider().opacity(0.3)
+                            ContributorRow(name: "Thomas MacDermott", role: "Testing and ideas for new features")
+                            Divider().opacity(0.3)
+                            ContributorRow(name: "Lionel Prost", role: "Testing and ideas for new features")
+                            Divider().opacity(0.3)
+                            ContributorRow(name: "Eduard Lopez", role: "Spanish Translation")
                         }
                         .padding()
                         .sectionCardBackground()

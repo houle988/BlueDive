@@ -125,6 +125,6 @@ extension DivePhoto {
         return PhotoTiming.profileOffset(capture: WallClock.components(ofStored: captureDate),
                                          clockAdjustment: clockAdjustmentSeconds,
                                          diveStart: dive.timestamp,
-                                         durationSeconds: dive.durationSeconds)
+                                         durationSeconds: dive.profileDurationSeconds)
     }
 }

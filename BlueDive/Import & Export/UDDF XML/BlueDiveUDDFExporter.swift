@@ -471,6 +471,10 @@ enum BlueDiveUDDFExporter {
             lines.append("            <passedtime>\(si * 60)</passedtime>")
             lines.append("          </surfaceintervalbeforedive>")
         }
+        // Surface pressure recorded by the computer or a file: UDDF wants pascals.
+        if let surfacePressure = dive.surfacePressure {
+            lines.append("          <surfacepressure>\(formatDouble(surfacePressure * 100_000))</surfacepressure>")
+        }
         // Site link
         if let siteId = siteMap.first(where: { $0.value.id == dive.id })?.key {
             lines.append("          <link ref=\"\(xmlEscape(siteId))\"/>")
@@ -519,6 +523,16 @@ enum BlueDiveUDDFExporter {
         if !samples.isEmpty {
             lines.append("        <samples>")
             let lastIndex = samples.count - 1
+            // CCR setpoint last written: <setpo2> marks where a setpoint is set and holds until
+            // the next one, so it is written only where it changes, and <divemode> marks where a
+            // setpoint starts (closed circuit) or stops (e.g. open-circuit bailout).
+            var writtenSetpoint: Double?
+            // Semi-closed dives (libdc SCR, e.g. iDive, or a Subsurface PSCR dive) are marked as
+            // such, not as closed circuit.
+            // Matched as whole comma-separated types (the values the Bluetooth and Subsurface
+            // importers write), so a user-entered type that merely contains them does not count.
+            let diveTypes = Set((dive.diveTypes ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+            let loopMode = diveTypes.contains("Semi-Rebreather") || diveTypes.contains("PSCR") ? "semiclosedcircuit" : "closedcircuit"
             for (index, sample) in samples.enumerated() {
                 lines.append("          <waypoint>")
                 // Time: profile stores minutes, UDDF needs seconds
@@ -537,6 +551,19 @@ enum BlueDiveUDDFExporter {
                 }
                 if let ppo2 = sample.ppo2 {
                     lines.append("            <calculatedpo2>\(formatDouble(barToPascal(ppo2)))</calculatedpo2>")
+                }
+                let sampleSetpoint = sample.setpoint
+                if sampleSetpoint != writtenSetpoint {
+                    if let setpoint = sampleSetpoint {
+                        if writtenSetpoint == nil {
+                            lines.append("            <divemode type=\"\(loopMode)\"/>")
+                        }
+                        // CCR setpoint reported by the dive computer (bar → Pa)
+                        lines.append("            <setpo2 setby=\"computer\">\(formatDouble(barToPascal(setpoint)))</setpo2>")
+                    } else {
+                        lines.append("            <divemode type=\"opencircuit\"/>")
+                    }
+                    writtenSetpoint = sampleSetpoint
                 }
                 if let ndl = sample.ndl {
                     // NDL: profile stores minutes, UDDF needs seconds
@@ -557,7 +584,7 @@ enum BlueDiveUDDFExporter {
         if dive.averageDepth > 0 {
             lines.append("          <averagedepth>\(formatDouble(dive.averageDepth))</averagedepth>")
         }
-        lines.append("          <diveduration>\(dive.durationSeconds)</diveduration>")
+        lines.append("          <diveduration>\(dive.resolvedDurationSeconds)</diveduration>")
 
         if let lowTemp = dive.minTemperature {
             lines.append("          <lowesttemperature>\(formatDouble(celsiusToKelvin(lowTemp)))</lowesttemperature>")
@@ -579,11 +606,14 @@ enum BlueDiveUDDFExporter {
 
         // Notes
         if !dive.notes.isEmpty {
+            // The whole note in one <para>, its line breaks, blank lines and indentation kept as
+            // typed (they matter to notes written in Markdown), so a re-import gives back the
+            // exact note (UDDFXMLParser trims only the ends, and notes are saved trimmed). One
+            // <para> per line lost blank lines and indentation, and Subsurface, whose UDDF import
+            // reads only the first <para>, kept only the first line; Subsurface's own UDDF export
+            // also writes the whole note in a single <para>.
             lines.append("          <notes>")
-            // Split on newlines to create separate <para> elements
-            for paragraph in dive.notes.components(separatedBy: "\n").filter({ !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
-                lines.append("            <para>\(xmlEscape(paragraph))</para>")
-            }
+            lines.append("            <para>\(xmlEscape(dive.notes))</para>")
             lines.append("          </notes>")
         }
 

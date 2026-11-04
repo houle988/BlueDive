@@ -48,6 +48,8 @@ struct OnlineServicesSettingsView: View {
                 )
                 .padding(.horizontal)
 
+                replaceWeatherCard
+
                 updateAllWeatherCard
 
                 taxonomyCard
@@ -181,6 +183,50 @@ struct OnlineServicesSettingsView: View {
                 .disabled(!prefs.fetchTaxonomyOnline)
             }
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
+    }
+
+    /// How Edit Conditions' "Replace existing weather" switch starts (greyed out while the
+    /// service is off, like the Update Weather for All Dives card).
+    private var replaceWeatherCard: some View {
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Orange and arrow.triangle.2.circlepath, as the matching switch in Edit Conditions.
+                Label("Replace existing weather", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                Picker("Replace existing weather", selection: $prefs.replaceWeatherMode) {
+                    ForEach(SwitchStartMode.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .fullWidthSegmentedPicker()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+            .disabled(!prefs.fetchWeatherOnline)
+
+            Group {
+                if prefs.fetchWeatherOnline {
+                    Text("Sets whether Replace existing weather is on when Edit Conditions opens. Last Used keeps the choice you made the last time. When on, Fetch Weather replaces the values already in the fields, including the air temperature; when off, it fills only empty fields.")
+                } else {
+                    Text("Turn on Fetch weather online to use this option.")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
         .background(

@@ -220,7 +220,17 @@ enum BlueDiveXMLExporter {
         lines.append("    <!-- BlueDiveGlobalData: Dive Stats -->")
         lines.append(xmlTag("maxDepth",        formatDouble(dive.maxDepth),                                                indent: 4))
         lines.append(xmlTag("averageDepth",    dive.averageDepth > 0 ? formatDouble(dive.averageDepth) : "",              indent: 4))
-        lines.append(xmlTag("duration",        String(dive.durationSeconds),                                              indent: 4))
+        lines.append(xmlTag("duration",        String(dive.resolvedDurationSeconds),                                       indent: 4))
+        // The dive computer's time, only when the dive has one that still matches its minutes:
+        // a dive without it must not gain one through an export and re-import.
+        if let computerSeconds = dive.consistentDurationSeconds {
+            lines.append(xmlTag("durationSeconds", String(computerSeconds),                                        indent: 4))
+        }
+        // The surface pressure the computer or a file recorded (bar), only when the dive has one,
+        // written in full (`String(Double)`, the shortest exact form) so a re-import keeps it.
+        if let surfacePressure = dive.surfacePressure {
+            lines.append(xmlTag("surfacePressure", String(surfacePressure),                                         indent: 4))
+        }
         lines.append(xmlTag("surfaceInterval", surfaceIntervalMinutes(from: dive.surfaceInterval).map(String.init) ?? "", indent: 4))
 
         // Decompression
@@ -385,12 +395,16 @@ enum BlueDiveXMLExporter {
                     ("depth", formatDouble(sample.depth))
                 ]
                 if let temp     = sample.temperature  { attrs.append(("temperature", formatDouble(temp))) }
-                if let pressure = sample.tankPressure  { attrs.append(("tankPressure", formatDouble(pressure))) }
+                // tankPressure is tank 0 / the lowest index of tankPressures (DiveProfilePoint's
+                // decoder and the parser both derive it), so it is written only for samples
+                // without per-tank pressures.
                 if let tp = sample.tankPressures, !tp.isEmpty {
                     let serialized = tp.sorted(by: { $0.key < $1.key })
                         .map { "\($0.key):\(formatDouble($0.value))" }
                         .joined(separator: ",")
                     attrs.append(("tankPressures", serialized))
+                } else if let pressure = sample.tankPressure {
+                    attrs.append(("tankPressure", formatDouble(pressure)))
                 }
                 if let ppo2     = sample.ppo2           { attrs.append(("ppo2", formatDouble(ppo2))) }
                 if let sp = sample.sensorPPO2, !sp.isEmpty {
@@ -404,6 +418,7 @@ enum BlueDiveXMLExporter {
                 if let ceilTime = sample.ceilingTime    { attrs.append(("ceilingTime", formatDouble(ceilTime))) }
                 if let cns      = sample.cns            { attrs.append(("cns", formatDouble(cns))) }
                 if let gas      = sample.currentGas     { attrs.append(("currentGas", String(gas))) }
+                if let setpoint = sample.setpoint       { attrs.append(("setpoint", formatDouble(setpoint))) }
                 let eventsStr = sample.events.map { serializeEvent($0) }.joined(separator: ",")
                 attrs.append(("events", eventsStr))
                 let attrString = attrs.map { "\($0.0)=\"\($0.1)\"" }.joined(separator: " ")

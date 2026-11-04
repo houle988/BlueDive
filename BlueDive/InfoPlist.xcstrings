@@ -15,10 +15,22 @@
             "value" : "BlueDive Dive Log"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bitácora de buceo BlueDive"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Journal de plongée BlueDive"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive-dykkelogg"
           }
         },
         "nl" : {
@@ -69,10 +81,22 @@
             "value" : "Garmin FIT Activity"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actividad Garmin FIT"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activité Garmin FIT"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garmin FIT-aktivitet"
           }
         },
         "nl" : {
@@ -98,10 +122,22 @@
             "value" : "BlueDive uses Bluetooth to connect to your dive computer."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive usa Bluetooth para conectarse a tu computadora de buceo."
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "BlueDive utilise le Bluetooth pour se connecter à votre ordinateur de plongée."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive bruker Bluetooth til å koble til dykkecomputeren din."
           }
         },
         "nl" : {
@@ -117,26 +153,38 @@
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "BlueDive nutzt deinen Standort, um deine Position auf der Tauchkarte anzuzeigen."
+            "state" : "needs_review",
+            "value" : "BlueDive nutzt deinen Standort, um deine Position auf der Tauchkarte anzuzeigen und die Koordinaten von Tauchplätzen einzutragen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "BlueDive uses your location to show your position on the dive map."
+            "value" : "BlueDive uses your location to show your position on the dive map and to fill in dive site coordinates."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive usa tu ubicación para mostrar tu posición en el mapa de inmersiones y completar las coordenadas de los puntos de inmersión."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "BlueDive utilise votre position pour l'afficher sur la carte de plongée."
+            "value" : "BlueDive utilise votre position pour l'afficher sur la carte de plongée et pour remplir les coordonnées des sites de plongée."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive bruker posisjonen din til å vise hvor du er på kartet og til å fylle inn koordinatene til dykkesteder."
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "BlueDive gebruikt je locatie om je positie op de duikkaart weer te geven."
+            "state" : "needs_review",
+            "value" : "BlueDive gebruikt je locatie om je positie op de duikkaart weer te geven en de coördinaten van duikstekken in te vullen."
           }
         }
       }
@@ -149,10 +197,22 @@
             "value" : "Subsurface-Tauchprotokoll"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bitácora de buceo Subsurface"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Journal de plongée Subsurface"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subsurface-dykkelogg"
           }
         },
         "nl" : {

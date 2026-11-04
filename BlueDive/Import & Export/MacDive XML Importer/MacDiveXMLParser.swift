@@ -36,6 +36,14 @@ struct BlueDiveGlobalData: Sendable {
     let maxDepth: Double           // meters or feet
     let averageDepth: Double?      // meters or feet
     let duration: Int              // seconds
+    // BlueDive XML only: the `<durationSeconds>` element (the dive computer's time, written only
+    // when the exported dive had one). nil for every other format, whose `duration` is the
+    // file's own dive time. `var` with a nil default so the other parsers can omit it.
+    var exportedDurationSeconds: Int? = nil
+    /// The surface (atmospheric) pressure the file records for the dive, in bar (BlueDive XML
+    /// `<surfacePressure>`, Subsurface `<surface pressure>`, UDDF `<surfacepressure>`); nil when
+    /// the format or the dive has none. `var` with a nil default so other parsers can omit it.
+    var surfacePressure: Double? = nil
     let interval: Int?
 
     // MARK: Decompression
@@ -197,8 +205,14 @@ struct BlueDiveSamplesData: Sendable {
     let cns: Double?               // reported CNS oxygen-toxicity load at this sample, percentage 0-100; nil when not reported per sample
     let events: [DiveProfileEvent]
     let currentGas: Int?           // active tank index at this sample point
+    let setpoint: Double?          // CCR setpoint in bar at this sample, as each importer provides it: the UDDF
+                                   // importer stores the setpoint in effect (held, ended on open circuit); the
+                                   // Subsurface importer first stores the raw po2 (may be 0 or logged on open
+                                   // circuit) and resolves it in its forward-fill; BlueDive XML stores the
+                                   // attribute as exported. DiveProfilePoint then drops 0 and non-finite values.
+                                   // nil when not reported
 
-    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil) {
+    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil, setpoint: Double? = nil) {
         self.time = time
         self.depth = depth
         self.pressure = pressure
@@ -212,6 +226,7 @@ struct BlueDiveSamplesData: Sendable {
         self.cns = cns
         self.events = events
         self.currentGas = currentGas
+        self.setpoint = setpoint
     }
 }
 
@@ -810,7 +825,8 @@ final class MacDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private func parseSeconds(_ text: String) -> Int? {
         guard !text.isEmpty else { return nil }
         if let intValue = Int(text) { return intValue }
-        if let doubleValue = Double(text) { return Int(doubleValue) }
+        // Truncated as before; Int(exactly:) returns nil instead of trapping on "1e30" or "inf".
+        if let doubleValue = Double(text) { return Int(exactly: doubleValue.rounded(.towardZero)) }
         return nil
     }
 }

@@ -90,7 +90,7 @@ struct BestMixCalculatorView: View {
                     .standardSheetPresentation(dragIndicator: .hidden)
             }
             .onAppear {
-                if lastAcknowledgedCalculatorWarningVersion != appVersionBuild() {
+                if !isCurrentAppVersion(lastAcknowledgedCalculatorWarningVersion) {
                     showCalculatorWarning = true
                 }
             }

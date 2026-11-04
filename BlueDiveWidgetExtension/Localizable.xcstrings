@@ -15,10 +15,22 @@
             "value" : "%@ h"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ h"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ h"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ t"
           }
         },
         "nl" : {
@@ -38,10 +50,22 @@
             "value" : "%@ h %@ min"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ h %@ min"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ h %@ min"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ t %@ min"
           }
         },
         "nl" : {
@@ -61,7 +85,19 @@
             "value" : "%@ min"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ min"
+          }
+        },
         "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ min"
+          }
+        },
+        "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ min"
@@ -84,10 +120,22 @@
             "value" : "Alle Taucher"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todos los buceadores"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tous les plongeurs"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle dykkere"
           }
         },
         "nl" : {
@@ -115,10 +163,22 @@
             "value" : "Bluetooth-Tauchgang"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inmersión Bluetooth"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Plongée Bluetooth"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bluetooth-dykk"
           }
         },
         "nl" : {
@@ -138,10 +198,22 @@
             "value" : "Wähle aus, wessen Statistiken angezeigt werden sollen."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige de qué buceador mostrar las estadísticas."
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisissez les statistiques du plongeur à afficher."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg hvilken dykkers statistikk som skal vises."
           }
         },
         "nl" : {
@@ -161,10 +233,22 @@
             "value" : "Tage seit"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Días desde"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Depuis (jours)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dager siden"
           }
         },
         "nl" : {
@@ -184,10 +268,22 @@
             "value" : "Tiefste"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más profunda"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Plus profonde"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dypeste"
           }
         },
         "nl" : {
@@ -208,10 +304,22 @@
             "value" : "Anzahl Tauchgänge"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Número de inmersiones"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nombre de plongées"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Antall dykk"
           }
         },
         "nl" : {
@@ -231,10 +339,22 @@
             "value" : "Taucher"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buceador"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Plongeur"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dykker"
           }
         },
         "nl" : {
@@ -254,10 +374,22 @@
             "value" : "Taucher-Statistiken"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estadísticas del buceador"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Statistiques du plongeur"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dykkerstatistikk"
           }
         },
         "nl" : {
@@ -278,10 +410,22 @@
             "value" : "Nach Taucher filtern."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtrar por nombre del buceador."
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Filtrer par nom de plongeur."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtrer etter dykkernavn."
           }
         },
         "nl" : {
@@ -301,10 +445,22 @@
             "value" : "Vom Tauchcomputer"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desde la computadora de buceo"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Depuis l'ordinateur de plongée"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fra dykkecomputer"
           }
         },
         "nl" : {
@@ -325,10 +481,22 @@
             "value" : "Importiere einen Tauchgang via Bluetooth von deinem Tauchcomputer."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importa una inmersión desde tu computadora de buceo por Bluetooth."
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importez une plongée depuis votre ordinateur de plongée via Bluetooth."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer et dykk fra dykkecomputeren din via Bluetooth."
           }
         },
         "nl" : {
@@ -348,10 +516,22 @@
             "value" : "Manuell erfassen"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrar a mano"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Saisir manuellement"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logg manuelt"
           }
         },
         "nl" : {
@@ -371,10 +551,22 @@
             "value" : "Längster"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más larga"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "La plus longue"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lengste"
           }
         },
         "nl" : {
@@ -394,10 +586,22 @@
             "value" : "Manuell"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manual"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Manuel"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuelt"
           }
         },
         "nl" : {
@@ -418,10 +622,22 @@
             "value" : "Manueller Tauchgang"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inmersión manual"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Plongée manuelle"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuelt dykk"
           }
         },
         "nl" : {
@@ -442,10 +658,22 @@
             "value" : "Erfasse schnell einen neuen Tauchgang manuell."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra rápidamente una nueva inmersión a mano."
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Notez rapidement une nouvelle plongée manuellement."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logg raskt et nytt dykk manuelt."
           }
         },
         "nl" : {
@@ -465,10 +693,22 @@
             "value" : "Sieh dir deine wichtigsten Taucher-Statistiken auf einen Blick an."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consulta tus estadísticas clave de buceador de un vistazo."
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Consultez vos statistiques de plongeur en un coup d'œil."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se den viktigste dykkerstatistikken din raskt."
           }
         },
         "nl" : {
@@ -489,10 +729,22 @@
             "value" : "Sieh dir auf einen Blick die Gesamtzahl deiner erfassten Tauchgänge an."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consulta de un vistazo el número total de inmersiones registradas."
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Consultez votre nombre total de plongées enregistrées en un coup d'œil."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se totalt antall loggførte dykk raskt."
           }
         },
         "nl" : {
@@ -512,10 +764,22 @@
             "value" : "Tauchgänge gesamt"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inmersiones totales"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Plongées totales"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Totalt antall dykk"
           }
         },
         "nl" : {
@@ -535,16 +799,112 @@
             "value" : "Gesamtzeit"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tiempo total"
+          }
+        },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Temps total"
           }
         },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total tid"
+          }
+        },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Totale tijd"
+          }
+        }
+      }
+    },
+    "unit.depth.symbol.feet" : {
+      "comment" : "Depth unit symbol for feet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ft"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ft"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ft"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pi"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ft"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ft"
+          }
+        }
+      }
+    },
+    "unit.depth.symbol.meters" : {
+      "comment" : "Depth unit symbol for metres",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "m"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "m"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "m"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "m"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "m"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "m"
           }
         }
       }

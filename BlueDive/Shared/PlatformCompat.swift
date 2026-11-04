@@ -56,6 +56,51 @@ extension View {
         self
         #endif
     }
+
+    /// Sizes an icon label in a sheet's utility items on macOS, where those items sit in the
+    /// sheet's bottom bar: a 24 pt icon frame plus the padding of the bezel that
+    /// `sheetToolbarControlOnMac()` draws around the control, so the whole bezel is clickable
+    /// and every item has the same size. The system's bezels cannot give one look — each hugs its
+    /// label (a short glyph such as `line.3.horizontal.decrease` gets a shorter button) and a
+    /// `Menu`'s bezel is lighter than a `Button`'s, even with the same button style. Pass `false`
+    /// when the label is not in a sheet (main window), which leaves it as it is. On iOS the view
+    /// is returned unchanged.
+    func sheetToolbarIconOnMac(_ isInSheet: Bool = true) -> some View {
+        #if os(macOS)
+        self
+            .frame(width: isInSheet ? 24 : nil, height: isInSheet ? 24 : nil)
+            .padding(.horizontal, isInSheet ? 12 : 0)
+            .padding(.vertical, isInSheet ? 3 : 0)
+            .contentShape(Rectangle())
+        #else
+        self
+        #endif
+    }
+
+    /// Gives a sheet's utility `Button` or `Menu` one look on macOS: it removes the system bezel
+    /// (plain style; menus drawn as buttons, without the ⌄ indicator) and draws the app's own
+    /// around the control, at the size of the label `sheetToolbarIconOnMac()` frames (24 pt icon
+    /// + 12/3 pt padding). The fixed frame gives every item the same size (a menu and a button
+    /// otherwise report slightly different ones); the bezel is drawn here, outside the control,
+    /// because a menu shifts its label down inside its pop-up cell. Pair it with
+    /// `sheetToolbarIconOnMac()` on the label. On iOS the view is returned unchanged.
+    func sheetToolbarControlOnMac() -> some View {
+        #if os(macOS)
+        self
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .frame(width: 48, height: 30)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            // The bar aligns its items by text baseline, which each label puts elsewhere (the
+            // bottom of its glyph, the initials' text), leaving a staircase of half-point steps:
+            // give every item the same baseline, its centre.
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
+            .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] }
+        #else
+        self
+        #endif
+    }
 }
 
 // MARK: - Close button on pushed sheet pages
@@ -187,6 +232,46 @@ func fullWidthPicker<SelectionValue: Hashable, Content: View>(
     Picker(title, selection: selection, content: content)
     #endif
 }
+
+/// A `Menu` that acts as a whole `List`/`Form` row (e.g. "Change Image" with its image
+/// sources), drawn like a `listRowButton()` row: accent-coloured label, full width, no ⌄
+/// indicator. On macOS a Form `Menu` draws its label through the system control, which
+/// ignores a colour or button style set from outside (the label shows grey), so the label
+/// is coloured itself, as `SightingQuantityMenu` does. On iOS this returns the plain `Menu`
+/// itself (a function, not a wrapper view, so the iOS view tree is unchanged).
+@ViewBuilder
+func listRowMenu<Content: View, MenuLabel: View>(
+    @ViewBuilder content: () -> Content,
+    @ViewBuilder label: () -> MenuLabel
+) -> some View {
+    #if os(macOS)
+    Menu(content: content) {
+        ListRowMenuLabel(label: label())
+    }
+    .menuStyle(.button)
+    .buttonStyle(.plain)
+    .menuIndicator(.hidden)
+    #else
+    Menu(content: content, label: label)
+    #endif
+}
+
+#if os(macOS)
+/// `listRowMenu`'s label on macOS: accent-coloured, full width, dimmed while disabled as
+/// `ListRowButtonStyle` is (a label coloured itself does not dim by itself).
+private struct ListRowMenuLabel<Label: View>: View {
+    let label: Label
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        label
+            .foregroundStyle(.tint)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+#endif
 
 // MARK: - List row separator
 
@@ -664,10 +749,10 @@ extension View {
 
 // MARK: - Wrapping Chip Layout
 
-#if os(macOS)
 /// Lays out chips left to right and wraps onto a new line when the next chip would not
-/// fit the proposed width (macOS filter sheet). Lines are separated by `spacing`, like
-/// the chips within a line.
+/// fit the proposed width (macOS filter sheet, and the dive profile legend's per-sensor and
+/// per-tank entries on both platforms). Lines are separated by `spacing`, like the chips
+/// within a line.
 struct WrappingChipLayout: Layout {
     var spacing: CGFloat
 
@@ -728,7 +813,6 @@ struct WrappingChipLayout: Layout {
         return rows
     }
 }
-#endif
 
 #if os(macOS)
 /// macOS wide-window density layouts: shows `wide` when the available width is at least
@@ -753,6 +837,47 @@ struct WidthAdaptiveLayout<Wide: View, Narrow: View>: View {
         }
         .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+}
+
+/// macOS wide-window density layouts: places its subviews side by side, each taking its
+/// share of the offered width (`weights`, e.g. `[3, 2]` for ⅗ and ⅖), all as tall as the
+/// tallest. It sizes to the width it is offered — a scroll view's content area, without a
+/// permanent scroller — never to its content: `containerRelativeFrame` uses the scroll
+/// view's full width, so with permanent scroll bars the row was a scroller wider than its
+/// space and the sheet window grew without end to fit it.
+struct ProportionalHStack: Layout {
+    let weights: [CGFloat]
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        // An unspecified or infinite width (a probe for the ideal or largest size) gives the
+        // subviews' ideal widths, never an infinite size.
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+            ?? subviews.reduce(0) { $0 + $1.sizeThatFits(.unspecified).width }
+        let height = subviews.indices.reduce(0) { tallest, index in
+            max(tallest, subviews[index].sizeThatFits(ProposedViewSize(width: share(index, of: width, count: subviews.count), height: nil)).height)
+        }
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        for index in subviews.indices {
+            let width = share(index, of: bounds.width, count: subviews.count)
+            subviews[index].place(
+                at: CGPoint(x: x, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: width, height: bounds.height)
+            )
+            x += width
+        }
+    }
+
+    /// The subview's share of `width`; a subview without a weight gets none.
+    private func share(_ index: Int, of width: CGFloat, count: Int) -> CGFloat {
+        let total = weights.prefix(count).reduce(0, +)
+        guard index < weights.count, total > 0 else { return 0 }
+        return width * weights[index] / total
     }
 }
 #endif

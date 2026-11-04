@@ -121,8 +121,9 @@ extension BluetoothScannerView {
                 )
                 descriptor.fetchLimit = 1
                 if let previousDive = try? modelContext.fetch(descriptor).first {
-                    // End time = start time + duration (duration is in minutes)
-                    previousDiveEndTime = previousDive.timestamp.addingTimeInterval(Double(previousDive.duration) * 60)
+                    // End time = start time + its computer/file time, else its minutes
+                    previousDiveEndTime = previousDive.timestamp.addingTimeInterval(
+                        Double(previousDive.consistentDurationSeconds ?? previousDive.duration * 60))
                 }
             }
 
@@ -191,8 +192,8 @@ extension BluetoothScannerView {
                 }
 
                 // Update previous dive end time for the next iteration
-                // divetime is in seconds
-                previousDiveEndTime = diveData.datetime.addingTimeInterval(diveData.divetime)
+                // End of the dive: the computer's dive time when it reports one, else the last sample (seconds)
+                previousDiveEndTime = diveData.datetime.addingTimeInterval(diveData.reportedDivetime ?? diveData.divetime)
 
                 importProgress = Double(index + 1) / Double(total)
             }
@@ -796,7 +797,7 @@ extension BluetoothScannerView {
         // Dive statistics
         dive.maxDepth = diveData.maxDepth
         dive.averageDepth = diveData.avgDepth
-        dive.duration = Int(diveData.divetime / 60)
+        Self.applyDuration(from: diveData, to: dive)
 
         // Temperatures
         let profileTemperatures = diveData.profile.compactMap { $0.temperature }
@@ -822,39 +823,30 @@ extension BluetoothScannerView {
         let profileGasMixOrder = Self.orderedGasMixIndices(from: diveData)
 
         if let dcTanks = diveData.tanks, !dcTanks.isEmpty {
-            var tanks: [TankData] = []
-            for (index, tank) in dcTanks.enumerated() {
-                let (o2, he, resolvedMixIdx) = Self.resolveGasMix(
-                    mixIndex: tank.gasMix,
-                    tankIndex: index,
-                    tankCount: dcTanks.count,
-                    tankUsage: tank.usage,
-                    dcGasMixes: dcGasMixes,
-                    profileGasMixOrder: profileGasMixOrder,
-                    deviceFamily: connectedDeviceFamily,
-                    headerGasMix: diveData.gasMix
-                )
-                if let resolved = resolvedMixIdx, mergeMixToTankIndex[resolved] == nil { mergeMixToTankIndex[resolved] = index }
-                // Preserve user-set fields from existing tank at the same index
+            // Same gas-to-tank assignment as the first download (Shearwater pressure inference
+            // included), so a re-download keeps each gas on its transmitter.
+            let built = Self.buildTanksFromComputerTanks(
+                dcTanks,
+                diveData: diveData,
+                deviceFamily: connectedDeviceFamily,
+                filterUnusedTanks: filterUnusedTanks
+            )
+            mergeMixToTankIndex = built.gasMixToTankIndex
+            // Preserve the identity and user-set fields of the existing tank at the same index
+            // (the transmitter slot, then the gas-only tanks in gas-mix order).
+            dive.tanks = built.tanks.enumerated().map { (index, tank) in
                 let existing = index < existingTanks.count ? existingTanks[index] : nil
-                // When the dive computer header reports no begin/end pressure (pressure pod scenario),
-                // derive start and end pressure from the first/last non-zero profile sample.
-                let profilePressures = (tank.beginPressure <= 0 || tank.endPressure <= 0)
-                    ? Self.pressureRangeFromProfile(diveData.profile, tankIndex: index)
-                    : (start: nil, end: nil)
-                let startPressure = Self.resolvedPressure(header: tank.beginPressure, fallback: profilePressures.start)
-                let endPressure   = Self.resolvedPressure(header: tank.endPressure,   fallback: profilePressures.end)
-                tanks.append(TankData(
-                    o2: o2, he: he,
-                    volume: tank.volume > 0 ? tank.volume : existing?.volume,
-                    startPressure: startPressure,
-                    endPressure: endPressure,
-                    workingPressure: tank.workingPressure > 0 ? tank.workingPressure : existing?.workingPressure,
+                return TankData(
+                    id: existing?.id ?? tank.id,
+                    o2: tank.o2, he: tank.he,
+                    volume: tank.volume ?? existing?.volume,
+                    startPressure: tank.startPressure,
+                    endPressure: tank.endPressure,
+                    workingPressure: tank.workingPressure ?? existing?.workingPressure,
                     tankMaterial: existing?.tankMaterial,
                     tankType: existing?.tankType
-                ))
+                )
             }
-            dive.tanks = tanks
         } else if !diveData.tankPressure.isEmpty {
             // Fallback: create a TankData from tank pressure samples
             let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0
@@ -937,6 +929,12 @@ extension BluetoothScannerView {
         // Water type from salinity (g/cm³): ~1.0 = Fresh, ~1.025 = Salt
         if let sal = diveData.salinity {
             dive.siteWaterType = waterType(forSalinity: sal)
+        }
+
+        // Surface pressure, only when the computer reports one: a value from an earlier import
+        // is kept when this computer records none.
+        if let pressure = Dive.validatedSurfacePressure(diveData.atmospheric) {
+            dive.surfacePressure = pressure
         }
 
         // Decompression stops

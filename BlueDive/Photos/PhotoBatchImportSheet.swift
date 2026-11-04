@@ -393,7 +393,7 @@ struct PhotoBatchImportSheet: View {
             var scanned: [Row] = []
             for (index, url) in files.enumerated() {
                 if Task.isCancelled { return }
-                let file = await Task.detached(priority: .userInitiated) { ScannedPhotoFile.scan(url) }.value
+                let file = await PhotoMetadataReader.onImageQueue { ScannedPhotoFile.scan(url) }
                 scanned.append(Row(file: file))
                 phase = .scanning(done: index + 1, total: files.count)
             }
@@ -442,13 +442,14 @@ struct PhotoBatchImportSheet: View {
     /// Matches every photo to the dives it was taken during, for the current clock correction.
     private func rematch() {
         let matcher = PhotoDiveMatcher(summaries: store.cachedSummaries)
-        let divesByID = Dictionary(store.dives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // currentDives leaves out a dive deleted since the last delivery: its profile is read below.
+        let divesByID = Dictionary(store.currentDives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let adjustment = clockAdjustment
         // A dive's precise duration reads its profile: once per dive, not once per photo.
         var durations: [UUID: Int] = [:]
         func duration(of dive: Dive) -> Int {
             if let known = durations[dive.id] { return known }
-            let value = dive.durationSeconds
+            let value = dive.profileDurationSeconds
             durations[dive.id] = value
             return value
         }
@@ -484,8 +485,9 @@ struct PhotoBatchImportSheet: View {
     }
 
     private func runImport() {
-        // Identifiers only: a dive deleted during the import is never read.
-        let divePIDs = Dictionary(store.dives.map { ($0.id, $0.persistentModelID) }, uniquingKeysWith: { first, _ in first })
+        // Identifiers only: a dive deleted during the import is never read. currentDives leaves
+        // out a dive deleted before it starts (`id` is a stored attribute, read here).
+        let divePIDs = Dictionary(store.currentDives.map { ($0.id, $0.persistentModelID) }, uniquingKeysWith: { first, _ in first })
         let groups = Dictionary(grouping: rows.filter { $0.chosen != nil }, by: { $0.chosen! })
         let total = groups.values.reduce(0) { $0 + $1.count }
         let adjustment = clockAdjustment

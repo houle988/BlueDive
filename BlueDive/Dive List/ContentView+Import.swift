@@ -89,6 +89,10 @@ struct GearSnapshot: Sendable {
     let category: String
     let diverName: String
     let serialNumber: String?
+    /// True for gear created by the current import from an id carried in the file. Another
+    /// item of the file with a different id is a distinct record (e.g. two regulators of the
+    /// same model), so it must not be merged into this one by name or serial.
+    var createdFromFileID: Bool = false
 }
 
 private let gearSentinelSerials: Set<String> = ["n/a", "na", "unknown", "none", "0", "00", "-", "--"]
@@ -703,7 +707,7 @@ extension ContentView {
                 incomingDate: dive.date,
                 incomingSiteName: dive.site?.name ?? "",
                 incomingMaxDepth: dive.maxDepth,
-                incomingDuration: dive.duration / 60,
+                incomingDuration: Dive.roundedMinutes(fromSeconds: dive.duration),
                 incomingDistanceUnit: dive.distanceFormat,
                 existing: existing,
                 reason: reason
@@ -756,10 +760,19 @@ extension ContentView {
         }
 
         // Profile tolerances — shared by Path B, the identifier path, and the heuristic.
-        // BlueDiveGlobalData.duration is seconds; Dive.duration is stored in minutes (floor).
+        // BlueDiveGlobalData.duration is seconds; Dive.duration is stored in minutes (rounded; older
+        // dives truncated — within the tolerance either way).
         let depthToleranceMeters = 1.0
         let durationToleranceMin = 2
-        let incomingDurationMin = incoming.duration / 60
+        let incomingDurationMin = Dive.roundedMinutes(fromSeconds: incoming.duration)
+        // Minutes earlier builds stored for the same file (seconds / 60, truncated, with no range
+        // check): a garbage duration (e.g. 1159792640) now rounds to 0, but a dive imported
+        // before kept the huge value, and must still be recognised on re-import.
+        let legacyIncomingDurationMin = incoming.duration / 60
+        func durationMatches(_ existingMinutes: Int) -> Bool {
+            abs(existingMinutes - incomingDurationMin) <= durationToleranceMin
+                || abs(existingMinutes - legacyIncomingDurationMin) <= durationToleranceMin
+        }
         let incomingDepthMeters = depthInMeters(incoming.maxDepth, unit: incoming.distanceFormat)
 
         // MARK: Serial + fingerprint match (Path B)
@@ -778,7 +791,7 @@ extension ContentView {
            !consumed.contains(match.id) {
             let matchDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
             if abs(matchDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
-               abs(match.duration - incomingDurationMin) <= durationToleranceMin {
+               durationMatches(match.duration) {
                 return (match, .sameComputerAndFingerprint)
             }
             // Profile mismatch — suspected recycled fingerprint after firmware reset. Fall through.
@@ -857,7 +870,7 @@ extension ContentView {
                     // resets that recycle dive IDs — even within a short time window.
                     let existingDepthMeters = depthInMeters(match.maxDepth, unit: match.importDistanceUnit)
                     if abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters,
-                       abs(match.duration - incomingDurationMin) <= durationToleranceMin {
+                       durationMatches(match.duration) {
                         return (match, .sameIdentifierAndProfile)
                     }
                     // Profile validation failed — proven wrong dive despite matching identifier+serial.
@@ -893,7 +906,7 @@ extension ContentView {
                 guard !identifierRejectedIDs.contains(existing.id) else { return false }
                 guard !consumed.contains(existing.id) else { return false }
                 guard abs(existing.timestamp.timeIntervalSince(date)) <= dateTolerance else { return false }
-                guard abs(existing.duration - incomingDurationMin) <= durationToleranceMin else { return false }
+                guard durationMatches(existing.duration) else { return false }
                 let existingDepthMeters = depthInMeters(existing.maxDepth, unit: existing.importDistanceUnit)
                 guard abs(existingDepthMeters - incomingDepthMeters) <= depthToleranceMeters else { return false }
                 let existingSiteName = existing.siteName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -958,7 +971,8 @@ extension ContentView {
                 ppo2: sample.ppo2,
                 sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
-                currentGas: sample.currentGas
+                currentGas: sample.currentGas,
+                setpoint: sample.setpoint
             )
         }
         
@@ -1026,7 +1040,6 @@ extension ContentView {
             boat: diveData.boat,
             maxDepth: diveData.maxDepth,
             averageDepth: averageDepth,
-            duration: diveData.duration / 60, // Convert seconds to minutes
             waterTemperature: diveData.tempLow,
             minTemperature: diveData.tempLow,
             airTemperature: diveData.tempAir,
@@ -1048,9 +1061,16 @@ extension ContentView {
             siteAltitude: diveData.site?.altitude,
             siteLatitude: diveData.site?.latitude,
             siteLongitude: diveData.site?.longitude,
+            surfacePressure: diveData.surfacePressure,
             profileSamples: profilePoints
         )
-        
+
+        // Dive time: the file's seconds and the minutes rounded from them (30 s rounds up);
+        // a BlueDive XML file carries the computer's time in <durationSeconds>.
+        newDive.setImportedDuration(fileSeconds: diveData.duration,
+                                    exportedSeconds: diveData.exportedDurationSeconds,
+                                    isBlueDiveXML: diveData.isBlueDiveXMLImport)
+
         // Exit GPS (BlueDive XML round-trip)
         newDive.exitLatitude  = diveData.site?.exitLatitude
         newDive.exitLongitude = diveData.site?.exitLongitude
@@ -1146,12 +1166,18 @@ extension ContentView {
 
                 // Priority 1: UUID match — O(1) snapshot lookup, Gear resolved lazily on demand.
                 // Priority 2: name + category + diver + serial — O(1) hash index, resolved lazily.
+                // An item with its own id is never merged into gear this import created from
+                // another id of the file: the source holds them as separate records.
                 let matchedID: UUID?
                 if let gearID = gearItem.id, snapshotByID[gearID] != nil {
                     matchedID = gearID
                 } else {
                     let key = gearMatchKey(name: gearName, category: category, diverName: gearItem.diverName, serial: gearItem.serial)
-                    matchedID = snapshotByMatchKey[key]?.id
+                    if let snap = snapshotByMatchKey[key], !(gearItem.id != nil && snap.createdFromFileID) {
+                        matchedID = snap.id
+                    } else {
+                        matchedID = nil
+                    }
                 }
 
                 let existingGear: Gear?
@@ -1193,7 +1219,7 @@ extension ContentView {
                         gearNotes: gearItem.gearNotes
                     )
                     modelContext.insert(newGear)
-                    let snap = GearSnapshot(id: newGear.id, name: newGear.name, category: newGear.category, diverName: newGear.diverName, serialNumber: newGear.serialNumber)
+                    let snap = GearSnapshot(id: newGear.id, name: newGear.name, category: newGear.category, diverName: newGear.diverName, serialNumber: newGear.serialNumber, createdFromFileID: gearItem.id != nil)
                     snapshotByID[newGear.id] = snap
                     snapshotByMatchKey[gearMatchKey(name: newGear.name, category: newGear.category, diverName: newGear.diverName, serial: newGear.serialNumber)] = snap
                     resolvedGearByID[newGear.id] = newGear
@@ -1293,14 +1319,23 @@ extension ContentView {
                 ppo2: sample.ppo2,
                 sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
-                currentGas: sample.currentGas
+                currentGas: sample.currentGas,
+                setpoint: sample.setpoint
             ))
         }
         earlier.profileSamples = combinedSamples
 
         // --- Recalculate maxDepth ---
-        let allDepths = combinedSamples.map(\.depth)
-        earlier.maxDepth = allDepths.max() ?? earlier.maxDepth
+        // Deepest of the merged profile and both dives' stored maxima: a dive computer can
+        // record a maximum deeper than any logged sample (the peak fell between samples), and
+        // that recorded value must survive the merge. The later dive's stored maximum is only
+        // compared when both dives share a depth unit, as stored values are never converted.
+        var depthCandidates = combinedSamples.map(\.depth)
+        depthCandidates.append(earlier.maxDepth)
+        if later.importDistanceUnit == earlier.importDistanceUnit {
+            depthCandidates.append(later.maxDepth)
+        }
+        earlier.maxDepth = depthCandidates.max() ?? earlier.maxDepth
 
         // --- Recalculate averageDepth (time-weighted) ---
         if combinedSamples.count >= 2 {
@@ -1317,11 +1352,13 @@ extension ContentView {
         }
 
         // --- Recalculate duration ---
-        // Use the last sample time (which includes surface interval) converted to minutes
+        // Use the last sample time (which includes surface interval) converted to minutes.
+        // setDuration(minutes:) also clears the earlier dive's computer time, which no longer
+        // matches the merged dive.
         if let lastTime = combinedSamples.last?.time {
-            earlier.duration = Int(lastTime.rounded())
+            earlier.setDuration(minutes: Int(exactly: lastTime.rounded()) ?? earlier.duration)
         } else {
-            earlier.duration = earlier.duration + surfaceMinutes + later.duration
+            earlier.setDuration(minutes: earlier.duration + surfaceMinutes + later.duration)
         }
 
         // --- CNS: sum both segments, capped at 100% ---
@@ -1404,6 +1441,9 @@ extension ContentView {
         // stop lists concatenate directly with no time offset.
         earlier.decoStops = earlier.decoStops + later.decoStops
         earlier.isDecompressionDive = earlier.isDecompressionDive || later.isDecompressionDive
+        if earlier.surfacePressure == nil {
+            earlier.surfacePressure = later.surfacePressure
+        }
         if earlier.decompressionAlgorithm == nil {
             earlier.decompressionAlgorithm = later.decompressionAlgorithm
         }

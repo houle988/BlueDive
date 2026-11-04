@@ -278,12 +278,19 @@ enum ScientificNameDetector {
     /// the last article ("A green sea turtle (…)" → "green sea turtle"), else from the first
     /// capitalised word, and after the last lower-case word followed by a capitalised one
     /// ("Diver with Giant Moray (…)" → "Giant Moray"); at most four words. One word after a
-    /// comma is usually a place ("Seal, Wales (…)"): no hint.
+    /// comma is usually a place ("Seal, Wales (…)"): no hint. The Norwegian and Spanish articles
+    /// count only when the app is in that language, leaving other users' imports unchanged: the
+    /// Norwegian ones are also ordinary French words ("en" = in, "et" = and).
     private static func commonNameHint(before: String) -> String? {
         let segments = before.split(whereSeparator: { ",;:.".contains($0) })
         let segment = segments.last.map(String.init) ?? ""
         var words = segment.split(whereSeparator: \.isWhitespace).map(String.init)
-        let articles: Set<String> = ["a", "an", "the", "un", "une", "le", "la", "les", "der", "die", "das", "ein", "eine", "de", "het", "een"]
+        var articles: Set<String> = ["a", "an", "the", "un", "une", "le", "la", "les", "der", "die", "das", "ein", "eine", "de", "het", "een"]
+        switch UserPreferences.shared.languageMode.effective {
+        case .norwegianBokmal: articles.formUnion(["en", "ei", "et"])
+        case .spanish: articles.formUnion(["el", "los", "las", "una"])  // "la", "un" are above
+        default: break
+        }
         if let last = words.lastIndex(where: { articles.contains($0.lowercased()) }) {
             words = Array(words[(last + 1)...])
         } else {

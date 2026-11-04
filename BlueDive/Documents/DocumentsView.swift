@@ -240,8 +240,11 @@ struct DocumentsView: View {
                                                 .columnHeaderRow()
                                         }
                                         #endif
-                                        ForEach(certs) { cert in
-                                            certRow(cert, isFirst: cert.id == certs.first?.id, isLast: cert.id == certs.last?.id)
+                                        // By record, not by `id`: two certifications can share an id
+                                        // (e.g. the same file imported on two devices before they synced).
+                                        ForEach(certs, id: \.persistentModelID) { cert in
+                                            certRow(cert, isFirst: cert.persistentModelID == certs.first?.persistentModelID,
+                                                    isLast: cert.persistentModelID == certs.last?.persistentModelID)
                                         }
                                     } header: {
                                         Text(agency)
@@ -303,8 +306,10 @@ struct DocumentsView: View {
                                                 .columnHeaderRow()
                                         }
                                         #endif
-                                        ForEach(policies) { insurance in
-                                            insuranceRow(insurance, isFirst: insurance.id == policies.first?.id, isLast: insurance.id == policies.last?.id)
+                                        // By record, not by `id` (see the certification sections).
+                                        ForEach(policies, id: \.persistentModelID) { insurance in
+                                            insuranceRow(insurance, isFirst: insurance.persistentModelID == policies.first?.persistentModelID,
+                                                         isLast: insurance.persistentModelID == policies.last?.persistentModelID)
                                         }
                                     } header: {
                                         Text(displayName)
@@ -404,29 +409,31 @@ struct DocumentsView: View {
                         closeToolbarButton { onClose() }
                     }
                     // In a sheet (from Diver Profile): the diver filter only, no app-wide buttons.
-                    DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
                     #if os(macOS)
-                    // One ToolbarItemGroup so macOS shares a single glass capsule, as the iOS
-                    // navigation bar does. In a sheet macOS would draw a .primaryAction item as
-                    // the sheet's accent-filled default button, so it uses .sheetPrimaryAction.
+                    // In a sheet macOS would draw a .primaryAction item as the sheet's
+                    // accent-filled default button, so the items use .sheetPrimaryAction; the
+                    // diver filter leads them, as macOS draws no .navigation item in a sheet.
                     ToolbarItemGroup(placement: .sheetPrimaryAction) {
-                        addDocumentMenu
-                            .toolbarMenuIndicatorHiddenOnMac()
-                        documentsMoreMenu
-                            .toolbarMenuIndicatorHiddenOnMac()
+                        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver, inSheet: true).picker
+                            .sheetToolbarControlOnMac()
+                        addDocumentMenu(inSheet: true)
+                            .sheetToolbarControlOnMac()
+                        documentsMoreMenu(inSheet: true)
+                            .sheetToolbarControlOnMac()
                     }
                     #else
+                    DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver)
                     ToolbarItem(placement: .primaryAction) {
-                        addDocumentMenu
+                        addDocumentMenu()
                     }
                     ToolbarItem(placement: .primaryAction) {
-                        documentsMoreMenu
+                        documentsMoreMenu()
                     }
                     #endif
                 } else {
                     MainWindowToolbar(uniqueDivers: uniqueDivers, selectedDiver: $selectedDiver) {
-                        addDocumentMenu
-                        documentsMoreMenu
+                        addDocumentMenu()
+                        documentsMoreMenu()
                     }
                 }
             }
@@ -583,7 +590,8 @@ struct DocumentsView: View {
     // MARK: - Toolbar Controls
     // Shared by the iOS and macOS toolbar layouts in `body`.
 
-    private var addDocumentMenu: some View {
+    /// `inSheet`: shown with a sheet's utility items, which share one label frame on macOS.
+    private func addDocumentMenu(inSheet: Bool = false) -> some View {
         Menu {
             Button { showAddCertification = true } label: {
                 Label("Add Certification", systemImage: "graduationcap")
@@ -594,11 +602,12 @@ struct DocumentsView: View {
         } label: {
             Image(systemName: "plus")
                 .foregroundStyle(.cyan)
+                .sheetToolbarIconOnMac(inSheet)
         }
         .accessibilityLabel(Text("Add Document"))
     }
 
-    private var documentsMoreMenu: some View {
+    private func documentsMoreMenu(inSheet: Bool = false) -> some View {
         Menu {
             Section("Certifications") {
                 Button {
@@ -634,6 +643,7 @@ struct DocumentsView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .foregroundStyle(.cyan)
+                .sheetToolbarIconOnMac(inSheet)
         }
         .accessibilityLabel(Text("More"))
     }
@@ -1041,12 +1051,14 @@ struct DocumentsView: View {
         var dupPreview: [ImportPreviewItem] = []
 
         for item in parsed {
+            // A record listed again later in the same file (same id) is a duplicate too;
+            // records of the file with different ids stay distinct.
             let isDuplicate = certifications.contains { existing in
                 existing.id == item.id ||
                 (!item.certificationNumber.isEmpty &&
                  existing.certificationNumber == item.certificationNumber &&
                  existing.organization == item.organization)
-            }
+            } || newItems.contains { $0.id == item.id }
             let orgDisplay = CertificationOrganization(rawValue: item.organization)?.localizedName ?? item.organization
             let previewItem = ImportPreviewItem(
                 name: item.name,
@@ -1113,7 +1125,7 @@ struct DocumentsView: View {
                  existing.coverageType == item.coverageType &&
                  Int(existing.startDate.timeIntervalSince1970) == Int(item.startDate.timeIntervalSince1970) &&
                  Int(existing.endDate.timeIntervalSince1970) == Int(item.endDate.timeIntervalSince1970))
-            }
+            } || newItems.contains { $0.id == item.id } // listed again later in the same file
             let detail = [
                 item.coverageType,
                 dateFormatter.string(from: item.startDate) + " – " + dateFormatter.string(from: item.endDate)
@@ -1159,6 +1171,8 @@ struct DocumentsView: View {
     private func commitCertImport() {
         var count = 0
         for item in pendingCertImport {
+            // Stored since the preview (e.g. delivered by iCloud meanwhile): not inserted twice.
+            guard !certifications.contains(where: { $0.id == item.id }) else { continue }
             let cert = Certification(
                 id: item.id,
                 name: item.name,
@@ -1182,6 +1196,10 @@ struct DocumentsView: View {
         pendingCertImport = []
         importPreviewNew = []
         importPreviewDuplicates = []
+        guard count > 0 else {
+            showAllAlreadyImported()
+            return
+        }
         try? modelContext.save()
         importedCount = count
         importSuccessTarget = .certifications
@@ -1194,6 +1212,8 @@ struct DocumentsView: View {
     private func commitInsuranceImport() {
         var count = 0
         for item in pendingInsuranceImport {
+            // Stored since the preview (e.g. delivered by iCloud meanwhile): not inserted twice.
+            guard !insurances.contains(where: { $0.id == item.id }) else { continue }
             let record = DivingInsurance(
                 id: item.id,
                 insurerName: item.insurerName,
@@ -1213,12 +1233,30 @@ struct DocumentsView: View {
         pendingInsuranceImport = []
         importPreviewNew = []
         importPreviewDuplicates = []
+        guard count > 0 else {
+            showAllAlreadyImported()
+            return
+        }
         try? modelContext.save()
         importedCount = count
         importSuccessTarget = .insurance
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
             showImportSuccess = true
+        }
+    }
+
+    /// Every pending record was stored after the preview (e.g. delivered by iCloud meanwhile):
+    /// the same message as when the file holds nothing new, after the preview has closed.
+    private func showAllAlreadyImported() {
+        importError = NSLocalizedString(
+            "All records in the file are already imported.",
+            bundle: Bundle.forAppLanguage(),
+            comment: "Message when all records in the import file already exist in the database."
+        )
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            showImportError = true
         }
     }
 }
@@ -1943,6 +1981,9 @@ struct AddCertificationView: View {
                 notes: trimmedNotes.isEmpty ? nil : trimmedNotes
             )
             modelContext.insert(newCert)
+            // Saved at once, as Add Gear does: the Documents list identifies rows by
+            // persistentModelID, which changes when an unsaved record is first saved.
+            try? modelContext.save()
             if hasExpiration {
                 newCert.scheduleExpirationReminder()
             }

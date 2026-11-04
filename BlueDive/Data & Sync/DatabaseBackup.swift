@@ -296,3 +296,20 @@ nonisolated enum DatabaseBackup {
         return "\(system) \(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
     }
 }
+
+extension DatabaseBackup {
+    /// Removes the staging (`BlueDiveBackup-<UUID>`) and archive (`BlueDiveBackupZip-<UUID>`)
+    /// folders a backup left in tmp: the app was stopped while a backup was built or while its
+    /// save dialog was open. Run once at launch, when no backup can be running.
+    nonisolated static func removeLeftoverFolders() {
+        let fm = FileManager.default
+        let tmp = fm.temporaryDirectory
+        guard let names = try? fm.contentsOfDirectory(atPath: tmp.path) else { return }
+        for name in names {
+            for prefix in ["BlueDiveBackup-", "BlueDiveBackupZip-"]
+            where name.hasPrefix(prefix) && UUID(uuidString: String(name.dropFirst(prefix.count))) != nil {
+                try? fm.removeItem(at: tmp.appendingPathComponent(name, isDirectory: true))
+            }
+        }
+    }
+}

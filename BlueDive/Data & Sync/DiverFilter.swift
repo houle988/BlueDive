@@ -70,6 +70,14 @@ enum DiverFilter {
         selected.isEmpty ? insurances : insurances.filter { $0.diverName.trimmingCharacters(in: .whitespaces) == selected }
     }
 
+    /// The buddy names of a dive's comma-separated `buddies` text, trimmed, empty ones dropped
+    /// (as the XML and UDDF exporters split it). Shared by the buddy filter and its menu.
+    nonisolated static func buddyNames(_ buddies: String) -> [String] {
+        buddies.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
     /// Gas filter rule shared by the Dives list, Map and Statistics: "None" (empty `gas`) keeps
     /// dives with no tanks; otherwise a dive matches when any of its tanks uses `gas`, and
     /// `negate` keeps the dives where none does.
@@ -87,7 +95,8 @@ enum DiverFilter {
         minRating: Int,
         country: String?, countryNegate: Bool,
         diveType: String?, diveTypeNegate: Bool,
-        tag: String?,
+        tag: String?, tagNegate: Bool,
+        buddy: String?, buddyNegate: Bool,
         marineLife: [String], marineLifeMode: FilterMarineLifeMode
     ) -> [Dive] {
         dives.filter { dive in
@@ -131,8 +140,15 @@ enum DiverFilter {
                     if !trimmed.isEmpty { return false }
                 } else {
                     let diveTags = dive.tags?.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-                    if !diveTags.contains(tag) { return false }
+                    if tagNegate { if diveTags.contains(tag) { return false } }
+                    else { if !diveTags.contains(tag) { return false } }
                 }
+            }
+            if let buddy = buddy {
+                let names = buddyNames(dive.buddies)
+                if buddy.isEmpty { if !names.isEmpty { return false } }
+                else if buddyNegate { if names.contains(buddy) { return false } }
+                else { if !names.contains(buddy) { return false } }
             }
             if !diveMatchesMarineLifeFilter(dive, species: marineLife, mode: marineLifeMode) { return false }
             return true
@@ -226,12 +242,31 @@ struct DiverSourcesFeeder: View {
 struct DiverFilterToolbar: ToolbarContent {
     let uniqueDivers: [String]
     @Binding var selectedDiver: String
+    /// The picker sits with a sheet's utility items: on macOS its label gets their common frame.
+    var inSheet = false
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             picker
                 .toolbarMenuIndicatorHiddenOnMac()
         }
+    }
+
+    /// The diver filter for a sheet whose only utility item it is (Trips, Calendar, Diver Profile).
+    /// macOS draws no `.navigation` item (`.topBarLeading`) in a sheet's toolbar, so there it sits
+    /// with the sheet's utility items (`.sheetPrimaryAction`); on iOS it is exactly `DiverFilterToolbar`.
+    /// A sheet with other utility items puts `picker` (with `inSheet: true` and
+    /// `sheetToolbarControlOnMac()`) first in their macOS group instead (Statistics, Documents).
+    @ToolbarContentBuilder
+    static func sheetItem(uniqueDivers: [String], selectedDiver: Binding<String>) -> some ToolbarContent {
+        #if os(macOS)
+        ToolbarItemGroup(placement: .sheetPrimaryAction) {
+            DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: selectedDiver, inSheet: true).picker
+                .sheetToolbarControlOnMac()
+        }
+        #else
+        DiverFilterToolbar(uniqueDivers: uniqueDivers, selectedDiver: selectedDiver)
+        #endif
     }
 
     private var isActive: Bool { !selectedDiver.isEmpty }
@@ -281,9 +316,11 @@ struct DiverFilterToolbar: ToolbarContent {
                         .foregroundStyle(Color.black)
                 }
                 .accessibilityHidden(true)
+                .sheetToolbarIconOnMac(inSheet)
             } else {
                 Image(systemName: "person.2")
                     .foregroundStyle(Color.cyan)
+                    .sheetToolbarIconOnMac(inSheet)
             }
         }
         .accessibilityLabel(Self.accessibilityTitle(selectedDiver: selectedDiver))
@@ -687,5 +724,10 @@ struct NoEntriesForDiverView<Actions: View>: View {
         } actions: {
             actions()
         }
+        #if os(macOS)
+        // macOS sizes ContentUnavailableView to its content: fill the container so a sheet
+        // keeps its page size and the screen's AppBackground covers it, as on iOS.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #endif
     }
 }

@@ -28,12 +28,12 @@ struct AppearanceSettingsView: View {
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
                     #if os(macOS)
-                    Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
+                    Text("Choose System to use your device's language (System Settings → General → Language & Region), or override with English, Français, Deutsch, Nederlands, Norsk bokmål, or Español. Switching from or to System will close Settings to apply the change.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
                     #else
-                    Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, Deutsch, or Nederlands. Switching from or to System will close Settings to apply the change.")
+                    Text("Choose System to use your device's language (Settings → General → Language & Region), or override with English, Français, Deutsch, Nederlands, Norsk bokmål, or Español. Switching from or to System will close Settings to apply the change.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
@@ -84,6 +84,38 @@ struct AppearanceSettingsView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
                     #endif
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.primary.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $prefs.wideSpeciesImages) {
+                            Label {
+                                Text("Wide species photos")
+                            } icon: {
+                                Image(systemName: "photo")
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                        .fullWidthSwitch()
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    Text("Shows species photos in a wider 3:2 format in Marine Life and on species pages. Photos that are taller than they are wide are cropped at the top and bottom.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding()
                 .background(

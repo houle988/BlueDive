@@ -29,7 +29,7 @@ BlueDive is a modern, actively maintained dive log app designed as a full-featur
 - **Reminders** — Notifications for upcoming gear service and for certification and insurance expiry
 - **Database backup** — Back up your full logbook as a zip archive
 - **Units, appearance & language** — Each dive keeps the units it was imported in and is shown in your preferred units; light/dark mode override; in-app language independent of the system
-- **Localized** — Available in English (Canada), French (Canada), German, and Dutch
+- **Localized** — Available in English (Canada), French (Canada), German, Dutch, Norwegian Bokmål, and Spanish (neutral, for Spain and Latin America)
 - **Widget** — Small and medium widgets showing recent dive stats, on the Home Screen and on the Mac desktop
 
 ## Requirements

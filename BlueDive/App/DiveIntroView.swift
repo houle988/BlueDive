@@ -2052,7 +2052,7 @@ struct RootLaunchContainer<Content: View>: View {
     @State private var introRunCount: Int = 0
 
     private var shouldShowIntro: Bool {
-        lastIntroShownVersion != DiveIntroConfig.currentVersion
+        !isCurrentAppVersion(lastIntroShownVersion)
     }
 
     var body: some View {

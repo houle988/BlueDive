@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 import ImageIO
+import QuickLook
 #if os(macOS)
 import AppKit
 #endif
@@ -298,54 +299,84 @@ struct DetailCard: View {
     }
 }
 
-// MARK: - Gear Chip View
+// MARK: - Dive Gear Row
 
-struct GearChipView: View {
+/// One gear item in a dive's Equipment card: the brand logo or category symbol, the name, its
+/// weight and next service date underneath, and the service indicator or "Inactive" trailing.
+/// Compact, for the dive page (the main Equipment list's `GearRow` shows the inventory details).
+struct DiveGearRow: View {
     let gear: Gear
+    @Environment(\.locale) private var locale
 
-    private var categoryColor: Color {
-        GearCategory(exportKeyOrRawValue: gear.category)?.swiftUIColor ?? .secondary
-    }
-
-    private var categoryIcon: String {
-        GearCategory(exportKeyOrRawValue: gear.category)?.icon ?? "wrench.and.screwdriver.fill"
+    /// "0.54 kg · Service: 12 Mar 2027": the weight in the display unit and the next service date
+    /// in the app language, each only when set (empty when neither is).
+    private var detailText: String {
+        var parts: [String] = []
+        if gear.weightContribution > 0 {
+            let unit = UserPreferences.shared.weightUnit
+            parts.append(unit.formatted(gear.weightContribution,
+                                        from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? unit.symbol)))
+        }
+        if let due = gear.nextServiceDue {
+            let date = due.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale))
+            parts.append(String(format: NSLocalizedString("Service: %@", bundle: .forAppLanguage(), value: "Service: %@",
+                                                          comment: "A gear item's next service date in a dive's Equipment tab, e.g. Service: 12 Mar 2027"),
+                                date))
+        }
+        return parts.joined(separator: " · ")
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(gear.isInactive ? .red : .green)
-                    .frame(width: 6, height: 6)
-                    .accessibilityLabel(gear.isInactive ? Text("Inactive") : Text("Active"))
+        HStack(spacing: 12) {
+            GearIconView(manufacturer: gear.manufacturer, category: gear.gearCategory, size: 36)
 
-                Image(systemName: categoryIcon)
-                    .font(.caption)
-                    .foregroundStyle(categoryColor)
-                    .accessibilityHidden(true)
+            // Every row has the height of a two-line name plus a details line (an invisible copy
+            // of that layout sizes it, exact at every text size), with the visible text centred in
+            // it: a short name or a row without details sits beside the icon, not at the top.
+            ZStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: " ")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .lineLimit(2, reservesSpace: true)
+                    Text(verbatim: " ")
+                        .font(.caption)
+                        .lineLimit(1, reservesSpace: true)
+                }
+                .hidden()
+                .accessibilityHidden(true)
 
-                Text(gear.gearCategory?.localizedName ?? LocalizedStringKey(gear.category))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(gear.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(gear.isInactive ? .secondary : .primary)
+                        .lineLimit(2)
+                    if !detailText.isEmpty {
+                        Text(verbatim: detailText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
             }
 
-            Text(gear.name)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.primary)
-
             Spacer(minLength: 0)
+
+            if gear.isInactive {
+                Text("Inactive")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            } else {
+                GearServiceIndicator(gear: gear)
+            }
         }
-        .padding(12)
-        .frame(width: 140, height: 90, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(categoryColor.opacity(0.15))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(categoryColor.opacity(0.3), lineWidth: 1)
-        )
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        // The whole row opens the item, not only what is drawn.
+        .contentShape(Rectangle())
     }
 }
 
@@ -390,163 +421,6 @@ struct EquipmentInfoCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(color.opacity(0.3), lineWidth: 1)
         )
-    }
-}
-
-// MARK: - Add Gear To Dive View
-
-struct AddGearToDiveView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Bindable var dive: Dive
-
-    @Query private var allGear: [Gear]
-
-    // Équipements déjà utilisés dans cette plongée
-    private var usedGearIds: Set<UUID> {
-        Set((dive.usedGear ?? []).map { $0.id })
-    }
-
-    // Équipements disponibles (non encore ajoutés)
-    private var availableGear: [Gear] {
-        allGear.filter { !usedGearIds.contains($0.id) && !$0.isInactive }
-    }
-
-    /// Gear items grouped by category, sorted A-Z within each group.
-    private var groupedAvailableGear: [(key: String, items: [Gear])] {
-        let grouped = Dictionary(grouping: availableGear) { gear in
-            GearCategory(rawValue: gear.category)?.rawValue ?? gear.category
-        }
-        return grouped.sorted { $0.key < $1.key }.map { (key: $0.key, items: $0.value.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) }
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                AppBackground().ignoresSafeArea()
-
-                if availableGear.isEmpty {
-                    emptyStateView
-                } else {
-                    gearList
-                }
-            }
-            .navigationTitle("Add Equipment")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .confirmationActionForeground(.orange)
-                }
-            }
-        }
-    }
-
-    private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "tray")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-
-            Text("No Equipment Available")
-                .font(.headline)
-                .foregroundStyle(.primary)
-
-            Text("All your equipment is already added to this dive or you haven't created any equipment yet.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-    }
-
-    private var gearList: some View {
-        groupedList {
-            ForEach(groupedAvailableGear, id: \.key) { category, items in
-                Section {
-                    ForEach(items) { gear in
-                        Button(action: {
-                            withAnimation {
-                                addGear(gear)
-                            }
-                        }) {
-                            HStack(spacing: 12) {
-                                // Icône de catégorie
-                                ZStack {
-                                    Circle()
-                                        .fill(categoryColor(for: gear.category).opacity(0.2))
-                                        .frame(width: 40, height: 40)
-
-                                    Image(systemName: categoryIcon(for: gear.category))
-                                        .foregroundStyle(categoryColor(for: gear.category))
-                                }
-
-                                // Info de l'équipement
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(gear.name)
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-
-                                    HStack(spacing: 8) {
-                                        Text(gear.gearCategory?.localizedName ?? LocalizedStringKey(gear.category))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-
-                                        if gear.weightContribution > 0 {
-                                            Text("• \(UserPreferences.shared.weightUnit.formatted(gear.weightContribution, from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? UserPreferences.shared.weightUnit.symbol)))")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-
-                                        Label(Double(gear.totalDivesCount).localizedString(decimals: 0), systemImage: "water.waves")
-                                            .font(.caption)
-                                            .foregroundStyle(.cyan)
-                                    }
-
-                                    if !gear.diverName.isEmpty {
-                                        Text(gear.diverName)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-
-                                Spacer()
-
-                                // Bouton ajouter
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-                        .listRowBackground(Color.primary.opacity(0.05))
-                        .listRowButton()
-                    }
-                } header: {
-                    Text(GearCategory(rawValue: category)?.localizedName ?? LocalizedStringKey(category))
-                }
-            }
-        }
-        .scrollContentBackground(.hidden)
-    }
-
-    @MainActor
-    private func addGear(_ gear: Gear) {
-        if dive.usedGear == nil { dive.usedGear = [] }
-        dive.usedGear!.append(gear)
-        try? modelContext.save()
-    }
-
-    private func categoryColor(for category: String) -> Color {
-        GearCategory(exportKeyOrRawValue: category)?.swiftUIColor ?? .secondary
-    }
-
-    private func categoryIcon(for category: String) -> String {
-        GearCategory(exportKeyOrRawValue: category)?.icon ?? "wrench.and.screwdriver.fill"
     }
 }
 
@@ -627,6 +501,38 @@ struct MenuTextField: View {
             }
         }
     }
+}
+
+/// Autocomplete suggestions for the text fields of an edit sheet, built in one pass over the
+/// logbook when the sheet opens rather than on every redraw (every keystroke redraws the whole
+/// sheet, which would read each field of every dive again). Values are trimmed, de-duplicated
+/// regardless of case (the first spelling found is kept) and sorted. A value saved on another
+/// device while the sheet is open is suggested from the sheet's next opening.
+struct DiveFieldSuggestions {
+    private var values: [AnyKeyPath: [String]] = [:]
+
+    init() {}
+
+    /// Skips dives deleted on another device, which `DiveStore.dives` may still briefly hold
+    /// (reading their attributes would crash).
+    @MainActor
+    init(dives: [Dive], fields: [KeyPath<Dive, String>] = [], optionalFields: [KeyPath<Dive, String?>] = []) {
+        var seen: [AnyKeyPath: Set<String>] = [:]
+        var found: [AnyKeyPath: [String]] = [:]
+        func add(_ raw: String?, for field: AnyKeyPath) {
+            guard let value = raw?.trimmingCharacters(in: .whitespaces), !value.isEmpty,
+                  seen[field, default: []].insert(value.lowercased()).inserted else { return }
+            found[field, default: []].append(value)
+        }
+        for dive in dives where !dive.isDeleted && dive.modelContext != nil {
+            for field in fields { add(dive[keyPath: field], for: field) }
+            for field in optionalFields { add(dive[keyPath: field], for: field) }
+        }
+        values = found.mapValues { $0.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending } }
+    }
+
+    /// The suggestions for one field (empty before the sheet appears or when no dive has a value).
+    subscript(_ field: AnyKeyPath) -> [String] { values[field] ?? [] }
 }
 
 struct AutocompleteMenuTextField: View {
@@ -723,7 +629,8 @@ struct SiteSearchField: View {
     @FocusState private var isFocused: Bool
 
     private var selectedDisplayText: String {
-        guard let site = selectedSite else { return "" }
+        // The selection is kept across redraws; a dive deleted on another device is not read.
+        guard let site = selectedSite, !site.isDeleted, site.modelContext != nil else { return "" }
         return site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
     }
 
@@ -838,6 +745,146 @@ struct SiteSearchField: View {
 }
 
 
+
+// MARK: - Dive Copy Search Field
+
+/// Picks another dive to copy from, as `SiteSearchField` picks a site: the field shows `recents`
+/// while empty and focused, and the `candidates` matching the typed text (site, location,
+/// country or dive number) otherwise. Reads only `DiveSummary` values.
+struct DiveCopySearchField: View {
+    @Binding var selection: DiveSummary?
+    let recents: [DiveSummary]
+    let candidates: [DiveSummary]
+
+    @Environment(\.locale) private var locale
+    @State private var searchText: String = ""
+    @State private var showSuggestions: Bool = false
+    @FocusState private var isFocused: Bool
+
+    /// "#153 · Flintkote · 1 Aug 2026" (the number as the region formats it, the date in the
+    /// app language; parts left out when empty).
+    private func label(for summary: DiveSummary) -> String {
+        var parts: [String] = []
+        if let number = summary.diveNumber {
+            parts.append("#" + Double(number).localizedString(decimals: 0))
+        }
+        if !summary.siteName.isEmpty { parts.append(summary.siteName) }
+        parts.append(summary.timestamp.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale)))
+        return parts.joined(separator: " · ")
+    }
+
+    private var filtered: [DiveSummary] {
+        // Trimmed, so a leading or trailing space still finds the dive.
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard selection == nil, !query.isEmpty else { return [] }
+        return candidates.filter { summary in
+            let number = summary.diveNumber.map(String.init) ?? ""
+            let haystack = [summary.siteName, summary.location, summary.siteCountry ?? "", number].joined(separator: " ")
+            return haystack.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: selection == nil ? "magnifyingglass" : "checkmark.circle.fill")
+                    .foregroundStyle(DiveTab.equipment.color)
+                    .frame(width: 24)
+                formTextField("Search dives…", text: $searchText)
+                    .foregroundStyle(.primary)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+                    .onChange(of: searchText) {
+                        // Editing the text of a chosen dive starts a new search.
+                        if let chosen = selection, searchText != label(for: chosen) {
+                            selection = nil
+                            searchText = ""
+                        }
+                        showSuggestions = isFocused
+                    }
+                    .onChange(of: isFocused) {
+                        if isFocused {
+                            showSuggestions = true
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                if !isFocused { showSuggestions = false }
+                            }
+                        }
+                    }
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        selection = nil
+                        showSuggestions = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .clearButtonTapTarget()
+                            .accessibilityLabel(Text("Clear"))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if showSuggestions {
+                if searchText.isEmpty {
+                    if !recents.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Recent")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 6)
+                                .padding(.bottom, 2)
+                            ForEach(recents) { summary in
+                                row(summary, icon: "clock", iconColor: DiveTab.equipment.color)
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                        .padding(.top, 4)
+                    }
+                } else if !filtered.isEmpty {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(filtered) { summary in
+                                row(summary, icon: "magnifyingglass", iconColor: .secondary)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 260)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private func row(_ summary: DiveSummary, icon: String, iconColor: Color) -> some View {
+        Button {
+            searchText = label(for: summary)
+            selection = summary
+            showSuggestions = false
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(iconColor)
+                    .accessibilityHidden(true)
+                Text(verbatim: label(for: summary))
+                    .foregroundStyle(DiveTab.equipment.color)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            // The whole suggestion responds, not only its text (a plain Button only responds
+            // where something is drawn).
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 // MARK: - Array Extension
 
@@ -985,6 +1032,15 @@ struct PhotoPreviewSheet: View {
     @State private var cachedShareItem: PhotoTransferable?
     @State private var sessionTempFileURLs: Set<URL> = []
     @State private var isPreparingShare = false
+    /// The photo shown in Quick Look (full screen and zoomable on iOS, a resizable, zoomable
+    /// window on macOS): a temporary copy of the original, kept until the next launch (see
+    /// `QuickLookCopies`).
+    @State private var quickLookURL: URL?
+    /// A copy is being written: further taps are ignored until it opens.
+    @State private var isOpeningQuickLook = false
+    /// The page identity of the photo shown now. Kept in state so a copy finishing its write
+    /// is checked against the current photos, not those captured when it was tapped.
+    @State private var shownPageID: String?
 
     init(photoIDs: [String], photoData: @escaping (Int) -> Data, initialIndex: Int,
          photoNote: @escaping (Int) -> String? = { _ in nil },
@@ -1083,7 +1139,9 @@ struct PhotoPreviewSheet: View {
                         LazyHStack(spacing: 0) {
                             ForEach(photoIDs.indices, id: \.self) { index in
                                 PhotoPageView(photoID: pageID(index), load: { photoData(index) }, index: index, total: photoIDs.count,
-                                              isCurrent: index == currentIndex)
+                                              isCurrent: index == currentIndex,
+                                              canOpenQuickLook: hasOriginal(index),
+                                              openQuickLook: { openInQuickLook(index) })
                                     .containerRelativeFrame([.horizontal, .vertical])
                                     .id(index)
                             }
@@ -1128,6 +1186,17 @@ struct PhotoPreviewSheet: View {
                         .padding()
                     }
                 }
+            }
+            .quickLookPreview($quickLookURL)
+            .onChange(of: thumbnailTaskID, initial: true) { _, _ in
+                shownPageID = photoIDs.isEmpty ? nil : pageID(min(currentIndex, photoIDs.count - 1))
+                #if os(macOS)
+                // The shown photo changed (paged, removed, replaced) while the macOS Quick Look
+                // panel, which does not block the viewer, was open: close it rather than keep
+                // showing the previous photo. (On iOS Quick Look covers the viewer, which cannot
+                // be paged meanwhile; a sync must not close the photo being looked at.)
+                quickLookURL = nil
+                #endif
             }
             .sheet(item: $taggingPhoto) { photo in
                 PhotoSpeciesTagSheet(photo: photo)
@@ -1233,7 +1302,10 @@ struct PhotoPreviewSheet: View {
             }
             .alert("Remove Photo", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) {
-                    if let deleteTargetID { onDelete?(deleteTargetID) }
+                    if let deleteTargetID {
+                        onDelete?(deleteTargetID)
+                        QuickLookCopies.remove(photoID: deleteTargetID)
+                    }
                     deleteTargetID = nil
                     // onChange(of: photoIDs.count) handles both index clamping and dismissal
                     // when count reaches zero (covers in-app delete AND external iCloud sync).
@@ -1263,8 +1335,9 @@ struct PhotoPreviewSheet: View {
                 }
                 // Build the share item and thumbnail in one detached pass — the same
                 // CGImageSource is reused for type detection and thumbnail decode,
-                // so HEIC photos are parsed only once, fully off the main thread.
-                let (thumbnail, shareItem): (PlatformImage?, PhotoTransferable) = await Task.detached(priority: .userInitiated) {
+                // so HEIC photos are parsed only once, fully off the main thread (at default
+                // QoS through onImageQueue: ImageIO waits on its own default-QoS threads).
+                let (thumbnail, shareItem): (PlatformImage?, PhotoTransferable) = await PhotoMetadataReader.onImageQueue {
                     let cfData = data as CFData
                     guard let source = CGImageSourceCreateWithData(cfData, nil) else {
                         // Source creation failed — fall back to magic-byte type detection, no thumbnail.
@@ -1284,7 +1357,7 @@ struct PhotoPreviewSheet: View {
                     #else
                     return (NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)), item)
                     #endif
-                }.value
+                }
                 guard !Task.isCancelled else { return }
                 cachedShareItem = shareItem
                 shareThumbnail = thumbnail
@@ -1304,11 +1377,18 @@ struct PhotoPreviewSheet: View {
                 }
             }
             .onDisappear {
+                #if os(macOS)
+                // The macOS Quick Look panel does not block the viewer: close it with the viewer,
+                // so it does not stay over the main window. (Not on iOS, where Quick Look's own
+                // full-screen presentation may hide the viewer.)
+                quickLookURL = nil
+                #endif
                 // Remove only the temp files this session predicted (one per photo navigated to).
                 // SentTransferredFile(allowAccessingOriginalFile: false) (the default) causes the
                 // system to copy the file before returning control, so deleting these paths is safe.
                 // A prefix-based sweep is intentionally avoided: it would also remove files written
                 // by other concurrently open photo sheets on iPad/Mac multi-window.
+                // (Quick Look copies are not listed here: they are kept until the next launch.)
                 for url in sessionTempFileURLs {
                     try? FileManager.default.removeItem(at: url)
                 }
@@ -1334,6 +1414,52 @@ struct PhotoPreviewSheet: View {
         return "\(prefix) \(PhotoPreviewSheet.exportDateFormatter.string(from: Date()))"
     }
 
+    /// Opens the photo at an index in Quick Look. Quick Look reads only files, so the original's
+    /// bytes are written unchanged to a folder of their own in the temporary directory, once
+    /// per photo version (see `QuickLookCopies`). Only the original is shown, never
+    /// the thumbnail while it downloads.
+    private func openInQuickLook(_ index: Int) {
+        // Only the current photo (not a neighbouring page peeking in during a swipe).
+        guard !isOpeningQuickLook, quickLookURL == nil, index == currentIndex,
+              photoIDs.indices.contains(index), hasOriginal(index) else { return }
+        let data = photoData(index)
+        guard !data.isEmpty else { return }
+        let pageAtTap = pageID(index)
+        if let url = QuickLookCopies.copy(for: pageAtTap, byteCount: data.count) {
+            quickLookURL = url
+            return
+        }
+        let name = exportFileName
+        isOpeningQuickLook = true
+        Task {
+            let folder = QuickLookCopies.newCopyFolder()
+            let url: URL? = await Task.detached {
+                // The same type detection and extension as Share and Save As.
+                let url = folder.appendingPathComponent("\(name).\(PhotoTransferable(data: data, suggestedName: name).fileExtension)")
+                do {
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try data.write(to: url, options: .atomic)
+                    // Read-only: an app it is handed to (Preview) offers to duplicate it rather
+                    // than save edits into a file BlueDive removes later.
+                    try? FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: url.path)
+                    return url
+                } catch {
+                    try? FileManager.default.removeItem(at: folder)
+                    return nil
+                }
+            }.value
+            isOpeningQuickLook = false
+            guard let url else { return }
+            QuickLookCopies.record(url, for: pageAtTap, byteCount: data.count)
+            // Not opened if the photo was paged away from, removed or replaced during the write
+            // (Quick Look would show another photo than the viewer); the copy is still reused
+            // if that photo is opened again. Read from state: this task's `photoIDs` and page
+            // closures are those of the tap.
+            guard shownPageID == pageAtTap else { return }
+            quickLookURL = url
+        }
+    }
+
     @ViewBuilder private var shareButtonLabel: some View {
         Label("Save As", systemImage: "square.and.arrow.up")
             .foregroundStyle(.primary)
@@ -1356,6 +1482,100 @@ struct PhotoPreviewSheet: View {
     #endif
 }
 
+// MARK: - Quick Look Copies
+
+/// The temporary copies photos are opened from in Quick Look, on both platforms. They are not
+/// removed when Quick Look or the viewer closes: Quick Look can hand the file to another app
+/// ("Open with Preview" on macOS, share extensions), which reads it after Quick Look has
+/// closed. One copy per photo version (the viewer's page identity: photo, original present,
+/// content hash), reused when the photo is opened again. The latest copies are kept, up to
+/// `maxCopies` and `maxBytes` (the newest always); the others are removed as new ones are
+/// written, a removed photo's copies at once, all of them
+/// on Erase all data, and whatever a previous launch left at the next launch.
+@MainActor
+enum QuickLookCopies {
+    /// Name prefix of the launch folders, which identifies them in the launch sweep.
+    nonisolated static let folderPrefix = "BlueDive-QuickLook-"
+
+    /// This launch's folder, holding each copy in a subfolder of its own (under the export
+    /// file name, which several copies can share).
+    nonisolated static let launchFolder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("\(folderPrefix)\(UUID().uuidString)", isDirectory: true)
+
+    /// How many copies a launch keeps (a few MB each, up to tens for large originals).
+    private static let maxCopies = 20
+    /// How much space they may use together (ProRAW or DNG originals can be 50–100 MB each).
+    private static let maxBytes = 500_000_000
+
+    /// This launch's copies by photo version, least recently opened first.
+    private static var copies: [(key: String, url: URL, bytes: Int)] = []
+
+    /// A new subfolder of this launch's folder, for one copy.
+    nonisolated static func newCopyFolder() -> URL {
+        launchFolder.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    }
+
+    /// The copy already written for a photo version, if it is still there with the photo's
+    /// size (else it is forgotten and written again).
+    static func copy(for key: String, byteCount: Int) -> URL? {
+        guard let index = copies.firstIndex(where: { $0.key == key }) else { return nil }
+        let entry = copies.remove(at: index)
+        let size = (try? FileManager.default.attributesOfItem(atPath: entry.url.path))?[.size] as? Int
+        guard size == byteCount else {
+            removeFolder(of: entry.url)
+            return nil
+        }
+        copies.append(entry)
+        return entry.url
+    }
+
+    static func record(_ url: URL, for key: String, byteCount: Int) {
+        if let index = copies.firstIndex(where: { $0.key == key }) {
+            removeFolder(of: copies.remove(at: index).url)
+        }
+        copies.append((key, url, byteCount))
+        // The oldest copies were opened photos ago: whatever they were handed to has long read
+        // them. The newest one is always kept, even alone above the byte budget.
+        while copies.count > maxCopies
+                || (copies.count > 1 && copies.reduce(0, { $0 + $1.bytes }) > maxBytes) {
+            removeFolder(of: copies.removeFirst().url)
+        }
+    }
+
+    /// Removes the copies of a photo the user removed (keys start with its viewer id).
+    static func remove(photoID: String) {
+        let prefix = "\(photoID)|"
+        for entry in copies where entry.key.hasPrefix(prefix) {
+            removeFolder(of: entry.url)
+        }
+        copies.removeAll { $0.key.hasPrefix(prefix) }
+    }
+
+    /// Removes every copy of this launch (Erase all data).
+    static func removeAll() {
+        try? FileManager.default.removeItem(at: launchFolder)
+        copies.removeAll()
+    }
+
+    private static func removeFolder(of url: URL) {
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
+    /// Removes the copies previous launches left: every Quick Look folder but this launch's.
+    /// Run once at launch. Touches only the Quick Look folders, nothing else in `tmp`.
+    nonisolated static func removeLeftovers() {
+        let fileManager = FileManager.default
+        let tmp = fileManager.temporaryDirectory
+        let current = launchFolder.lastPathComponent
+        guard let names = try? fileManager.contentsOfDirectory(atPath: tmp.path) else { return }
+        // Only folders this code names: the prefix followed by a launch UUID.
+        for name in names where name.hasPrefix(folderPrefix) && name != current
+            && UUID(uuidString: String(name.dropFirst(folderPrefix.count))) != nil {
+            try? fileManager.removeItem(at: tmp.appendingPathComponent(name, isDirectory: true))
+        }
+    }
+}
+
 // MARK: - Photo Page View
 
 private struct PhotoPageView: View {
@@ -1368,6 +1588,9 @@ private struct PhotoPageView: View {
     /// (a species page), so Back shows it at once instead of a spinner (it is still read and
     /// decoded again, when the page reappears).
     let isCurrent: Bool
+    /// Whether a tap opens the photo in Quick Look (its original is here).
+    let canOpenQuickLook: Bool
+    let openQuickLook: () -> Void
     @State private var image: PlatformImage?
 
     var body: some View {
@@ -1377,6 +1600,17 @@ private struct PhotoPageView: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                    // Tap or click the photo itself (not the margin around it) to open it in
+                    // Quick Look; a swipe still pages through the photos.
+                    .contentShape(RoundedRectangle(cornerRadius: 16))
+                    .onTapGesture { openQuickLook() }
+                    .allowsHitTesting(canOpenQuickLook)
+                    .accessibilityAddTraits(canOpenQuickLook ? .isButton : [])
+                    .accessibilityHint(canOpenQuickLook ? Text("Opens the photo in Quick Look") : Text(verbatim: ""))
+                    // VoiceOver and Full Keyboard Access activate this, not the tap gesture.
+                    .accessibilityAction {
+                        if canOpenQuickLook { openQuickLook() }
+                    }
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Photo %@ of %@", bundle: .forAppLanguage(), value: "Photo %@ of %@", comment: "Announces the current photo's position while paging through photos (locale-formatted numbers)"), Double(index + 1).localizedString(decimals: 0), Double(total).localizedString(decimals: 0))))
@@ -1389,10 +1623,11 @@ private struct PhotoPageView: View {
         }
         .task(id: photoID) {
             let d = load()
-            let decoded = await Task.detached(priority: .userInitiated) {
+            // At default QoS (ImageIO, often a HEIC original); nil: the page scrolled away
+            // while waiting for its turn (nothing decoded).
+            guard let decoded = await PhotoMetadataReader.onImageQueueUnlessCancelled({
                 PlatformImage(data: d)
-            }.value
-            guard !Task.isCancelled else { return }
+            }), !Task.isCancelled else { return }
             image = decoded
         }
         // A page scrolled away keeps its state in the viewer's lazy stack: release its
