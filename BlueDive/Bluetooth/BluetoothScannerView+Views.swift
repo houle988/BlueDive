@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
-import CoreBluetooth
-import LibDCSwift
+import DiveComputerKit
 import UniformTypeIdentifiers
 #if canImport(AppKit)
 import AppKit
@@ -269,7 +268,7 @@ extension BluetoothScannerView {
         // still scanning had no way to disarm it again until a device happened to be discovered.
         Form {
             Section {
-                if bleManager.discoveredPeripherals.isEmpty {
+                if bleManager.discoveredDevices.isEmpty {
                     ContentUnavailableView {
                         Label("Searching...", systemImage: "antenna.radiowaves.left.and.right")
                     } description: {
@@ -281,7 +280,7 @@ extension BluetoothScannerView {
                     .frame(maxWidth: .infinity)
                     #endif
                 } else {
-                    ForEach(bleManager.discoveredPeripherals, id: \.identifier) { peripheral in
+                    ForEach(bleManager.discoveredDevices, id: \.id) { peripheral in
                         DeviceRow(
                             peripheral: peripheral,
                             isSelected: selectedDevice?.identifier == peripheral.identifier,
@@ -299,14 +298,14 @@ extension BluetoothScannerView {
                 HStack {
                     Text("Available Devices")
                     Spacer()
-                    Text("\(bleManager.discoveredPeripherals.count)")
+                    Text("\(bleManager.discoveredDevices.count)")
                         .foregroundStyle(.secondary)
                 }
             } footer: {
                 // Dropped entirely while the list is empty: there is nothing to select and no
                 // info button to tap, so the instruction would describe controls that aren't on
                 // screen. The ContentUnavailableView above already carries the empty-state copy.
-                if !bleManager.discoveredPeripherals.isEmpty {
+                if !bleManager.discoveredDevices.isEmpty {
                     Text("Select your dive computer to download new dives. Tap the info button to change the detected model if incorrect.")
                 }
             }
@@ -395,7 +394,7 @@ extension BluetoothScannerView {
         }
         .sheet(item: $peripheralForModelPicker) { peripheral in
             ModelPickerSheet(
-                detectedName: DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown"),
+                detectedName: DeviceCatalog.displayName(forAdvertisedName: peripheral.name ?? "Unknown"),
                 currentOverride: modelOverrides[peripheral.identifier.uuidString],
                 onSelect: { model in
                     if let model = model {
@@ -654,12 +653,20 @@ extension BluetoothScannerView {
 
     // MARK: - Toolbar
 
+    /// Connecting or downloading: the session can be cancelled (nothing is imported).
+    var isDownloadCancellable: Bool {
+        switch syncState {
+        case .connecting, .downloading: return true
+        default: return false
+        }
+    }
+
     @ToolbarContentBuilder
     var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             closeToolbarButton {
                 stopScanning()
-                bleManager.close(clearDevicePtr: true)
+                cancelDownload()
                 dismiss()
             }
             // Blocks the explicit tap path into the unsafe teardown. The swipe-to-dismiss
@@ -680,6 +687,16 @@ extension BluetoothScannerView {
             }
         }
 
+        if isDownloadCancellable {
+            ToolbarItem(placement: .sheetPrimaryAction) {
+                Button {
+                    cancelDownload()
+                } label: {
+                    Text("Cancel Download")
+                }
+            }
+        }
+
         if syncState == .scanning {
             ToolbarItem(placement: .sheetPrimaryAction) {
                 Button {
@@ -694,7 +711,7 @@ extension BluetoothScannerView {
                     stopScanning()
                     // Drop peripherals discovered by the previous scan so a rescan starts from a
                     // clean list — same pattern as connectToKnownDevice's scan-fallback path.
-                    bleManager.clearDiscoveredPeripherals()
+                    bleManager.clearDiscoveredDevices()
                     startScanning()
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -911,7 +928,7 @@ extension BluetoothScannerView {
         }
     }
 
-    private func isConnecting(to peripheral: CBPeripheral) -> Bool {
+    private func isConnecting(to peripheral: DiscoveredDevice) -> Bool {
         // Match the connecting device by its unique identifier rather than its (non-unique) name
         guard case .connecting = syncState,
               let selectedDevice = selectedDevice else {

@@ -3,7 +3,6 @@ import SwiftData
 import CoreBluetooth
 import UniformTypeIdentifiers
 import WidgetKit
-import LibDCSwift
 import os.log
 #if canImport(UIKit)
 import UIKit

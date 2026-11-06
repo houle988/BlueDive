@@ -1,8 +1,6 @@
 import SwiftUI
 import SwiftData
-import CoreBluetooth
-import LibDCSwift
-import Combine
+import DiveComputerKit
 import os.log
 
 /// Value-type snapshot of the DeviceFingerprint fields read during a BLE scan.
@@ -11,7 +9,7 @@ import os.log
 struct CachedDeviceFingerprint {
     let serial: String
     let computerName: String
-    let family: DeviceConfiguration.DeviceFamily?
+    let family: DeviceFamily?
     let modelID: UInt32
 }
 
@@ -21,7 +19,7 @@ struct ReassociationCandidate: Identifiable {
     let id: String
     let serial: String
     let computerName: String
-    let family: DeviceConfiguration.DeviceFamily?
+    let family: DeviceFamily?
     let modelID: UInt32
     let lastSynced: Date
     let diverName: String?
@@ -42,14 +40,19 @@ struct BluetoothScannerView: View {
     @Query(sort: \DeviceFingerprint.updatedAt, order: .reverse) var knownDevices: [DeviceFingerprint]
     @Query(filter: #Predicate<Gear> { $0.category == "Computer" }) var gearComputers: [Gear]
 
-    @ObservedObject var bleManager = CoreBluetoothManager.sharedManager
+    /// Scanning and downloads (DiveComputerKit). `@Observable`: the views refresh on the
+    /// properties they read.
+    let bleManager = DiveComputerManager.shared
+    /// The PIN prompt shown while a Pelagic computer (Aqualung i330R, Apeks DSX) pairs.
+    let pairingPrompt = BLEPairingPrompt.shared
+    @State var pairingPIN: String = ""
     @State var syncState: BluetoothSyncState = .idle
     /// Mirrors `Self.isTeardownUnsafe(syncState)` out to the presenting view so it can
     /// block swipe-to-dismiss with `.interactiveDismissDisabled(...)`. Kept in sync by the
     /// `.onChange(of: syncState, initial: true)` below — never assigned anywhere else, and only
     /// when the computed value actually changes (see the guard there).
     @Binding var isTeardownUnsafe: Bool
-    @State var selectedDevice: CBPeripheral?
+    @State var selectedDevice: DiscoveredDevice?
     @State var downloadedDives: [DiveData] = []
     @State var importProgress: Double = 0
     @State var showingImportConfirmation = false
@@ -81,24 +84,28 @@ struct BluetoothScannerView: View {
     @State var logExportFileName: String = ""
     #endif
     @State var diveCountDuringDownload: Int = 0
-    @State var downloadProgressCancellable: AnyCancellable?
+    /// The running download; cancelling it discards everything it downloaded.
+    @State var sessionHandle: DeviceSessionHandle?
+    /// The newest downloaded dive's fingerprint to store as the device's watermark after
+    /// the import (nil when the watermark must not move).
+    @State var sessionWatermark: Data?
     @State var isSearching: Bool = false
     @State var cachedTargetFingerprint: CachedDeviceFingerprint?
-    @State var pendingDeviceStorageSeed: (uuid: String, name: String, family: DeviceConfiguration.DeviceFamily, modelID: UInt32, serial: String)?
+    @State var pendingDeviceStorageSeed: (uuid: String, name: String, family: DeviceFamily, modelID: UInt32, serial: String)?
     /// The exact `StoredDevice` entries removed by a reassociation prune whose corresponding
-    /// connection attempt has not yet been confirmed successful. Only armed on the legacy
-    /// (no family/modelID) reassociation path, which cannot set `pendingDeviceStorageSeed` and so
-    /// has no other way to recover the pruned mapping if the connect fails. Restored by
-    /// `connectToDevice`'s failure branches and cleared (without restoring) once the connection
-    /// is confirmed viable.
+    /// connection attempt has not yet been confirmed to reach the right unit. Armed by every
+    /// reassociation, which prunes before connecting. Restored when the connection fails or
+    /// the device reports another serial than the candidate's, and cleared (without
+    /// restoring) once the reported serial matches (or, for a device that reports none, once
+    /// the download succeeds).
     @State var pendingReassociationPruneRestore: [StoredDevice]? = nil
     @State var deviceToDelete: DeviceFingerprint?
     @State var showingDeleteConfirmation = false
-    @State var modelOverrides: [String: DeviceConfiguration.ComputerModel] = [:]
-    @State var peripheralForModelPicker: CBPeripheral?
+    @State var modelOverrides: [String: ComputerModel] = [:]
+    @State var peripheralForModelPicker: DiscoveredDevice?
     @State var showInfo = false
-    @State var peripheralPendingReassociation: CBPeripheral?
-    @State var peripheralForReassociationPicker: CBPeripheral?
+    @State var peripheralPendingReassociation: DiscoveredDevice?
+    @State var peripheralForReassociationPicker: DiscoveredDevice?
     @State var reassociationCandidates: [ReassociationCandidate] = []
     @State var showingReassociationAlert = false
     @State var isPartialSync: Bool = false
@@ -141,11 +148,10 @@ struct BluetoothScannerView: View {
     // Logger for debugging
     static let logger = Logger(subsystem: "com.bluedive.app", category: "Bluetooth")
 
-    /// True while a BLE device connection is open and a retrieval may still be in flight.
-    /// Dismissing the sheet in any of these states runs `onDisappear`, which calls
-    /// `bleManager.close(clearDevicePtr: true)` → `free_device_data(devicePtr)` — that free is
-    /// unconditional, and `dc_device_foreach` may still be dereferencing the same pointer on a
-    /// background queue (EXC_BAD_ACCESS / double free).
+    /// True while a connection, a download or an import is running. Dismissing the sheet then
+    /// would discard the download (the session is cancelled on disappear, which is safe) or
+    /// interrupt the import, so a swipe or the toolbar Close cannot end it by accident; the
+    /// downloading screen has an explicit Cancel button instead.
     ///
     /// Both dismissal routes must be blocked, and both read this one helper so they cannot
     /// drift: the toolbar Close button's `.disabled(...)` (BluetoothScannerView+Views.swift)
@@ -164,12 +170,12 @@ struct BluetoothScannerView: View {
     /// De-duplicated by serial, keeping the most recently updated record per serial (the query
     /// above is already sorted updatedAt descending, so the first occurrence for each serial is
     /// that one — the same "most recent wins" rule persistFingerprintRecord and
-    /// syncFingerprintFromDatabase use). Duplicate serials can occur after an iCloud merge;
+    /// fingerprintFromDatabase use). Duplicate serials can occur after an iCloud merge;
     /// without this, the known-devices ForEach and the reassociation candidate list would both
     /// produce duplicate Identifiable IDs for one physical device.
     ///
     /// Sentinel and empty serials are exempt and always kept, matching `deleteKnownDevice`,
-    /// `syncFingerprintFromDatabase` and `confirmReassociation`: a value like "0"/"00000000" is
+    /// `fingerprintFromDatabase` and `confirmReassociation`: a value like "0"/"00000000" is
     /// reported by hardware that doesn't expose a real serial, so two *different* physical
     /// computers can share it and must not collapse into one row.
     var dedupedKnownDevices: [DeviceFingerprint] {
@@ -261,15 +267,14 @@ struct BluetoothScannerView: View {
             .onAppear {
                 // Don't auto-scan; show known devices first
             }
-            .onReceive(bleManager.$discoveredPeripherals) { _ in
+            .onChange(of: bleManager.discoveredDevices) { _, _ in
                 checkForTargetDevice()
             }
             .onDisappear {
                 weatherFetchTask?.cancel()
                 stopScanning()
                 BLEDiagnosticSession.shared.stop()
-                bleManager.close(clearDevicePtr: true)
-                downloadProgressCancellable = nil
+                cancelDownload()
                 isSearching = false
                 cachedTargetFingerprint = nil
                 clearCutoffResults()
@@ -333,6 +338,7 @@ struct BluetoothScannerView: View {
             }
             .alert("Update Bluetooth Pairing?", isPresented: $showingReassociationAlert) {
                 Button("Connect") {
+                    DiveComputerLog.shared.log("[Reassociation] Alert: Connect", level: .info)
                     if let peripheral = peripheralPendingReassociation,
                        let candidate = reassociationCandidates.first {
                         confirmReassociation(peripheral, candidate: candidate)
@@ -340,6 +346,7 @@ struct BluetoothScannerView: View {
                     clearReassociationState()
                 }
                 Button("Connect as New Device") {
+                    DiveComputerLog.shared.log("[Reassociation] Alert: Connect as New Device", level: .info)
                     if let peripheral = peripheralPendingReassociation {
                         // Pairing as a new device still means a full-history download, and the
                         // matched candidate is the best available clue to who owns the hardware,
@@ -352,6 +359,7 @@ struct BluetoothScannerView: View {
                     clearReassociationState()
                 }
                 Button("Cancel", role: .cancel) {
+                    DiveComputerLog.shared.log("[Reassociation] Alert: Cancel", level: .info)
                     clearReassociationState()
                 }
             } message: {
@@ -397,6 +405,24 @@ struct BluetoothScannerView: View {
             .sheet(isPresented: $showInfo) {
                 infoSheet
                     .standardSheetPresentation()
+            }
+            .alert("Pair Dive Computer", isPresented: Binding(
+                get: { pairingPrompt.pendingDeviceName != nil },
+                set: { if !$0 && pairingPrompt.pendingDeviceName != nil { pairingPrompt.answer(nil) } }
+            )) {
+                TextField("PIN Code", text: $pairingPIN)
+                    .platformKeyboardType(.numberPad)
+                Button("Cancel", role: .cancel) {
+                    pairingPIN = ""
+                    pairingPrompt.answer(nil)
+                }
+                Button("Pair") {
+                    let pin = pairingPIN
+                    pairingPIN = ""
+                    pairingPrompt.answer(pin)
+                }
+            } message: {
+                Text(verbatim: String(format: NSLocalizedString("Enter the 6-digit PIN code shown on %@.", bundle: Bundle.forAppLanguage(), value: "Enter the 6-digit PIN code shown on %@.", comment: "Message of the Bluetooth pairing prompt for Aqualung i330R / Apeks DSX dive computers. %@ is the dive computer name."), pairingPrompt.pendingDeviceName ?? ""))
             }
         }
         // ⚠️ Temporary — remove after testing delete feature - Add Dummy Dive computer to database

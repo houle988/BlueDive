@@ -1,6 +1,6 @@
 import SwiftUI
 import CoreBluetooth
-import LibDCSwift
+import DiveComputerKit
 import os.log
 
 // MARK: - Profile & Tank Processing
@@ -56,7 +56,7 @@ extension BluetoothScannerView {
 
     /// Families whose libdivecomputer parser does NOT filter unused tanks/gas mixes
     /// at the C level.  Only these need the Swift-side usedGasMixIndices filter.
-    static let familiesNeedingSwiftTankFilter: Set<DeviceConfiguration.DeviceFamily> = [
+    static let familiesNeedingSwiftTankFilter: Set<DeviceFamily> = [
         .oceanicAtom2,   // Reports all configured gas slots (3–6)
         .pelagicI330R,   // Same Oceanic-derived protocol
         .hwOstc3,        // Reports all 3–5 configured mixes, no DC_FIELD_TANK
@@ -87,7 +87,7 @@ extension BluetoothScannerView {
     private static let pressureDropRatioThreshold = 3.0
 
     /// Returns the DeviceFamily of the currently connected device, if known.
-    var connectedDeviceFamily: DeviceConfiguration.DeviceFamily? {
+    var connectedDeviceFamily: DeviceFamily? {
         guard let peripheral = selectedDevice,
               let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString) else {
             return nil
@@ -124,7 +124,7 @@ extension BluetoothScannerView {
     /// Scans profile samples for the first and last non-zero pressure reading for a given tank index.
     /// Used when the dive computer header reports no begin/end pressure (e.g. pressure pod scenario).
     static func pressureRangeFromProfile(
-        _ profile: [LibDCSwift.DiveProfilePoint],
+        _ profile: [ProfileSample],
         tankIndex: Int
     ) -> (start: Double?, end: Double?) {
         let readings = profile.compactMap { point -> Double? in
@@ -147,7 +147,7 @@ extension BluetoothScannerView {
     /// heuristic fails when AI transmitter slot order ≠ gas configuration slot order.
     /// Returns nil when the profile lacks sufficient data for a reliable determination.
     private static func inferShearwaterGasMixToTank(
-        profile: [LibDCSwift.DiveProfilePoint],
+        profile: [ProfileSample],
         tankCount: Int,
         gasMixCount: Int,
         minMappings: Int = 2
@@ -210,10 +210,10 @@ extension BluetoothScannerView {
         mixIndex: Int,
         tankIndex: Int,
         tankCount: Int,
-        tankUsage: DiveData.Tank.Usage,
+        tankUsage: GasUsage,
         dcGasMixes: [GasMix],
         profileGasMixOrder: [Int],
-        deviceFamily: DeviceConfiguration.DeviceFamily?,
+        deviceFamily: DeviceFamily?,
         headerGasMix: Int?
     ) -> (o2: Double, he: Double, resolvedMixIdx: Int?) {
         let o2: Double
@@ -244,24 +244,24 @@ extension BluetoothScannerView {
             // by design and have no corresponding breathed mix — mapping them to "N-th
             // breathed mix" is semantically wrong. Halcyon falls to the positional tier below.
             if tankIndex >= dcGasMixes.count {
-                Logger.shared.log("Tank \(tankIndex): \(tankCount) tanks but only \(dcGasMixes.count) mixes; using profile-order fallback", level: .warning)
+                DiveComputerLog.shared.log("Tank \(tankIndex): \(tankCount) tanks but only \(dcGasMixes.count) mixes; using profile-order fallback", level: .warning)
             }
             o2 = dcGasMixes[profileGasMixOrder[tankIndex]].oxygen
             he = dcGasMixes[profileGasMixOrder[tankIndex]].helium
             resolvedMixIdx = profileGasMixOrder[tankIndex]
         } else if tankIndex < dcGasMixes.count {
             // Positional last resort: no profile evidence for this tank's gas
-            Logger.shared.log("Tank \(tankIndex): no profile-order evidence; using positional mix \(tankIndex) (\(Int(dcGasMixes[tankIndex].oxygen * 100))% O2)", level: .info)
+            DiveComputerLog.shared.log("Tank \(tankIndex): no profile-order evidence; using positional mix \(tankIndex) (\(Int(dcGasMixes[tankIndex].oxygen * 100))% O2)", level: .info)
             o2 = dcGasMixes[tankIndex].oxygen
             he = dcGasMixes[tankIndex].helium
             resolvedMixIdx = tankIndex
         } else if let firstMix = dcGasMixes.first {
-            Logger.shared.log("Tank \(tankIndex): out of range; using first available mix (\(Int(firstMix.oxygen * 100))% O2)", level: .warning)
+            DiveComputerLog.shared.log("Tank \(tankIndex): out of range; using first available mix (\(Int(firstMix.oxygen * 100))% O2)", level: .warning)
             o2 = firstMix.oxygen
             he = firstMix.helium
         } else {
             let pct = headerGasMix ?? 21
-            Logger.shared.log("Tank \(tankIndex): no gas mix data; defaulting to \(pct)% O2", level: .warning)
+            DiveComputerLog.shared.log("Tank \(tankIndex): no gas mix data; defaulting to \(pct)% O2", level: .warning)
             o2 = Double(pct) / 100.0
             he = 0.0
         }
@@ -269,7 +269,7 @@ extension BluetoothScannerView {
     }
 
     /// Converts a LibDCSwift DiveEvent to a BlueDive DiveProfileEvent
-    private static func convertDiveEvent(_ event: LibDCSwift.DiveEvent) -> DiveProfileEvent {
+    private static func convertDiveEvent(_ event: SampleEvent) -> DiveProfileEvent {
         switch event {
         case .ascent:
             return .ascent
@@ -319,10 +319,10 @@ extension BluetoothScannerView {
     /// or when a mandatory deco obligation is present (decoStop depth set for DC_DECO_DECOSTOP).
     /// NDL=0 alone does not generate a synthetic event.
     static func consolidateProfilePoints(
-        _ profile: [LibDCSwift.DiveProfilePoint]
+        _ profile: [ProfileSample]
     ) -> [DiveProfilePoint] {
         // Group all points by their timestamp (seconds)
-        var pointsByTime: [(time: TimeInterval, points: [LibDCSwift.DiveProfilePoint])] = []
+        var pointsByTime: [(time: TimeInterval, points: [ProfileSample])] = []
         var lastTime: TimeInterval?
 
         for point in profile {
@@ -552,7 +552,7 @@ extension BluetoothScannerView {
     static func buildTanksFromComputerTanks(
         _ dcTanks: [DiveData.Tank],
         diveData: DiveData,
-        deviceFamily: DeviceConfiguration.DeviceFamily?,
+        deviceFamily: DeviceFamily?,
         filterUnusedTanks: Bool
     ) -> (tanks: [TankData], gasMixToTankIndex: [Int: Int]) {
         let dcGasMixes = diveData.gasMixes ?? []
@@ -668,7 +668,7 @@ extension BluetoothScannerView {
         let minTemperature: Double? = diveData.minTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.min() ?? (diveData.temperature.isFinite ? diveData.temperature : nil)
         let maxTemperature: Double? = diveData.maxTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.max()
 
-        // Build tanks with inline gas data from LibDCSwift.
+        // Build tanks with inline gas data from the dive computer.
         // Also build gasMixToTankIndex: maps gas-mix index (as reported by DC_SAMPLE_GASMIX /
         // currentGas in profile) to the corresponding position in linkedTanks.
         let dcGasMixes = diveData.gasMixes ?? []
@@ -807,7 +807,7 @@ extension BluetoothScannerView {
             location: "",
             siteName: "",
             diveTypes: diveType,
-            computerName: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString) }.flatMap { stored in DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family })?.name } ?? connectedDeviceName ?? NSLocalizedString("dive.computer.default_ble_name",
+            computerName: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString) }.flatMap { stored in DeviceCatalog.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family })?.name } ?? connectedDeviceName ?? NSLocalizedString("dive.computer.default_ble_name",
                                                                     comment: "Fallback name for an unknown Bluetooth dive computer"),
             computerSerialNumber: computerSerial,
             surfaceInterval: surfaceIntervalString,

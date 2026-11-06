@@ -1,10 +1,10 @@
 import Foundation
-import LibDCSwift
+import DiveComputerKit
 
 /// Manages a BLE diagnostic log session. When started, every raw BLE packet and
-/// LibDCSwift log message is written to a timestamped file in the app's Documents
+/// DiveComputerKit log message is written to a timestamped file in the app's Documents
 /// directory. Controlled by the "BLE Diagnostic Logging" toggle in Settings.
-final class BLEDiagnosticSession {
+nonisolated final class BLEDiagnosticSession: @unchecked Sendable {
     static let shared = BLEDiagnosticSession()
     private init() {}
 
@@ -135,7 +135,7 @@ final class BLEDiagnosticSession {
     /// Regardless of build configuration the full trace (log lines + packet hex
     /// dumps) is written to the file so it can be shared from device/TestFlight.
     /// Packet hex dumps are additionally echoed to the Xcode console in DEBUG
-    /// builds; plain log lines already reach the console via LibDCSwift itself.
+    /// builds; plain log lines already reach the console via DiveComputerKit itself.
     func start() {
         // Drain any in-flight writes and close the previous file before rotating.
         queue.sync { _close() }
@@ -161,11 +161,11 @@ final class BLEDiagnosticSession {
 
         // Assign sinks BEFORE enabling debug mode so no packet is dropped.
         // write() no-ops when no file handle is open (file-creation failure).
-        Logger.shared.onLog = { [weak self] event in
+        DiveComputerLog.shared.onLog = { [weak self] event in
             let ts = String(format: "%.3f", event.timestamp.timeIntervalSince1970)
             self?.write("[\(ts)] [\(event.level.prefix)] [\(event.category)] \(event.message)")
         }
-        Logger.shared.onPacket = { [weak self] event in
+        DiveComputerLog.shared.onPacket = { [weak self] event in
             let ts = String(format: "%.3f", event.timestamp.timeIntervalSince1970)
             let dir = event.direction.rawValue.uppercased()
             let line = "[\(ts)] [\(dir)] \(event.characteristicUUID) (\(event.data.count) bytes)\n\(event.hexDump)"
@@ -183,7 +183,7 @@ final class BLEDiagnosticSession {
             write("BlueDive BLE Diagnostic Log\nStarted: \(Date())\n" + String(repeating: "-", count: 60))
         }
         queue.sync { _active = true }
-        Logger.shared.enableDebugMode()
+        DiveComputerLog.shared.enableDebugMode()
     }
 
     /// Flushes and closes the log file, then disables debug mode and clears callbacks.
@@ -202,11 +202,11 @@ final class BLEDiagnosticSession {
         guard wasActive else { return }
         // disableDebugMode() stops packet capture and verbose libdivecomputer logging,
         // but it also lowers minimumLogLevel to .warning. Restore it to .debug so the
-        // regular LibDCSwift log lines remain visible in the Xcode console after a session.
-        Logger.shared.disableDebugMode()
-        Logger.shared.minimumLogLevel = .debug
-        Logger.shared.onLog = nil
-        Logger.shared.onPacket = nil
+        // regular DiveComputerKit log lines remain visible in the Xcode console after a session.
+        DiveComputerLog.shared.disableDebugMode()
+        DiveComputerLog.shared.minimumLevel = .debug
+        DiveComputerLog.shared.onLog = nil
+        DiveComputerLog.shared.onPacket = nil
     }
 
     // MARK: - Private

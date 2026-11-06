@@ -4,7 +4,6 @@ import CoreData
 import CloudKit
 import UserNotifications
 import os.log
-import LibDCSwift
 import BackgroundTasks
 #if canImport(UIKit)
 import UIKit
@@ -148,7 +147,7 @@ struct BlueDiveApp: App {
         // so we can see [BLE IOCTL] GET_NAME, [DC_IO READ/WRITE] hex dumps
         // and SLIP framing during the i300C handshake.  Remove this line
         // once the i300C connection issue is resolved.
-        // LibDCSwift.Logger.shared.enableDebugMode()
+        // DiveComputerLog.shared.enableDebugMode()
 
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
         #if os(iOS)

@@ -1,0 +1,4 @@
+module CLibDiveComputer {
+    header "CLibDiveComputer.h"
+    export *
+}

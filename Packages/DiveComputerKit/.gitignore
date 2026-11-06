@@ -1,0 +1,5 @@
+.build/
+.swiftpm/
+# Golden files and BLE traces are private dive data (Docs/DECISIONS.md, Q3).
+Tests/Fixtures/golden/
+Tests/Fixtures/traces/

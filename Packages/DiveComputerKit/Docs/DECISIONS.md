@@ -1,0 +1,48 @@
+# DiveComputerKit — Owner decisions
+
+Decisions taken by the project owner on 2026-11-02 in answer to the open questions of `ARCHITECTURE.md` §9. Where a decision differs from the architecture document, **this file wins**.
+
+| # | Question | Decision | Consequence for the design |
+|---|---|---|---|
+| Q1 | Static or dynamic linking of the LGPL libdivecomputer target | **Static** | `CLibDiveComputer` stays a static target. LGPL §6 is met by publishing the complete libdivecomputer source in the repository and by adding a relinking clarification to `LICENSE` (wording to be drafted in Phase 6 and approved by the owner before it is written). In-app licence notice required (About → Licences). |
+| Q2 | Allow cancelling a download | **Yes** | Add a Cancel button in the downloading state, `DeviceSessionHandle.cancel()`, new localized strings (fr-CA, de, nl, nb, es). `isTeardownUnsafe` is reduced to `.importing` only. |
+| Q3 | Commit golden files and BLE traces (personal dive data) | **No — they stay private** | Goldens and traces live outside the repository; tests read them from the `DCK_GOLDEN_DIR` / `DCK_TRACE_DIR` environment variables and are skipped when the variables are unset. `Tests/Fixtures/golden/` and `Tests/Fixtures/traces/` are git-ignored. Only synthetic fixtures (hand-written sample sequences) are committed. |
+| Q4 | Keep the non-BLE legacy catalog entries (Atom 3.1, Wisdom 3, Icon HD) | **No — BLE devices only** | **Overrides `ARCHITECTURE.md` §4.1**, which kept them for display-name compatibility. `DeviceCatalog.supportedModels` contains only models whose libdivecomputer descriptor has `DC_TRANSPORT_BLE`. `CatalogConsistencyTests` enforce it in both directions. Existing dives keep their stored `computerName` string, so nothing already in the logbook changes. |
+| Q5 | Ship the Pelagic i330R / Apeks DSX PIN prompt in this cycle | **Yes — now** | `BLEAuthorizationProvider` is implemented by the app: PIN prompt (`DC_IOCTL_BLE_GET_PINCODE`, 6 digits, asked synchronously from the libdivecomputer thread through a MainActor continuation) and access-code persistence (`GET_ACCESSCODE` / `SET_ACCESSCODE`, 16 bytes). Moves from optional Phase 6 into Phase 4 (package) and Phase 5 (app UI and strings). Access-code storage must not be a SwiftData model change. |
+| Q6 | Branch and PR structure | **This branch (`working-2.1-BLE`)**, temporary local commits between phases | One phase per local commit, made only when the owner asks. No pushes, PRs or tags without explicit authorization (CLAUDE.md). |
+| — | Package location | **`Packages/DiveComputerKit/` at the repository root** | `BlueDive/` is an Xcode synchronized folder (pbxproj:96), so a package under `BlueDive/Bluetooth/` would be compiled into the app target as well. App-side files (`KnownDeviceStore`, `DiveImportMapper`, `BluetoothSyncController`) live in `BlueDive/Bluetooth/`. |
+
+## Follow-up items (answered 2026-11-02)
+
+| # | Item | Decision | Consequence |
+|---|---|---|---|
+| O1 | Dive computers for the device test matrix | **Shearwater Perdix 2, Perdix 3, Peregrine** (owner's), **Aqualung i300C** (owner's test unit). Suunto EON Steel, Shearwater Petrel and Mares Puck through users, who will be asked for files. | Device matrix (`ARCHITECTURE.md` §7) runs on these four units. Families without a unit (Suunto, Mares, and the Petrel generation) are validated only through user-supplied files: a BlueDive XML export (raw dive bytes and computer name, for goldens) and a BLE diagnostic trace (`BlueDive_BLE_*.log`, for trace replay), both taken with the **current** app before the cutover. All other families rely on golden parity and libdivecomputer itself. |
+| O2 | Access to an i330R / i330R Console / DSX for the PIN flow | **No unit available** | The PIN / access-code flow (Q5) ships tested only against a scripted link (`ScriptedLink` replaying the `pelagic_i330r.c` authentication sequence). Risk accepted; ask a user with one of these models for a test and a trace before release. |
+| O3 | Dives already downloaded when the user cancels | **Discarded** | On cancel nothing is imported and no watermark is written: the stream ends with `SessionError.cancelled`, `downloadedDives` is cleared and the sync state returns to the device list. |
+| O4 | Source of the golden data | **The owner's logbook** (Perdix 2, Perdix 3, Peregrine) and the **Aqualung i300C test unit** the owner keeps for testing | Exported with the current app (BlueDive XML or a Format-2 backup copy) into a private folder outside the repository, e.g. `~/BlueDive-Fixtures/golden` and `~/BlueDive-Fixtures/traces`, given to tests through `DCK_GOLDEN_DIR` / `DCK_TRACE_DIR` (Q3). User files (O1) go in the same folder. |
+| O5 | libdivecomputer revision to vendor | **The copy included in libdc-swift `working` (`fd5b0db`), unchanged for now** | Phase 1 copies that tree as-is (snapshot reported as upstream `9e6c3c8`; the diff against upstream is still run and recorded in `UPSTREAM.md`, without changing files). Upstream syncs come later as separate steps (`ARCHITECTURE.md` §10). |
+| O6 | Pelagic access-code storage | **Keychain** (owner left the choice open) | One generic-password item per device, keyed by its **advertised BLE name** (service `app.bluedive.divecomputer.accesscode`, account = e.g. `GD123456`): Pelagic devices ask for the code while the connection opens, before libdivecomputer reports the serial, and the name carries the model code and serial digits (stable across reinstalls, unlike the CoreBluetooth identifier), 16 bytes, `kSecAttrAccessibleAfterFirstUnlock`, not synchronized. No SwiftData model change; deleted together with the device in `deleteKnownDevice`. |
+| O7 | `LICENSE` relinking clarification (Q1) | **Draft in Phase 6**, written only after the owner approves the wording | — |
+
+## Later decisions (after the cutover)
+
+| # | Item | Status |
+|---|---|---|
+| L0 | **`gasMixCount` / `tankCount` stay nil when not reported** (the old library stored 0). Found by golden parity on 84 EON Steel dives; no effect on the app (never read, never stored). The golden comparison accepts it (`Docs/GOLDEN_FORMAT.md`, "Accepted deviations"). | Decided 2026-11-03: keep nil |
+| L1 | **Name-resolution quirks kept for parity.** `DeviceCatalog.resolve` reproduces the old library exactly (`NameResolutionTests`, 141 names). Where libdivecomputer's filter is family-wide, the first descriptor of the family wins: `Liberty …` → Divesoft Freedom, `H07…` / all-digit Halcyon names → Symbios HUD, `Galileo 3` / lowercase `g2` → Aladin Sport Matrix, lowercase `perdix 2` / `Nerd 2` → Petrel 2, `EON Steel Black` → EON Steel, `G2 TEK` → G2, `OSTC 3` / `OSTC 5` → model 0 ("OSTC 2"), `Crest-CR4` / `CENTAURI` / `ALPHA` → Deep Six Excursion; `NERD` resolves to the non-BLE Nerd (model 4); `FH` with no digits → i300C. This only affects devices seen for the first time (a stored device or model override takes precedence) and the display name before the first download. | Open — revisit once the new stack is in use |
+
+## Phase 4 implementation notes (2026-11-02)
+
+Behaviour kept from the former bridge unless listed here:
+
+| Change | Why |
+|---|---|
+| CoreBluetooth runs on a private queue, not the main queue; every wait is an `NSCondition` wait with the spec's timeouts instead of 50 ms / 1 ms polling | Removes the main-queue deadlock class; same timeouts |
+| No auto-reconnect after an unexpected disconnect; the session fails with `SessionError.disconnected` | Source of the double-free and Shearwater 30 s hang bugs (`ARCHITECTURE.md` §4.2) |
+| `didFailToConnect` and a disconnect fail waits at once (were: the 30 s / read timeout ran out) | Deterministic errors |
+| Download cancellable at any time (`DeviceSessionHandle.cancel()` waits for teardown) | Q2 |
+| After a cancel, the device is still closed normally: `SessionLink.resumeForClose()` lets `dc_device_close` send the protocol's exit command (libdivecomputer disables cancellation for the close), after waiting until the device has sent nothing for 150 ms (at most 1 s) and dropping what it left unread; reads during the close limited to 1 s; then the link is cut | On the Perdix 3 the disconnect alone already ended the transfer (2026-11-06, the BLE icon stopped blinking); the exit command covers computers that would otherwise stay in transfer mode until they time out. The quiet wait was added after the i300C, cancelled mid-answer, sent one more 18-byte piece that libdivecomputer read as the exit command's reply (the i300C still returned to its normal screen) |
+| PIN / access-code ioctls answered through `BLEAuthorizationProvider` (no provider = unsupported, as before) | Q5 |
+| A dive is parsed with the model the device reports and, only if libdivecomputer has no descriptor for it, with the opened descriptor's model (was: the dive was skipped) | Only affects dives the old code dropped |
+| Fingerprints come from `SessionRequest.fingerprintsBySerial`; no UserDefaults fingerprint store | SwiftData is the single source of truth |
+| libdivecomputer's `purge` and `poll` callbacks stay unimplemented (no-ops), as before | Parity; changing them is a separate step with device tests |

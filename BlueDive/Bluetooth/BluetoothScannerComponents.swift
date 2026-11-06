@@ -1,12 +1,5 @@
 import SwiftUI
-import CoreBluetooth
-import LibDCSwift
-
-// MARK: - CBPeripheral + Identifiable
-
-extension CBPeripheral: @retroactive Identifiable {
-    public var id: UUID { identifier }
-}
+import DiveComputerKit
 
 // MARK: - Device Icon View
 
@@ -41,7 +34,7 @@ struct DiveComputerIconView: View {
         // Exact model name → per-model asset (used when model is known/resolved). Not every
         // supported model has artwork: without it, fall through to the brand-level icon below
         // (a missing asset name would draw an empty circle).
-        if DeviceConfiguration.supportedModels.contains(where: { $0.name == name }) {
+        if DeviceCatalog.supportedModels.contains(where: { $0.name == name }) {
             let modelAsset = modelLevelAssetName(name)
             if PlatformImage(named: modelAsset) != nil {
                 return modelAsset
@@ -96,10 +89,10 @@ struct DiveComputerIconView: View {
 // MARK: - Device Row
 
 struct DeviceRow: View {
-    let peripheral: CBPeripheral
+    let peripheral: DiscoveredDevice
     let isSelected: Bool
     let isConnecting: Bool
-    let modelOverride: DeviceConfiguration.ComputerModel?
+    let modelOverride: ComputerModel?
     let onTap: () -> Void
     let onChangeModel: () -> Void
 
@@ -171,17 +164,17 @@ struct DeviceRow: View {
             return override.name
         }
         if let stored = stored,
-           let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
+           let modelInfo = DeviceCatalog.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
             return modelInfo.name
         }
         guard let name = peripheral.name else {
             return "Unknown Device"
         }
-        return DeviceConfiguration.getDeviceDisplayName(from: name)
+        return DeviceCatalog.displayName(forAdvertisedName: name)
     }
 
     private var autoDetectedName: String {
-        let detected = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
+        let detected = DeviceCatalog.displayName(forAdvertisedName: peripheral.name ?? "Unknown")
         return "Detected: \(detected)"
     }
 
@@ -189,11 +182,11 @@ struct DeviceRow: View {
     private func effectiveModelName(stored: StoredDevice?) -> String? {
         if let override = modelOverride { return override.name }
         if let stored = stored,
-           let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
+           let modelInfo = DeviceCatalog.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
             return modelInfo.name
         }
         guard let name = peripheral.name else { return nil }
-        return DeviceConfiguration.getDeviceDisplayName(from: name)
+        return DeviceCatalog.displayName(forAdvertisedName: name)
     }
 }
 
@@ -324,14 +317,14 @@ struct DeviceReassociationPickerSheet: View {
 
 struct ModelPickerSheet: View {
     let detectedName: String
-    let currentOverride: DeviceConfiguration.ComputerModel?
-    let onSelect: (DeviceConfiguration.ComputerModel?) -> Void
+    let currentOverride: ComputerModel?
+    let onSelect: (ComputerModel?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
 
-    private var groupedModels: [(brand: String, models: [DeviceConfiguration.ComputerModel])] {
-        let models = DeviceConfiguration.supportedModels.filter { model in
+    private var groupedModels: [(brand: String, models: [ComputerModel])] {
+        let models = DeviceCatalog.supportedModels.filter { model in
             searchText.isEmpty || model.name.localizedCaseInsensitiveContains(searchText)
         }
 

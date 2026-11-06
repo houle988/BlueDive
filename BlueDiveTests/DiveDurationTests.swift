@@ -1,5 +1,5 @@
 import Foundation
-import LibDCSwift
+import DiveComputerKit
 import SwiftData
 import Testing
 @testable import BlueDive
@@ -266,17 +266,13 @@ struct DiveDurationTests {
         #expect(staleBack.durationSeconds == nil && staleBack.duration == 75)
     }
 
-    // MARK: Bluetooth (LibDCSwift)
+    // MARK: Bluetooth (DiveComputerKit)
 
     /// A downloaded dive with only the fields `applyDuration` reads set meaningfully.
     private func diveData(divetime: TimeInterval, reported: TimeInterval?) -> DiveData {
         DiveData(number: 1, datetime: Date(timeIntervalSince1970: 1_800_000_000),
                  maxDepth: 11.4, avgDepth: 7.7, divetime: divetime, reportedDivetime: reported,
-                 temperature: 19, profile: [], tankPressure: [], gasMix: nil, gasMixCount: nil,
-                 gasMixes: nil, salinity: nil, atmospheric: nil, surfaceTemperature: nil,
-                 minTemperature: nil, maxTemperature: nil, tankCount: nil, tanks: nil,
-                 diveMode: nil, decoModel: nil, location: nil, rbt: nil, heartbeat: nil,
-                 bearing: nil, setpoint: nil, ppo2Readings: [], cns: nil, decoStop: nil)
+                 temperature: 19)
     }
 
     @Test func bluetoothStoresTheComputersTimeWithItsSeconds() {
