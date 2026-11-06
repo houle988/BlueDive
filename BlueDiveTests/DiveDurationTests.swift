@@ -278,22 +278,22 @@ struct DiveDurationTests {
     @Test func bluetoothStoresTheComputersTimeWithItsSeconds() {
         let dive = Dive()
         // Garmin: computer 68:34, profile (last sample) 70:34.
-        BluetoothScannerView.applyDuration(from: diveData(divetime: 4234, reported: 4114), to: dive)
+        DiveImportMapper.applyDuration(from: diveData(divetime: 4234, reported: 4114), to: dive)
         #expect(dive.durationSeconds == 4114 && dive.duration == 69)
     }
 
     @Test func bluetoothWithoutComputerTimeStoresMinutesFromTheLastSample() {
         let dive = Dive()
         dive.setDuration(seconds: 4114)                              // a re-download replaces it
-        BluetoothScannerView.applyDuration(from: diveData(divetime: 4234, reported: nil), to: dive)
+        DiveImportMapper.applyDuration(from: diveData(divetime: 4234, reported: nil), to: dive)
         #expect(dive.durationSeconds == nil && dive.duration == 71)  // 70:34 → 71, no seconds
     }
 
     @Test func bluetoothIgnoresANonFiniteComputerTime() {
         let dive = Dive()
-        BluetoothScannerView.applyDuration(from: diveData(divetime: 4234, reported: .infinity), to: dive)
+        DiveImportMapper.applyDuration(from: diveData(divetime: 4234, reported: .infinity), to: dive)
         #expect(dive.durationSeconds == nil && dive.duration == 71)
-        BluetoothScannerView.applyDuration(from: diveData(divetime: .nan, reported: nil), to: dive)
+        DiveImportMapper.applyDuration(from: diveData(divetime: .nan, reported: nil), to: dive)
         #expect(dive.durationSeconds == nil && dive.duration == 0)
     }
 

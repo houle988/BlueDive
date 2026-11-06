@@ -262,7 +262,7 @@ fileprivate func ppo2Dash(forSensorAtPosition position: Int) -> [CGFloat] {
 /// a ceiling greater than zero. The two signals are unioned, not intersected, because the
 /// importers disagree about which one they populate: `GarminFITParser` appends `.decoStop`
 /// with a nil ceiling when the watch stops reporting `nextStopDepth`, while
-/// `BluetoothScannerView+ProfileProcessing` sets both together. Unioning yields the
+/// `DiveImportMapper` (Bluetooth) sets both together. Unioning yields the
 /// *latest* possible cutoff, which makes every caller as conservative as possible — a
 /// diamond wrongly hidden is far worse than one wrongly kept.
 ///

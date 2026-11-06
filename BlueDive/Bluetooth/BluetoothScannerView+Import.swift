@@ -50,6 +50,8 @@ extension BluetoothScannerView {
 
             // Resolve the diver name once for the entire batch — the same computer is used for all dives.
             let batchDiverName = resolveGearDiverName(forSerial: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial }, in: modelContext)
+            // Device and settings for the mapping, likewise captured once for the batch.
+            let importContext = makeImportContext()
 
             // Find the highest dive number for this diver's bucket so new dives continue their own
             // sequence independently of other divers. Stored diverName values are always trimmed,
@@ -145,7 +147,8 @@ extension BluetoothScannerView {
                 if let existingDive {
                     if downloadAllDives {
                         // Re-download mode: merge data from the computer
-                        mergeComputerData(from: diveData, into: existingDive, matchReason: "fingerprint + serial")
+                        DiveImportMapper.merge(diveData, into: existingDive, context: importContext)
+                        Self.logger.info("Dive from \(existingDive.timestamp) merged with computer data (matched by: fingerprint + serial)")
                         mergedCount += 1
                         weatherCandidates.append((existingDive, false))
                     } else {
@@ -153,7 +156,8 @@ extension BluetoothScannerView {
                         skippedCount += 1
                     }
                 } else {
-                    let dive = convertToBlueDiveDive(diveData, diveNumber: nextDiveNumber, previousDiveEndTime: previousDiveEndTime, diverName: batchDiverName)
+                    let dive = DiveImportMapper.makeDive(from: diveData, diveNumber: nextDiveNumber, previousDiveEndTime: previousDiveEndTime,
+                                                         diverName: batchDiverName, context: importContext)
                     modelContext.insert(dive)
                     nextDiveNumber += 1
                     importedCount += 1
@@ -206,6 +210,23 @@ extension BluetoothScannerView {
         }
     }
 
+    /// The connected device and the import settings, for `DiveImportMapper`.
+    func makeImportContext() -> DiveImportContext {
+        let stored = selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString) }
+        return DiveImportContext(
+            deviceFamily: stored?.family,
+            catalogComputerName: stored.flatMap { stored in
+                DeviceCatalog.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family })?.name
+            },
+            connectedDeviceName: connectedDeviceName,
+            computerSerial: stored?.serial
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .flatMap { $0.isEmpty ? nil : $0 },
+            filterUnusedTanks: filterUnusedTanks,
+            importWeightUnit: (WeightUnit(rawValue: UserDefaults.standard.string(forKey: "weightUnit") ?? "kilograms") ?? .kilograms).symbol
+        )
+    }
+
     // MARK: - Weather Fetch After Import
 
     /// Offers, on the completed screen, to fetch the weather for the just-imported dives that
@@ -216,7 +237,7 @@ extension BluetoothScannerView {
     /// set only from a surface temperature the computer reports
     /// (`DiveData.measuredSurfaceTemperature`), and that reading is kept. A dive downloaded
     /// again is already in the logbook and may hold weather the user entered — as
-    /// mergeComputerData preserves user-modified fields (CLAUDE.md: preserve values the user
+    /// DiveImportMapper.merge preserves user-modified fields (CLAUDE.md: preserve values the user
     /// did not change through the app).
     func offerWeatherFetch(for candidates: [(dive: Dive, isNew: Bool)]) {
         guard UserPreferences.shared.fetchWeatherOnline else {
@@ -602,179 +623,6 @@ extension BluetoothScannerView {
             modelContext.delete(device)
             Self.logger.info("Deleted DeviceFingerprint record for \(device.computerName) (sentinel serial \(serial) — single record only)")
         }
-    }
-
-    // MARK: - Merge
-
-    /// Merges dive computer data into an existing dive.
-    /// Only fields originating from the computer are updated.
-    /// User-modified fields (notes, rating, buddies, etc.) are preserved.
-    private func mergeComputerData(from diveData: DiveData, into dive: Dive, matchReason: String) {
-        // Dive statistics
-        dive.maxDepth = diveData.maxDepth
-        dive.averageDepth = diveData.avgDepth
-        Self.applyDuration(from: diveData, to: dive)
-
-        // Temperatures
-        let profileTemperatures = diveData.profile.compactMap { $0.temperature }
-        dive.waterTemperature = diveData.temperature.isFinite ? diveData.temperature : nil
-        dive.minTemperature = diveData.minTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.min() ?? (diveData.temperature.isFinite ? diveData.temperature : nil)
-        dive.maxTemperature = diveData.maxTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.max()
-        // Only a surface temperature the computer reports (not LibDC-Swift's first-sample
-        // fallback), and only into an empty field: it must not overwrite a value fetched from
-        // Open-Meteo or entered by the user on an earlier import or edit.
-        // LibDC-Swift sets measuredSurfaceTemperature only to a finite value.
-        if dive.airTemperature == nil, let surfaceTemp = diveData.measuredSurfaceTemperature {
-            dive.airTemperature = surfaceTemp
-        }
-
-        // Build tanks with inline gas data from the dive computer.
-        // Preserve user-set fields (volume, workingPressure, tankType, tankMaterial) that dive
-        // computers typically do not provide. Usage times are derived from the fresh profile by
-        // applyGasSwitchUsageTimes below and are intentionally not carried forward here.
-        // Also build gasMixToTankIndex: maps gas-mix index (currentGas) to tank array position.
-        let dcGasMixes = diveData.gasMixes ?? []
-        let existingTanks = dive.tanks
-        var mergeMixToTankIndex: [Int: Int] = [:]
-        let profileGasMixOrder = Self.orderedGasMixIndices(from: diveData)
-
-        if let dcTanks = diveData.tanks, !dcTanks.isEmpty {
-            // Same gas-to-tank assignment as the first download (Shearwater pressure inference
-            // included), so a re-download keeps each gas on its transmitter.
-            let built = Self.buildTanksFromComputerTanks(
-                dcTanks,
-                diveData: diveData,
-                deviceFamily: connectedDeviceFamily,
-                filterUnusedTanks: filterUnusedTanks
-            )
-            mergeMixToTankIndex = built.gasMixToTankIndex
-            // Preserve the identity and user-set fields of the existing tank at the same index
-            // (the transmitter slot, then the gas-only tanks in gas-mix order).
-            dive.tanks = built.tanks.enumerated().map { (index, tank) in
-                let existing = index < existingTanks.count ? existingTanks[index] : nil
-                return TankData(
-                    id: existing?.id ?? tank.id,
-                    o2: tank.o2, he: tank.he,
-                    volume: tank.volume ?? existing?.volume,
-                    startPressure: tank.startPressure,
-                    endPressure: tank.endPressure,
-                    workingPressure: tank.workingPressure ?? existing?.workingPressure,
-                    tankMaterial: existing?.tankMaterial,
-                    tankType: existing?.tankType
-                )
-            }
-        } else if !diveData.tankPressure.isEmpty {
-            // Fallback: create a TankData from tank pressure samples
-            let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0
-            let startP = diveData.tankPressure.first(where: { $0 > 0 })
-            let endP   = diveData.tankPressure.last(where:  { $0 > 0 })
-            let existing = existingTanks.first
-            dive.tanks = [TankData(o2: o2Fraction, he: 0.0,
-                                   volume: existing?.volume,
-                                   startPressure: startP, endPressure: endP,
-                                   workingPressure: existing?.workingPressure,
-                                   tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)]
-            mergeMixToTankIndex[0] = 0
-        } else if !dcGasMixes.isEmpty {
-            // No tank data but we have gas mixes — store them as tanks with gas only
-            let needsFilter = filterUnusedTanks && (connectedDeviceFamily.map { Self.familiesNeedingSwiftTankFilter.contains($0) } ?? true)
-            let usedMixes = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
-            // existingIdx walks existingTanks in lockstep with the filtered output.
-            // If filterUnusedTanks was toggled between imports, the shapes may differ and
-            // user-set fields (volume, tankMaterial, etc.) could land on the wrong tank.
-            var existingIdx = 0
-            var tankIdx = 0
-            dive.tanks = dcGasMixes.enumerated().compactMap { (index, mix) in
-                if let used = usedMixes {
-                    guard used.contains(index) else { return nil }
-                }
-                let existing = existingIdx < existingTanks.count ? existingTanks[existingIdx] : nil
-                existingIdx += 1
-                mergeMixToTankIndex[index] = tankIdx
-                tankIdx += 1
-                return TankData(o2: mix.oxygen, he: mix.helium,
-                                volume: existing?.volume, workingPressure: existing?.workingPressure,
-                                tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)
-            }
-        } else if let gasMix = diveData.gasMix, gasMix != 21 {
-            // Single non-Air gas from dive computer
-            let existing = existingTanks.first
-            dive.tanks = [TankData(o2: Double(gasMix) / 100.0, he: 0.0,
-                                   volume: existing?.volume, workingPressure: existing?.workingPressure,
-                                   tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)]
-            mergeMixToTankIndex[0] = 0
-        }
-
-        // Decompression
-        if let decoModel = diveData.decoModel {
-            dive.decompressionAlgorithm = decoModel.description
-        }
-        dive.cnsPercentage = diveData.cns ?? diveData.profile.last(where: { $0.cns != nil })?.cns
-        // DC_DECO_DECOSTOP = 2: only mandatory decompression stops count
-        let hadDecoObligation = (diveData.decoStop?.type == 2)
-            || diveData.profile.contains { $0.decoStop != nil }
-            || diveData.profile.contains { $0.events.contains(.decoStop) }
-        dive.isDecompressionDive = hadDecoObligation
-
-        // Dive profile (always update with fresh data, merge event-only points)
-        // currentGas is remapped from gas-mix index to tank-array index before storage.
-        dive.profileSamples = Self.remapProfileCurrentGas(
-            Self.consolidateProfilePoints(diveData.profile),
-            using: mergeMixToTankIndex)
-        let mergeInitialGasMixIndex = profileGasMixOrder.first
-        dive.tanks = Self.applyGasSwitchUsageTimes(
-            to: dive.tanks,
-            gasMixToTankIndex: mergeMixToTankIndex,
-            initialGasMixIndex: mergeInitialGasMixIndex,
-            profileSamples: dive.profileSamples
-        )
-
-        // Computer name — prefer full brand+model name from supportedModels lookup
-        if let peripheral = selectedDevice,
-           let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
-           let modelInfo = DeviceCatalog.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
-            dive.computerName = modelInfo.name
-        } else if let name = connectedDeviceName {
-            dive.computerName = name
-        }
-
-        // Raw dive computer data
-        dive.rawDiveComputerData = diveData.rawData
-        dive.fingerprintData = diveData.fingerprint
-
-        // Water type from salinity (g/cm³): ~1.0 = Fresh, ~1.025 = Salt
-        if let sal = diveData.salinity {
-            dive.siteWaterType = waterType(forSalinity: sal)
-        }
-
-        // Surface pressure, only when the computer reports one: a value from an earlier import
-        // is kept when this computer records none.
-        if let pressure = Dive.validatedSurfacePressure(diveData.atmospheric) {
-            dive.surfacePressure = pressure
-        }
-
-        // Decompression stops
-        dive.decoStops = Self.extractDecoStops(from: diveData)
-
-        if let entryLoc = diveData.location,
-           (-90...90).contains(entryLoc.latitude),
-           (-180...180).contains(entryLoc.longitude),
-           !(entryLoc.latitude == 0 && entryLoc.longitude == 0) {
-            dive.siteLatitude = entryLoc.latitude
-            dive.siteLongitude = entryLoc.longitude
-        }
-        if let exitLoc = diveData.exitLocation,
-           (-90...90).contains(exitLoc.latitude),
-           (-180...180).contains(exitLoc.longitude),
-           !(exitLoc.latitude == 0 && exitLoc.longitude == 0) {
-            dive.exitLatitude = exitLoc.latitude
-            dive.exitLongitude = exitLoc.longitude
-        }
-
-        // Override source import to reflect the Bluetooth re-download
-        dive.sourceImport = "Bluetooth"
-
-        Self.logger.info("Dive from \(dive.timestamp) merged with computer data (matched by: \(matchReason))")
     }
 
     // MARK: - Diver Name

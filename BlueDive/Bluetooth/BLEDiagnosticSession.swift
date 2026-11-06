@@ -169,7 +169,7 @@ nonisolated final class BLEDiagnosticSession: @unchecked Sendable {
             let ts = String(format: "%.3f", event.timestamp.timeIntervalSince1970)
             let dir = event.direction.rawValue.uppercased()
             let line = "[\(ts)] [\(dir)] \(event.characteristicUUID) (\(event.data.count) bytes)\n\(event.hexDump)"
-            // libdc-swift does not print packets itself; echo them to the Xcode console in DEBUG only.
+            // DiveComputerKit does not print packets itself; echo them to the Xcode console in DEBUG only.
             #if DEBUG
             print(line)
             #endif
