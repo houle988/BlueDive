@@ -120,18 +120,12 @@ struct AboutView: View {
                         AboutSectionHeader(title: "Acknowledgements", icon: "heart.fill", color: .orange)
                         
                         VStack(alignment: .leading, spacing: 12) {
+                            // The LGPL notice for the libdivecomputer copy linked into the app
+                            // (Packages/DiveComputerKit/Docs/DECISIONS.md, Q1).
                             AcknowledgementRow(
                                 name: "libdivecomputer",
-                                description: "Open-source library for communicating with dive computers. Provides the low-level protocol support for downloading dive data from a wide range of hardware.",
+                                description: "Open-source library for communicating with dive computers. Provides the low-level protocol support for downloading dive data from a wide range of hardware. Licensed under the [GNU LGPL 2.1 or later](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html); the complete source code used by BlueDive is published in the [BlueDive repository](https://github.com/houle988/BlueDive/tree/main/Packages/DiveComputerKit/Sources/CLibDiveComputer).",
                                 url: "https://www.libdivecomputer.org"
-                            )
-                            
-                            Divider().opacity(0.3)
-                            
-                            AcknowledgementRow(
-                                name: "LibDC-Swift",
-                                description: "Swift wrapper around libdivecomputer, enabling native integration with Apple platforms for dive computer communication.",
-                                url: "https://github.com/latishab/LibDC-Swift"
                             )
 
                             Divider().opacity(0.3)

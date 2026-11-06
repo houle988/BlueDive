@@ -150,6 +150,7 @@ struct BlueDiveApp: App {
         // DiveComputerLog.shared.enableDebugMode()
 
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
+        DeviceStorage.removeFormerLibraryKeys()
         #if os(iOS)
         BackgroundSyncTask.register()
         #endif

@@ -96,6 +96,22 @@ final class DeviceStorage {
         updateStoredDevices(devices)
     }
 
+    /// Version of the former-library key cleanup already done, so it runs only once.
+    private static let formerLibraryKeysCleanupVersionKey = "formerLibraryKeysCleanupVersion"
+
+    /// Removes, once, the fingerprint store the former LibDCSwift library kept in UserDefaults
+    /// ("BlueDive", earlier "DeviceFingerprints"), which nothing reads any more: watermarks come
+    /// from SwiftData's `DeviceFingerprint`. `storageKey` is kept — it is still the known-device
+    /// list. It runs only once so it can never delete a key of the same name added later.
+    static func removeFormerLibraryKeys() {
+        let defaults = UserDefaults.standard
+        guard defaults.integer(forKey: formerLibraryKeysCleanupVersionKey) < 1 else { return }
+        for key in ["BlueDive", "DeviceFingerprints"] {
+            defaults.removeObject(forKey: key)
+        }
+        defaults.set(1, forKey: formerLibraryKeysCleanupVersionKey)
+    }
+
     func updateStoredDevices(_ devices: [StoredDevice]) {
         guard let data = try? JSONEncoder().encode(devices) else { return }
         defaults.set(data, forKey: Self.storageKey)

@@ -112,7 +112,7 @@ Never call `DepthUnit.formatted(_ meters:)` or `DepthUnit.convert(_ meters:)` wi
 A dive's time is stored in two fields:
 
 - **`Dive.duration`** (whole minutes, always set): the dive list, sorting, totals, Gear use, the widget, the Statistics CSV "Duration (min)" column and the duplicate checks use it, and older app versions read only it. The CSV's "Duration (s)" column, right after it, holds `consistentDurationSeconds` and is empty when the dive has none (never minutes × 60).
-- **`Dive.durationSeconds`** (optional): the dive time recorded by the dive computer (LibDCSwift's `reportedDivetime`, `DC_FIELD_DIVETIME`) or by the imported file (MacDive, UDDF, Subsurface, Garmin FIT, BlueDive XML `<durationSeconds>`). It is **never filled from `duration`**: existing dives, manual dives and dives whose computer reports no dive time have none.
+- **`Dive.durationSeconds`** (optional): the dive time recorded by the dive computer (DiveComputerKit's `reportedDivetime`, `DC_FIELD_DIVETIME`) or by the imported file (MacDive, UDDF, Subsurface, Garmin FIT, BlueDive XML `<durationSeconds>`). It is **never filled from `duration`**: existing dives, manual dives and dives whose computer reports no dive time have none.
 
 Rules:
 
@@ -128,7 +128,7 @@ Rules:
 
 ## Surface Pressure
 
-`Dive.surfacePressure` (optional) is the surface (atmospheric) pressure recorded by the dive computer (LibDCSwift's `DiveData.atmospheric`, `DC_FIELD_ATMOSPHERIC`) or by the imported file (UDDF `<surfacepressure>` in pascals, Subsurface `<surface pressure='… bar'>`, BlueDive XML `<surfacePressure>`). It is **always stored in bar**, whatever the dive's `importPressureUnit` (a weather quantity, not a tank pressure), and is **never estimated**: it is never filled from `siteAltitude`, and dives whose computer or file reports none have none.
+`Dive.surfacePressure` (optional) is the surface (atmospheric) pressure recorded by the dive computer (DiveComputerKit's `DiveData.atmospheric`, `DC_FIELD_ATMOSPHERIC`) or by the imported file (UDDF `<surfacepressure>` in pascals, Subsurface `<surface pressure='… bar'>`, BlueDive XML `<surfacePressure>`). It is **always stored in bar**, whatever the dive's `importPressureUnit` (a weather quantity, not a tank pressure), and is **never estimated**: it is never filled from `siteAltitude`, and dives whose computer or file reports none have none.
 
 - **Write only validated values:** every path that stores it goes through `Dive.validatedSurfacePressure(_:)` (`Dive.validSurfacePressure`, 0.4–1.2 bar; `Dive.init` applies it). Out-of-range values (e.g. the 0 some computers report) store nothing. The library applies the same range (`GenericParser.validAtmosphericRange`).
 - **Bluetooth:** a download stores the computer's value; a re-download replaces it only when the computer reports one. **Merge Dives** keeps the earlier dive's value, else takes the later one's.
@@ -136,6 +136,18 @@ Rules:
 - **Display:** only through `formattedSurfacePressure` ("1.013 bar", fixed in bar, locale decimals): the Conditions card and the PDF Site Details show it, "—" when nil.
 - **Calculations:** `PPO2Setup` (PPO₂ and the GF99 / Surface GF tissue model) uses it when set, else `atmosphericPressure(forAltitudeMeters:)` from the site altitude. That fallback lives only there; do not add another. Any cache key of a calculation that uses `PPO2Setup` (`tissueInputsHash`, the `GFTissueFeeder` key, `buhlmannPriorFingerprint`) must hash `surfacePressure`.
 - It is not part of `DiveSummary`, so remote edits to it need no `classifyRemoteHistory` entry. A new model attribute needs the CloudKit schema step below (`CD_surfacePressure`, DOUBLE).
+
+## Dive Computer Downloads (DiveComputerKit)
+
+Bluetooth downloads go through `Packages/DiveComputerKit`, BlueDive's own package (it replaced LibDCSwift): the device catalog, the dive parser, the Bluetooth transport and the download session, over a vendored, statically linked copy of libdivecomputer. Its design, owner decisions and parity results are in `Packages/DiveComputerKit/Docs` (`DECISIONS.md` takes precedence over `ARCHITECTURE.md`).
+
+- **Clean room:** never copy code from LibDCSwift (LGPL, mostly third-party). Work from `Docs/BEHAVIOURAL_SPEC.md`, the libdivecomputer headers and sources, and BlueDive's own code.
+- **Threading contract:** CoreBluetooth runs on the package's private queue, and each download runs libdivecomputer on its own session thread (every C object is created, used and freed there; waits are `NSCondition` waits, never main-queue polling). The app sees only `DiveComputerManager` (`@MainActor`) and the `AsyncThrowingStream` of `SessionEvent`s from `startSession`. Code called from the session thread (e.g. `BLEPairingProvider`, `BLEDiagnosticSession`) must be `nonisolated` and must not touch `@MainActor` state, `UserPreferences.shared` included. `DiveImportMapper` is `@MainActor`, like the `Dive` it builds.
+- **Mapping:** a downloaded `DiveData` becomes a `Dive` only through `DiveImportMapper` (`makeDive` / `merge`), with the device and settings captured once per import in `DiveImportContext`; the mapper reads no view state. Keep the parity tests green (`BlueDiveTests/DiveImportMapperParityTests`, `DiveImportMapperTests`).
+- **Persistence:** watermarks (fingerprints) come only from SwiftData's `DeviceFingerprint`. The known-device list is `DeviceStorage` (`KnownDeviceStore.swift`, UserDefaults key `com.libdc.storedDevices`, kept in LibDCSwift's format so existing devices keep working): one identifier per real serial, written only from what the device itself reports. Pelagic access codes are in the Keychain (`BLEAccessCodeKeychain`).
+- **Timings and quirks:** every constant in `BLETiming` works around a real device behaviour; change one only with a device test and a BLE diagnostic trace.
+- **Updating libdivecomputer:** follow the sync procedure in `Packages/DiveComputerKit/Sources/CLibDiveComputer/UPSTREAM.md`: copy upstream unchanged (no local C patches), regenerate `version.h`, review the C diff, add the catalog rows `CatalogConsistencyTests` lists, re-run the golden parity tests (`DCK_GOLDEN_DIR`) and the mapper parity tests, and do a device smoke test. The update is its own commit.
+- **Private test data:** golden files, BLE traces and dive exports are the owner's and beta testers' dive data. They live outside the repository (e.g. `~/BlueDive-Fixtures`) and are passed to tests through `DCK_GOLDEN_DIR` / `BLUEDIVE_PARITY_DIR` (with xcodebuild, `TEST_RUNNER_BLUEDIVE_PARITY_DIR`); never commit them.
 
 ## macOS Support (Native Universal App)
 
