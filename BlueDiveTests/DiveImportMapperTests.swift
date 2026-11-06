@@ -30,6 +30,14 @@ struct DiveImportMapperTests {
         return data
     }
 
+    private func merged(_ data: DiveData, firstFilter: Bool = false, mergeFilter: Bool = false) -> (before: [UUID], after: [UUID]) {
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(filterUnusedTanks: firstFilter))
+        let before = dive.tanks.map(\.id)
+        DiveImportMapper.merge(data, into: dive, context: context(filterUnusedTanks: mergeFilter))
+        return (before, dive.tanks.map(\.id))
+    }
+
     // MARK: Computer name and import settings
 
     @Test func newDiveTakesTheCatalogNameThenTheConnectedNameThenTheDefault() {
@@ -105,6 +113,7 @@ struct DiveImportMapperTests {
         dive.tanks = dive.tanks.map {
             TankData(o2: $0.o2, he: $0.he, volume: 11.1, workingPressure: 207, tankMaterial: "Aluminum", tankType: "Single")
         }
+        let ids = dive.tanks.map(\.id)
         dive.airTemperature = 25
         dive.surfacePressure = 0.98
         dive.notes = "Great visibility"
@@ -119,8 +128,51 @@ struct DiveImportMapperTests {
         #expect(dive.tanks.allSatisfy {
             $0.volume == 11.1 && $0.workingPressure == 207 && $0.tankMaterial == "Aluminum" && $0.tankType == "Single"
         })
+        #expect(dive.tanks.map(\.id) == ids)
         #expect(dive.airTemperature == 25)
         #expect(dive.surfacePressure == 0.98)
         #expect(dive.notes == "Great visibility" && dive.rating == 4)
+    }
+
+    // MARK: Tank identity on a re-download
+
+    @Test func mergeKeepsTankIDsForComputerTanks() {
+        var data = threeMixDive()
+        data.tanks = [DiveData.Tank(volume: 11.1, workingPressure: 207, beginPressure: 200, endPressure: 60,
+                                    gasMix: 0, usage: .none)]
+        let ids = merged(data)
+        #expect(!ids.before.isEmpty && ids.after == ids.before)
+    }
+
+    @Test func mergeKeepsTheTankIDForTankPressureOnly() {
+        var data = threeMixDive()
+        data.gasMixes = nil
+        data.tankPressure = [200, 180, 120]
+        let ids = merged(data)
+        #expect(ids.before.count == 1 && ids.after == ids.before)
+    }
+
+    @Test func mergeKeepsTankIDsForGasMixesOnly() {
+        let ids = merged(threeMixDive())
+        #expect(ids.before.count == 3 && ids.after == ids.before)
+    }
+
+    @Test func mergeKeepsTheTankIDForASingleNonAirGas() {
+        var data = threeMixDive()
+        data.gasMixes = nil
+        data.gasMix = 32
+        let ids = merged(data)
+        #expect(ids.before.count == 1 && ids.after == ids.before)
+    }
+
+    /// The id follows the tank at the same position, like the user's tank details: switching
+    /// "Filter unused tanks" between downloads keeps the first tank's id and gives any added
+    /// tank a new one.
+    @Test func mergeKeepsIDsByPositionWhenTheTankCountChanges() {
+        let fewer = merged(threeMixDive(), firstFilter: false, mergeFilter: true)
+        #expect(fewer.before.count == 3 && fewer.after == [fewer.before[0]])
+        let more = merged(threeMixDive(), firstFilter: true, mergeFilter: false)
+        #expect(more.before.count == 1 && more.after.count == 3 && more.after[0] == more.before[0])
+        #expect(Set(more.after).count == 3)
     }
 }

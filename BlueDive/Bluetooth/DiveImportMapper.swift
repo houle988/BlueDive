@@ -950,7 +950,8 @@ enum DiveImportMapper {
 
         // Build tanks with inline gas data from the dive computer.
         // Preserve user-set fields (volume, workingPressure, tankType, tankMaterial) that dive
-        // computers typically do not provide. Usage times are derived from the fresh profile by
+        // computers typically do not provide, and each tank's id: in every branch the tank at
+        // the same position keeps both, so a re-download changes no tank identity. Usage times are derived from the fresh profile by
         // applyGasSwitchUsageTimes below and are intentionally not carried forward here.
         // Also build gasMixToTankIndex: maps gas-mix index (currentGas) to tank array position.
         let dcGasMixes = diveData.gasMixes ?? []
@@ -989,7 +990,8 @@ enum DiveImportMapper {
             let startP = diveData.tankPressure.first(where: { $0 > 0 })
             let endP   = diveData.tankPressure.last(where:  { $0 > 0 })
             let existing = existingTanks.first
-            dive.tanks = [TankData(o2: o2Fraction, he: 0.0,
+            dive.tanks = [TankData(id: existing?.id ?? UUID(),
+                                   o2: o2Fraction, he: 0.0,
                                    volume: existing?.volume,
                                    startPressure: startP, endPressure: endP,
                                    workingPressure: existing?.workingPressure,
@@ -1001,7 +1003,7 @@ enum DiveImportMapper {
             let usedMixes = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
             // existingIdx walks existingTanks in lockstep with the filtered output.
             // If filterUnusedTanks was toggled between imports, the shapes may differ and
-            // user-set fields (volume, tankMaterial, etc.) could land on the wrong tank.
+            // user-set fields (volume, tankMaterial, etc.) and the id could land on the wrong tank.
             var existingIdx = 0
             var tankIdx = 0
             dive.tanks = dcGasMixes.enumerated().compactMap { (index, mix) in
@@ -1012,14 +1014,16 @@ enum DiveImportMapper {
                 existingIdx += 1
                 mergeMixToTankIndex[index] = tankIdx
                 tankIdx += 1
-                return TankData(o2: mix.oxygen, he: mix.helium,
+                return TankData(id: existing?.id ?? UUID(),
+                                o2: mix.oxygen, he: mix.helium,
                                 volume: existing?.volume, workingPressure: existing?.workingPressure,
                                 tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)
             }
         } else if let gasMix = diveData.gasMix, gasMix != 21 {
             // Single non-Air gas from dive computer
             let existing = existingTanks.first
-            dive.tanks = [TankData(o2: Double(gasMix) / 100.0, he: 0.0,
+            dive.tanks = [TankData(id: existing?.id ?? UUID(),
+                                   o2: Double(gasMix) / 100.0, he: 0.0,
                                    volume: existing?.volume, workingPressure: existing?.workingPressure,
                                    tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)]
             mergeMixToTankIndex[0] = 0

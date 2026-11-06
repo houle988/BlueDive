@@ -44,8 +44,7 @@ struct DiveImportMapperParityTests {
         #expect(compared == fixture.dives.count && compared > 0)
     }
 
-    /// A re-download merged into the dive it created changes no value; only the IDs of tanks
-    /// built from gas mixes alone change (known, pre-existing: those branches do not reuse IDs).
+    /// A re-download merged into the dive it created changes nothing, tank IDs included.
     @Test(arguments: MapperParityFixtures.computers)
     func mergingTheSameDownloadChangesNothing(_ folder: URL) throws {
         let fixture = try MapperParityFixtures.load(folder)
@@ -56,7 +55,7 @@ struct DiveImportMapperParityTests {
             let before = try MapperParityFixtures.diveElement(BlueDiveXMLExporter.generateXML(for: dive))
             DiveImportMapper.merge(diveData, into: dive, context: fixture.context)
             let after = try MapperParityFixtures.diveElement(BlueDiveXMLExporter.generateXML(for: dive))
-            if let difference = MapperParityFixtures.firstDifference(before, after, ignoring: ["tanks/tank/id"]) {
+            if let difference = MapperParityFixtures.firstDifference(before, after, ignoring: []) {
                 Issue.record("\(folder.lastPathComponent) \(old.value("date") ?? ""): \(difference)")
             }
         }
