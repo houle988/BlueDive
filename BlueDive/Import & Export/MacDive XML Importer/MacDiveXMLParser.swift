@@ -211,8 +211,10 @@ struct BlueDiveSamplesData: Sendable {
                                    // circuit) and resolves it in its forward-fill; BlueDive XML stores the
                                    // attribute as exported. DiveProfilePoint then drops 0 and non-finite values.
                                    // nil when not reported
+    let tts: Double?               // reported time to surface at this sample, minutes; nil when not reported
+    let rbt: Double?               // reported remaining bottom time at this sample, minutes; nil when not reported
 
-    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil, setpoint: Double? = nil) {
+    init(time: Double, depth: Double, pressure: Double? = nil, tankPressures: [Int: Double]? = nil, temperature: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, ndt: Int? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil, setpoint: Double? = nil, tts: Double? = nil, rbt: Double? = nil) {
         self.time = time
         self.depth = depth
         self.pressure = pressure
@@ -227,6 +229,8 @@ struct BlueDiveSamplesData: Sendable {
         self.events = events
         self.currentGas = currentGas
         self.setpoint = setpoint
+        self.tts = tts
+        self.rbt = rbt
     }
 }
 

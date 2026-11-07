@@ -69,7 +69,7 @@ Both sides render with the same rules, and the comparison is **byte-equal, zero 
 
 **DiveData**: `number`, `datetime` (seconds since 1970, Double), `maxDepth`, `avgDepth`, `divetime`, `reportedDivetime?`, `temperature` (may be `"inf"`), `profile` [Point], `tankPressure` [Double], `gasMix?`, `gasMixCount?`, `gasMixes?` [GasMix], `salinity?`, `atmospheric?`, `surfaceTemperature?`, `measuredSurfaceTemperature?`, `minTemperature?`, `maxTemperature?`, `tankCount?`, `tanks?` [Tank], `diveMode?`, `decoModel?`, `location?`, `exitLocation?`, `rbt?`, `heartbeat?`, `bearing?`, `setpoint?`, `ppo2Readings` [{`sensor`, `value`}], `cns?`, `decoStop?` {`depth`, `time`, `type`}. The parser is called with dive number 1. `rawData` / `fingerprint` are inputs, not output.
 
-**Point**: `time`, `depth`, `temperature?`, `pressure?`, `pressures` [[tank, bar]], `po2?`, `sensorPPO2` [[sensor, bar]], `pn2?`, `phe?`, `events` [String], `ndl?`, `decoStop?`, `decoTime?`, `tts?`, `currentGas?`, `cns?`, `rbt?`, `heartbeat?`, `bearing?`, `setpoint?`.
+**Point**: `time`, `depth`, `temperature?`, `pressure?`, `pressures` [[tank, bar]], `po2?`, `sensorPPO2` [[sensor, bar]], `pn2?`, `phe?`, `events` [String], `ndl?`, `decoStop?`, `decoTime?`, `tts?`, `currentGas?`, `cns?`, `rbt?`, `heartbeat?`, `bearing?`, `setpoint?`. `ProfileSample.reportedRBT` (added later, not in the former library's output) is deliberately not encoded.
 
 **GasMix**: `helium`, `oxygen`, `nitrogen`, `usage`. **Tank**: `volume`, `workingPressure`, `beginPressure`, `endPressure`, `gasMix` (Int), `usage`. **DecoModel**: `type`, `conservatism`, `gfLow?`, `gfHigh?`, `description` (the persisted string). **Location**: `latitude`, `longitude`, `altitude?`.
 

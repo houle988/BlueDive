@@ -56,8 +56,10 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
     let events: [DiveProfileEvent] // Events at this profile point
     let currentGas: Int? // Active tank index at this point (index into Dive.tanks)
     let setpoint: Double? // CCR setpoint in bar in effect at this point, as reported by the dive computer; nil for OC/legacy
+    let tts: Double? // Time to surface reported by the dive computer at this sample, in minutes; nil when not reported
+    let rbt: Double? // Remaining bottom time reported by the dive computer at this sample, in minutes; nil when not reported
 
-    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil, setpoint: Double? = nil) {
+    init(id: UUID = UUID(), time: Double, depth: Double, temperature: Double? = nil, tankPressure: Double? = nil, tankPressures: [Int: Double]? = nil, ndl: Double? = nil, ceilingDepth: Double? = nil, ceilingTime: Double? = nil, cns: Double? = nil, ppo2: Double? = nil, sensorPPO2: [Int: Double]? = nil, events: [DiveProfileEvent] = [], currentGas: Int? = nil, setpoint: Double? = nil, tts: Double? = nil, rbt: Double? = nil) {
         self.id = id
         self.time = time
         self.depth = depth
@@ -75,6 +77,8 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         // Stored only when valid (see `validSetpoint(_:)`): 0 is no setpoint, and a non-finite
         // value would make the whole profile fail to encode.
         self.setpoint = Self.validSetpoint(setpoint)
+        self.tts = Self.validTTS(tts)
+        self.rbt = Self.validRBT(rbt)
     }
 
     // Custom decoder so that profiles serialized before the events field was added
@@ -99,6 +103,9 @@ struct DiveProfilePoint: Codable, Identifiable, Hashable, Sendable {
         events = (try? container.decode([DiveProfileEvent].self, forKey: .events)) ?? []
         currentGas = try container.decodeIfPresent(Int.self, forKey: .currentGas)
         setpoint = Self.validSetpoint(try container.decodeIfPresent(Double.self, forKey: .setpoint))
+        // Absent from profiles stored before TTS and RBT were kept.
+        tts = Self.validTTS(try container.decodeIfPresent(Double.self, forKey: .tts))
+        rbt = Self.validRBT(try container.decodeIfPresent(Double.self, forKey: .rbt))
     }
 }
 
@@ -112,6 +119,32 @@ extension DiveProfilePoint {
     static func validSetpoint(_ value: Double?) -> Double? {
         guard let value, value > 0, value.isFinite else { return nil }
         return value
+    }
+
+    /// A time to surface as BlueDive stores it: 0 or less, or non-finite, is no TTS.
+    /// libdivecomputer has no "not reported" value for it — the backends of computers that
+    /// do not compute one write 0 — so a 0 never means a real reading.
+    static func validTTS(_ value: Double?) -> Double? {
+        guard let value, value > 0, value.isFinite else { return nil }
+        return value
+    }
+
+    /// A remaining bottom time as BlueDive stores it: 0 is a real reading (no time left),
+    /// only negative or non-finite values are dropped. Sources that have no "not reported"
+    /// value decide before this: the Subsurface importer reads a written 0 as none (Subsurface
+    /// zeroes each sample's RBT), and DiveComputerKit drops the Uwatec backend's default 99s.
+    static func validRBT(_ value: Double?) -> Double? {
+        guard let value, value >= 0, value.isFinite else { return nil }
+        return value
+    }
+
+    /// Whole minutes a stored TTS or RBT is shown as (Samples tab, chart tooltip): rounded up,
+    /// as dive computers show TTS, so a time reported in seconds (Garmin, Subsurface) is never
+    /// shown as 0 or as less than reported (37 s → 1, 61 s → 2). Whole minutes (Shearwater and
+    /// the other libdivecomputer backends) are unchanged. Display only: the stored value keeps
+    /// its seconds.
+    static func displayedMinutes(_ minutes: Double) -> Double {
+        minutes.rounded(.up)
     }
 }
 

@@ -50104,6 +50104,76 @@
         }
       }
     },
+    "RBT" : {
+      "comment" : "Samples table column header: remaining bottom time (minutes)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RBT"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RBT"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TRF"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RBT"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RBT"
+          }
+        }
+      }
+    },
+    "RBT %@ min" : {
+      "comment" : "Dive chart tooltip row: remaining bottom time reported by the dive computer; %@ is the number of minutes",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RBT %@ min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RBT %@ min"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TRF %@ min"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RBT %@ min"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RBT %@ min"
+          }
+        }
+      }
+    },
     "Re-downloads all dives and merges matched ones. Tap ⓘ at the top right for details." : {
       "localizations" : {
         "de" : {
@@ -66649,6 +66719,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Probeer andere zoekwoorden of pas de filters aan."
+          }
+        }
+      }
+    },
+    "TTS" : {
+      "comment" : "Samples table column header: time to surface (minutes)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TTS"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TTS"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DTR"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TTS"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TTS"
+          }
+        }
+      }
+    },
+    "TTS %@ min" : {
+      "comment" : "Dive chart tooltip row: time to surface reported by the dive computer; %@ is the number of minutes",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TTS %@ min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TTS %@ min"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DTR %@ min"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TTS %@ min"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TTS %@ min"
           }
         }
       }

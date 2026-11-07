@@ -33,6 +33,10 @@ struct ChartInterpolatedPoint {
     /// CCR setpoint held from the nearest earlier real sample — never interpolated, and nil
     /// where that sample reported none (e.g. on open-circuit bailout).
     let setpoint: Double?
+    /// Time to surface and remaining bottom time (minutes) held from the nearest earlier
+    /// real sample — never interpolated; nil where that sample reported none.
+    let tts: Double?
+    let rbt: Double?
     let ascentSpeed: Double?
     /// GF99 and Surface GF calculated by BlueDive's ZHL-16C tissue model at the cursor time
     /// (`BuhlmannProfile`); nil when the dive's gases do not allow the calculation.
@@ -2866,6 +2870,8 @@ struct UnifiedDiveChartOptimized: View {
             currentGas: gasSource.currentGas,
             // Step-hold from the earlier real sample, like the ceiling.
             setpoint: prev.setpoint,
+            tts: prev.tts,
+            rbt: prev.rbt,
             ascentSpeed: ascentSpeed,
             gradientFactors: tissueProfile?.values(atMinutes: cursorTime)
         )
@@ -2886,6 +2892,8 @@ struct UnifiedDiveChartOptimized: View {
             events: sample.events,
             currentGas: sample.currentGas,
             setpoint: sample.setpoint,
+            tts: sample.tts,
+            rbt: sample.rbt,
             ascentSpeed: ascentSpeed,
             gradientFactors: tissueProfile?.values(atMinutes: cursorTime)
         )
@@ -3602,6 +3610,15 @@ struct ChartTooltipView: View {
             if let setpoint = point.setpoint {
                 TooltipRow(icon: "scope", color: Color.ccrSetpoint, label: String(format: NSLocalizedString("Setpoint %@", bundle: .forAppLanguage(), value: "Setpoint %@", comment: "Dive chart tooltip row: CCR setpoint in effect; %@ is the value with unit, e.g. '1.30 bar'"), setpoint.localizedString(decimals: 2, minDecimals: 2) + " bar"))
             }
+
+            // Time to surface — always shown when the dive computer reported it (no chart chip).
+            // Remaining bottom time is computed from the gas consumption and the tank pressure
+            // (air integration), so it goes with the pressure: shown only when Pressure is on.
+            // In their own view to keep this body's type small.
+            let rbt = visibility.showPressure ? point.rbt : nil
+            if point.tts != nil || rbt != nil {
+                TooltipTimeRows(tts: point.tts, rbt: rbt)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -3622,7 +3639,8 @@ struct ChartTooltipView: View {
 /// A labelled icon row inside `ChartTooltipView`. Used to be a plain function inlining
 /// its HStack/Image/Text tree at every call site; `ChartTooltipView.body` calls it up to
 /// 13 times statically (depth, ascent rate, temperature, per-tank/voted pressure, NDL,
-/// PPO₂ (voted + per-sensor), deco event + detail, deco ceiling, gas switch) — see the
+/// PPO₂ (voted + per-sensor), deco event + detail, deco ceiling, gas switch), plus the GF,
+/// setpoint and `TooltipTimeRows` (TTS, RBT) rows — see the
 /// `LegendDot` doc comment above for why that risks the same stack-overflow crash class
 /// this app has already hit once. Packaging it as a nominal struct bounds the complexity
 /// at its own `body`.
@@ -3641,6 +3659,23 @@ struct TooltipRow: View {
                 .font(.system(.caption, design: .monospaced))
                 .fontWeight(.medium)
                 .foregroundStyle(.white)
+        }
+    }
+}
+
+/// The time to surface and remaining bottom time rows of `ChartTooltipView`, as reported by
+/// the dive computer (minutes). A nominal view of its own, like `TooltipRow`, so the tooltip
+/// body gains one call rather than two (see the `LegendDot` doc comment).
+struct TooltipTimeRows: View {
+    let tts: Double?
+    let rbt: Double?
+
+    var body: some View {
+        if let tts {
+            TooltipRow(icon: "clock.arrow.circlepath", color: .pink, label: String(format: NSLocalizedString("TTS %@ min", bundle: .forAppLanguage(), value: "TTS %@ min", comment: "Dive chart tooltip row: time to surface reported by the dive computer; %@ is the number of minutes"), DiveProfilePoint.displayedMinutes(tts).localizedString(decimals: 0)))
+        }
+        if let rbt {
+            TooltipRow(icon: "hourglass.bottomhalf.filled", color: .green, label: String(format: NSLocalizedString("RBT %@ min", bundle: .forAppLanguage(), value: "RBT %@ min", comment: "Dive chart tooltip row: remaining bottom time reported by the dive computer; %@ is the number of minutes"), DiveProfilePoint.displayedMinutes(rbt).localizedString(decimals: 0)))
         }
     }
 }

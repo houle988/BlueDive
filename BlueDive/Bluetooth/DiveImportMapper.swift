@@ -321,7 +321,8 @@ enum DiveImportMapper {
                 ndl: point.ndl, ceilingDepth: point.ceilingDepth,
                 ceilingTime: point.ceilingTime, cns: point.cns, ppo2: point.ppo2,
                 sensorPPO2: point.sensorPPO2, events: point.events,
-                currentGas: gasMixToTankIndex[gasIdx], setpoint: point.setpoint
+                currentGas: gasMixToTankIndex[gasIdx], setpoint: point.setpoint,
+                tts: point.tts, rbt: point.rbt
             )
         }
     }
@@ -397,6 +398,13 @@ enum DiveImportMapper {
             // (0 or non-finite = no setpoint).
             let setpoint: Double? = group.points.last?.setpoint
 
+            // Time to surface (DC_SAMPLE_DECO, seconds) and remaining bottom time
+            // (DC_SAMPLE_RBT, minutes, reported in this interval only), from the same
+            // end-of-interval point. Stored through DiveProfilePoint's rules (a TTS of 0 is
+            // none: libdivecomputer backends write 0 when the computer reports no TTS).
+            let tts: Double? = group.points.last?.tts.map { Double($0) / 60.0 }
+            let rbt: Double? = group.points.last?.reportedRBT.map { Double($0) }
+
             result.append(DiveProfilePoint(
                 time: base.time / 60.0, // DiveComputerKit uses seconds, BlueDive uses minutes
                 depth: base.depth,
@@ -420,7 +428,9 @@ enum DiveImportMapper {
                 sensorPPO2: sensorPPO2,
                 events: allEvents,
                 currentGas: currentGas,
-                setpoint: setpoint
+                setpoint: setpoint,
+                tts: tts,
+                rbt: rbt
             ))
         }
 

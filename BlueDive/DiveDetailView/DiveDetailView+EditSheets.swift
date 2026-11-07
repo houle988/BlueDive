@@ -2937,7 +2937,9 @@ struct EditGazView: View {
                 sensorPPO2: point.sensorPPO2,
                 events: point.events,
                 currentGas: newCurrentGas,
-                setpoint: point.setpoint
+                setpoint: point.setpoint,
+                tts: point.tts,
+                rbt: point.rbt
             )
         }
     }

@@ -27,8 +27,8 @@ enum SampleInput: Sendable, Equatable {
 /// libdivecomputer sends a `time` sample, then the samples of that interval. A profile
 /// point is written when the *next* `time` arrives (and once more by `finish()`), so
 /// each point carries its own interval's values. Values carry forward between intervals,
-/// except the per-interval ones (`pressures`, voted and per-sensor PPO₂, and the setpoint
-/// for computers that report it every sample).
+/// except the per-interval ones (`pressures`, voted and per-sensor PPO₂, `reportedRBT`, and
+/// the setpoint for computers that report it every sample).
 final class SampleAccumulator {
 
     /// `DC_SENSOR_NONE` / `DC_GASMIX_UNKNOWN`.
@@ -54,6 +54,7 @@ final class SampleAccumulator {
     private var currentVotedPPO2: Double?
     private var currentPPO2: [Int: Double] = [:]
     private var currentSetpoint: Double?
+    private var currentRBT: UInt32?
     private var onOpenCircuit = false
     private var currentGas: Int?
     private var lastRealGas: UInt32?
@@ -112,6 +113,7 @@ final class SampleAccumulator {
 
         case .rbt(let value):
             rbt = value
+            currentRBT = value
 
         case .heartbeat(let value):
             heartbeat = value
@@ -186,6 +188,7 @@ final class SampleAccumulator {
         currentPressures = [:]
         currentPPO2 = [:]
         currentVotedPPO2 = nil
+        currentRBT = nil
         if setpointPerSample { currentSetpoint = nil }
         maxTime = max(maxTime, time)
         if let temperature {
@@ -214,6 +217,7 @@ final class SampleAccumulator {
             currentGas: currentGas,
             cns: cns,
             rbt: rbt,
+            reportedRBT: currentRBT,
             heartbeat: heartbeat,
             bearing: bearing,
             setpoint: currentSetpoint

@@ -192,6 +192,19 @@ extension DiveDetailView {
         return (indices.sorted(), hasSetpoint)
     }
 
+    /// Whether any sample has a time to surface (TTS column) or a remaining bottom time
+    /// (RBT column) reported by the dive computer, found in one pass over the dive.
+    private var sampleTimeColumns: (hasTTS: Bool, hasRBT: Bool) {
+        var hasTTS = false
+        var hasRBT = false
+        for sample in dive.profileSamples {
+            if sample.tts != nil { hasTTS = true }
+            if sample.rbt != nil { hasRBT = true }
+            if hasTTS && hasRBT { break }
+        }
+        return (hasTTS, hasRBT)
+    }
+
     /// Rows shown before "Show all" is tapped. Keeps the tab short so the page stays easy
     /// to scroll through; the rows themselves are built lazily either way.
     static let samplesPreviewLimit = 150
@@ -233,6 +246,8 @@ extension DiveDetailView {
         let hasSensorPPO2 = !sensorIndices.isEmpty
         // CCR setpoint column, only for dives whose computer reported a setpoint.
         let hasSetpoint = ccrColumns.hasSetpoint
+        // TTS and RBT columns, only for dives whose computer reported them.
+        let timeColumns = sampleTimeColumns
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -270,6 +285,12 @@ extension DiveDetailView {
                         sampleHeader(Text("NDL"), .ndl, alignment: .trailing)
                         sampleHeader(Text("Ceiling"), .ceiling, alignment: .trailing)
                         sampleHeader(Text("Stop"), .stop, alignment: .trailing)
+                        if timeColumns.hasTTS {
+                            sampleHeader(Text("TTS", comment: "Samples table column header: time to surface (minutes)"), .tts, alignment: .trailing)
+                        }
+                        if timeColumns.hasRBT {
+                            sampleHeader(Text("RBT", comment: "Samples table column header: remaining bottom time (minutes)"), .rbt, alignment: .trailing)
+                        }
                         sampleHeader(Text("Gas"), .gas, alignment: .trailing)
                         sampleHeader(Text("Events"), .events, alignment: .leading)
                     }
@@ -374,6 +395,24 @@ extension DiveDetailView {
                                 } else {
                                     Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.stop), alignment: .trailing)
                                 }
+                                if timeColumns.hasTTS {
+                                    if let tts = sample.tts {
+                                        Text(verbatim: DiveProfilePoint.displayedMinutes(tts).localizedString(decimals: 0))
+                                            .font(.caption).foregroundStyle(.pink)
+                                            .frame(width: sampleColumnWidth(.tts), alignment: .trailing)
+                                    } else {
+                                        Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.tts), alignment: .trailing)
+                                    }
+                                }
+                                if timeColumns.hasRBT {
+                                    if let rbt = sample.rbt {
+                                        Text(verbatim: DiveProfilePoint.displayedMinutes(rbt).localizedString(decimals: 0))
+                                            .font(.caption).foregroundStyle(.green)
+                                            .frame(width: sampleColumnWidth(.rbt), alignment: .trailing)
+                                    } else {
+                                        Text("—").font(.caption).foregroundStyle(.secondary).frame(width: sampleColumnWidth(.rbt), alignment: .trailing)
+                                    }
+                                }
                                 if let gas = sample.currentGas, gas >= 0, gas < dive.tanks.count {
                                     Text(verbatim: "T\(gas + 1)")
                                         .font(.caption).foregroundStyle(.purple)
@@ -429,22 +468,23 @@ extension DiveDetailView {
 extension DiveDetailView {
     /// Columns of the samples table whose width adapts to their header title.
     enum SampleColumn: Hashable {
-        case time, depth, temperature, pressure, ppo2, setpoint, cns, ndl, ceiling, stop, gas, events
+        case time, depth, temperature, pressure, ppo2, setpoint, cns, ndl, ceiling, stop, tts, rbt, gas, events
         case tank(Int)
         case sensor(Int)
 
         /// Width used when the header title fits (the table's original fixed widths).
         var defaultWidth: CGFloat {
             switch self {
-            case .time, .temperature, .pressure, .ppo2, .tank: return 50
-            case .depth, .ndl, .ceiling, .stop:                return 45
-            case .sensor, .setpoint:                          return 42
-            case .cns:                                        return 40
-            case .gas:                                        return 35
+            case .time, .pressure, .tank:                                  return 50
+            case .depth, .temperature, .ndl, .ceiling, .stop, .tts, .rbt:  return 45
+            case .ppo2, .sensor, .setpoint:                               return 42
+            case .cns:                                                    return 40
+            case .gas:                                                    return 35
             // Fixed rather than sized to its content: rows are built lazily, so a row built
             // later with a long event list must not widen the table and misalign it with the
-            // header. Long lists wrap instead; kept narrow so the whole table (≈ 680 pt) still
-            // fits on iPad and in a Mac window without horizontal scrolling.
+            // header. Long lists wrap instead; kept narrow so the whole table (≈ 670 pt, ≈ 725 pt
+            // with the TTS column most Shearwater dives have) still fits on iPad and in a Mac
+            // window without horizontal scrolling.
             case .events:                                     return 140
             }
         }

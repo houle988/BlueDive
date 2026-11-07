@@ -4,7 +4,7 @@ import Foundation
 ///
 /// A point is emitted per sample interval, plus a separate point at the same time for
 /// each event and each synthesized gas change. Values carry forward between intervals
-/// except `pressures`, `po2` and `sensorPPO2` (this interval only) and, for computers
+/// except `pressures`, `po2`, `sensorPPO2` and `reportedRBT` (this interval only) and, for computers
 /// that report the setpoint on every sample, `setpoint`.
 public struct ProfileSample: Sendable, Hashable {
     /// Seconds from the start of the dive.
@@ -35,8 +35,11 @@ public struct ProfileSample: Sendable, Hashable {
     public var currentGas: Int?
     /// Percent.
     public var cns: Double?
-    /// Minutes.
+    /// Minutes (carried forward).
     public var rbt: UInt32?
+    /// Minutes: the RBT reported in this interval only. Computers omit it when they have
+    /// none to give (e.g. Shearwater during deco), so this, unlike `rbt`, is never stale.
+    public var reportedRBT: UInt32?
     public var heartbeat: UInt32?
     /// Degrees.
     public var bearing: UInt32?
@@ -61,6 +64,7 @@ public struct ProfileSample: Sendable, Hashable {
         currentGas: Int? = nil,
         cns: Double? = nil,
         rbt: UInt32? = nil,
+        reportedRBT: UInt32? = nil,
         heartbeat: UInt32? = nil,
         bearing: UInt32? = nil,
         setpoint: Double? = nil
@@ -82,6 +86,7 @@ public struct ProfileSample: Sendable, Hashable {
         self.currentGas = currentGas
         self.cns = cns
         self.rbt = rbt
+        self.reportedRBT = reportedRBT
         self.heartbeat = heartbeat
         self.bearing = bearing
         self.setpoint = setpoint

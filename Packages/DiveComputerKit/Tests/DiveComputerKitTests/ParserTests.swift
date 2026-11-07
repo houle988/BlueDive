@@ -68,6 +68,33 @@ struct SampleAccumulatorTests {
         #expect(a.pressureValues == [200, 180])
     }
 
+    /// RBT carries forward in `rbt` (as before), but `reportedRBT` holds only the interval's
+    /// own value: a computer that stops reporting it (Shearwater in deco) leaves none.
+    @Test func reportedRBTIsPerIntervalButRBTCarries() {
+        let a = run([.time(milliseconds: 0), .rbt(25), .time(milliseconds: 10_000), .rbt(0),
+                     .time(milliseconds: 20_000)])
+        #expect(a.profile.map(\.reportedRBT) == [25, 0, nil])
+        #expect(a.profile.map(\.rbt) == [25, 0, 0])
+        #expect(a.rbt == 0)
+    }
+
+    /// Uwatec: the 99s libdivecomputer sends before the computer's first RBT are not
+    /// readings; a later 99 is.
+    @Test func uwatecDefaultRBTIsDroppedUntilTheFirstReading() {
+        func profile(_ values: [UInt32?]) -> [ProfileSample] {
+            values.enumerated().map { ProfileSample(time: TimeInterval($0.offset), depth: 10, reportedRBT: $0.element) }
+        }
+        var leading = profile([99, nil, 99, 42, 99, 40])
+        DiveParser.dropUwatecDefaultRBT(&leading)
+        #expect(leading.map(\.reportedRBT) == [nil, nil, nil, 42, 99, 40])
+        var never = profile([99, 99, 99])
+        DiveParser.dropUwatecDefaultRBT(&never)
+        #expect(never.map(\.reportedRBT) == [nil, nil, nil])
+        var real = profile([50, 99])
+        DiveParser.dropUwatecDefaultRBT(&real)
+        #expect(real.map(\.reportedRBT) == [50, 99])
+    }
+
     @Test func votedAndSensorPPO2() {
         let a = run([.time(milliseconds: 0), .ppo2(sensor: 0xFFFF_FFFF, bar: 1.2),
                      .ppo2(sensor: 0, bar: 1.18), .ppo2(sensor: 1, bar: 1.22),

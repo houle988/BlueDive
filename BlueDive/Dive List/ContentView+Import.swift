@@ -972,10 +972,12 @@ extension ContentView {
                 sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
                 currentGas: sample.currentGas,
-                setpoint: sample.setpoint
+                setpoint: sample.setpoint,
+                tts: sample.tts,
+                rbt: sample.rbt
             )
         }
-        
+
         // Format buddies
         let buddiesString = diveData.buddies.joined(separator: ", ")
         
@@ -1320,7 +1322,9 @@ extension ContentView {
                 sensorPPO2: sample.sensorPPO2,
                 events: sample.events,
                 currentGas: sample.currentGas,
-                setpoint: sample.setpoint
+                setpoint: sample.setpoint,
+                tts: sample.tts,
+                rbt: sample.rbt
             ))
         }
         earlier.profileSamples = combinedSamples

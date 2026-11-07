@@ -138,7 +138,24 @@ public enum DiveParser {
         if !gasMixes.fieldIndices.enumerated().allSatisfy({ $0.offset == Int($0.element) }) {
             dive.gasMixFieldIndices = gasMixes.fieldIndices.map { Int($0) }
         }
+        if family == .uwatecSmart {
+            dropUwatecDefaultRBT(&dive.profile)
+        }
         return dive
+    }
+
+    /// libdivecomputer's Uwatec Smart backend starts the dive's RBT at 99 and sends it with
+    /// every sample that has a tank pressure, before (or without) any RBT from the computer.
+    /// Those leading 99s are not readings: `reportedRBT` drops them up to the first other value
+    /// (all of them when the computer never reported one). A 99 after that is kept. `rbt`
+    /// (carried forward, golden parity) is left as libdivecomputer gives it.
+    static func dropUwatecDefaultRBT(_ profile: inout [ProfileSample]) {
+        let uwatecDefaultRBT: UInt32 = 99
+        for index in profile.indices {
+            guard let rbt = profile[index].reportedRBT else { continue }
+            if rbt != uwatecDefaultRBT { return }
+            profile[index].reportedRBT = nil
+        }
     }
 
     /// Families that report the CCR setpoint on every sample (no value = open circuit).

@@ -42,8 +42,8 @@ final class DiveImportMapperParityTests {
                                                  diverName: "", context: fixture.context)
             let produced = try MapperParityFixtures.diveElement(BlueDiveXMLExporter.generateXML(for: dive))
             // The first dive's surface interval was computed against the logbook's previous dive.
-            let skip = index == 0 ? MapperParityFixtures.notFromTheMapper.union(["surfaceInterval", "repetitiveDive"])
-                                  : MapperParityFixtures.notFromTheMapper
+            let ignored = MapperParityFixtures.notFromTheMapper.union(MapperParityFixtures.notInFormerExports)
+            let skip = index == 0 ? ignored.union(["surfaceInterval", "repetitiveDive"]) : ignored
             if let difference = MapperParityFixtures.firstDifference(old, produced, ignoring: skip) {
                 Issue.record("\(folder.lastPathComponent) \(old.value("date") ?? ""): \(difference)")
             }
@@ -94,6 +94,12 @@ enum MapperParityFixtures {
     /// fixture with edited dives would need the edited fields listed here.
     static let notFromTheMapper: Set<String> = [
         "id", "tanks/tank/id", "diveNumber", "diver",
+    ]
+
+    /// Sample attributes the former version did not keep, so its exports have none to
+    /// compare: time to surface and remaining bottom time (`ProfileTimeTests` covers them).
+    static let notInFormerExports: Set<String> = [
+        "profileSamples/sample@tts", "profileSamples/sample@rbt",
     ]
 
     struct Fixture {
@@ -151,8 +157,8 @@ enum MapperParityFixtures {
     static func firstDifference(_ expected: XMLElementTree, _ actual: XMLElementTree, ignoring: Set<String>) -> String? {
         let a = expected.flattened(), b = actual.flattened()
         for key in Set(a.keys).union(b.keys).sorted() {
-            let path = key.split(separator: "/").map { $0.split(separator: "[").first.map(String.init) ?? "" }
-                .joined(separator: "/")
+            // Drops the "[n]" indices only, so an attribute keeps its "@name" ("a[1]/b[2]@c" → "a/b@c").
+            let path = key.replacingOccurrences(of: #"\[\d+\]"#, with: "", options: .regularExpression)
             if ignoring.contains(path) || ignoring.contains(where: { path.hasPrefix($0 + "/") || path.hasPrefix($0 + "@") }) {
                 continue
             }
