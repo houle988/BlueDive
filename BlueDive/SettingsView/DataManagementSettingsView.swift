@@ -23,6 +23,12 @@ struct DataManagementSettingsView: View {
     @State private var backupProgress = BackupProgress()
     @State private var showConvertPhotosAlert = false
     @State private var photoConversionSummary: PhotoImporter.ConversionSummary?
+    @State private var photoRepairSummary: PhotoImporter.RepairSummary?
+    /// The last repair result, kept after its alert closes (`photoRepairSummary` is cleared
+    /// then), so the alert's title does not change while it animates out.
+    @State private var lastPhotoRepairSummary: PhotoImporter.RepairSummary?
+    /// Photos the user chose to delete, waiting for the confirmation.
+    @State private var unlinkedPhotosToDelete: [PersistentIdentifier]?
     /// The size of the app's temporary folder, in bytes; nil while it is measured.
     @State private var temporaryFilesSize: Int64?
     /// Numbers the measurements: only the latest one is shown (an earlier, slower one finishing
@@ -113,6 +119,32 @@ struct DataManagementSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button {
+                            repairPhotos()
+                        } label: {
+                            HStack {
+                                Label("Repair photos", systemImage: "photo.badge.checkmark")
+                                Spacer()
+                                if activity.isRepairingPhotos {
+                                    ProgressView().scaleEffect(0.8)
+                                }
+                            }
+                            // The padding sits inside the button so the whole card responds, not only the
+                            // drawn label (a borderless Button only responds where something is drawn).
+                            .padding()
+                            .contentShape(Rectangle())
+                        }
+                        .disabled(isDataOperationRunning)
+                        .borderlessButton()
+                    }
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                    Text("Puts photos that no longer appear on their dive back on it. Photos that cannot be put back are listed, and you choose whether to delete them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
                 }
                 .padding()
                 .background(
@@ -135,7 +167,7 @@ struct DataManagementSettingsView: View {
                                 Spacer()
                                 // While a data operation runs (also one started before the screen
                                 // was reopened), tmp is changing: the size is measured once it ends.
-                                if isDataOperationRunning || temporaryFilesSize == nil {
+                                if isTemporaryFilesOperationRunning || temporaryFilesSize == nil {
                                     ProgressView().scaleEffect(0.8)
                                 } else if let temporaryFilesSize {
                                     Text(verbatim: temporaryFilesSizeText(temporaryFilesSize))
@@ -288,6 +320,32 @@ struct DataManagementSettingsView: View {
                 String(format: NSLocalizedString("Dives with photos left in the previous format (a photo could not be read or saved): %@", bundle: .forAppLanguage(), value: "Dives with photos left in the previous format (a photo could not be read or saved): %@", comment: "Legacy photo conversion summary line: dives that still have photos in the old format"), Double(summary.divesKept).localizedString(decimals: 0))
             ].joined(separator: "\n"))
         }
+        .alert(photoRepairTitle, isPresented: Binding(
+            get: { photoRepairSummary != nil },
+            set: { if !$0 { photoRepairSummary = nil } }
+        ), presenting: photoRepairSummary) { summary in
+            if summary.leftIDs.isEmpty {
+                Button("OK", role: .cancel) { }
+            } else {
+                Button("Delete Photos…", role: .destructive) {
+                    unlinkedPhotosToDelete = summary.leftIDs
+                }
+                Button("Keep", role: .cancel) { }
+            }
+        } message: { summary in
+            Text(verbatim: photoRepairMessage(summary))
+        }
+        .alert("Delete photos?", isPresented: Binding(
+            get: { unlinkedPhotosToDelete != nil },
+            set: { if !$0 { unlinkedPhotosToDelete = nil } }
+        ), presenting: unlinkedPhotosToDelete) { ids in
+            Button("Delete Photos", role: .destructive) {
+                deleteUnlinkedPhotos(ids)
+            }
+            Button("Keep", role: .cancel) { }
+        } message: { _ in
+            Text("These photos are not shown on any dive. If you use iCloud sync, first make sure all your devices are up to date: a photo whose dive has not arrived yet would be deleted on every device. Deleting them also removes their species tags. This cannot be undone.")
+        }
         .alert("Reset preferences?", isPresented: $showingResetAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
@@ -345,7 +403,7 @@ struct DataManagementSettingsView: View {
         .onDisappear { backupTask?.cancel() }
         .task { await measureTemporaryFiles() }
         // A backup adds and removes its staging folder there: measure again once it ends.
-        .onChange(of: isDataOperationRunning) { _, isRunning in
+        .onChange(of: isTemporaryFilesOperationRunning) { _, isRunning in
             if !isRunning { Task { await measureTemporaryFiles() } }
         }
     }
@@ -398,7 +456,7 @@ struct DataManagementSettingsView: View {
             await Task.detached(priority: .utility) {
                 Self.removeTemporaryFiles()
             }.value
-            // Measured again by `onChange(of: isDataOperationRunning)`.
+            // Measured again by `onChange(of: isTemporaryFilesOperationRunning)`.
             activity.isDeletingTemporaryFiles = false
         }
     }
@@ -445,11 +503,17 @@ struct DataManagementSettingsView: View {
     /// The operations running on this screen, kept outside the view (`DataOperationActivity`).
     private var activity: DataOperationActivity { .shared }
 
-    /// A backup, a photo conversion, an erase or a temporary-files deletion is running. They
-    /// exclude each other: an erase or a conversion removes files a backup is still copying, a
-    /// backup of a log being erased or converted would be incomplete, and the deletion empties
-    /// tmp, where a backup builds its archive.
+    /// A backup, a photo conversion, an erase, a temporary-files deletion or a photo repair is
+    /// running. They exclude each other: an erase or a conversion removes files a backup is
+    /// still copying, a backup of a log being erased, converted or repaired would be
+    /// incomplete, and the deletion empties tmp, where a backup builds its archive.
     private var isDataOperationRunning: Bool {
+        isTemporaryFilesOperationRunning || activity.isRepairingPhotos
+    }
+
+    /// The operations after which the temporary files are measured again (a photo repair does
+    /// not touch them).
+    private var isTemporaryFilesOperationRunning: Bool {
         activity.isBackingUp || activity.photoConversionProgress != nil || activity.isErasing
             || activity.isDeletingTemporaryFiles
     }
@@ -569,6 +633,63 @@ struct DataManagementSettingsView: View {
             activity.photoConversionProgress = nil
             // No list refresh: a dive's photos only change format, so its photo badge is the same.
             photoConversionSummary = summary
+        }
+    }
+
+    // MARK: - Repair Photos
+
+    private func repairPhotos() {
+        guard !isDataOperationRunning else { return }
+        let activity = activity
+        activity.isRepairingPhotos = true
+        Task {
+            let summary = await PhotoImporter.repairUnlinkedPhotos(container: modelContext.container)
+            activity.isRepairingPhotos = false
+            // Photos put back change their dives' photo badges. A dive deleted during the run
+            // is skipped: reading a deleted dive crashes.
+            for diveID in summary.relinkedDiveIDs {
+                if let dive = store.liveDive(id: diveID) { store.commit(dive, affects: .rowBadges) }
+            }
+            lastPhotoRepairSummary = summary
+            photoRepairSummary = summary
+        }
+    }
+
+    /// "Photos Repaired" only when a photo was put back on its dive.
+    private var photoRepairTitle: Text {
+        guard let summary = lastPhotoRepairSummary else { return Text("Photos Repaired") }
+        if summary.foundNothing { return Text("No Photos to Repair") }
+        return summary.relinked > 0 ? Text("Photos Repaired") : Text("Photo Repair")
+    }
+
+    private func photoRepairMessage(_ summary: PhotoImporter.RepairSummary) -> String {
+        if summary.foundNothing {
+            return NSLocalizedString("Every photo is on its dive.", bundle: .forAppLanguage(), value: "Every photo is on its dive.", comment: "Photo repair result when no photo had lost its dive")
+        }
+        var lines: [String] = []
+        if summary.relinked > 0 {
+            lines.append(String(format: NSLocalizedString("Photos put back on their dive: %@", bundle: .forAppLanguage(), value: "Photos put back on their dive: %@", comment: "Photo repair summary line: photos linked to their dive again"), Double(summary.relinked).localizedString(decimals: 0)))
+        }
+        if !summary.leftIDs.isEmpty {
+            lines.append(String(format: NSLocalizedString("Photos that could not be put back: %@", bundle: .forAppLanguage(), value: "Photos that could not be put back: %@", comment: "Photo repair summary line: photos without a dive link whose dive is missing, ambiguous, or already shows the same photo"), Double(summary.leftIDs.count).localizedString(decimals: 0)))
+            lines.append("")
+            lines.append(NSLocalizedString("Their dive is not in this logbook, several dives share its identifier, or the dive already shows the same photo. You can delete them, or keep them.", bundle: .forAppLanguage(), value: "Their dive is not in this logbook, several dives share its identifier, or the dive already shows the same photo. You can delete them, or keep them.", comment: "Photo repair: why some photos could not be put back on their dive, and that they can be deleted or kept"))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func deleteUnlinkedPhotos(_ ids: [PersistentIdentifier]) {
+        guard !isDataOperationRunning else { return }
+        let activity = activity
+        activity.isRepairingPhotos = true
+        Task {
+            let result = await PhotoImporter.deleteUnlinkedPhotos(ids, container: modelContext.container)
+            activity.isRepairingPhotos = false
+            // Deleted photos were on no dive (no badge changes); a photo put back instead
+            // changes its dive's badge.
+            for diveID in result.relinkedDiveIDs {
+                if let dive = store.liveDive(id: diveID) { store.commit(dive, affects: .rowBadges) }
+            }
         }
     }
 
@@ -745,4 +866,6 @@ private final class DataOperationActivity {
     var isErasing = false
     /// Delete temporary files is emptying tmp, where a backup builds its archive.
     var isDeletingTemporaryFiles = false
+    /// Repair photos is linking photos to their dives, or deleting the ones it could not.
+    var isRepairingPhotos = false
 }

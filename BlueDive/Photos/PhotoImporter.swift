@@ -501,6 +501,7 @@ enum PhotoImporter {
                              progress: (Int, Int) -> Void = { _, _ in }) async -> Result {
         guard await acquire(diveID, onWaiting: onWaiting) else { return Result() }
         defer { release(diveID) }
+        saveMainContext(of: container)
         let result = await insert(sources, intoDiveWith: diveID, container: container, mode: .importing,
                                   clockAdjustment: clockAdjustment, progress: progress)
         logger.info("Photo import: \(result.imported) imported, \(result.updated) updated, \(result.duplicates) duplicates, \(result.questions.count) to decide, \(result.unreadable) unreadable")
@@ -660,6 +661,7 @@ enum PhotoImporter {
                                     container: ModelContainer) async -> Result? {
         guard await acquire(diveID) else { return nil }
         defer { release(diveID) }
+        saveMainContext(of: container)
         return await convertLegacy(ofDiveWith: diveID, container: container)?.result
     }
 
@@ -675,6 +677,7 @@ enum PhotoImporter {
     /// (dives processed, total dives).
     static func convertAllLegacyPhotos(container: ModelContainer,
                                        progress: (Int, Int) -> Void = { _, _ in }) async -> ConversionSummary {
+        saveMainContext(of: container)
         let idContext = makeContext(container)
         var descriptor = FetchDescriptor<Dive>()
         descriptor.propertiesToFetch = [\.id]
@@ -694,6 +697,166 @@ enum PhotoImporter {
         }
         logger.info("Legacy photo conversion: \(summary.photos) photos in \(summary.dives) dives, \(summary.divesKept) dives kept")
         return summary
+    }
+
+    // MARK: Repair
+
+    struct RepairSummary: Equatable {
+        /// Photos linked to their dive again.
+        var relinked = 0
+        /// The dives photos were linked to again (`Dive.id`), whose photo badges change.
+        var relinkedDiveIDs: Set<UUID> = []
+        /// Photos left without a dive: their dive is not in this logbook, several dives share
+        /// its id, or the dive already shows the same file. Offered for deletion
+        /// (`deleteUnlinkedPhotos(_:container:)`, which keeps those of dives sharing an id).
+        var leftIDs: [PersistentIdentifier] = []
+
+        /// No photo without a dive link was found.
+        var foundNothing: Bool { relinked == 0 && leftIDs.isEmpty }
+    }
+
+    /// Links photos that lost their dive link (`dive` nil, `diveID` kept) back to their dive.
+    /// Such a photo keeps its original, thumbnail and species, but no dive shows it (see
+    /// `saveMainContext(of:)`). A photo is linked again only when exactly one dive has its
+    /// `diveID` and that dive does not already show the same file; the others are listed.
+    static func repairUnlinkedPhotos(container: ModelContainer) async -> RepairSummary {
+        saveMainContext(of: container)
+        var summary = RepairSummary()
+        let ids = (try? makeContext(container).fetchIdentifiers(
+            FetchDescriptor<DivePhoto>(predicate: #Predicate { $0.dive == nil }))) ?? []
+        for photoID in ids {
+            if Task.isCancelled { break }
+            let lookup = makeContext(container)
+            guard let found = fetchUnlinkedPhoto(photoID, in: lookup) else { continue }
+            guard let divePID = uniqueDiveIdentifier(of: found, in: lookup) else {
+                summary.leftIDs.append(photoID)
+                continue
+            }
+            guard await acquire(divePID) else { break }
+            // Read again once the dive is free: an import may have added the same file, or the
+            // photo may have been linked or the dive deleted while waiting.
+            let context = makeContext(container)
+            if let photo = fetchUnlinkedPhoto(photoID, in: context) {
+                if let dive = diveToPutBack(photo, in: context), dive.persistentModelID == divePID {
+                    photo.attach(to: dive)
+                    if save(context) {
+                        summary.relinked += 1
+                        summary.relinkedDiveIDs.insert(dive.id)
+                    } else {
+                        // Still hidden: listed (deletion keeps a photo that can be put back).
+                        summary.leftIDs.append(photoID)
+                    }
+                } else {
+                    summary.leftIDs.append(photoID)
+                }
+            }
+            release(divePID)
+            await Task.yield()
+        }
+        if !ids.isEmpty {
+            logger.notice("Unlinked photos: \(summary.relinked) relinked, \(summary.leftIDs.count) left")
+        }
+        return summary
+    }
+
+    struct DeletionResult: Equatable {
+        var deleted = 0
+        /// Photos put back instead (their dive arrived meanwhile, e.g. from iCloud).
+        var relinkedDiveIDs: Set<UUID> = []
+    }
+
+    /// Deletes photos `repairUnlinkedPhotos` could not link again, with their images and
+    /// species tags: those whose dive is not in this logbook, and hidden copies of a file their
+    /// dive already shows. Each is checked again first. A photo whose `diveID` matches several
+    /// dives is kept (its dive exists; which one is unknown), and one that can now be put back
+    /// (its dive arrived meanwhile) is linked to it instead.
+    @discardableResult
+    static func deleteUnlinkedPhotos(_ ids: [PersistentIdentifier], container: ModelContainer) async -> DeletionResult {
+        // No `saveMainContext` here: this follows the repair's own photo saves (see its doc).
+        var result = DeletionResult()
+        for photoID in ids {
+            if Task.isCancelled { break }
+            let lookup = makeContext(container)
+            guard let found = fetchUnlinkedPhoto(photoID, in: lookup) else { continue }
+            let dives = diveIdentifiers(of: found, in: lookup)
+            guard dives.count <= 1 else { continue }
+            if let divePID = dives.first {
+                // Its dive exists: hold it, then read again (an import may be adding photos).
+                guard await acquire(divePID) else { break }
+                let context = makeContext(container)
+                if let photo = fetchUnlinkedPhoto(photoID, in: context) {
+                    if let dive = diveToPutBack(photo, in: context), dive.persistentModelID == divePID {
+                        photo.attach(to: dive)
+                        if save(context) { result.relinkedDiveIDs.insert(dive.id) }
+                    } else if uniqueDiveIdentifier(of: photo, in: context) == divePID,
+                              diveShowsSameFile(as: photo, divePID: divePID, in: context) == true {
+                        // The dive already shows the same file: a hidden copy. Checked here, not
+                        // inferred from `diveToPutBack` returning nil (it also does when the
+                        // dive cannot be read), so the only copy of a photo is never deleted.
+                        context.delete(photo)
+                        if save(context) { result.deleted += 1 }
+                    }
+                }
+                release(divePID)
+            } else {
+                let context = makeContext(container)
+                if let photo = fetchUnlinkedPhoto(photoID, in: context),
+                   diveIdentifiers(of: photo, in: context).isEmpty {
+                    context.delete(photo)
+                    if save(context) { result.deleted += 1 }
+                }
+            }
+            await Task.yield()
+        }
+        logger.notice("Unlinked photos deleted: \(result.deleted), put back instead: \(result.relinkedDiveIDs.count) dives")
+        return result
+    }
+
+    /// The photo `id` while it has no dive link; nil once linked or deleted.
+    private static func fetchUnlinkedPhoto(_ id: PersistentIdentifier, in context: ModelContext) -> DivePhoto? {
+        var descriptor = FetchDescriptor<DivePhoto>(predicate: #Predicate { $0.persistentModelID == id })
+        descriptor.fetchLimit = 1
+        guard let photo = (try? context.fetch(descriptor))?.first, photo.dive == nil else { return nil }
+        return photo
+    }
+
+    /// The identifier of the one dive with the photo's `diveID`, without loading it; nil when
+    /// none or several have it.
+    private static func uniqueDiveIdentifier(of photo: DivePhoto, in context: ModelContext) -> PersistentIdentifier? {
+        let ids = diveIdentifiers(of: photo, in: context)
+        return ids.count == 1 ? ids.first : nil
+    }
+
+    /// Identifiers of up to two dives with the photo's `diveID` (enough to tell none, one and
+    /// several), without loading them; none when it has no dive id.
+    private static func diveIdentifiers(of photo: DivePhoto, in context: ModelContext) -> [PersistentIdentifier] {
+        guard let diveUUID = photo.diveID else { return [] }
+        var descriptor = FetchDescriptor<Dive>(predicate: #Predicate { $0.id == diveUUID })
+        descriptor.fetchLimit = 2
+        return (try? context.fetchIdentifiers(descriptor)) ?? []
+    }
+
+    /// The dive an unlinked photo can be linked to again: the one dive with its `diveID`, when
+    /// that dive does not already show the same file (it would then show it twice).
+    private static func diveToPutBack(_ photo: DivePhoto, in context: ModelContext) -> Dive? {
+        guard let divePID = uniqueDiveIdentifier(of: photo, in: context),
+              let dive = fetchDive(divePID, in: context) else { return nil }
+        // Put back only when it is known the dive does not show the file (unknown: left).
+        return diveShowsSameFile(as: photo, divePID: divePID, in: context) == false ? dive : nil
+    }
+
+    /// Whether a photo linked to the dive has `photo`'s file (not `existingHashes`, which
+    /// matches `diveID` and so also counts this unlinked photo); nil when it cannot be read,
+    /// so neither putting back nor deleting acts on a guess.
+    private static func diveShowsSameFile(as photo: DivePhoto, divePID: PersistentIdentifier,
+                                          in context: ModelContext) -> Bool? {
+        guard let hash = photo.contentHash else { return false }
+        let wanted: Data? = hash
+        let descriptor = FetchDescriptor<DivePhoto>(predicate: #Predicate {
+            $0.contentHash == wanted && $0.dive?.persistentModelID == divePID
+        })
+        guard let count = try? context.fetchCount(descriptor) else { return nil }
+        return count > 0
     }
 
     /// Converts one dive's legacy photos; nil when the dive is gone or has none. `kept`: the
@@ -1056,6 +1219,24 @@ enum PhotoImporter {
         context.author = "BlueDive.photoImport"
         context.autosaveEnabled = false
         return context
+    }
+
+    /// Saves the main context's pending edits when an operation starts, before its first photo
+    /// context, so that context reads the dives as saved. Whichever context saves a dive last
+    /// writes its whole copy of it: an edit left unsaved in the main context (e.g. the tank
+    /// editor, which relies on autosave) was autosaved just after an import, with the photo
+    /// list read before it, unlinking the photos just added (seen in a user's store history).
+    /// Never called after a photo save of the same operation: the main context would save
+    /// before it has merged that save, writing its older photo list over it. So not in
+    /// `answer`, which may run right after an import (the dive screen left meanwhile).
+    private static func saveMainContext(of container: ModelContainer) {
+        let main = container.mainContext
+        guard main.hasChanges else { return }
+        do {
+            try main.save()
+        } catch {
+            logger.error("Saving the main context before a photo import failed: \(error.localizedDescription)")
+        }
     }
 
     /// The dive with `id` as saved in the store; nil once it was deleted (a deleted model must

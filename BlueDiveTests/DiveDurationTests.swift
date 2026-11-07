@@ -22,7 +22,7 @@ struct DiveDurationTests {
         return ModelContext(container)
     }
 
-    /// Dive #2134 of Simone's logbook: Garmin 68:34, profile ends at 70:34.
+    /// A real Garmin dive's timing: dive time 68:34, profile ends at 70:34.
     private func garminSamples() -> [BlueDive.DiveProfilePoint] {
         [BlueDive.DiveProfilePoint(time: 0, depth: 1.2), BlueDive.DiveProfilePoint(time: 4234.0 / 60.0, depth: 0)]
     }

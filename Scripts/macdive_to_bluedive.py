@@ -62,6 +62,24 @@ Flags:
             - Volume: unit inferred from working pressure (PSI → cuft, bar → L);
               omitted when working pressure is unknown.
 
+    --import-unmatched-tanks                  (dives; off by default)
+        For rebreather divers.  On CCR/SCR dives whose dive computer marks its cylinders
+        as oxygen or diluent (raw data), match them to MacDive's tanks by role and gas
+        instead of pressure — MacDive often kept only the diluent, with the oxygen
+        cylinder's pressures — and add the cylinders MacDive does not have, with the
+        computer's start/end and sample pressures.  The oxygen cylinder is added as
+        100 % O₂ (inferred from its role; the computer records no mix) without size or
+        working pressure.  Ambiguous cases are logged and left as in MacDive; open-circuit
+        dives are never changed.  See "Rebreather cylinders" in the priority table below.
+
+    --drop-duplicate-tanks                    (dives; off by default)
+        Leave out tanks that are exact copies of an earlier tank on the same dive — same
+        MacDive tank, gas, size, working pressure, material and type, neither with a start
+        or end pressure — rows MacDive stored twice.  Tanks with a pressure are never
+        dropped.  Each removal is logged ("MacDive tank[n] not exported — exact copy of
+        tank[m]").  Note: two real stages of the same tank and gas, logged without
+        pressures, look the same and would be dropped too.
+
     --critter-species {scientific,omit}      (dives, species; default: scientific)
         What MacDive's critter "Species" field holds — MacDive labels it only "Species" and
         users fill it differently.  'scientific' exports it as the species' scientific name
@@ -150,7 +168,10 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
     Air / high / low temperature (dive)                        XML → SQLite
     Duration                                                   Raw (computer dive time, if not longer than its
                                                                profile + 60 s and within 10 min or 20 % of
-                                                               MacDive's) → SQLite
+                                                               MacDive's) → SQLite. Written in seconds to
+                                                               <duration> and <durationSeconds>; BlueDive
+                                                               keeps the seconds and lists whole minutes
+                                                               (30 s rounds up).
     Max depth                                                  Raw (computer value, if within 0.5 m of its
                                                                deepest sample) → SQLite
     Decompression-dive flag                                    Raw (the app's Bluetooth rule: a deco-stop
@@ -162,6 +183,11 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
                                                                transmitter of a one-tank dive MacDive has no
                                                                pressures for) → XML (gas matched by mix,
                                                                else position) → SQLite
+    Duplicate tanks (--drop-duplicate-tanks only; off by     Left out: a tank that is an exact copy of an
+      default)                                                 earlier one on the same dive — same MacDive tank,
+                                                               gas, size, working pressure, material and type,
+                                                               neither with a pressure (rows MacDive stored
+                                                               twice). Tanks with a pressure are always kept.
     Rebreather cylinders (--import-unmatched-tanks only;       Raw: on CCR/SCR dives whose computer marks its
       off by default)                                          cylinders as oxygen or diluent, they are matched
                                                                to MacDive's tanks by role and gas, not pressure
@@ -178,6 +204,14 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
                                                                sighting per critter, linked to its species
     Profile samples (time, depth, temperature, NDL, PPO₂,      Raw → XML.  PPO₂ only as the computer reports it
       per-cell PPO₂, ceiling, remaining stop time)             (BlueDive calculates it otherwise).
+    CCR setpoint per sample                                    Raw only (MacDive's XML has none), as BlueDive's
+                                                               Bluetooth import stores it: Shearwater, DiveSystem,
+                                                               McLean and TecDiving report it in every loop sample
+                                                               (none on open-circuit bailout); other computers
+                                                               report changes, held until the next one — cleared
+                                                               on a switch to an open-circuit gas and restored on
+                                                               a diluent when the computer flags its diluents.
+                                                               Not written when MacDive's XML samples are kept.
     Sample tank pressure                                       Raw (mapped transmitters, same mapping as the
                                                                tank values) → when the raw samples have no
                                                                main-tank pressure at all: MacDive's main-tank
@@ -189,7 +223,8 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
                                                                MacDive events (tank set when one tank has the mix)
     Other events (ascent, deep stop, PPO₂, ceiling,            Raw + MacDive events (MacDive's dropped when raw
       bookmark, safety stop, deco stop)                        has the same event within 30 s)
-    Not imported                                               Set point switches (counted in the log)
+    Not imported                                               Low/high setpoint labels (only the value is
+                                                               reported by the computer)
 
     Every value raw data changes is logged per dive as "raw values : … (MacDive → raw
     data)", and each dive's profile source on its "profile :" line.
@@ -223,6 +258,11 @@ Examples:
     python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
         --weight-unit kg --macdive-xml MacDive-Export.xml --critter-species omit
 
+    # Rebreather dives: add the cylinders MacDive missed; leave out tanks MacDive stored twice
+    python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
+        --weight-unit kg --macdive-xml MacDive-Export.xml \\
+        --import-unmatched-tanks --drop-duplicate-tanks
+
     python3 macdive_to_bluedive.py MacDive.sqlite --schema
 
 Requirements: Python 3.8+  (no third-party packages needed)
@@ -232,6 +272,7 @@ import argparse
 import base64
 import bisect
 import json
+import math
 import os
 import re
 import sqlite3
@@ -248,6 +289,12 @@ from pathlib import Path
 # CoreData epoch: 2001-01-01 00:00:00 UTC
 # ---------------------------------------------------------------------------
 COREDATA_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
+
+# ---------------------------------------------------------------------------
+# BlueDive version and build the exported files are written for, in the same
+# "version (build)" form as the app's own exports (<metadata><version>).
+# ---------------------------------------------------------------------------
+BLUEDIVE_VERSION = "2.1 (156)"
 
 
 def coredata_to_str(ts):
@@ -574,11 +621,12 @@ def fetch_tanks(cur, dive_pk):
     o2_col   = "g.ZOXYGEN"          if "ZOXYGEN"          in gc else "NULL"
     he_col   = "g.ZHELIUM"          if "ZHELIUM"          in gc else "NULL"
     type_col = "t.ZTANKTYPE"        if "ZTANKTYPE"        in tc else "NULL"
+    tank_fk_col = "tg.ZRELATIONSHIPTANK" if "ZRELATIONSHIPTANK" in tgc else "NULL"
 
     sql = f"""
         SELECT tg.ZAIRSTART, tg.ZAIREND,
                {size_col}, {wp_col}, {mat_col},
-               {o2_col}, {he_col}, {type_col}
+               {o2_col}, {he_col}, {type_col}, {tank_fk_col}
         FROM ZTANKANDGAS tg
         LEFT JOIN ZTANK t ON tg.ZRELATIONSHIPTANK = t.Z_PK
         LEFT JOIN ZGAS  g ON tg.ZRELATIONSHIPGAS  = g.Z_PK
@@ -592,7 +640,7 @@ def fetch_tanks(cur, dive_pk):
         return []
     tanks = []
     for row in rows:
-        air_start, air_end, size, wp, mat, o2raw, he_raw, tank_type = row
+        air_start, air_end, size, wp, mat, o2raw, he_raw, tank_type, tank_fk = row
         # O2/He stored as fractions (0.21) or percentages (21). Exactly 1.0 means
         # 100% O2 (pure oxygen, a valid deco gas) — not 1%.
         # o2raw == 0 is treated as absent (same as None) — a stored 0 means "not recorded",
@@ -612,6 +660,7 @@ def fetch_tanks(cur, dive_pk):
             "vol": size, "wp": wp, "mat": mat,
             "o2": o2_pct, "he": he_pct,
             "type": tank_type,
+            "tank_fk": tank_fk,   # MacDive tank (template) the row uses
         })
     return tanks
 
@@ -969,6 +1018,12 @@ _DC_SENSOR_NONE = 0xFFFFFFFF
 _DC_GASMIX_UNKNOWN = 0xFFFFFFFF   # e.g. Shearwater, for a tank without a transmitter
 _DC_DIVEMODES = {0: "freedive", 1: "gauge", 2: "OC", 3: "CCR", 4: "SCR"}
 _DC_USAGE_OXYGEN, _DC_USAGE_DILUENT = 1, 2   # dc_usage_t: the computer's role for a tank or gas
+# dc_family_t of the backends that report DC_SAMPLE_SETPOINT in every sample while a setpoint
+# is in effect and omit it otherwise (e.g. Shearwater on open-circuit bailout): Shearwater
+# Predator / Petrel, DiveSystem iDive, TecDiving DiveComputer.eu, McLean Extreme. Other
+# backends report it only when it changes. Same list as LibDCSwift's
+# GenericParser.reportsSetpointEverySample(_:), so migrated dives match a Bluetooth download.
+_SETPOINT_EVERY_SAMPLE_FAMILIES = {(10 << 16), (10 << 16) + 1, (13 << 16), (15 << 16), (16 << 16)}
 
 
 def _http_get(url, accept=None):
@@ -1179,8 +1234,8 @@ def _merge_depthless_records(samples):
     Fold records without a depth (event-only records some computers send at their own time,
     e.g. Suunto EON Steel, or data reported before the first time sample) into the record with
     a depth nearest in time (the earlier one on a tie), so the gas, events, deco, pressures and
-    PPO₂ they carry are kept. Gas and deco state: the latest report wins. Other values: the
-    target record's own values win.
+    PPO₂ they carry are kept. Gas, deco and setpoint state: the latest report wins. Other
+    values: the target record's own values win.
     """
     out = [r for r in samples if "depth" in r]
     if not out:
@@ -1191,7 +1246,9 @@ def _merge_depthless_records(samples):
     # keeps its own report time and is always taken whole from one record.
     # NDL and a deco stop are one deco state in libdivecomputer: a later report of either
     # replaces the other.
-    groups = {"gasmix": ("gasmix",), "deco": ("ndl_secs", "deco_depth", "deco_time")}
+    # The setpoint in effect (None after a bailout) is a state as well: the later record's wins.
+    groups = {"gasmix": ("gasmix",), "deco": ("ndl_secs", "deco_depth", "deco_time"),
+              "setpoint": ("setpoint",)}
     key_group = {k: g for g, keys in groups.items() for k in keys}
     def fold(target, rec):
         times_by_group = target.setdefault("_state_times", {})
@@ -1278,6 +1335,8 @@ class LibDC:
         for fn in ("dc_descriptor_get_vendor", "dc_descriptor_get_product"):
             getattr(lib, fn).argtypes = [vp]
             getattr(lib, fn).restype = C.c_char_p
+        lib.dc_descriptor_get_type.argtypes = [vp]
+        lib.dc_descriptor_get_type.restype = C.c_uint   # dc_family_t
         lib.dc_parser_new2.argtypes = [C.POINTER(vp), vp, vp, C.c_char_p, C.c_size_t]
         lib.dc_parser_get_field.argtypes = [vp, C.c_int, C.c_uint, vp]
         lib.dc_parser_samples_foreach.argtypes = [vp, self.Callback, vp]
@@ -1341,12 +1400,45 @@ class LibDC:
             return None
         try:
             samples, cur = [], {}
-            state = {"setpoint": None, "sp_changes": 0}
+            # CCR setpoint in effect, as LibDCSwift's GenericParser tracks it (see
+            # _SETPOINT_EVERY_SAMPLE_FAMILIES): "reported" is the last DC_SAMPLE_SETPOINT,
+            # "current" the setpoint in effect, written on each time record when it ends.
+            per_sample = lib.dc_descriptor_get_type(desc) in _SETPOINT_EVERY_SAMPLE_FAMILIES
+            diluents, oxygen = set(), set()
+            if not per_sample:
+                # Change-only backends that flag their diluents (OSTC, EON Steel, Divesoft): a
+                # switch to another mix (not the loop's oxygen) is an open-circuit bailout.
+                n_flag = C.c_uint(0)
+                if lib.dc_parser_get_field(parser, _DC_FIELD_GASMIX_COUNT, 0, C.byref(n_flag)) == 0:
+                    for i in range(n_flag.value):
+                        gm = self.GasMix()
+                        if lib.dc_parser_get_field(parser, _DC_FIELD_GASMIX, i, C.byref(gm)) != 0:
+                            continue
+                        if gm.usage == _DC_USAGE_DILUENT:
+                            diluents.add(i)
+                        elif gm.usage == _DC_USAGE_OXYGEN:
+                            oxygen.add(i)
+                if not diluents:
+                    oxygen = set()   # no diluent flagged: the setpoint is held, as in LibDCSwift
+            state = {"reported": None, "current": None, "open_circuit": False, "seen_time": False}
+
+            def end_record():
+                # The record's setpoint is the one in effect when it ends (LibDCSwift writes a
+                # profile point at the next DC_SAMPLE_TIME). Per-sample backends: only what
+                # the computer reported in that record, never a value held from an earlier one.
+                cur["setpoint"] = state["current"]
+                if per_sample:
+                    state["current"] = None
 
             def cb(stype, value_p, _ud):
                 v = value_p.contents
                 nonlocal cur
                 if stype == _DC_SAMPLE_TIME:
+                    # Data before the first time sample belongs to the first record (as in
+                    # LibDCSwift, which writes no point for it), so it is not ended here.
+                    if state["seen_time"]:
+                        end_record()
+                    state["seen_time"] = True
                     cur = {"time": v.time / 1000.0, "events": []}
                     samples.append(cur)
                     return
@@ -1384,10 +1476,20 @@ class LibDC:
                 elif stype == _DC_SAMPLE_GASMIX:
                     if v.gasmix != _DC_GASMIX_UNKNOWN:
                         cur["gasmix"] = v.gasmix
+                        # Bailout to an open-circuit mix clears the held setpoint; back on a
+                        # diluent restores the last reported one. The loop's oxygen changes neither.
+                        if diluents:
+                            if v.gasmix in diluents:
+                                state["open_circuit"] = False
+                                state["current"] = state["reported"]
+                            elif v.gasmix not in oxygen:
+                                state["open_circuit"] = True
+                                state["current"] = None
                 elif stype == _DC_SAMPLE_SETPOINT:
-                    if state["setpoint"] is not None and v.setpoint != state["setpoint"]:
-                        state["sp_changes"] += 1
-                    state["setpoint"] = v.setpoint
+                    # Recorded while on open circuit, but applied only back on the loop.
+                    state["reported"] = v.setpoint
+                    if not state["open_circuit"]:
+                        state["current"] = v.setpoint
                 elif stype == _DC_SAMPLE_EVENT:
                     kind = _LIBDC_EVENT_MAP.get(v.event.type)
                     if kind and kind not in cur["events"]:
@@ -1396,6 +1498,8 @@ class LibDC:
             callback = self.Callback(cb)
             if lib.dc_parser_samples_foreach(parser, callback, None) != 0:
                 return None
+            if state["seen_time"]:
+                end_record()   # the last record: no further time sample ends it
             samples = _merge_depthless_records(samples)
             depths = [s["depth"] for s in samples]
             if not depths:
@@ -1434,7 +1538,6 @@ class LibDC:
                 "divemode":    _DC_DIVEMODES.get(mode.value, "unknown"),
                 "max_depth":   max(depths),
                 "span":        max(s["time"] for s in samples),
-                "sp_changes":  state["sp_changes"],
             }
         finally:
             lib.dc_parser_destroy(parser)
@@ -1777,6 +1880,27 @@ def map_raw_tanks(decoded, tanks, cvt_press, tolerance, end_time=None):
     return mapping, {i: (v[0], v[1]) for i, v in values.items()}, series
 
 
+def drop_duplicate_tanks(tanks):
+    """
+    For --drop-duplicate-tanks: remove tanks that are exact copies of an earlier one — the
+    same MacDive tank, gas, size, working pressure, material and type, and neither with any
+    start or end pressure. Returns (kept tanks, [(dropped position, position of the copy kept)])
+    with 1-based MacDive positions. Tanks with a pressure are never dropped.
+    """
+    kept, dropped, seen = [], [], {}
+    for pos, t in enumerate(tanks, 1):
+        empty = t.get("start") is None and t.get("end") is None
+        key = (t.get("tank_fk"), t["o2"], t["he"], t.get("vol_out"), t.get("wp_out"),
+               t.get("mat"), t.get("type"))
+        if empty and t.get("tank_fk") is not None and key in seen:
+            dropped.append((pos, seen[key]))
+            continue
+        if empty:
+            seen.setdefault(key, pos)
+        kept.append(t)
+    return kept, dropped
+
+
 def rebreather_tank_plan(decoded, tanks, base_mapping, values):
     """
     For --import-unmatched-tanks on a rebreather dive (CCR/SCR) whose computer records tank
@@ -1915,6 +2039,8 @@ def raw_profile_samples(decoded, cvt_depth, cvt_temp, cvt_press, mapping, series
             "ppo2":        s.get("ppo2"),
             "sensor_ppo2": s.get("sensors"),
             "ndt":         (ndl // 60 if ndl % 60 == 0 else ndl / 60) if ndl is not None else None,
+            # CCR setpoint in effect (bar). 0 or non-finite = no setpoint, as BlueDive stores it.
+            "setpoint":    s["setpoint"] if (s.get("setpoint") or 0) > 0 and math.isfinite(s["setpoint"]) else None,
         }
         # Mandatory deco obligation, as the app's Bluetooth import stores it: ceiling in the
         # output distance unit, remaining stop time in minutes, and a decoStop event. A
@@ -2762,6 +2888,8 @@ def profile_samples_xml_lines(samples, indent=4):
             attrs.append(f'ceilingTime="{fmt_double(s["ceiling_time"])}"')
         if s.get("current_gas") is not None:
             attrs.append(f'currentGas="{s["current_gas"]}"')
+        if s.get("setpoint") is not None:
+            attrs.append(f'setpoint="{fmt_double(s["setpoint"])}"')
         attrs.append(f'events="{",".join(s.get("events", []))}"')
         lines.append(f'{inner_pad}<sample {" ".join(attrs)}/>')
     lines.append(f'{pad}</profileSamples>')
@@ -2773,18 +2901,19 @@ def profile_samples_xml_lines(samples, indent=4):
 # ---------------------------------------------------------------------------
 
 def export_dives(input_path, output_path, weight_unit, macdive_xml_path, import_unmatched_tanks=False,
-                 critter_opts=None):
+                 critter_opts=None, drop_dup_tanks=False):
     """Export dives; the libdivecomputer worker is stopped however the export ends."""
     try:
         return _export_dives(input_path, output_path, weight_unit, macdive_xml_path,
-                             import_unmatched_tanks, critter_opts or default_critter_opts(input_path))
+                             import_unmatched_tanks, critter_opts or default_critter_opts(input_path),
+                             drop_dup_tanks)
     finally:
         for worker in list(_ACTIVE_WORKERS):
             worker.close()
 
 
 def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import_unmatched_tanks,
-                  critter_opts):
+                  critter_opts, drop_dup_tanks=False):
     _reset_schema_caches()
 
     # Parse MacDive XML first — distance/temp/pressure/volume are auto-detected from its <units> tag.
@@ -3047,8 +3176,10 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
     _n_src       = _collections.Counter()
     _raw_reasons = _collections.Counter()
     _n_deco_dives = 0
+    _n_sp_dives   = 0   # dives with CCR setpoints from raw data
     _n_raw_vals   = _collections.Counter()   # dive values taken from raw data instead of MacDive
     _n_unmatched  = _collections.Counter()   # computer tanks MacDive did not have
+    _n_dup_tanks  = _collections.Counter()   # --drop-duplicate-tanks removals
     print("  Profile source per dive:")
 
     # Per-dive unit log setup.
@@ -3075,7 +3206,7 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
     lines.append("<blueDiveExport>")
     lines.append("  <metadata>")
     lines.append(xtag("software",   "BlueDive", indent=4))
-    lines.append(xtag("version",    "1.0",                    indent=4))
+    lines.append(xtag("version",    BLUEDIVE_VERSION, indent=4))
     lines.append(xtag("exportedAt", datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"), indent=4))
     lines.append(xtag("diveCount",  str(len(rows)),           indent=4))
     lines.append("  </metadata>")
@@ -3278,6 +3409,17 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
             _dive_log.append(f"    wp     : {_wp_log}")
             _dive_log.append(f"    volume : {_vol_log}")
 
+        # --drop-duplicate-tanks: exact copies of a tank (same MacDive tank, gas, size, no
+        # pressures — rows MacDive stored twice) are left out; tanks with a pressure never are.
+        if drop_dup_tanks and len(tanks) > 1:
+            tanks, _dups = drop_duplicate_tanks(tanks)
+            for _pos, _orig in _dups:
+                _dive_log.append(f"  tanks      : MacDive tank[{_pos}] not exported — exact copy of "
+                                 f"tank[{_orig}] (same tank, gas and size, no pressures)")
+            if _dups:
+                _n_dup_tanks["tanks"] += len(_dups)
+                _n_dup_tanks["dives"] += 1
+
         # Raw dive computer data (ZRAWDATA, decoded by libdivecomputer in a worker process).
         # When it agrees with MacDive's XML profile (or, without one, with the dive record), it
         # has priority for every value it records: profile, events, decompression stops, and
@@ -3430,6 +3572,16 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
         lines.append(xtag("maxDepth",        fmt_double(cvt_dist(max_depth)),  indent=4))
         lines.append(xtag("averageDepth",    fmt_double(cvt_dist(avg_depth)),  indent=4))
         lines.append(xtag("duration",        str(dur_secs),          indent=4))
+        # The dive time in seconds (raw computer time or MacDive's), stored by BlueDive as the
+        # dive's own time (Dive.durationSeconds). BlueDive reads <durationSeconds> only from
+        # BlueDive XML; without it, <duration> alone gives minutes only. Omitted outside BlueDive's
+        # accepted range (Dive.validDurationSeconds: 1 s to just under 60 hours), which stores
+        # no duration. Minutes as BlueDive rounds them: 30 s and more rounds up.
+        if 0 < dur_secs < 3600 * 60 - 30:
+            lines.append(xtag("durationSeconds", str(dur_secs),      indent=4))
+            _dive_log.append(f"  duration   : {dur_secs} s → {(dur_secs + 30) // 60} min in BlueDive")
+        else:
+            _dive_log.append(f"  duration   : {dur_secs} s — out of range, BlueDive stores no duration")
         _dive_log.append(f"  maxDepth   : {_fv(max_depth, 4)} m ({_max_depth_src}) → {_fv(cvt_dist(max_depth), 4)} {_log_du}")
         _dive_log.append(f"  avgDepth   : {_fv(avg_depth, 4)} m (SQLite) → {_fv(cvt_dist(avg_depth), 4)} {_log_du}")
         try:
@@ -3670,9 +3822,14 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
             _raw_reasons[re.sub(r"[\d.]+", "#", raw_why)] += 1
         _dive_log.append(f"  profile    : {_profile_src}")
         print(f"    Dive #{_log_dive_num}: {_profile_src}")
-        if decoded is not None and decoded["sp_changes"]:
-            _dive_log.append(f"  setpoints  : {decoded['sp_changes']} setpoint switch(es) in raw data — "
-                             f"not imported (BlueDive has no setpoint event)")
+        _sp_values = sorted({s["setpoint"] for s in samples if s.get("setpoint") is not None})
+        if _sp_values:
+            _n_sp = sum(1 for s in samples if s.get("setpoint") is not None)
+            _dive_log.append(f"  setpoints  : {_n_sp}/{len(samples)} samples with a setpoint from raw data ("
+                             + ", ".join(f"{fmt_double(v)} bar" for v in _sp_values) + ")")
+            _n_sp_dives += 1
+        elif decoded is not None and _keep_xml and any(s.get("setpoint") is not None for s in raw_samples):
+            _dive_log.append("  setpoints  : in raw data but not imported (MacDive XML samples kept)")
         # Mandatory decompression stops reported by the computer (Gas tab list). Depth in
         # metres, time in seconds, type 2 = DC_DECO_DECOSTOP.
         if _deco_stops:
@@ -3737,8 +3894,12 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
         f"  MacDive XML samples + MacDive events             : {_n_src['xml']}",
         f"  No profile                                       : {_n_src['none']}",
         f"  Dives with deco stops from raw data              : {_n_deco_dives}",
+        f"  Dives with CCR setpoints from raw data           : {_n_sp_dives}",
         "  Dive values changed by raw data (MacDive → raw): "
         + (", ".join(f"{k} {v}" for k, v in _n_raw_vals.items()) or "none"),
+        "  Duplicate tanks (--drop-duplicate-tanks "
+        + ("on): " + (f"{_n_dup_tanks['tanks']} exact copies not exported on {_n_dup_tanks['dives']} dives"
+                      if _n_dup_tanks else "none found") if drop_dup_tanks else "off)"),
         "  Unmatched computer tanks (--import-unmatched-tanks "
         + ("on" if import_unmatched_tanks else "off") + "): "
         + (", ".join(f"{k} {v}" for k, v in _n_unmatched.items()) or "none"),
@@ -3875,7 +4036,7 @@ def export_gears(input_path, output_path, weight_unit):
     lines.append("<blueDiveGearExport>")
     lines.append("  <metadata>")
     lines.append(xtag("software",          "BlueDive",  indent=4))
-    lines.append(xtag("version",           "1.0",       indent=4))
+    lines.append(xtag("version",           BLUEDIVE_VERSION, indent=4))
     lines.append(xtag("exportedAt",        datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"), indent=4))
     lines.append(xtag("gearCount",         str(len(gear_map)),    indent=4))
     lines.append(xtag("gearGroupCount",    str(len(gear_groups)), indent=4))
@@ -4005,7 +4166,7 @@ def export_certifications(input_path, output_path):
     lines.append("<blueDiveCertificationExport>")
     lines.append("  <metadata>")
     lines.append(xtag("software",           "BlueDive", indent=4))
-    lines.append(xtag("version",            "1.0",      indent=4))
+    lines.append(xtag("version",            BLUEDIVE_VERSION, indent=4))
     lines.append(xtag("exportedAt",         datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"), indent=4))
     lines.append(xtag("certificationCount", str(len(certs)), indent=4))
     lines.append("  </metadata>")
@@ -4070,7 +4231,7 @@ def export_species(input_path, output_path, critter_opts):
     lines.append("<blueDiveSpeciesExport>")
     lines.append("  <metadata>")
     lines.append(xtag("software",       "BlueDive", indent=4))
-    lines.append(xtag("version",        "1.0",      indent=4))
+    lines.append(xtag("version",        BLUEDIVE_VERSION, indent=4))
     lines.append(xtag("exportedAt",     datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"), indent=4))
     lines.append(xtag("speciesCount",   str(len(written)), indent=4))
     lines.append(xtag("includesImages", "true" if includes_images else "false", indent=4))
@@ -4154,6 +4315,11 @@ Examples:
   # Critter Species field holding group names, not scientific names: leave it out
   python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
       --weight-unit kg --macdive-xml MacDive-Export.xml --critter-species omit
+
+  # Rebreather dives: add the cylinders MacDive missed; leave out tanks MacDive stored twice
+  python3 macdive_to_bluedive.py MacDive.sqlite dives.xml --export dives \\
+      --weight-unit kg --macdive-xml MacDive-Export.xml \\
+      --import-unmatched-tanks --drop-duplicate-tanks
         """,
     )
     parser.add_argument("input",  help="Path to the MacDive .sqlite file")
@@ -4174,6 +4340,10 @@ Examples:
                         help="Dives: also add rebreather cylinders the dive computer recorded but MacDive "
                              "did not (the computer marks them as oxygen or diluent), with the computer's "
                              "pressures. An oxygen cylinder is added as 100%% O2. Off by default.")
+    parser.add_argument("--drop-duplicate-tanks", dest="drop_duplicate_tanks", action="store_true",
+                        help="Dives: leave out tanks that are exact copies of another tank on the same "
+                             "dive (same MacDive tank, gas and size, no pressures) — rows MacDive stored "
+                             "twice. Tanks with a pressure are never dropped. Off by default.")
     parser.add_argument("--critter-species", choices=["scientific", "omit"], default="scientific",
                         dest="critter_species",
                         help="Dives, species: what MacDive's critter Species field is. 'scientific' "
@@ -4211,7 +4381,8 @@ Examples:
         if not Path(args.macdive_xml).exists():
             parser.error(f"MacDive XML file not found: {args.macdive_xml}")
         export_dives(args.input, args.output, args.weight, macdive_xml_path=args.macdive_xml,
-                     import_unmatched_tanks=args.import_unmatched_tanks, critter_opts=critter_opts)
+                     import_unmatched_tanks=args.import_unmatched_tanks, critter_opts=critter_opts,
+                     drop_dup_tanks=args.drop_duplicate_tanks)
 
     elif args.export_type == "gears":
         if args.weight is None:

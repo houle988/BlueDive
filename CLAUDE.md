@@ -14,6 +14,14 @@ Do not change the data model (structs, properties, enums, relationships) unless 
 
 Do not estimate any data displayed or stored. All fields must be calculated or extracted from the data model unless explicitly instructed to do so.
 
+### No Personal Information in the Repository
+
+Never store personal information in the repository: not in code, tests, comments, documentation, commit messages or test fixtures. This covers users' and testers' data (database backups, SwiftData stores, logbook or XML exports, photos, dive profiles), their names, dive numbers and dive sites, e-mail addresses, GPS coordinates, device serial numbers, and local paths that contain a macOS user name (e.g. `/Users/<name>/…`). The only exception is the contributor credits the developer adds on purpose (`AboutView`).
+
+- **Tests** build their data in code (e.g. a JPEG drawn with `CGContext`, a dive with made-up values). A test that needs a real file reads it from outside the repository, through a path relative to the tester's home (`SIMULATOR_HOST_HOME` in the simulator, else `NSHomeDirectory()`; see `PhotoReimportImportTests.testerHome`), and is skipped when the file is absent (`.enabled(if: FileManager.default.fileExists(…))`). Never add a sample file to the test target.
+- **Comments and commit messages** describe a reported case without naming the person ("a reported case", "a tester's dive"), never "<first name>'s dive #<number>".
+- **Investigating a user's data** (a backup or photo sent for a bug): work only on copies in `/tmp`, opened read-only (`sqlite3 -readonly`, never opened in the app with CloudKit), and delete them when done. A temporary test that reads such a copy is never staged or committed (Xcode may stage a new test file by itself: check `git status` before committing).
+
 ## Language & Localisation
 
 Always use English (Canada) for labels, text, and comments in user-facing content.
