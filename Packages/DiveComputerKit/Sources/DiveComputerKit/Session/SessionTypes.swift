@@ -115,6 +115,9 @@ public enum SessionError: Error, Sendable, Equatable {
     case peripheralNotFound
     case connectionTimeout
     case connectionFailed(String?)
+    /// The dive computer no longer has this device's pairing: it must be forgotten in the
+    /// Bluetooth settings (and pairing restarted on the dive computer) before it connects.
+    case pairingRemoved
     case serviceDiscoveryFailed
     case notificationEnableFailed
     case disconnected

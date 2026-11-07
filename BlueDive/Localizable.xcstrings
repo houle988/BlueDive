@@ -859,6 +859,41 @@
         }
       }
     },
+    "%@ no longer recognizes this device. Forget it in this device's Bluetooth settings, turn Bluetooth on the dive computer off and on, then try again." : {
+      "comment" : "Error shown when a dive computer refuses the connection because it no longer has this iPhone's or Mac's Bluetooth pairing (e.g. after pairing with another device). %@ is the dive computer name.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ erkennt dieses Gerät nicht mehr. Entferne es in den Bluetooth-Einstellungen dieses Geräts, schalte Bluetooth am Tauchcomputer aus und wieder ein und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ ya no reconoce este dispositivo. Olvídalo en la configuración de Bluetooth de este dispositivo, apaga y vuelve a encender el Bluetooth de la computadora de buceo e inténtalo de nuevo."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ne reconnaît plus cet appareil. Oubliez-le dans les réglages Bluetooth de cet appareil, désactivez puis réactivez le Bluetooth de l’ordinateur de plongée, puis réessayez."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ gjenkjenner ikke lenger denne enheten. Glem den i Bluetooth-innstillingene på denne enheten, slå Bluetooth på dykkecomputeren av og på, og prøv igjen."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ herkent dit apparaat niet meer. Vergeet het in de Bluetooth-instellingen van dit apparaat, zet Bluetooth op de duikcomputer uit en weer aan en probeer het opnieuw."
+          }
+        }
+      }
+    },
     "%@ of %@ dives exported" : {
       "comment" : "Progress label during dive export showing current and total count",
       "localizations" : {
@@ -13870,7 +13905,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Error de comunicación con la computadora de buceo. Apágala y enciéndela, y vuelve a intentarlo."
+            "value" : "Error de comunicación con la computadora de buceo. Apágala, vuelve a encenderla e inténtalo de nuevo."
           }
         },
         "fr-CA" : {
@@ -19127,6 +19162,7 @@
       }
     },
     "Dive Computer" : {
+      "comment" : "Fallback name for an unknown Bluetooth dive computer",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -20005,6 +20041,7 @@
     },
     "dive.computer.default_ble_name" : {
       "comment" : "Fallback name for an unknown Bluetooth dive computer",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -21187,7 +21224,7 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Échec du téléchargement : %@"
+            "value" : "Échec du téléchargement : %@"
           }
         },
         "nb" : {
@@ -23617,7 +23654,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Introduce el código PIN de 6 dígitos que aparece en %@."
+            "value" : "Escribe el código PIN de 6 dígitos que aparece en %@."
           }
         },
         "fr-CA" : {
@@ -46483,7 +46520,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Open-sourcebibliotheek voor communicatie met duikcomputers. Biedt ondersteuning voor het laag-niveau-protocol om duikgegevens van een breed scala aan apparaten te downloaden. Gelicentieerd onder de [GNU LGPL 2.1 of later](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html); de volledige broncode die BlueDive gebruikt, is gepubliceerd in de [BlueDive-repository](https://github.com/houle988/BlueDive/tree/main/Packages/DiveComputerKit/Sources/CLibDiveComputer)."
+            "value" : "Open-sourcebibliotheek voor communicatie met duikcomputers. Biedt de protocolondersteuning op laag niveau om duikgegevens van een breed scala aan apparaten te downloaden. Gelicentieerd onder de [GNU LGPL 2.1 of later](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html); de volledige broncode die BlueDive gebruikt, is gepubliceerd in de [BlueDive-repository](https://github.com/houle988/BlueDive/tree/main/Packages/DiveComputerKit/Sources/CLibDiveComputer)."
           }
         }
       }
@@ -47444,7 +47481,7 @@
         "nb" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Koble til"
+            "value" : "Sammenkoble"
           }
         },
         "nl" : {
@@ -47478,7 +47515,7 @@
         "nb" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Koble til dykkecomputer"
+            "value" : "Sammenkoble dykkecomputer"
           }
         },
         "nl" : {
@@ -63339,7 +63376,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "La computadora de buceo rechazó la conexión. Revisa el código PIN e inténtalo de nuevo."
+            "value" : "La computadora de buceo rechazó la conexión. Comprueba el código PIN e inténtalo de nuevo."
           }
         },
         "fr-CA" : {
@@ -67537,8 +67574,8 @@
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oppdatere Bluetooth-paring?"
+            "state" : "needs_review",
+            "value" : "Oppdatere Bluetooth-sammenkobling?"
           }
         },
         "nl" : {

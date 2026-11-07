@@ -169,7 +169,9 @@ final class SampleAccumulator {
                 currentSetpoint = nil
             }
         }
-        currentGas = Int(Int32(bitPattern: index))
+        // DC_GASMIX_UNKNOWN (Shearwater, for tanks without an AI transmitter) leaves the
+        // last real gas in place: points never carry an unknown index.
+        if isReal { currentGas = Int(index) }
         if isReal, let previous = lastRealGas, previous != index {
             let alreadyMarked = profile.last.map { $0.time == time && $0.events.contains(.gasChange) } ?? false
             if !alreadyMarked {

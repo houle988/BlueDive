@@ -1497,8 +1497,8 @@ extension Dive {
     // `setDuration(seconds:)`, `setDuration(minutes:)` or `setImportedDuration(...)`, so the
     // two fields never disagree.
 
-    /// Accepted surface pressures in bar, the same range as LibDCSwift's
-    /// `GenericParser.validAtmosphericRange`: about 6 000 m of altitude up to the strongest
+    /// Accepted surface pressures in bar, the same range as DiveComputerKit's
+    /// `DiveParser.validAtmosphericRange`: about 6 000 m of altitude up to the strongest
     /// sea-level highs. A value outside it (e.g. 0 in a file) is a placeholder, not a reading.
     static let validSurfacePressure: ClosedRange<Double> = 0.4...1.2
 

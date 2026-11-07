@@ -185,7 +185,7 @@ extension BluetoothScannerView {
                 } else {
                     // Model absent from supportedModels — seed DeviceStorage immediately so the session
                     // can use it, but also track via pendingDeviceStorageSeed so failure paths can clean up.
-                    DeviceStorage.shared.storeDevice(uuid: peripheral.identifier.uuidString, name: record.computerName, family: family, model: record.modelID, serial: record.serial)
+                    DeviceStorage.shared.storeDevice(uuid: peripheral.identifier.uuidString, name: peripheral.name ?? record.computerName, family: family, model: record.modelID, serial: record.serial)
                     pendingDeviceStorageSeed = (uuid: peripheral.identifier.uuidString, name: record.computerName, family: family, modelID: record.modelID, serial: record.serial)
                 }
                 DiveComputerLog.shared.log("[Known device] Found \(peripheral.name ?? "Unknown") under a new identifier \(uuid) — connecting, stored after a successful download", level: .info)
@@ -276,7 +276,11 @@ extension BluetoothScannerView {
         } else {
             let resolved = fingerprintFromDatabase(for: peripheral)
             watermarkRestored = resolved.result == .restored
-            fingerprints = resolved.table
+            // With the serial unknown before connecting, the session could still apply the
+            // reported serial's watermark. Not when a cutoff is armed: the download is then a
+            // full-history one (as the screen says), and a cutoff on an incremental download
+            // would drop new dives older than it, then move the watermark past them.
+            fingerprints = (!watermarkRestored && importCutoffEnabled) ? [:] : resolved.table
         }
 
         // A cutoff is meaningful for a full-history download only: an incremental sync is
@@ -297,7 +301,8 @@ extension BluetoothScannerView {
             // dives are never transferred over BLE.
             stopBefore: effectiveCutoff,
             syncClock: syncDeviceClock,
-            authorization: BLEPairingProvider(deviceName: connectedDeviceName ?? deviceName)
+            authorization: BLEPairingProvider(deviceName: connectedDeviceName ?? deviceName,
+                                              generation: pairingPrompt.generation)
         )
         DiveComputerLog.shared.log("Session for \(connectedDeviceName ?? deviceName) \(deviceAddress): model \(String(describing: modelSelection))", level: .info)
         diveCountDuringDownload = 0
@@ -317,6 +322,10 @@ extension BluetoothScannerView {
     /// watermark is stored.
     func cancelDownload() {
         guard let handle = sessionHandle else { return }
+        // The download thread may be waiting for a PIN: release it (or the cancel would wait
+        // for an answer that never comes), and refuse this download's request still on its way.
+        pairingPrompt.cancelPending()
+        pairingPIN = ""
         Task { await handle.cancel() }
     }
 
@@ -388,7 +397,7 @@ extension BluetoothScannerView {
         if wrongSerial != nil {
             rejectWrongUnit(deviceAddress: deviceAddress, wasStored: wasStored)
         } else if let failure {
-            failDownload(failure as? SessionError ?? .downloadFailed(.io), connected: connected,
+            failDownload(failure as? SessionError ?? .downloadFailed(.io), connected: connected, wasStored: wasStored,
                          deviceName: deviceName, deviceAddress: deviceAddress)
         }
         if sessionHandle === handle { sessionHandle = nil }
@@ -407,11 +416,12 @@ extension BluetoothScannerView {
     private func rejectWrongUnit(deviceAddress: String, wasStored: Bool) {
         BLEDiagnosticSession.shared.stop()
         selectedDevice = nil
+        let storedThisSession = !wasStored || pendingDeviceStorageSeed?.uuid == deviceAddress
         let expectedName = connectedDeviceName ?? NSLocalizedString("the selected dive computer", bundle: Bundle.forAppLanguage(), value: "the selected dive computer", comment: "Stands for a dive computer's name in 'The connected dive computer is not %@' when the name is unknown.")
         discardPendingSeed()
         // The session's own writes for this identifier (the model it opened with, or an
         // immediate seed); an entry stored before the session is kept.
-        if !wasStored, let all = DeviceStorage.shared.getAllStoredDevices(), all.contains(where: { $0.uuid == deviceAddress }) {
+        if storedThisSession, let all = DeviceStorage.shared.getAllStoredDevices(), all.contains(where: { $0.uuid == deviceAddress }) {
             DeviceStorage.shared.updateStoredDevices(all.filter { $0.uuid != deviceAddress })
             DiveComputerLog.shared.log("[Serial check] Removed the entry stored for \(deviceAddress) during this session", level: .info)
         }
@@ -492,13 +502,25 @@ extension BluetoothScannerView {
         BLEDiagnosticSession.shared.stop()
     }
 
-    private func failDownload(_ error: SessionError, connected: Bool, deviceName: String, deviceAddress: String) {
+    private func failDownload(_ reportedError: SessionError, connected: Bool, wasStored: Bool,
+                              deviceName: String, deviceAddress: String) {
         BLEDiagnosticSession.shared.stop()
         selectedDevice = nil
+        // A PIN prompt answered with Cancel ends the device open with DC_STATUS_CANCELLED.
+        let error: SessionError = reportedError == .deviceOpenFailed(.cancelled) ? .cancelled : reportedError
         if error == .cancelled {
             Self.logger.info("Download cancelled")
+            // A reassociation cancelled before the device confirmed its serial: drop the
+            // identifier this session stored, and put back the entries removed for it (the
+            // restore stays armed only until the serial is confirmed).
+            if connected, pendingReassociationPruneRestore != nil,
+               !wasStored || pendingDeviceStorageSeed?.uuid == deviceAddress,
+               let all = DeviceStorage.shared.getAllStoredDevices(), all.contains(where: { $0.uuid == deviceAddress }) {
+                DeviceStorage.shared.updateStoredDevices(all.filter { $0.uuid != deviceAddress })
+                DiveComputerLog.shared.log("[Reassociation] Cancelled before the serial check — removed \(deviceAddress)", level: .info)
+            }
             discardPendingSeed(matchingUUID: deviceAddress)
-            if !connected { restorePendingReassociationPrune() }
+            restorePendingReassociationPrune()
             // Back to the known-devices screen, with the full-history options disarmed as
             // when a scan is abandoned (the next tap must not silently re-run them).
             abandonScanSession()
@@ -512,7 +534,7 @@ extension BluetoothScannerView {
             return
         }
         Self.logger.error("Failed to retrieve dives: \(String(describing: error))")
-        syncState = .error(message: String(format: NSLocalizedString("Download failed: %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when downloading dives from the dive computer fails. %@ is the underlying error description."), Self.downloadErrorReason(error)))
+        syncState = .error(message: String(format: NSLocalizedString("Download failed: %@", bundle: Bundle.forAppLanguage(), value: "Download failed: %@", comment: "Error message shown when downloading dives from the dive computer fails. %@ is the underlying error description."), Self.downloadErrorReason(error)))
         let failedSeedUUID = pendingDeviceStorageSeed?.uuid
         discardPendingSeed()
         // Still armed only when the unit's serial was not verified yet.
@@ -534,10 +556,12 @@ extension BluetoothScannerView {
             return NSLocalizedString("Bluetooth is off or not available. Turn it on and try again.", bundle: Bundle.forAppLanguage(), value: "Bluetooth is off or not available. Turn it on and try again.", comment: "Error message shown when a dive computer download starts while Bluetooth is off or unavailable.")
         case .busy:
             return NSLocalizedString("Another download is already in progress.", bundle: Bundle.forAppLanguage(), value: "Another download is already in progress.", comment: "Error message shown when a dive computer download is started while another one is running.")
+        case .pairingRemoved:
+            return String(format: NSLocalizedString("%@ no longer recognizes this device. Forget it in this device's Bluetooth settings, turn Bluetooth on the dive computer off and on, then try again.", bundle: Bundle.forAppLanguage(), value: "%@ no longer recognizes this device. Forget it in this device's Bluetooth settings, turn Bluetooth on the dive computer off and on, then try again.", comment: "Error shown when a dive computer refuses the connection because it no longer has this iPhone's or Mac's Bluetooth pairing (e.g. after pairing with another device). %@ is the dive computer name."), deviceName)
         case .deviceOpenFailed(.noAccess):
             return NSLocalizedString("The dive computer refused the connection. Check the PIN code and try again.", bundle: Bundle.forAppLanguage(), value: "The dive computer refused the connection. Check the PIN code and try again.", comment: "Error message shown when a dive computer that requires a PIN code (e.g. Aqualung i330R) denies access.")
         default:
-            return String(format: NSLocalizedString("Unable to connect to %@", bundle: Bundle.forAppLanguage(), comment: "Error message shown when a Bluetooth connection to a dive computer fails. %@ is the device name."), deviceName)
+            return String(format: NSLocalizedString("Unable to connect to %@", bundle: Bundle.forAppLanguage(), value: "Unable to connect to %@", comment: "Error message shown when a Bluetooth connection to a dive computer fails. %@ is the device name."), deviceName)
         }
     }
 
@@ -591,7 +615,10 @@ extension BluetoothScannerView {
             discardPendingSeed()
             return
         }
-        DeviceStorage.shared.storeDevice(uuid: seed.uuid, name: seed.name, family: seed.family, model: seed.modelID, serial: seed.serial)
+        // The advertised name stored when the session opened, when there is one (it keys the
+        // Pelagic access code in the Keychain).
+        let storedName = DeviceStorage.shared.getStoredDevice(uuid: seed.uuid)?.name ?? seed.name
+        DeviceStorage.shared.storeDevice(uuid: seed.uuid, name: storedName, family: seed.family, model: seed.modelID, serial: seed.serial)
         if !seed.serial.isEmpty && !Self.knownSentinelSerials.contains(seed.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()),
            let allDevices = DeviceStorage.shared.getAllStoredDevices() {
             let filtered = allDevices.filter { !($0.serial?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == seed.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() && $0.uuid != seed.uuid) }

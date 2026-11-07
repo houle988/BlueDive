@@ -51,9 +51,9 @@ public enum DiveParser {
         var diluents = Set<UInt32>()
         var oxygens = Set<UInt32>()
         if !setpointPerSample {
-            for (index, mix) in gasMixes.mixes.enumerated() {
-                if mix.usage == .diluent { diluents.insert(UInt32(index)) }
-                if mix.usage == .oxygen { oxygens.insert(UInt32(index)) }
+            for (index, mix) in zip(gasMixes.fieldIndices, gasMixes.mixes) {
+                if mix.usage == .diluent { diluents.insert(index) }
+                if mix.usage == .oxygen { oxygens.insert(index) }
             }
             if diluents.isEmpty { oxygens = [] }
         }
@@ -100,7 +100,7 @@ public enum DiveParser {
         guard let date = localDate(datetime) else { throw .invalidDate }
         let tanks = fields.tanks()
 
-        return DiveData(
+        var dive = DiveData(
             number: diveNumber,
             datetime: date,
             maxDepth: maxDepth,
@@ -135,6 +135,10 @@ public enum DiveParser {
                 DiveData.DecoStop(depth: $0.depth, time: TimeInterval($0.time), type: Int($0.type))
             }
         )
+        if !gasMixes.fieldIndices.enumerated().allSatisfy({ $0.offset == Int($0.element) }) {
+            dive.gasMixFieldIndices = gasMixes.fieldIndices.map { Int($0) }
+        }
+        return dive
     }
 
     /// Families that report the CCR setpoint on every sample (no value = open circuit).

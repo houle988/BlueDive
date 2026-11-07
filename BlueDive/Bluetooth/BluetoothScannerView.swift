@@ -406,9 +406,12 @@ struct BluetoothScannerView: View {
                 infoSheet
                     .standardSheetPresentation()
             }
+            // Only the buttons answer: SwiftUI may dismiss the alert before it runs the Pair
+            // action, so answering on dismissal could cancel a pairing the user confirmed.
+            // A download cancelled with the prompt open answers it (cancelDownload).
             .alert("Pair Dive Computer", isPresented: Binding(
                 get: { pairingPrompt.pendingDeviceName != nil },
-                set: { if !$0 && pairingPrompt.pendingDeviceName != nil { pairingPrompt.answer(nil) } }
+                set: { _ in }
             )) {
                 TextField("PIN Code", text: $pairingPIN)
                     .platformKeyboardType(.numberPad)

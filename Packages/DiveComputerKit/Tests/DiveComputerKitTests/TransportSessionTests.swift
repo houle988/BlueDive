@@ -17,7 +17,9 @@ final class FakeLink: SessionLink, @unchecked Sendable {
     private(set) var timeout: Int32 = -1
     private(set) var cancelled = false
     private(set) var resumedForClose = false
-    /// Writes made after `resumeForClose()` (the exit command).
+    /// Set by `prepareForClose()`: as in the real link, a cancel then no longer refuses writes.
+    private(set) var closing = false
+    /// Writes made after `prepareForClose()` released a cancel (the exit command).
     private(set) var closeWrites: [Data] = []
     private(set) var closed = false
     private(set) var opened = false
@@ -56,8 +58,14 @@ final class FakeLink: SessionLink, @unchecked Sendable {
         if let openError { throw openError }
         lock.withLock { opened = true }
     }
-    func cancel() { lock.withLock { cancelled = true; lock.broadcast() } }
-    func resumeForClose() { lock.withLock { cancelled = false; resumedForClose = true; lock.broadcast() } }
+    func cancel() { lock.withLock { if !closing { cancelled = true }; lock.broadcast() } }
+    func prepareForClose() {
+        lock.withLock {
+            closing = true
+            if cancelled { cancelled = false; resumedForClose = true }
+            lock.broadcast()
+        }
+    }
     func close() { lock.withLock { closed = true } }
 }
 

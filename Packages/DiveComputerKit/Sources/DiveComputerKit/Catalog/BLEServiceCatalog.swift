@@ -38,14 +38,26 @@ public enum BLEServiceCatalog {
     }
 
     public static func isKnown(_ uuid: String) -> Bool {
-        knownServiceUUIDStrings.contains(uuid.lowercased())
+        knownServiceUUIDStrings.contains(normalized(uuid))
     }
 
     public static func isExcluded(_ uuid: String) -> Bool {
-        excludedServiceUUIDStrings.contains(uuid.lowercased())
+        excludedServiceUUIDStrings.contains(normalized(uuid))
     }
 
     public static func isNordicUART(_ uuid: String) -> Bool {
-        uuid.lowercased() == nordicUARTServiceUUIDString
+        normalized(uuid) == nordicUARTServiceUUIDString
+    }
+
+    /// Lowercased 128-bit form. CoreBluetooth reports Bluetooth-base UUIDs in their short
+    /// form ("FEFB"), which would otherwise never match the catalog (Heinrichs Weikamp
+    /// Telit/Stollmann, Divesoft Freedom) or a characteristic libdivecomputer asks for in full.
+    static func normalized(_ uuid: String) -> String {
+        let lower = uuid.lowercased()
+        switch lower.count {
+        case 4: return "0000\(lower)-0000-1000-8000-00805f9b34fb"
+        case 8: return "\(lower)-0000-1000-8000-00805f9b34fb"
+        default: return lower
+        }
     }
 }

@@ -48,10 +48,21 @@ final class BLEPairingPrompt {
     /// The device name being paired while a PIN is requested, else nil.
     private(set) var pendingDeviceName: String?
     @ObservationIgnored private var completion: ((String?) -> Void)?
+    /// The request the pending prompt belongs to.
+    @ObservationIgnored private var pendingToken: UUID?
+    /// Advanced by every cancelled download: a request from a session started before it is
+    /// refused at once, even when it arrives after the cancel (the request is posted from
+    /// the download thread, so it can lose the race with the cancel).
+    @ObservationIgnored private(set) var generation = 0
 
-    func ask(deviceName: String, completion: @escaping (String?) -> Void) {
+    func ask(deviceName: String, generation: Int, token: UUID, completion: @escaping (String?) -> Void) {
+        guard generation == self.generation else {
+            completion(nil)
+            return
+        }
         self.completion?(nil)
         self.completion = completion
+        pendingToken = token
         pendingDeviceName = deviceName
     }
 
@@ -59,9 +70,23 @@ final class BLEPairingPrompt {
     func answer(_ pin: String?) {
         let reply = pin?.trimmingCharacters(in: .whitespacesAndNewlines)
         pendingDeviceName = nil
+        pendingToken = nil
         let completion = self.completion
         self.completion = nil
         completion?(reply?.isEmpty == true ? nil : reply)
+    }
+
+    /// Gives up the request `token`, if it is still the pending one (the wait timed out).
+    func expire(_ token: UUID) {
+        guard pendingToken == token else { return }
+        answer(nil)
+    }
+
+    /// The download is being cancelled: answers a pending prompt and refuses any request
+    /// of that download still on its way.
+    func cancelPending() {
+        generation += 1
+        if pendingDeviceName != nil { answer(nil) }
     }
 }
 
@@ -69,19 +94,31 @@ final class BLEPairingPrompt {
 nonisolated struct BLEPairingProvider: BLEAuthorizationProvider {
     /// Shown in the prompt (the model name when known).
     let deviceName: String
+    /// `BLEPairingPrompt.generation` when the download started.
+    let generation: Int
+
+    /// Longest wait for the user's PIN before the pairing is given up.
+    static let answerTimeout: DispatchTimeInterval = .seconds(300)
 
     func pinCode(for request: AuthorizationRequest) -> String? {
         // Called on the download thread, which may block; the prompt runs on the main actor.
         let semaphore = DispatchSemaphore(value: 0)
         let answer = Answer()
         let name = deviceName
+        let generation = generation
+        let token = UUID()
         Task { @MainActor in
-            BLEPairingPrompt.shared.ask(deviceName: name) { pin in
+            BLEPairingPrompt.shared.ask(deviceName: name, generation: generation, token: token) { pin in
                 answer.value = pin
                 semaphore.signal()
             }
         }
-        semaphore.wait()
+        // Answered by the prompt's buttons or by a cancelled download; the timeout is only a
+        // backstop so the download thread can never wait forever.
+        if semaphore.wait(timeout: .now() + Self.answerTimeout) == .timedOut {
+            Task { @MainActor in BLEPairingPrompt.shared.expire(token) }
+            return nil
+        }
         return answer.value
     }
 

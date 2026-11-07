@@ -14,12 +14,21 @@ import Testing
 /// (Packages/DiveComputerKit/Docs/DECISIONS.md, Q3): set `BLUEDIVE_PARITY_DIR` (with
 /// xcodebuild, `TEST_RUNNER_BLUEDIVE_PARITY_DIR`) to the folder that contains them.
 @MainActor
-@Suite(.enabled(if: MapperParityFixtures.directory != nil, "Set BLUEDIVE_PARITY_DIR to run the mapper parity tests"))
-struct DiveImportMapperParityTests {
+@Suite(.enabled(if: MapperParityFixtures.directory != nil, "Set BLUEDIVE_PARITY_DIR to run the mapper parity tests"),
+       .serialized)
+final class DiveImportMapperParityTests {
+
+    /// The exports were made in this zone, and the parser and the exporter both use local
+    /// time, so each test sets it and puts the previous one back. Other suites running at the
+    /// same time could see it: the suite only runs when `BLUEDIVE_PARITY_DIR` is set.
+    private let previousTimeZone = NSTimeZone.default
 
     init() {
-        // The exports were made in this zone; the parser and the exporter both use local time.
         NSTimeZone.default = TimeZone(identifier: "America/Toronto")!
+    }
+
+    deinit {
+        NSTimeZone.default = previousTimeZone
     }
 
     @Test(arguments: MapperParityFixtures.computers)

@@ -50,8 +50,10 @@ struct DiveImportMapperTests {
         #expect(connected.computerName == "FH021857")
         let unknown = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
                                                 context: context())
-        #expect(unknown.computerName == NSLocalizedString("dive.computer.default_ble_name",
+        #expect(unknown.computerName == NSLocalizedString("Dive Computer", bundle: Bundle.forAppLanguage(), value: "Dive Computer",
                                                           comment: "Fallback name for an unknown Bluetooth dive computer"))
+        // A translated name, never a raw catalog key.
+        #expect(!unknown.computerName.isEmpty && !unknown.computerName.contains("."))
     }
 
     @Test func newDiveStoresTheSerialAndTheWeightUnitFromTheContext() {
@@ -174,5 +176,85 @@ struct DiveImportMapperTests {
         let more = merged(threeMixDive(), firstFilter: true, mergeFilter: false)
         #expect(more.before.count == 1 && more.after.count == 3 && more.after[0] == more.before[0])
         #expect(Set(more.after).count == 3)
+    }
+
+    // MARK: Gas mixes that could not be read
+
+    /// Mix 1 of three could not be read: `gasMixes` holds field mixes 0 and 2. A sample on
+    /// field mix 2 must reach the 50 % mix, never another one.
+    @Test func gasReferencesSkipAMixThatCouldNotBeRead() {
+        var data = threeMixDive()
+        data.gasMixes = [GasMix(helium: 0, oxygen: 0.32, nitrogen: 0.68, usage: .none),
+                         GasMix(helium: 0, oxygen: 0.50, nitrogen: 0.50, usage: .none)]
+        data.gasMixFieldIndices = [0, 2]
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 600, depth: 18, currentGas: 2),
+                        ProfileSample(time: 1200, depth: 10, currentGas: 1),   // the unreadable mix
+                        ProfileSample(time: 2400, depth: 0)]
+        data.gasMix = 2
+        let byPosition = DiveImportMapper.gasMixReferencesByPosition(data)
+        #expect(byPosition.profile.map(\.currentGas) == [0, 1, nil, nil])
+        #expect(byPosition.gasMix == 1)
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.tanks.map(\.o2) == [0.32, 0.50])
+        // The stored profile follows the translation: field mix 2 is tank 1, the unreadable
+        // mix is no tank (without it, field mix 1 would land on the 50 % tank).
+        #expect(dive.profileSamples.map(\.currentGas) == [0, 1, nil, nil])
+        // A re-download merges through the same translation.
+        DiveImportMapper.merge(data, into: dive, context: context())
+        #expect(dive.tanks.map(\.o2) == [0.32, 0.50])
+        #expect(dive.profileSamples.map(\.currentGas) == [0, 1, nil, nil])
+    }
+
+    /// A tank on the unreadable mix gets the no-gas-data default, never another mix's gas.
+    @Test func aTankOnAnUnreadableMixBorrowsNoOtherGas() {
+        var data = threeMixDive()
+        data.gasMixes = [GasMix(helium: 0, oxygen: 0.32, nitrogen: 0.68, usage: .none),
+                         GasMix(helium: 0, oxygen: 0.50, nitrogen: 0.50, usage: .none)]
+        data.gasMixFieldIndices = [0, 2]
+        data.tanks = (0..<3).map {
+            DiveData.Tank(volume: 11.1, workingPressure: 207, beginPressure: 200, endPressure: 60, gasMix: $0, usage: .none)
+        }
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.tanks.map(\.o2) == [0.32, 0.21, 0.50])
+    }
+
+    /// A switch to the unreadable mix ends the previous tank's usage window (its RMV/SAC
+    /// would otherwise be spread over time it was not breathed).
+    @Test func aSwitchToAnUnreadableMixEndsTheUsageWindow() {
+        var data = threeMixDive()
+        data.gasMixes = [GasMix(helium: 0, oxygen: 0.32, nitrogen: 0.68, usage: .none),
+                         GasMix(helium: 0, oxygen: 0.50, nitrogen: 0.50, usage: .none)]
+        data.gasMixFieldIndices = [0, 2]
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 600, depth: 18, events: [.gasChange], currentGas: 2),
+                        ProfileSample(time: 1200, depth: 10, events: [.gasChange], currentGas: 1),
+                        ProfileSample(time: 2400, depth: 0)]
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.tanks.count == 2)
+        #expect(dive.tanks[0].usageStartTime == 0 && dive.tanks[0].usageEndTime == 600)
+        #expect(dive.tanks[1].usageStartTime == 600 && dive.tanks[1].usageEndTime == 1200)
+    }
+
+    /// Every mix read: a gas change without a gas is ignored, as before (the window of the
+    /// starting tank still covers the whole dive).
+    @Test func aSwitchWithoutAGasChangesNothingWhenEveryMixWasRead() {
+        var data = threeMixDive()
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 1200, depth: 10, events: [.gasChange]),
+                        ProfileSample(time: 2400, depth: 0)]
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.tanks[0].usageStartTime == 0 && dive.tanks[0].usageEndTime == 2400)
+    }
+
+    @Test func gasReferencesAreUnchangedWhenEveryMixWasRead() {
+        let data = threeMixDive()
+        let same = DiveImportMapper.gasMixReferencesByPosition(data)
+        #expect(same.profile.map(\.currentGas) == data.profile.map(\.currentGas))
+        #expect(same.gasMix == data.gasMix)
     }
 }

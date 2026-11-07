@@ -48,6 +48,9 @@ final class DeviceSession: @unchecked Sendable {
 
     var isCancelled: Bool { stateLock.withLock { cancelled } }
 
+    /// Torn down: every libdivecomputer object and the connection are released.
+    var isFinished: Bool { stateLock.withLock { finished } }
+
     /// Cancels and returns once teardown is complete.
     func cancel() async {
         stateLock.withLock { cancelled = true }
@@ -70,18 +73,25 @@ final class DeviceSession: @unchecked Sendable {
 
     private func run() {
         let result = Result { () throws(SessionError) -> DownloadOutcome in try download() }
-        switch result {
-        case .success(let outcome):
-            continuation.yield(.finished(outcome))
-            continuation.finish()
-        case .failure(let error):
-            DiveComputerLog.shared.log("Session ended: \(error)", level: error == .cancelled ? .info : .warning)
-            continuation.finish(throwing: error)
-        }
+        // Teardown is complete here: mark the session finished before its stream ends, so a
+        // caller starting the next session as soon as it sees the end is not refused as busy.
         let waiters = stateLock.withLock { () -> [CheckedContinuation<Void, Never>] in
             finished = true
             defer { finishWaiters = [] }
             return finishWaiters
+        }
+        switch result {
+        case .success(let outcome) where !isCancelled:
+            continuation.yield(.finished(outcome))
+            continuation.finish()
+        case .success:
+            // Cancelled after the dives were transferred (clock sync, close): nothing is
+            // returned, as for any cancel (Docs/DECISIONS.md, O3).
+            DiveComputerLog.shared.log("Session ended: cancelled", level: .info)
+            continuation.finish(throwing: SessionError.cancelled)
+        case .failure(let error):
+            DiveComputerLog.shared.log("Session ended: \(error)", level: error == .cancelled ? .info : .warning)
+            continuation.finish(throwing: error)
         }
         waiters.forEach { $0.resume() }
     }
@@ -108,8 +118,9 @@ final class DeviceSession: @unchecked Sendable {
             // command, which must reach the device before the link is cut.
             if let device {
                 // libdivecomputer disables cancellation for the close, so the exit command
-                // reaches the device after a cancel too (the link would refuse it otherwise).
-                if isCancelled { link.resumeForClose() }
+                // reaches the device after a cancel too, including one that arrives during
+                // the close (the link would refuse it otherwise).
+                link.prepareForClose()
                 _ = dc_device_close(device)
                 Thread.sleep(forTimeInterval: BLETiming.closeFlush)
                 self.device = nil
@@ -300,6 +311,7 @@ final class DeviceSession: @unchecked Sendable {
         switch error {
         case .connectionTimeout: return .connectionTimeout
         case .connectionFailed(let reason): return .connectionFailed(reason)
+        case .pairingRemoved: return .pairingRemoved
         case .serviceDiscoveryFailed: return .serviceDiscoveryFailed
         case .notificationEnableFailed: return .notificationEnableFailed
         case .disconnected: return .disconnected

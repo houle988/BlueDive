@@ -4,8 +4,10 @@ import DiveComputerKit
 import os.log
 
 /// Whether `fingerprintFromDatabase` found a sync watermark for the device about to be
-/// downloaded. `.restored` means the download will be fingerprint-limited (incremental);
-/// `.notFound` means it will be a full-history download.
+/// downloaded. `.restored` means the download will be fingerprint-limited (incremental).
+/// `.notFound` means no watermark is known for it before connecting: the download is
+/// full-history, unless the serial the device reports has one in the table (see
+/// `fingerprintFromDatabase`).
 ///
 /// The negative case is deliberately *not* spelled `none`: a case of that name shadows
 /// `Optional.none` at every `.none` use site involving this type, so a future
@@ -296,11 +298,13 @@ extension BluetoothScannerView {
         let uuid = peripheral.identifier.uuidString
         guard let family = device.family, device.modelID != 0 else { return }
 
+        // The stored name is the advertised one: Pelagic access codes are kept in the Keychain
+        // under it, and deleting the device deletes them by that name.
         if let existing = DeviceStorage.shared.getStoredDevice(uuid: uuid) {
             guard existing.family != family || existing.model != device.modelID else { return }
             DeviceStorage.shared.storeDevice(
                 uuid: uuid,
-                name: device.computerName,
+                name: existing.name,
                 family: family,
                 model: device.modelID,
                 serial: device.serial
@@ -311,7 +315,7 @@ extension BluetoothScannerView {
 
         DeviceStorage.shared.storeDevice(
             uuid: uuid,
-            name: device.computerName,
+            name: peripheral.name ?? device.computerName,
             family: family,
             model: device.modelID,
             serial: device.serial
@@ -323,10 +327,11 @@ extension BluetoothScannerView {
     /// DeviceFingerprint record (SwiftData is the only source; iCloud syncs it).
     ///
     /// The serial comes from DeviceStorage, else from the pending reassociation seed (the new
-    /// UUID is written to DeviceStorage only after a successful download). The table passed to
-    /// DiveComputerKit holds only that serial's fingerprint, so a download is incremental
-    /// exactly when this returns `.restored`: a peripheral whose serial is unknown gets a full
-    /// download (its duplicates are skipped at import by fingerprint + serial).
+    /// UUID is written to DeviceStorage only after a successful download). The table holds
+    /// every stored watermark and DiveComputerKit applies the one of the serial the device
+    /// reports, so a peripheral whose serial is unknown here can still download only its new
+    /// dives. With an import cutoff armed and no watermark found here, the caller passes no
+    /// table, so the download is the full-history one the cutoff is meant for.
     ///
     /// A record with empty fingerprint bytes (`DeviceFingerprint.fingerprintData` defaults to
     /// `Data()`) is not a watermark and counts as not found.
@@ -339,23 +344,34 @@ extension BluetoothScannerView {
             serial = seed.serial
             Self.logger.info("[Reassociation] fingerprintFromDatabase: resolving via seed for serial \(serial)")
         } else {
-            Self.logger.debug("Serial unresolvable for peripheral \(uuid.prefix(8))… — full download")
-            return (.notFound, [:])
+            Self.logger.debug("Serial unresolvable for peripheral \(uuid.prefix(8))… — matched by the reported serial")
+            return (.notFound, fingerprintTable())
         }
 
-        // Case- and whitespace-insensitive, newest record first (an iCloud merge can leave
-        // duplicates under differently-cased serials). The table holds one record per computer.
         let key = serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let table = fingerprintTable()
+        guard let fingerprint = table[key] else {
+            Self.logger.debug("No DB fingerprint for serial \(serial) — full download")
+            return (.notFound, table)
+        }
+        Self.logger.debug("Using DB fingerprint for serial \(serial) (\(fingerprint.count) bytes)")
+        return (.restored, table)
+    }
+
+    /// Every stored watermark, keyed by trimmed lowercased serial, newest record first (an
+    /// iCloud merge can leave duplicates under differently-cased serials). The session
+    /// applies the one matching the serial the device reports, so a computer whose serial
+    /// was not known before connecting (Connect as New Device, an identifier stored without
+    /// a serial) still downloads only its new dives.
+    private func fingerprintTable() -> [String: Data] {
         let records = (try? modelContext.fetch(FetchDescriptor<DeviceFingerprint>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
-        guard let record = records.first(where: {
-            $0.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key
-        }), !record.fingerprintData.isEmpty else {
-            Self.logger.debug("No DB fingerprint for serial \(serial) — full download")
-            return (.notFound, [:])
+        var table: [String: Data] = [:]
+        for record in records where !record.fingerprintData.isEmpty {
+            let key = record.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !key.isEmpty, table[key] == nil { table[key] = record.fingerprintData }
         }
-        Self.logger.debug("Using DB fingerprint for serial \(serial) (\(record.fingerprintData.count) bytes)")
-        return (.restored, [key: record.fingerprintData])
+        return table
     }
 
     // MARK: - Import Date Cutoff

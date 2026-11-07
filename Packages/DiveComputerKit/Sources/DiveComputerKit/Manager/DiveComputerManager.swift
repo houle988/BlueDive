@@ -20,6 +20,9 @@ public final class DeviceSessionHandle: Sendable {
         await session?.cancel()
     }
 
+    /// The session has fully torn down (its stream has ended or is about to).
+    var isFinished: Bool { session?.isFinished ?? true }
+
     /// Waits until the session has fully torn down.
     public func waitUntilFinished() async {
         await session?.waitUntilFinished()
@@ -54,7 +57,7 @@ public final class DiveComputerManager {
     /// Which named peripherals are listed while scanning, e.g. "known device, or the
     /// catalog resolves its name". Called on the Bluetooth queue.
     public func setDiscoveryFilter(_ filter: @escaping @Sendable (_ id: UUID, _ name: String) -> Bool) {
-        central.discoveryFilter = filter
+        central.setDiscoveryFilter(filter)
     }
 
     /// - Parameter onlyKnownServices: scan only for the dive computer services of
@@ -85,7 +88,8 @@ public final class DiveComputerManager {
             continuation.finish(throwing: error)
             return DeviceSessionHandle(peripheralID: request.peripheralID, events: events, session: nil)
         }
-        guard activeSession == nil else { return failed(.busy) }
+        // A session already torn down no longer counts, even before the main-actor hop below clears it.
+        guard activeSession.map({ $0.isFinished }) ?? true else { return failed(.busy) }
         let state = central.bluetoothState
         guard state == .poweredOn else { return failed(.bluetoothUnavailable(state)) }
         guard let link = central.makeLink(id: request.peripheralID, advertisedName: request.advertisedName) else {

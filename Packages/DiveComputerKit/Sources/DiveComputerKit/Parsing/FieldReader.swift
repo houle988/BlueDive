@@ -15,14 +15,16 @@ struct FieldReader {
     func uint32(_ type: dc_field_type_t) -> UInt32? { read(type, into: UInt32(0)) }
 
     /// `DC_FIELD_GASMIX_COUNT` (nil when not reported) and every readable `DC_FIELD_GASMIX`.
-    func gasMixes() -> (count: Int?, mixes: [GasMix]) {
-        guard let count = uint32(DC_FIELD_GASMIX_COUNT) else { return (nil, []) }
-        let mixes = (0..<count).compactMap { index -> GasMix? in
+    /// `fieldIndices[i]` is the `DC_FIELD_GASMIX` index of `mixes[i]` (they differ when a mix
+    /// cannot be read), the index gas-mix samples refer to.
+    func gasMixes() -> (count: Int?, mixes: [GasMix], fieldIndices: [UInt32]) {
+        guard let count = uint32(DC_FIELD_GASMIX_COUNT) else { return (nil, [], []) }
+        let read = (0..<count).compactMap { index -> (UInt32, GasMix)? in
             read(DC_FIELD_GASMIX, index: index, into: dc_gasmix_t()).map {
-                GasMix(helium: $0.helium, oxygen: $0.oxygen, nitrogen: $0.nitrogen, usage: GasUsage($0.usage))
+                (index, GasMix(helium: $0.helium, oxygen: $0.oxygen, nitrogen: $0.nitrogen, usage: GasUsage($0.usage)))
             }
         }
-        return (Int(count), mixes)
+        return (Int(count), read.map(\.1), read.map(\.0))
     }
 
     /// `DC_FIELD_TANK_COUNT` (nil when not reported) and every readable `DC_FIELD_TANK`.

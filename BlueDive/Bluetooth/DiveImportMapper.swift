@@ -227,7 +227,13 @@ enum DiveImportMapper {
         let o2: Double
         let he: Double
         var resolvedMixIdx: Int? = nil
-        if mixIndex >= 0 && mixIndex < dcGasMixes.count {
+        if mixIndex == Self.unreadableGasMix {
+            // The tank's mix is known but could not be read (gasMixReferencesByPosition):
+            // no other mix's gas is inferred for it; the no-gas-data default applies.
+            DiveComputerLog.shared.log("Tank \(tankIndex): its gas mix could not be read; defaulting to 21% O2", level: .warning)
+            o2 = 0.21
+            he = 0.0
+        } else if mixIndex >= 0 && mixIndex < dcGasMixes.count {
             o2 = dcGasMixes[mixIndex].oxygen
             he = dcGasMixes[mixIndex].helium
             resolvedMixIdx = mixIndex
@@ -259,12 +265,12 @@ enum DiveImportMapper {
             resolvedMixIdx = profileGasMixOrder[tankIndex]
         } else if tankIndex < dcGasMixes.count {
             // Positional last resort: no profile evidence for this tank's gas
-            DiveComputerLog.shared.log("Tank \(tankIndex): no profile-order evidence; using positional mix \(tankIndex) (\(Int(dcGasMixes[tankIndex].oxygen * 100))% O2)", level: .info)
+            DiveComputerLog.shared.log("Tank \(tankIndex): no profile-order evidence; using positional mix \(tankIndex) (\(Int(exactly: (dcGasMixes[tankIndex].oxygen * 100).rounded(.towardZero)).map(String.init) ?? "?")% O2)", level: .info)
             o2 = dcGasMixes[tankIndex].oxygen
             he = dcGasMixes[tankIndex].helium
             resolvedMixIdx = tankIndex
         } else if let firstMix = dcGasMixes.first {
-            DiveComputerLog.shared.log("Tank \(tankIndex): out of range; using first available mix (\(Int(firstMix.oxygen * 100))% O2)", level: .warning)
+            DiveComputerLog.shared.log("Tank \(tankIndex): out of range; using first available mix (\(Int(exactly: (firstMix.oxygen * 100).rounded(.towardZero)).map(String.init) ?? "?")% O2)", level: .warning)
             o2 = firstMix.oxygen
             he = firstMix.helium
         } else {
@@ -442,14 +448,20 @@ enum DiveImportMapper {
         to tanks: [TankData],
         gasMixToTankIndex: [Int: Int],
         initialGasMixIndex: Int?,
-        profileSamples: [DiveProfilePoint]
+        profileSamples: [DiveProfilePoint],
+        switchesToUnknownGasEndUsage: Bool = false
     ) -> [TankData] {
         // currentGas on profile samples is already a tank-array index (remapped before storage).
-        // Negative values are filtered out; nil means no gas context at this sample.
+        // Negative values are filtered out; nil means no gas context at this sample — except
+        // with switchesToUnknownGasEndUsage (a dive with an unreadable gas mix), where a switch
+        // with no gas is a switch to that mix: it ends the open tank's window (tank -1 is none).
         let rawSwitches: [(time: Double, tankIdx: Int)] = profileSamples
             .filter { $0.events.contains(.gasChange) }
             .compactMap { sample in
-                guard let tankIdx = sample.currentGas, tankIdx >= 0 else { return nil }
+                guard let tankIdx = sample.currentGas else {
+                    return switchesToUnknownGasEndUsage ? (time: sample.time, tankIdx: -1) : nil
+                }
+                guard tankIdx >= 0 else { return nil }
                 return (time: sample.time, tankIdx: tankIdx)
             }
             .sorted { $0.time < $1.time }
@@ -661,8 +673,9 @@ enum DiveImportMapper {
     // MARK: - Convert to BlueDive Dive
 
     /// A new logbook dive from a downloaded dive.
-    static func makeDive(from diveData: DiveData, diveNumber: Int, previousDiveEndTime: Date?, diverName: String,
+    static func makeDive(from downloaded: DiveData, diveNumber: Int, previousDiveEndTime: Date?, diverName: String,
                          context: DiveImportContext) -> Dive {
+        let diveData = gasMixReferencesByPosition(downloaded)
         // Convert the dive profile, merging event-only points into time-based points.
         // currentGas is remapped from gas-mix index to tank-array index after gasMixToTankIndex
         // is built (see below), so rawProfileSamples is an intermediate variable.
@@ -783,8 +796,8 @@ enum DiveImportMapper {
         var isRepetitiveDive = false
         if let previousEnd = previousDiveEndTime {
             let intervalSeconds = diveData.datetime.timeIntervalSince(previousEnd)
-            if intervalSeconds > 0 {
-                let totalMinutes = Int(intervalSeconds / 60)
+            // Int(exactly:), never Int(_:), which traps on a non-finite or huge value.
+            if intervalSeconds > 0, let totalMinutes = Int(exactly: (intervalSeconds / 60).rounded(.towardZero)) {
                 let days    = totalMinutes / 1440
                 let hours   = (totalMinutes % 1440) / 60
                 let minutes = totalMinutes % 60
@@ -811,8 +824,9 @@ enum DiveImportMapper {
             location: "",
             siteName: "",
             diveTypes: diveType,
-            computerName: context.catalogComputerName ?? context.connectedDeviceName ?? NSLocalizedString("dive.computer.default_ble_name",
-                                                                    comment: "Fallback name for an unknown Bluetooth dive computer"),
+            computerName: context.catalogComputerName ?? context.connectedDeviceName
+                ?? NSLocalizedString("Dive Computer", bundle: Bundle.forAppLanguage(), value: "Dive Computer",
+                                     comment: "Fallback name for an unknown Bluetooth dive computer"),
             computerSerialNumber: context.computerSerial,
             surfaceInterval: surfaceIntervalString,
             diverName: diverName,
@@ -852,7 +866,8 @@ enum DiveImportMapper {
             to: linkedTanks,
             gasMixToTankIndex: gasMixToTankIndex,
             initialGasMixIndex: initialGasMixIndex,
-            profileSamples: profileSamples
+            profileSamples: profileSamples,
+            switchesToUnknownGasEndUsage: diveData.gasMixFieldIndices != nil
         )
         dive.rawDiveComputerData = diveData.rawData
         dive.fingerprintData = diveData.fingerprint
@@ -899,9 +914,9 @@ enum DiveImportMapper {
         for sample in diveData.profile {
             guard let stopDepth = sample.decoStop,
                   let stopTime = sample.decoTime,
-                  stopDepth > 0, stopTime > 0 else { continue }
+                  stopDepth > 0, stopTime > 0,
+                  let key = Int(exactly: stopDepth.rounded()) else { continue }
 
-            let key = Int(stopDepth.rounded())
             let t = TimeInterval(stopTime)
             if let existing = stopsByDepth[key] {
                 if t > existing.time { stopsByDepth[key] = (depth: stopDepth, time: t) }
@@ -929,7 +944,8 @@ enum DiveImportMapper {
     /// Merges dive computer data into an existing dive.
     /// Only fields originating from the computer are updated.
     /// User-modified fields (notes, rating, buddies, etc.) are preserved.
-    static func merge(_ diveData: DiveData, into dive: Dive, context: DiveImportContext) {
+    static func merge(_ downloaded: DiveData, into dive: Dive, context: DiveImportContext) {
+        let diveData = gasMixReferencesByPosition(downloaded)
         // Dive statistics
         dive.maxDepth = diveData.maxDepth
         dive.averageDepth = diveData.avgDepth
@@ -1050,7 +1066,8 @@ enum DiveImportMapper {
             to: dive.tanks,
             gasMixToTankIndex: mergeMixToTankIndex,
             initialGasMixIndex: mergeInitialGasMixIndex,
-            profileSamples: dive.profileSamples
+            profileSamples: dive.profileSamples,
+            switchesToUnknownGasEndUsage: diveData.gasMixFieldIndices != nil
         )
 
         // Computer name — prefer full brand+model name from supportedModels lookup
@@ -1097,5 +1114,36 @@ enum DiveImportMapper {
         // Override source import to reflect the Bluetooth re-download
         dive.sourceImport = "Bluetooth"
 
+    }
+
+    // MARK: - Gas-mix references
+
+    /// `DiveData.Tank.gasMix` of a tank whose gas mix exists but could not be read.
+    static let unreadableGasMix = -2
+
+    /// `diveData` with its gas-mix references (profile `currentGas`, tank `gasMix`, `gasMix`)
+    /// turned into positions in `gasMixes`, which every lookup in this file uses. They differ
+    /// only when a mix could not be read (`gasMixFieldIndices` is set): a reference to that
+    /// mix then becomes unknown instead of reaching the next mix's gas (a tank on it gets
+    /// `unreadableGasMix`). Otherwise `diveData` is returned unchanged.
+    static func gasMixReferencesByPosition(_ diveData: DiveData) -> DiveData {
+        guard let fieldIndices = diveData.gasMixFieldIndices else { return diveData }
+        var position: [Int: Int] = [:]
+        for (index, fieldIndex) in fieldIndices.enumerated() { position[fieldIndex] = index }
+        let unknown = Int(UInt32.max)   // DC_GASMIX_UNKNOWN, as DiveData.Tank.gasMix reports it
+        var data = diveData
+        data.profile = data.profile.map { sample in
+            var sample = sample
+            sample.currentGas = sample.currentGas.flatMap { position[$0] }
+            return sample
+        }
+        data.tanks = data.tanks?.map { tank in
+            var tank = tank
+            // A tank on the unreadable mix is marked, so no other mix's gas is inferred for it.
+            if tank.gasMix != unknown { tank.gasMix = position[tank.gasMix] ?? Self.unreadableGasMix }
+            return tank
+        }
+        data.gasMix = data.gasMix.flatMap { position[$0] }
+        return data
     }
 }

@@ -87,7 +87,7 @@ struct SampleAccumulatorTests {
         let gasChanges = a.profile.filter { $0.events == [.gasChange] }
         #expect(gasChanges.map(\.time) == [10, 20])   // the 20 s change was already an event
         #expect(gasChanges.first?.currentGas == 1)
-        #expect(a.profile.last?.currentGas == -1)     // DC_GASMIX_UNKNOWN
+        #expect(a.profile.last?.currentGas == 0)      // DC_GASMIX_UNKNOWN keeps the last real gas
         #expect(a.lastGasMix == 0)                    // last real index
     }
 
@@ -162,7 +162,8 @@ struct FieldRuleTests {
 
     @Test func decoModelDescriptions() {
         #expect(DiveData.DecoModel(type: .buhlmann, conservatism: 0, gfLow: 30, gfHigh: 70).description == "Bühlmann GF 30/70")
-        #expect(DiveData.DecoModel(type: .buhlmann, conservatism: 0, gfLow: 0, gfHigh: 0).description == "Bühlmann")
+        #expect(DiveData.DecoModel(type: .buhlmann, conservatism: 0, gfLow: 0, gfHigh: 0).description == "Bühlmann GF 0/0")
+        #expect(DiveData.DecoModel(type: .buhlmann, conservatism: 0).description == "Bühlmann")
         #expect(DiveData.DecoModel(type: .vpm, conservatism: 2, gfLow: 0, gfHigh: 0).description == "VPM (2)")
         #expect(DiveData.DecoModel(type: .rgbm, conservatism: 0).description == "RGBM")
         #expect(DiveData.DecoModel(type: .none, conservatism: 0).description == "None")

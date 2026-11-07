@@ -66,6 +66,10 @@ public struct DiveData: Identifiable, Sendable {
     public var rawData: Data?
     /// libdivecomputer fingerprint of this dive (attached by the session).
     public var fingerprint: Data?
+    /// The `DC_FIELD_GASMIX` index of each element of `gasMixes`, only when a mix could not
+    /// be read (else nil: positions and field indices are the same). Gas-mix references
+    /// (`ProfileSample.currentGas`, `Tank.gasMix`, `gasMix`) are field indices.
+    public var gasMixFieldIndices: [Int]?
 
     public init(
         number: Int,
@@ -239,14 +243,15 @@ extension DiveData {
             self.gfHigh = gfHigh
         }
 
-        /// Persisted as `Dive.decompressionAlgorithm`: "Bühlmann GF 30/70", "Bühlmann",
+        /// Persisted as `Dive.decompressionAlgorithm`: "Bühlmann GF 30/70" (also "GF 0/0"
+        /// when the computer reports zeros), "Bühlmann" (no GFs),
         /// "None", "VPM (2)", "RGBM".
         public var description: String {
             switch type {
             case .none:
                 return type.name
             case .buhlmann:
-                if let low = gfLow, let high = gfHigh, low > 0 || high > 0 {
+                if let low = gfLow, let high = gfHigh {
                     return "\(type.name) GF \(low)/\(high)"
                 }
                 return type.name

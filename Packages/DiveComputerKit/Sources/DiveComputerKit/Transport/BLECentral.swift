@@ -42,7 +42,8 @@ final class BLECentral: NSObject, CBCentralManagerDelegate, @unchecked Sendable 
     private var links: [UUID: BLEPeripheralLink] = [:]
 
     /// Decides which named peripherals are listed (set by the manager; called on `queue`).
-    var discoveryFilter: @Sendable (UUID, String) -> Bool = { _, name in
+    /// Only touched on `queue` (set through `setDiscoveryFilter`).
+    private var discoveryFilter: @Sendable (UUID, String) -> Bool = { _, name in
         DeviceCatalog.resolve(advertisedName: name) != nil
     }
     var onStateChange: (@Sendable (BluetoothState) -> Void)?
@@ -52,6 +53,10 @@ final class BLECentral: NSObject, CBCentralManagerDelegate, @unchecked Sendable 
     override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: queue)
+    }
+
+    func setDiscoveryFilter(_ filter: @escaping @Sendable (UUID, String) -> Bool) {
+        queue.async { [self] in discoveryFilter = filter }
     }
 
     // MARK: - Scanning
@@ -120,6 +125,8 @@ final class BLECentral: NSObject, CBCentralManagerDelegate, @unchecked Sendable 
 
     // Called on `queue` by the link.
     func connect(_ peripheral: CBPeripheral) { central.connect(peripheral, options: nil) }
+    /// Whether Bluetooth is on (call on `queue`).
+    var isPoweredOn: Bool { state == .poweredOn }
     func cancelConnection(_ peripheral: CBPeripheral) { central.cancelPeripheralConnection(peripheral) }
     func unregister(_ id: UUID) { queue.async { [self] in links[id] = nil } }
 

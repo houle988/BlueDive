@@ -46,10 +46,11 @@ protocol SessionLink: DiveComputerLink {
     func open() throws(LinkOpenError)
     /// Makes every current and future wait return at once.
     func cancel()
-    /// After `cancel()`, lets the device close through: libdivecomputer's `dc_device_close`
-    /// sends the protocol's exit command (e.g. Shearwater's shutdown request), which a
-    /// cancelled link would refuse. Reads during the close are kept short.
-    func resumeForClose()
+    /// Called before `dc_device_close`, cancelled or not: libdivecomputer's close sends the
+    /// protocol's exit command (e.g. Shearwater's shutdown request), which a cancelled link
+    /// would refuse. From then on a cancel no longer refuses writes; after a cancel, reads
+    /// during the close are kept short.
+    func prepareForClose()
     /// Disconnects; blocks briefly.
     func close()
 }

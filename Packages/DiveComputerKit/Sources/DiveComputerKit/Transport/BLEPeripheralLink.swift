@@ -5,6 +5,9 @@ import Foundation
 enum LinkOpenError: Error, Sendable, Equatable {
     case connectionTimeout
     case connectionFailed(String?)
+    /// The dive computer no longer has the pairing this device offers
+    /// (`CBError.peerRemovedPairingInformation`).
+    case pairingRemoved
     case serviceDiscoveryFailed
     case notificationEnableFailed
     case disconnected
@@ -29,8 +32,16 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
     private var connectError: Error?
     private var didFail = false
     private var cancelled = false
-    /// Set by `resumeForClose()`: the session was cancelled and is closing the device.
+    /// Set by `prepareForClose()`: the device is being closed; a cancel no longer refuses writes.
+    private var closing = false
+    /// The session was cancelled before or during the close: reads are kept short.
     private var closingAfterCancel = false
+    /// Set when this link asks CoreBluetooth to connect. A disconnect or failure reported
+    /// before that belongs to the peripheral's previous connection (a slow teardown) and
+    /// must not fail this one.
+    private var connectIssued = false
+    /// The error of the last disconnect of this connection (after `didConnect`).
+    private var lastDisconnectError: Error?
     private var preferredService: CBUUID?
     private var writeCharacteristic: CBCharacteristic?
     private var notifyCharacteristic: CBCharacteristic?
@@ -98,6 +109,15 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         }
 
         queue.async { [self] in
+            // Bluetooth turned off before the connect: fail now (CoreBluetooth would never
+            // answer a connect on a central that is not powered on).
+            guard central.isPoweredOn else {
+                withLock { connectIssued = true; didFail = true; connectError = nil; condition.broadcast() }
+                return
+            }
+            // On the central's queue, so every callback of the previous connection already
+            // delivered is ignored, and every later one is this connection's.
+            withLock { didFail = false; connectError = nil; connectIssued = true }
             peripheral.delegate = self
             central.connect(peripheral)
         }
@@ -105,9 +125,14 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         let connectedInTime = withLock {
             wait(until: Date(timeIntervalSinceNow: BLETiming.connectWait)) { !connected && !didFail && !cancelled }
         }
-        let afterConnect = withLock { (cancelled, didFail, connectError?.localizedDescription) }
+        let afterConnect = withLock { (cancelled, didFail, connectError) }
         if afterConnect.0 { throw .cancelled }
-        if afterConnect.1 { throw .connectionFailed(afterConnect.2) }
+        if afterConnect.1 {
+            if let error = afterConnect.2 as? CBError, error.code == .peerRemovedPairingInformation {
+                throw .pairingRemoved
+            }
+            throw .connectionFailed(afterConnect.2?.localizedDescription)
+        }
         if !connectedInTime { throw .connectionTimeout }
 
         queue.async { [self] in peripheral.discoverServices(nil) }
@@ -118,7 +143,7 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         }
         let afterDiscovery = withLock { (cancelled, connected, writeCharacteristic != nil, notifyCharacteristic) }
         if afterDiscovery.0 { throw .cancelled }
-        if !afterDiscovery.1 { throw .disconnected }
+        if !afterDiscovery.1 { throw disconnectedError() }
         guard discovered, afterDiscovery.2, let notify = afterDiscovery.3 else { throw .serviceDiscoveryFailed }
         let chosen = withLock { (preferredService?.uuidString, writeCharacteristic?.uuid.uuidString) }
         DiveComputerLog.shared.log("[BLE CONNECT] Service \(chosen.0 ?? "none preferred"), write \(chosen.1 ?? "?"), " +
@@ -132,9 +157,18 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         DiveComputerLog.shared.log("[BLE CONNECT] Notifications \(enabled ? "enabled" : "not enabled") after " +
                                    "\(String(format: "%.1f", Date().timeIntervalSince(start))) s from open", level: .info)
         if afterNotify.0 { throw .cancelled }
-        if !afterNotify.1 { throw .disconnected }
+        if !afterNotify.1 { throw disconnectedError() }
         if !enabled { throw .notificationEnableFailed }
         DiveComputerLog.shared.log("[BLE CONNECT] Ready: \(advertisedName)", level: .info)
+    }
+
+    /// Why the link dropped while it was being set up: some dive computers accept the link
+    /// and only refuse the encryption a step later (service discovery or notifications), with
+    /// the same "pairing removed" error a failed connect reports.
+    private func disconnectedError() -> LinkOpenError {
+        let error = withLock { lastDisconnectError }
+        if let error = error as? CBError, error.code == .peerRemovedPairingInformation { return .pairingRemoved }
+        return .disconnected
     }
 
     // MARK: - DiveComputerLink (session thread)
@@ -153,16 +187,19 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         let poll = timeoutMilliseconds == 0
         var timeout = timeoutMilliseconds < 0 ? BLETiming.defaultReadTimeout : TimeInterval(timeoutMilliseconds) / 1000
         if !poll && !firstPacketReceived { timeout = max(timeout, BLETiming.firstReadFloor) }
-        if closingAfterCancel { timeout = min(timeout, BLETiming.closeAfterCancelReadLimit) }
-        let deadline = Date(timeIntervalSinceNow: timeout)
+        let start = Date()
+        let deadline = start.addingTimeInterval(timeout)
         while true {
             if cancelled { return .cancelled }
             if let data = packets.take(maximum: maximum) { return .data(data) }
             if !connected { return .failed }
-            if poll || !condition.wait(until: deadline) {
+            // A cancel during the close (closingAfterCancel) shortens a read already waiting.
+            let limit = closingAfterCancel
+                ? min(deadline, start.addingTimeInterval(BLETiming.closeAfterCancelReadLimit)) : deadline
+            if poll || !condition.wait(until: limit) {
                 if let data = packets.take(maximum: maximum) { return .data(data) }
                 if !connected { return .failed }
-                DiveComputerLog.shared.log("[BLE READ] Timeout after \(timeout) s (\(maximum) bytes requested)", level: .debug)
+                DiveComputerLog.shared.log("[BLE READ] Timeout after \(limit.timeIntervalSince(start)) s (\(maximum) bytes requested)", level: .debug)
                 return .timeout
             }
         }
@@ -198,8 +235,9 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         while pendingWriteCallbacks > 0 {
             if cancelled { return .cancelled }
             if !connected { return .failed }
-            if !condition.wait(until: Date(timeIntervalSinceNow: BLETiming.writeConfirmation)) {
-                DiveComputerLog.shared.log("[BLE WRITE] Not confirmed within 5 s", level: .warning)
+            let wait = closingAfterCancel ? BLETiming.closeAfterCancelReadLimit : BLETiming.writeConfirmation
+            if !condition.wait(until: Date(timeIntervalSinceNow: wait)) {
+                DiveComputerLog.shared.log("[BLE WRITE] Not confirmed within \(wait) s", level: .warning)
                 return .timeout
             }
         }
@@ -212,7 +250,7 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
     }
 
     func readCharacteristic(uuid: String, timeout: TimeInterval) -> Data? {
-        let key = uuid.lowercased()
+        let key = BLEServiceCatalog.normalized(uuid)
         guard let characteristic = withLock({ characteristicsByUUID[key] }),
               characteristic.properties.contains(.read) else { return nil }
         condition.lock(); defer { ioctlRoute = nil; condition.unlock() }
@@ -233,12 +271,17 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
 
     /// Makes every current and future wait return at once.
     func cancel() {
-        withLock { cancelled = true; condition.broadcast() }
+        withLock {
+            // During the close the exit command must still go out: only keep reads short.
+            if closing { closingAfterCancel = true } else { cancelled = true }
+            condition.broadcast()
+        }
     }
 
-    func resumeForClose() {
+    func prepareForClose() {
         let start = Date()
         let discarded = withLock { () -> Int? in
+            closing = true
             guard cancelled else { return nil }
             cancelled = false
             closingAfterCancel = true
@@ -288,7 +331,8 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
 
     func markDisconnected(error: Error?) {
         withLock {
-            if !connected { didFail = true; connectError = error }
+            if !connected && connectIssued { didFail = true; connectError = error }
+            if connected { lastDisconnectError = error }
             connected = false
             notifying = false
             condition.broadcast()
@@ -326,7 +370,9 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
             // Only the preferred service: e.g. GATT's "Service Changed" indicate
             // characteristic must not be selected.
             if let preferred = preferredService, service.uuid != preferred { return }
-            for c in characteristics { characteristicsByUUID[c.uuid.uuidString.lowercased()] = c }
+            // Keyed in 128-bit form: CoreBluetooth reports Bluetooth-base UUIDs short ("2A26"),
+            // libdivecomputer asks for them in full.
+            for c in characteristics { characteristicsByUUID[BLEServiceCatalog.normalized(c.uuid.uuidString)] = c }
             let selection = BLECharacteristicSelector.select(characteristics.map {
                 BLECharacteristicSelector.Characteristic(
                     uuid: $0.uuid.uuidString,
@@ -366,9 +412,12 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         let uuid = characteristic.uuid.uuidString
         DiveComputerLog.shared.logPacket(.inbound, data: value, characteristicUUID: uuid)
         withLock {
-            if let route = ioctlRoute, route == uuid.lowercased() {
+            if let route = ioctlRoute, route == BLEServiceCatalog.normalized(uuid) {
                 // Characteristic reads (Cressi version info) never enter the data queue.
                 ioctlValue = value
+            } else if characteristic != notifyCharacteristic {
+                // A characteristic-read reply that arrived after its ioctl timed out: not data.
+                DiveComputerLog.shared.log("[BLE READ] Ignored late value from \(uuid)", level: .debug)
             } else {
                 packets.append(value)
                 firstPacketReceived = true

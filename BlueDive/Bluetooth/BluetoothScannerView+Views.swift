@@ -298,7 +298,7 @@ extension BluetoothScannerView {
                 HStack {
                     Text("Available Devices")
                     Spacer()
-                    Text("\(bleManager.discoveredDevices.count)")
+                    Text(verbatim: Double(bleManager.discoveredDevices.count).localizedString(decimals: 0))
                         .foregroundStyle(.secondary)
                 }
             } footer: {

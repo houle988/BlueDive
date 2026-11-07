@@ -99,3 +99,14 @@ struct NameResolutionTests {
 extension LegacyCatalog.Resolution: CustomTestStringConvertible {
     var testDescription: String { "\"\(name)\"" }
 }
+
+struct ServiceCatalogTests {
+    /// CoreBluetooth reports Bluetooth-base UUIDs in their short form.
+    @Test func shortServiceUUIDsMatchTheCatalog() {
+        #expect(BLEServiceCatalog.isKnown("FEFB"))          // Heinrichs Weikamp Telit/Stollmann
+        #expect(BLEServiceCatalog.isKnown("FCEF"))          // Divesoft Freedom
+        #expect(BLEServiceCatalog.isKnown("0000FEFB-0000-1000-8000-00805F9B34FB"))
+        #expect(!BLEServiceCatalog.isKnown("180A"))         // Device Information
+        #expect(BLECharacteristicSelector.preferredService(among: ["1801", "FEFB"]) == "FEFB")
+    }
+}
