@@ -191,7 +191,9 @@ struct DiveDetailView: View {
         self._dive = State(initialValue: dive)
         self.sortedDives = sortedDives
         self.isSlidePreview = isSlidePreview
-        self._selectedTab = State(initialValue: initialTab)
+        // A tab hidden in Settings → Dive Profile → Dive Detail Tabs (e.g. Marine Life opening
+        // a dive on its sightings) opens on the Overview instead.
+        self._selectedTab = State(initialValue: UserPreferences.shared.isDiveTabShown(initialTab) ? initialTab : .menu)
         self._cachedDiveNumber = State(initialValue: diveNumber)
     }
 
@@ -321,9 +323,11 @@ struct DiveDetailView: View {
                             showAllSamples = false
                             proxy.scrollTo("diveTop", anchor: .top)
                         }
-                        // Leave the Samples tab if it is hidden in Settings while it is shown.
-                        .onChange(of: prefs.showSamplesTab) { _, isShown in
-                            if !isShown && selectedTab == .samples { selectedTab = .menu }
+                        // Leave a tab hidden in Settings → Dive Profile → Dive Detail Tabs
+                        // while it is shown, once its edit sheet (chosen by the selected tab)
+                        // is closed, so an editor open in this window is never swapped.
+                        .onChange(of: !prefs.isDiveTabShown(selectedTab) && !showEditSheet) { _, mustLeave in
+                            if mustLeave { selectedTab = .menu }
                         }
                         // Leave photo and marine life edit mode with their tab.
                         .onChange(of: selectedTab) { _, _ in
@@ -741,7 +745,7 @@ struct DiveDetailView: View {
 
     private var diveTabBar: some View {
         // Scrollable tab bar, the selected tab marked in its colour.
-        let tabs = DiveTab.visibleCases.filter { $0 != .samples || prefs.showSamplesTab }
+        let tabs = prefs.shownDiveTabs
         return ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {

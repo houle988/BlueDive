@@ -468,9 +468,23 @@ class UserPreferences {
     }
     /// When true, the dive detail view shows the Samples tab (raw dive computer data).
     /// Off by default: the tab is a diagnostic view and a long table is slow to render.
+    /// Set by the Samples switch in Settings → Dive Profile → Dive Detail Tabs
+    /// (`setDiveTab(.samples, shown:)`) and reset by its Restore Default Layout, which both
+    /// assume it defaults to off.
     /// No App Group write: the widget does not show dive detail tabs.
     var showSamplesTab: Bool {
         didSet { UserDefaults.standard.set(showSamplesTab, forKey: "showSamplesTab") }
+    }
+    /// The user's order of the dive detail tabs (`DiveTab` raw values), set in Settings →
+    /// Dive Profile → Dive Detail Tabs; empty for the default order. Read through `orderedDiveTabs`, which keeps
+    /// Overview first. No App Group write: the widget does not show dive detail tabs.
+    var diveTabOrder: [String] {
+        didSet { UserDefaults.standard.set(diveTabOrder, forKey: "diveTabOrder") }
+    }
+    /// The dive detail tabs the user hid (`DiveTab` raw values); Overview is never hidden and
+    /// the Samples tab is shown by `showSamplesTab` instead.
+    var hiddenDiveTabs: [String] {
+        didSet { UserDefaults.standard.set(hiddenDiveTabs, forKey: "hiddenDiveTabs") }
     }
     /// When true, Edit Conditions offers a Fetch Weather button, and the Bluetooth sync results
     /// offer to fetch the weather for downloaded dives with GPS coordinates; both send the
@@ -602,6 +616,8 @@ class UserPreferences {
         // OFF default — no registerDefaults entry needed.
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
+        self.diveTabOrder = UserDefaults.standard.stringArray(forKey: "diveTabOrder") ?? []
+        self.hiddenDiveTabs = UserDefaults.standard.stringArray(forKey: "hiddenDiveTabs") ?? []
         self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
         self.formatNotesAsMarkdown = UserDefaults.standard.bool(forKey: "formatNotesAsMarkdown")
         self.copySiteGPSMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "copySiteGPSMode") ?? "lastUsed") ?? .lastUsed
@@ -637,6 +653,8 @@ class UserPreferences {
         languageMode    = .system
         hideClearedDecoStops = false
         showSamplesTab = false
+        diveTabOrder = []
+        hiddenDiveTabs = []
         searchDiveNotes = false
         formatNotesAsMarkdown = false
         wideSpeciesImages = true

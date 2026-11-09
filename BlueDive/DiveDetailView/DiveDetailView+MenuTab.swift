@@ -18,11 +18,13 @@ extension DiveDetailView {
             depthProfileSection
             statsGrid
             diveInfoSection
-            if !isEquipmentMovedBannerDismissed {
+            // A banner pointing to a tab hidden in Settings → Dive Profile → Dive Detail Tabs is
+            // not shown.
+            if !isEquipmentMovedBannerDismissed && prefs.isDiveTabShown(.equipment) {
                 equipmentMovedBanner
                     .transition(.opacity)
             }
-            if !isNotesMovedBannerDismissed {
+            if !isNotesMovedBannerDismissed && prefs.isDiveTabShown(.notes) {
                 notesMovedBanner
                     .transition(.opacity)
             }
@@ -1783,7 +1785,7 @@ extension DiveDetailView {
         movedToTabBanner(
             tab: .equipment,
             title: "Equipment Has Moved",
-            message: "Equipment now has its own tab, after Gas.",
+            message: "Equipment now has its own tab.",
             hint: Text("Opens the Equipment tab.", comment: "VoiceOver hint of the Overview banner saying equipment moved to its own tab"),
             dismissLabel: Text("Dismiss Equipment Notice", comment: "Accessibility label of the X button that permanently hides the Overview banner saying equipment moved to its own tab"),
             isDismissed: $isEquipmentMovedBannerDismissed
@@ -1795,7 +1797,7 @@ extension DiveDetailView {
         movedToTabBanner(
             tab: .notes,
             title: "Notes Have Moved",
-            message: "Notes now have their own tab, after Marine Life.",
+            message: "Notes now have their own tab.",
             hint: Text("Opens the Notes tab.", comment: "VoiceOver hint of the Overview banner saying notes moved to their own tab"),
             dismissLabel: Text("Dismiss Notes Notice", comment: "Accessibility label of the X button that permanently hides the Overview banner saying notes moved to their own tab"),
             isDismissed: $isNotesMovedBannerDismissed
