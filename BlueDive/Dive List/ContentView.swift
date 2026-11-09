@@ -109,11 +109,12 @@ struct ContentView: View {
     /// An observable object rather than a `UUID?` `@State` so a selection change redraws only
     /// the panel and the row highlights, not this body (the list reads it only in actions).
     @State private var listSelection = DiveListSelection()
-    /// Dive opened by double-click or Return, pushed through `navigationDestination(item:)`.
-    @State private var openedDiveTarget: DiveNavTarget?
     /// Keyboard focus of the dive list, for the arrow keys and Return.
     @FocusState private var isDiveListFocused: Bool
     #endif
+    /// Dive opened by `openDive` (a tap on a row on iOS; a double-click or Return on macOS),
+    /// pushed through `navigationDestination(item:)`.
+    @State private var openedDiveTarget: DiveNavTarget?
 
     @ViewBuilder
     private func moveButton(for summaryID: UUID) -> some View {
@@ -124,6 +125,56 @@ struct ContentView: View {
         }
         .tint(.blue)
     }
+
+    /// Opens the dive detail view: a tap on a row (iOS), a double-click or Return on the
+    /// selected row (macOS).
+    private func openDive(_ summaryID: UUID) {
+        #if os(iOS)
+        // A dive pushed while a sheet is animating closed gets its navigation bar only partly
+        // applied (the system back button beside the page's own, and no title), so the push
+        // waits for the end of the animation. This is why the rows are buttons: a
+        // NavigationLink row is pushed at once, whatever the stack's state says.
+        if let coordinator = Self.closingPresentationCoordinator(),
+           coordinator.animate(alongsideTransition: nil, completion: { context in
+               // A cancelled interactive dismissal leaves the sheet shown: no push behind it.
+               if !context.isCancelled { pushDive(summaryID) }
+           }) {
+            return
+        }
+        #endif
+        pushDive(summaryID)
+    }
+
+    /// Pushes the dive, read when the push happens: after waiting for a sheet, the dive may
+    /// have been deleted or the grouping changed (Settings) meanwhile.
+    private func pushDive(_ summaryID: UUID) {
+        guard store.diveByID[summaryID] != nil else { return }
+        openedDiveTarget = DiveNavTarget(summaryID: summaryID, isGrouped: store.cachedShowGrouped)
+    }
+
+    #if os(iOS)
+    /// The transition coordinator of a sheet, or any other presentation (an alert, a
+    /// confirmation dialog), animating closed, if any. A tap right after an alert's button
+    /// therefore also waits for the alert to go (a fraction of a second). Only the key window
+    /// is checked: closing a sheet (its X, or dragging it) makes its window key, so a tap in
+    /// that window finds it; a sheet closing in another window (iPad) does not affect this
+    /// window's navigation bar, and at worst delays the push until it is gone.
+    private static func closingPresentationCoordinator() -> UIViewControllerTransitionCoordinator? {
+        let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+        var presenting = keyWindow?.rootViewController
+        while let presented = presenting?.presentedViewController {
+            if let coordinator = presented.transitionCoordinator,
+               coordinator.viewController(forKey: .from) === presented {
+                return coordinator
+            }
+            presenting = presented
+        }
+        return nil
+    }
+    #endif
 
     #if os(macOS)
     /// Trailing swipe-to-delete for a dive row. On iOS the List synthesizes this swipe from
@@ -141,12 +192,6 @@ struct ContentView: View {
         // Swipe actions are coloured by their tint; without this macOS uses the app's cyan
         // accent instead of the destructive red iOS applies automatically.
         .tint(.red)
-    }
-
-    /// Opens the dive detail view (double-click, or Return on the selected row).
-    private func openDive(_ summaryID: UUID) {
-        guard store.diveByID[summaryID] != nil else { return }
-        openedDiveTarget = DiveNavTarget(summaryID: summaryID, isGrouped: store.cachedShowGrouped)
     }
 
     /// Dives in the order the list shows them (collapsed diver sections skipped), for the
@@ -225,7 +270,6 @@ struct ContentView: View {
     @ViewBuilder
     private func diveRows(
         _ summaries: [DiveSummary],
-        isGrouped: Bool,
         onDelete: @escaping (IndexSet) -> Void
     ) -> some View {
         // Read once, not per row.
@@ -237,14 +281,12 @@ struct ContentView: View {
             }
         } else {
             diveRowsForEach(summaries, onDelete: onDelete) { summary in
-                linkDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0),
-                            isGrouped: isGrouped)
+                linkDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0))
             }
         }
         #else
         diveRowsForEach(summaries, onDelete: onDelete) { summary in
-            linkDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0),
-                        isGrouped: isGrouped)
+            linkDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0))
         }
         #endif
     }
@@ -294,11 +336,28 @@ struct ContentView: View {
         .onDelete(perform: onDelete)
     }
 
-    /// A dive row that opens the dive when clicked or tapped.
-    private func linkDiveRow(_ summary: DiveSummary, rowNumber: Int, isGrouped: Bool) -> some View {
-        NavigationLink(value: DiveNavTarget(summaryID: summary.id, isGrouped: isGrouped)) {
-            DiveRowView(summary: summary, diveNumber: rowNumber)
+    /// A dive row that opens the dive when clicked or tapped: a plain button, as the rows of
+    /// the Equipment, Marine Life and Documents tabs, rather than a NavigationLink, so
+    /// `openDive` can delay the push on iOS until a closing sheet is gone.
+    private func linkDiveRow(_ summary: DiveSummary, rowNumber: Int) -> some View {
+        Button {
+            openDive(summary.id)
+        } label: {
+            HStack(spacing: 8) {
+                DiveRowView(summary: summary, diveNumber: rowNumber)
+                #if os(iOS)
+                // The chevron an iOS NavigationLink row draws: the row opens a page, not a sheet.
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+                #endif
+            }
+            // The whole row opens the dive, including the gaps between its texts (a plain
+            // Button only responds where something is drawn).
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     #if os(macOS)
@@ -579,14 +638,9 @@ struct ContentView: View {
             } message: { dive in
                 Text("\"\(dive.siteName)\" will be permanently deleted, with its marine life sightings and photos. Your equipment is kept.")
             }
-            .navigationDestination(for: DiveNavTarget.self) { target in
-                diveDetailDestination(target)
-            }
-            #if os(macOS)
             .navigationDestination(item: $openedDiveTarget) { target in
                 diveDetailDestination(target)
             }
-            #endif
         }
 
         .overlay {
@@ -863,7 +917,7 @@ struct ContentView: View {
                                     }
                                 }
                             )) {
-                                diveRows(sectionSummaries, isGrouped: true) { offsets in
+                                diveRows(sectionSummaries) { offsets in
                                     if let index = offsets.first {
                                         let summary = sectionSummaries[index]
                                         if let dive = store.diveByID[summary.id] {
@@ -899,12 +953,12 @@ struct ContentView: View {
                 } else {
                     diveListContainer {
                         #if os(macOS)
-                        diveRows(displayedSummaries, isGrouped: false, onDelete: deleteItems)
+                        diveRows(displayedSummaries, onDelete: deleteItems)
                         #else
                         // One section in the .sidebar style: the rows are the same rounded card,
                         // inset from the edges, as in the list grouped by diver.
                         Section {
-                            diveRows(displayedSummaries, isGrouped: false, onDelete: deleteItems)
+                            diveRows(displayedSummaries, onDelete: deleteItems)
                         }
                         #endif
                     }

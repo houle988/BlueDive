@@ -22,6 +22,9 @@ struct DiveRowView: View {
                 .reportsOneLine(true, to: oneLineLayout)
                 .reportsRowContentWidth(to: oneLineLayout)
             stackedRow
+                // macOS ignores a List row's vertical insets: without this the stacked row
+                // touches the separators (iOS pads every row itself).
+                .padding(.vertical, 8)
                 .reportsOneLine(false, to: oneLineLayout)
         }
         .accessibilityElement(children: .combine)
