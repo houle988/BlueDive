@@ -544,6 +544,19 @@ class UserPreferences {
     var searchDiveNotes: Bool {
         didSet { UserDefaults.standard.set(searchDiveNotes, forKey: "searchDiveNotes") }
     }
+    /// Trips (`TripBuilder`): a dive more than this many days after the previous one starts a
+    /// new trip. `defaultTripGapDays` by default, `tripGapDaysRange` in Settings.
+    /// No App Group write: the widget does not show trips.
+    var tripGapDays: Int {
+        didSet { UserDefaults.standard.set(tripGapDays, forKey: "tripGapDays") }
+    }
+    static let tripGapDaysRange = 1...30
+    static let defaultTripGapDays = 3
+    /// When true, a dive whose country differs from the previous dive's starts a new trip (dives
+    /// without a country never split one). Off by default, so trips stay grouped by date only.
+    var splitTripsOnCountryChange: Bool {
+        didSet { UserDefaults.standard.set(splitTripsOnCountryChange, forKey: "splitTripsOnCountryChange") }
+    }
     /// When true, the dive page (`MarkdownText`) and the PDF logbook (`PDFNotesText`) show notes
     /// formatted as Markdown. Display only: notes are stored, searched and exported as typed. Off
     /// by default, so notes typed or imported with `*`, `#` or `1.` keep their look.
@@ -634,6 +647,9 @@ class UserPreferences {
         self.mainTabOrder = UserDefaults.standard.stringArray(forKey: Self.mainTabOrderKey) ?? []
         self.hiddenMainTabs = UserDefaults.standard.stringArray(forKey: Self.hiddenMainTabsKey) ?? []
         self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
+        let storedTripGap = UserDefaults.standard.object(forKey: "tripGapDays") as? Int ?? Self.defaultTripGapDays
+        self.tripGapDays = min(max(storedTripGap, Self.tripGapDaysRange.lowerBound), Self.tripGapDaysRange.upperBound)
+        self.splitTripsOnCountryChange = UserDefaults.standard.bool(forKey: "splitTripsOnCountryChange")
         self.formatNotesAsMarkdown = UserDefaults.standard.bool(forKey: "formatNotesAsMarkdown")
         self.copySiteGPSMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "copySiteGPSMode") ?? "lastUsed") ?? .lastUsed
         self.copySiteGPSLastChoice = UserDefaults.standard.object(forKey: "copySiteGPSLastChoice") as? Bool
@@ -673,6 +689,8 @@ class UserPreferences {
         mainTabOrder = []
         hiddenMainTabs = []
         searchDiveNotes = false
+        tripGapDays = Self.defaultTripGapDays
+        splitTripsOnCountryChange = false
         formatNotesAsMarkdown = false
         wideSpeciesImages = true
         showPhotosOnProfile = true

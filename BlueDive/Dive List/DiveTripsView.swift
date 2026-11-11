@@ -93,18 +93,31 @@ struct DiveTrip: Identifiable {
 // MARK: - Trip Builder
 
 struct TripBuilder {
-    /// Groups dives into trips by date only: a dive within 7 days of the previous one joins
-    /// its trip, wherever it took place. Location is used only to name the trip.
+    /// Groups dives into trips using the Trips settings (Settings → Dive Sequence).
+    @MainActor
     static func buildTrips(from dives: [Dive]) -> [DiveTrip] {
+        let prefs = UserPreferences.shared
+        return buildTrips(from: dives, maxGapDays: prefs.tripGapDays, splitOnCountryChange: prefs.splitTripsOnCountryChange)
+    }
+
+    /// Groups dives into trips: a dive within `maxGapDays` of the previous one joins its trip.
+    /// With `splitOnCountryChange`, a dive whose country differs from the trip's last known
+    /// country starts a new trip; a dive without a country never splits one, nor lets the
+    /// countries either side of it share a trip. Location is used only to name the trip.
+    static func buildTrips(from dives: [Dive], maxGapDays: Int, splitOnCountryChange: Bool) -> [DiveTrip] {
         guard !dives.isEmpty else { return [] }
 
         let sorted = dives.sorted { $0.timestamp < $1.timestamp }
         var trips: [DiveTrip] = []
         var currentGroup: [Dive] = []
+        // The country of the current trip's latest dive that has one.
+        var currentCountry: String? = nil
 
         for dive in sorted {
+            let country = countryKey(dive.siteCountry)
             guard let lastDive = currentGroup.last else {
                 currentGroup.append(dive)
+                currentCountry = country
                 continue
             }
             let daysBetween = Calendar.current.dateComponents(
@@ -113,11 +126,18 @@ struct TripBuilder {
                     to: dive.timestamp
             ).day ?? 999
 
-            if daysBetween <= 7 {
+            let countryChanged = splitOnCountryChange && {
+                guard let previous = currentCountry, let country else { return false }
+                return previous != country
+            }()
+
+            if daysBetween <= maxGapDays && !countryChanged {
                 currentGroup.append(dive)
+                currentCountry = country ?? currentCountry
             } else {
                 trips.append(makeTrip(from: currentGroup))
                 currentGroup = [dive]
+                currentCountry = country
             }
         }
         if !currentGroup.isEmpty {
@@ -125,6 +145,12 @@ struct TripBuilder {
         }
 
         return trips.sorted { $0.startDate > $1.startDate } // most recent first
+    }
+
+    /// A country for comparison only ("Egypt" and "egypt " are the same), nil when empty.
+    private static func countryKey(_ country: String?) -> String? {
+        guard let trimmed = country?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed.lowercased()
     }
 
     private static func makeTrip(from dives: [Dive]) -> DiveTrip {
@@ -167,7 +193,7 @@ struct DiveTripsView: View {
     private var filteredDives: [Dive] { DiverFilter.apply(selectedDiver, to: store.liveDives) }
 
     private var tripsKey: String {
-        "\(store.dives.count):\(selectedDiver):\(tripsVersion):\(store.liveDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
+        "\(store.dives.count):\(selectedDiver):\(tripsVersion):\(prefs.tripGapDays):\(prefs.splitTripsOnCountryChange):\(store.liveDives.reduce(into: 0) { $0 += Int($1.timestamp.timeIntervalSinceReferenceDate) })"
     }
 
     var body: some View {

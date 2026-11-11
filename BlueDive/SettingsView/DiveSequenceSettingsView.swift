@@ -12,6 +12,7 @@ struct DiveSequenceSettingsView: View {
     @State private var showingRecalculateSurfaceDone = false
     @State private var showingRenumberDivesAlert = false
     @State private var showingRenumberDivesDone = false
+    @State private var prefs = UserPreferences.shared
 
     var body: some View {
         ScrollView {
@@ -93,6 +94,8 @@ struct DiveSequenceSettingsView: View {
                 )
                 .padding(.horizontal)
 
+                tripsCard
+
                 #if os(macOS)
                 VStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -161,6 +164,57 @@ struct DiveSequenceSettingsView: View {
         } message: {
             Text("Dives have been renumbered.")
         }
+    }
+
+    /// How dives are grouped into trips (My Trips and the PDF logbook's Trip field).
+    private var tripsCard: some View {
+        VStack(spacing: 12) {
+            Text("Trips")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Stepper(value: $prefs.tripGapDays, in: UserPreferences.tripGapDaysRange) {
+                    HStack {
+                        Label("Maximum days between dives", systemImage: "calendar")
+                        Spacer()
+                        Text(verbatim: String(
+                            format: NSLocalizedString("%lld days", bundle: Bundle.forAppLanguage(), value: "%lld days", comment: "Trip gap setting value (number of days)"),
+                            prefs.tripGapDays
+                        ))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    }
+                }
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $prefs.splitTripsOnCountryChange) {
+                    Label("New trip when the country changes", systemImage: "globe")
+                }
+                .fullWidthSwitch()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            Text("A dive joins the trip of the previous dive when it is no more than this number of days after it. When “New trip when the country changes” is on, a dive in a different country from the trip’s earlier dives starts a new trip; dives without a country never start one.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
     }
 
     private func recalculateSurfaceIntervals() {
