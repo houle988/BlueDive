@@ -708,9 +708,12 @@ struct ContentView: View {
         }
         #endif
         .background(filterObservers)
-        // Warm-launch: handle file URLs that arrive while the app is already running.
-        .onChange(of: importCoordinator.pendingURL) { _, url in
-            guard let url else { return }
+        // Warm-launch: handle file URLs that arrive while the app is already running. Re-read
+        // the shared coordinator rather than the value handed to this closure: every Dives list
+        // (each Mac window, or two during a Main Tabs fade) is told of the same change, and only
+        // the first one, which clears it, imports the file.
+        .onChange(of: importCoordinator.pendingURL) { _, _ in
+            guard let url = importCoordinator.pendingURL else { return }
             importCoordinator.pendingURL = nil
             handleExternalFileURL(url)
         }

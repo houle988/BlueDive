@@ -215,6 +215,9 @@ struct BlueDiveApp: App {
             // minimum window size keeps them from being squeezed below a usable height.
             // 600 pt still fits the smallest scaled display (13" "Larger Text", ~625 pt visible).
             .frame(minWidth: 900, minHeight: 600)
+            // A file or link opened from outside the app (Finder, Mail, the widget) goes to an
+            // open window instead of opening a new one; a new window opens only when none is.
+            .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
             #endif
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
             .environment(diveStore)
