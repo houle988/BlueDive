@@ -1209,10 +1209,14 @@ struct EditSiteDetailsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
     @Environment(DiveStore.self) private var store
-    // store.dives is sorted by timestamp desc (same order DiveDataFeeder's @Query delivers)
-    private var allDivesByDate: [Dive] { store.dives }
-
-    @State private var selectedSite: Dive? = nil
+    /// The edited dive's id, read once: the summaries handler runs on the rebuild that may
+    /// deliver this dive's deletion on another device, when its attributes can no longer be read.
+    private let editedDiveID: UUID
+    /// The summary of the site picked in Copy from Existing Site. Resolve its dive through
+    /// `liveSelectedSite` before reading any of the dive's attributes.
+    @State private var selectedSite: DiveSummary? = nil
+    /// The site lists of Copy from Existing Site, rebuilt when the store's summaries change.
+    @State private var siteIndex = SiteIndex()
     /// Starts as Settings → Dive Profile says (off, on or the last choice) each time the sheet
     /// opens; only the user's own flips are recorded as the last choice (see the Toggle).
     @State private var copyGPSCoordinates: Bool
@@ -1358,22 +1362,10 @@ struct EditSiteDetailsView: View {
         return Self.difficultyScale.first(where: { $0.label == workingDifficulty })?.level ?? 0
     }
 
-    private var uniqueSites: [Dive] {
-        var seen = Set<String>()
-        // store.dives may briefly hold a dive deleted on another device; skip it before reading.
-        return store.dives.compactMap { d -> Dive? in
-            guard !d.isDeleted, d.modelContext != nil, d.id != dive.id else { return nil }
-            let key = NearbySiteFinder.nameKey(d.siteName)
-            guard !key.isEmpty, seen.insert(key).inserted else { return nil }
-            return d
-        }.sorted { $0.siteName.localizedCaseInsensitiveCompare($1.siteName) == .orderedAscending }
-    }
-
     /// The chosen site's dive, or nil once it is deleted (on another device, while the sheet is
-    /// open): the selection is kept across redraws, so it is checked before it is read.
+    /// open, or pending a remote deletion): only a live dive is ever read.
     private var liveSelectedSite: Dive? {
-        guard let site = selectedSite, !site.isDeleted, site.modelContext != nil else { return nil }
-        return site
+        selectedSite.flatMap { store.liveDive(id: $0.id) }
     }
 
     /// What the nearby search depends on: the form's valid entry point (else valid exit point)
@@ -1399,27 +1391,22 @@ struct EditSiteDetailsView: View {
         return Array(nearbySites
             .filter { NearbySiteFinder.nameKey($0.siteName) != ownName }
             .compactMap { nearby -> NearbySiteSuggestion? in
-                guard let site = store.liveDive(id: nearby.diveID) else { return nil }
+                guard store.liveDive(id: nearby.diveID) != nil else { return nil }
                 return NearbySiteSuggestion(
-                    site: site,
+                    site: nearby.summary,
                     distance: UserPreferences.shared.depthUnit.formatted(nearby.distanceMeters, decimals: 0))
             }
             .prefix(3))
     }
 
-    /// The 3 most recently dived sites (by date, unique by name), leaving out the nearby ones.
-    private func recentSites(excluding nearby: [NearbySiteSuggestion]) -> [Dive] {
-        var seen = Set(nearby.map { NearbySiteFinder.nameKey($0.site.siteName) })
-        var result: [Dive] = []
-        // store.dives may briefly hold a dive deleted on another device; skip it before reading.
-        for d in allDivesByDate {
-            guard !d.isDeleted, d.modelContext != nil, d.id != dive.id else { continue }
-            let key = NearbySiteFinder.nameKey(d.siteName)
-            guard !key.isEmpty, seen.insert(key).inserted else { continue }
-            result.append(d)
-            if result.count == 3 { break }
-        }
-        return result
+    /// The 3 most recently dived sites (by date, unique by name), leaving out the nearby ones
+    /// and dives no longer live.
+    private func recentSites(excluding nearby: [NearbySiteSuggestion]) -> [DiveSummary] {
+        let nearbyNames = Set(nearby.map { NearbySiteFinder.nameKey($0.site.siteName) })
+        return Array(siteIndex.byDate.lazy
+            .filter { !nearbyNames.contains(NearbySiteFinder.nameKey($0.siteName))
+                && store.liveDive(id: $0.id) != nil }
+            .prefix(3))
     }
 
 
@@ -1459,6 +1446,7 @@ struct EditSiteDetailsView: View {
 
     init(dive: Dive) {
         self.dive = dive
+        editedDiveID = dive.id
         _copyGPSCoordinates = State(initialValue: UserPreferences.shared.initialCopySiteGPSCoordinates)
         _workingCountry     = State(initialValue: dive.siteCountry ?? "")
         _workingLocation    = State(initialValue: dive.location)
@@ -1487,15 +1475,16 @@ struct EditSiteDetailsView: View {
         Group {
             iOSBody
         }
-        // A chosen site whose dive was deleted on another device is cleared once the list
-        // drops it, so the field no longer shows it as selected.
-        .onChange(of: store.dives) {
+        // The site lists and the selection are revalidated together: a chosen site whose dive
+        // was deleted on another device is cleared once the list drops it.
+        .onChange(of: store.cachedSummaries) { _, newSummaries in
+            summariesVersion += 1
+            siteIndex = SiteIndex(summaries: newSummaries, excluding: editedDiveID)
             if selectedSite != nil && liveSelectedSite == nil { selectedSite = nil }
         }
-        .onChange(of: store.cachedSummaries) { _, _ in summariesVersion += 1 }
         // A Nearby pick turned GPS copying off; another pick (or clearing the field) gets the
         // switch back as it was.
-        .onChange(of: liveSelectedSite?.id) { _, newID in
+        .onChange(of: selectedSite?.id) { _, newID in
             if let nearbyID = gpsTurnedOffForNearbySite, newID != nearbyID {
                 gpsTurnedOffForNearbySite = nil
                 copyGPSCoordinates = true
@@ -1509,12 +1498,13 @@ struct EditSiteDetailsView: View {
             nearbySites = NearbySiteFinder.nearbySites(
                 to: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
                 in: store.cachedSummaries,
-                excluding: dive.id,
+                excluding: editedDiveID,
                 // One more than shown: names are unique, so leaving out the form's own site
                 // name removes at most one.
                 limit: 4)
         }
         .onAppear {
+            siteIndex = SiteIndex(summaries: store.cachedSummaries, excluding: editedDiveID)
             fieldSuggestions = DiveFieldSuggestions(
                 dives: store.dives,
                 fields: [\.siteName, \.location],
@@ -1628,18 +1618,17 @@ struct EditSiteDetailsView: View {
 
     @ViewBuilder
     private var copyFromSiteSection: some View {
-        // Built once per redraw: it walks and sorts every dive.
-        let sites = uniqueSites
-        if !sites.isEmpty {
+        if !siteIndex.all.isEmpty {
             let nearby = nearbySuggestions
             Section {
-                SiteSearchField(selectedSite: $selectedSite,
+                SiteSearchField(selection: $selectedSite,
                                 nearby: nearby,
                                 recents: recentSites(excluding: nearby),
-                                allSites: sites) {
+                                allSites: siteIndex.all,
+                                isLive: { store.liveDive(id: $0) != nil }) {
                     // A nearby site keeps this dive's own coordinates: copying stops including
                     // GPS (the user can turn it back on), without changing Settings' Last Used.
-                    if let site = liveSelectedSite, copyGPSCoordinates {
+                    if let site = selectedSite, copyGPSCoordinates {
                         copyGPSCoordinates = false
                         gpsTurnedOffForNearbySite = site.id
                     }

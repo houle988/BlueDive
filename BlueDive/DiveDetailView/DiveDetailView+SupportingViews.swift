@@ -621,17 +621,24 @@ struct AutocompleteMenuTextField: View {
 
 /// A site suggested in `SiteSearchField`'s Nearby group, with its distance already formatted.
 struct NearbySiteSuggestion {
-    let site: Dive
+    let site: DiveSummary
     let distance: String
 }
 
+/// Shows and searches `DiveSummary` values only (no dive is read while typing); the caller
+/// resolves the picked dive (`selection`) with `DiveStore.liveDive(id:)`, as
+/// `DiveCopySearchField` does.
 struct SiteSearchField: View {
-    @Binding var selectedSite: Dive?
+    /// The picked site's summary (a snapshot: the caller resolves its dive before reading it).
+    @Binding var selection: DiveSummary?
     /// Sites dived near this dive's coordinates, shown above `recents` while the field is empty.
     var nearby: [NearbySiteSuggestion] = []
-    let recents: [Dive]
-    let allSites: [Dive]
-    /// Called when a Nearby suggestion is picked (after `selectedSite` is set).
+    let recents: [DiveSummary]
+    let allSites: [DiveSummary]
+    /// Whether a dive can still be read (not deleted, not pending a remote deletion): typed
+    /// matches failing it are hidden, as `allSites` can hold such a dive until it is rebuilt.
+    let isLive: (UUID) -> Bool
+    /// Called when a Nearby suggestion is picked (after `selection` is set).
     var onNearbySelected: (() -> Void)? = nil
 
     @State private var searchText: String = ""
@@ -639,24 +646,23 @@ struct SiteSearchField: View {
     @FocusState private var isFocused: Bool
 
     private var selectedDisplayText: String {
-        // The selection is kept across redraws; a dive deleted on another device is not read.
-        guard let site = selectedSite, !site.isDeleted, site.modelContext != nil else { return "" }
-        return siteLabel(site)
+        selection.map(siteLabel) ?? ""
     }
 
-    private var filtered: [Dive] {
-        if selectedSite != nil { return [] }
+    private var filtered: [DiveSummary] {
+        if selection != nil { return [] }
         guard !searchText.isEmpty else { return [] }
         return allSites.filter { site in
             let haystack = [site.siteName, site.location, site.siteCountry ?? ""].joined(separator: " ")
-            return haystack.localizedCaseInsensitiveContains(searchText)
+            // Checked only for the matches, not every site.
+            return haystack.localizedCaseInsensitiveContains(searchText) && isLive(site.id)
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: selectedSite == nil ? "magnifyingglass" : "checkmark.circle.fill")
+                Image(systemName: selection == nil ? "magnifyingglass" : "checkmark.circle.fill")
                     .foregroundStyle(.orange)
                     .frame(width: 24)
                 formTextField("Search sites…", text: $searchText)
@@ -664,8 +670,8 @@ struct SiteSearchField: View {
                     .autocorrectionDisabled()
                     .focused($isFocused)
                     .onChange(of: searchText) {
-                        if selectedSite != nil && searchText != selectedDisplayText {
-                            selectedSite = nil
+                        if selection != nil && searchText != selectedDisplayText {
+                            selection = nil
                             searchText = ""
                         }
                         showSuggestions = isFocused
@@ -682,7 +688,7 @@ struct SiteSearchField: View {
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
-                        selectedSite = nil
+                        selection = nil
                         showSuggestions = false
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -735,33 +741,37 @@ struct SiteSearchField: View {
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
                         .padding(.top, 4)
                     }
-                } else if !filtered.isEmpty {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(filtered, id: \.id) { site in
-                                siteRow(site: site, icon: "magnifyingglass", iconColor: .secondary)
+                } else {
+                    // Computed once per redraw: it scans every site and checks each match.
+                    let results = filtered
+                    if !results.isEmpty {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(results, id: \.id) { site in
+                                    siteRow(site: site, icon: "magnifyingglass", iconColor: .secondary)
+                                }
                             }
                         }
+                        .frame(maxHeight: 260)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                        .padding(.top, 4)
                     }
-                    .frame(maxHeight: 260)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
-                    .padding(.top, 4)
                 }
             }
         }
     }
 
     /// "Site — Location", or the site name alone.
-    private func siteLabel(_ site: Dive) -> String {
+    private func siteLabel(_ site: DiveSummary) -> String {
         site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
     }
 
-    private func siteRow(site: Dive, icon: String, iconColor: Color, detail: String? = nil,
+    private func siteRow(site: DiveSummary, icon: String, iconColor: Color, detail: String? = nil,
                          onSelect: (() -> Void)? = nil) -> some View {
         let label = siteLabel(site)
         return Button {
             searchText = label
-            selectedSite = site
+            selection = site
             showSuggestions = false
             onSelect?()
         } label: {

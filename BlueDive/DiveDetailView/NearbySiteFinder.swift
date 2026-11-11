@@ -4,9 +4,11 @@ import Foundation
 /// A site dived near a reference point: the closest dive recorded under that site name.
 struct NearbySite: Hashable, Sendable {
     /// The dive whose site information is copied.
-    let diveID: UUID
-    let siteName: String
+    let summary: DiveSummary
     let distanceMeters: Double
+
+    var diveID: UUID { summary.id }
+    var siteName: String { summary.siteName }
 }
 
 /// Finds the sites of other dives near a point (Edit Site Details → Copy from Existing Site →
@@ -41,7 +43,7 @@ enum NearbySiteFinder {
             let distance = origin.distance(from: CLLocation(latitude: point.latitude, longitude: point.longitude))
             guard distance <= radiusMeters else { continue }
             if let existing = closestByName[key], existing.distanceMeters <= distance { continue }
-            closestByName[key] = NearbySite(diveID: summary.id, siteName: summary.siteName, distanceMeters: distance)
+            closestByName[key] = NearbySite(summary: summary, distanceMeters: distance)
         }
         return Array(closestByName.values
             .sorted { $0.distanceMeters == $1.distanceMeters
