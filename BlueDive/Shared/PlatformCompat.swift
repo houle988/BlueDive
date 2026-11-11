@@ -561,7 +561,10 @@ extension View {
 extension View {
     /// Use on a `Button` that acts as a whole `List`/`Form` row (a navigation-style row,
     /// a picker choice, or a text action row such as "Connect as New Device").
-    /// Colours set by the call site (on the label or on the Button) take precedence.
+    /// A colour set on the label takes precedence. On macOS a colour set on the Button itself
+    /// is lost (the style redraws the label in the default colour), so a custom colour goes on
+    /// the label: unconditionally, or inside `#if os(macOS)` to keep the iOS code unchanged
+    /// (see "Fetch Weather" and "Copy Site Information" in the edit sheets).
     func listRowButton() -> some View {
         #if os(macOS)
         self.buttonStyle(ListRowButtonStyle())

@@ -619,10 +619,20 @@ struct AutocompleteMenuTextField: View {
 // DiverAutocompleteField (DiverFilter.swift), and GearAutocompleteField (AddGearView.swift).
 // Any fix to that shared skeleton needs to be applied in all four places.
 
+/// A site suggested in `SiteSearchField`'s Nearby group, with its distance already formatted.
+struct NearbySiteSuggestion {
+    let site: Dive
+    let distance: String
+}
+
 struct SiteSearchField: View {
     @Binding var selectedSite: Dive?
+    /// Sites dived near this dive's coordinates, shown above `recents` while the field is empty.
+    var nearby: [NearbySiteSuggestion] = []
     let recents: [Dive]
     let allSites: [Dive]
+    /// Called when a Nearby suggestion is picked (after `selectedSite` is set).
+    var onNearbySelected: (() -> Void)? = nil
 
     @State private var searchText: String = ""
     @State private var showSuggestions: Bool = false
@@ -631,7 +641,7 @@ struct SiteSearchField: View {
     private var selectedDisplayText: String {
         // The selection is kept across redraws; a dive deleted on another device is not read.
         guard let site = selectedSite, !site.isDeleted, site.modelContext != nil else { return "" }
-        return site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
+        return siteLabel(site)
     }
 
     private var filtered: [Dive] {
@@ -686,6 +696,29 @@ struct SiteSearchField: View {
 
             if showSuggestions {
                 if searchText.isEmpty {
+                    if !nearby.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Nearby")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 6)
+                                .padding(.bottom, 2)
+                            ForEach(nearby, id: \.site.id) { suggestion in
+                                siteRow(site: suggestion.site, icon: "location", iconColor: .green,
+                                        detail: suggestion.distance) {
+                                    onNearbySelected?()
+                                }
+                                // On the Button, so VoiceOver still reads it as a button.
+                                .accessibilityLabel(Text(verbatim: String(
+                                    format: NSLocalizedString("%@, %@ away", bundle: Bundle.forAppLanguage(), value: "%@, %@ away", comment: "VoiceOver label of a nearby dive site suggestion: site name, then its distance from this dive (e.g. 120 m)"),
+                                    siteLabel(suggestion.site), suggestion.distance)))
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                        .padding(.top, 4)
+                    }
                     if !recents.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
                             Text("Recent")
@@ -718,20 +751,34 @@ struct SiteSearchField: View {
         }
     }
 
-    private func siteRow(site: Dive, icon: String, iconColor: Color) -> some View {
-        Button {
-            let label = site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
+    /// "Site — Location", or the site name alone.
+    private func siteLabel(_ site: Dive) -> String {
+        site.siteName + (site.location.isEmpty ? "" : " — \(site.location)")
+    }
+
+    private func siteRow(site: Dive, icon: String, iconColor: Color, detail: String? = nil,
+                         onSelect: (() -> Void)? = nil) -> some View {
+        let label = siteLabel(site)
+        return Button {
             searchText = label
             selectedSite = site
             showSuggestions = false
+            onSelect?()
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.caption2)
                     .foregroundStyle(iconColor)
-                Text(site.siteName + (site.location.isEmpty ? "" : " — \(site.location)"))
+                Text(label)
                     .foregroundStyle(.orange)
                     .lineLimit(1)
+                if let detail {
+                    Spacer(minLength: 8)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
@@ -761,7 +808,7 @@ struct DiveCopySearchField: View {
     @State private var showSuggestions: Bool = false
     @FocusState private var isFocused: Bool
 
-    /// "#153 · Flintkote · 1 Aug 2026" (the number as the region formats it, the date in the
+    /// "#153 · Reef · 1 Aug 2026" (the number as the region formats it, the date in the
     /// app language; parts left out when empty).
     private func label(for summary: DiveSummary) -> String {
         var parts: [String] = []
