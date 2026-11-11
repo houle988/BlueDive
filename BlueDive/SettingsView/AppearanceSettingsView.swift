@@ -6,6 +6,8 @@ struct AppearanceSettingsView: View {
     @State private var prefs = UserPreferences.shared
     @State private var previousAppearance: AppearanceMode = UserPreferences.shared.appearanceMode
     @State private var previousLanguage: AppLanguage = UserPreferences.shared.languageMode
+    /// The Settings sheet's close action on macOS, for the Main Tabs page pushed from here.
+    @Environment(\.sheetDismiss) private var sheetDismiss
 
     var body: some View {
         ScrollView {
@@ -127,6 +129,8 @@ struct AppearanceSettingsView: View {
                         )
                 )
                 .padding(.horizontal)
+
+                mainTabsCard
             }
             .padding(.vertical)
         }
@@ -144,6 +148,17 @@ struct AppearanceSettingsView: View {
                 onNeedsRootDismiss()
             }
             previousLanguage = prefs.languageMode
+        }
+    }
+
+    /// Opens Main Tabs: the order of the main window's tabs and which ones are shown.
+    private var mainTabsCard: some View {
+        SettingsLinkCard(
+            title: "Main Tabs", icon: "dock.rectangle", color: .teal,
+            caption: "Choose the order of the main tabs and which ones are shown. Dives always comes first."
+        ) {
+            MainTabLayoutSettingsView()
+                .closeSheetButtonOnMac(sheetDismiss)
         }
     }
 }

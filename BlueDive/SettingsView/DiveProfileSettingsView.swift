@@ -216,44 +216,12 @@ struct DiveProfileSettingsView: View {
     /// Opens Dive Detail Tabs: the order of the dive detail tabs and which ones are shown
     /// (including the Samples tab, whose switch used to be on this page).
     private var diveDetailTabsCard: some View {
-        VStack(spacing: 12) {
-            NavigationLink {
-                TabLayoutSettingsView()
-                    .closeSheetButtonOnMac(sheetDismiss)
-            } label: {
-                HStack {
-                    Label {
-                        Text("Dive Detail Tabs")
-                    } icon: {
-                        Image(systemName: "rectangle.split.3x1")
-                            .foregroundStyle(.teal)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .padding()
-                .contentShape(Rectangle())
-            }
-            .borderlessButton()
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-
-            Text("Choose the order of the dive detail tabs and which ones are shown, including the Samples tab with the raw data recorded by your dive computer.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+        SettingsLinkCard(
+            title: "Dive Detail Tabs", icon: "rectangle.split.3x1", color: .teal,
+            caption: "Choose the order of the dive detail tabs and which ones are shown, including the Samples tab with the raw data recorded by your dive computer."
+        ) {
+            TabLayoutSettingsView()
+                .closeSheetButtonOnMac(sheetDismiss)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.primary.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                )
-        )
-        .padding(.horizontal)
     }
 }

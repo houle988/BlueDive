@@ -99,6 +99,9 @@ struct ContentView: View {
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
     @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
     @Environment(FileImportCoordinator.self) var importCoordinator
+    /// The main tabs this window shows: an XML file for a hidden tab is refused (Settings →
+    /// Appearance & Language → Main Tabs).
+    @Environment(\.shownMainTabs) var shownMainTabs
     @State private var collapsedDiverSections: Set<String> = []
     #if os(macOS)
     /// Whether the dive rows show their one-line version (wide window), and their width, reported
@@ -422,10 +425,6 @@ struct ContentView: View {
             .mainListSearchable(text: $store.searchText, prompt: searchPrompt)
             .animation(.easeInOut(duration: 0.3), value: store.searchText)
             .toolbar { toolbarContent }
-            #if os(iOS)
-            // The macOS window toolbar is always visible; there is no navigation bar.
-            .toolbarBackground(.visible, for: .navigationBar)
-            #endif
             .sheet(isPresented: $store.showFilterSheet) {
                 DiveFilterSheet(
                     availableYears: store.cachedAvailableYears,

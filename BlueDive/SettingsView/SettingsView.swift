@@ -486,6 +486,19 @@ class UserPreferences {
     var hiddenDiveTabs: [String] {
         didSet { UserDefaults.standard.set(hiddenDiveTabs, forKey: "hiddenDiveTabs") }
     }
+    /// The user's order of the main window's tabs (`MainTab` raw values), set in Settings →
+    /// Appearance & Language → Main Tabs; empty for the default order. Read through
+    /// `orderedMainTabs`, which keeps Dives first. Applied by each window when it is created or
+    /// its Settings closes. No App Group write: the widget shows no tabs.
+    var mainTabOrder: [String] {
+        didSet { UserDefaults.standard.set(mainTabOrder, forKey: Self.mainTabOrderKey) }
+    }
+    static let mainTabOrderKey = "mainTabOrder"
+    /// The main tabs the user hid (`MainTab` raw values); Dives is never hidden.
+    var hiddenMainTabs: [String] {
+        didSet { UserDefaults.standard.set(hiddenMainTabs, forKey: Self.hiddenMainTabsKey) }
+    }
+    static let hiddenMainTabsKey = "hiddenMainTabs"
     /// When true, Edit Conditions offers a Fetch Weather button, and the Bluetooth sync results
     /// offer to fetch the weather for downloaded dives with GPS coordinates; both send the
     /// dive's GPS coordinates and date to Open-Meteo, only when the user chooses Fetch Weather.
@@ -618,6 +631,8 @@ class UserPreferences {
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
         self.diveTabOrder = UserDefaults.standard.stringArray(forKey: "diveTabOrder") ?? []
         self.hiddenDiveTabs = UserDefaults.standard.stringArray(forKey: "hiddenDiveTabs") ?? []
+        self.mainTabOrder = UserDefaults.standard.stringArray(forKey: Self.mainTabOrderKey) ?? []
+        self.hiddenMainTabs = UserDefaults.standard.stringArray(forKey: Self.hiddenMainTabsKey) ?? []
         self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
         self.formatNotesAsMarkdown = UserDefaults.standard.bool(forKey: "formatNotesAsMarkdown")
         self.copySiteGPSMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "copySiteGPSMode") ?? "lastUsed") ?? .lastUsed
@@ -655,6 +670,8 @@ class UserPreferences {
         showSamplesTab = false
         diveTabOrder = []
         hiddenDiveTabs = []
+        mainTabOrder = []
+        hiddenMainTabs = []
         searchDiveNotes = false
         formatNotesAsMarkdown = false
         wideSpeciesImages = true
@@ -840,10 +857,22 @@ struct SettingsView: View {
 // MARK: - Settings List Row
 
 struct SettingsListRow: View {
-    let title: LocalizedStringKey
+    let title: Text
     let icon: String
     let color: Color
     var detail: String? = nil
+
+    init(title: LocalizedStringKey, icon: String, color: Color, detail: String? = nil) {
+        self.init(title: Text(title), icon: icon, color: color, detail: detail)
+    }
+
+    /// For a title already in the app's language (e.g. a main tab's `MainTab.title`).
+    init(title: Text, icon: String, color: Color, detail: String? = nil) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+        self.detail = detail
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -857,7 +886,7 @@ struct SettingsListRow: View {
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                title
                     .foregroundStyle(.primary)
                 if let detail {
                     Text(detail)
@@ -866,6 +895,59 @@ struct SettingsListRow: View {
                 }
             }
         }
+    }
+}
+
+/// A card on a Settings topic page that opens another page: an icon and title with a chevron,
+/// and a caption below, in the pages' card style (Dive Profile → Dive Detail Tabs, Appearance &
+/// Language → Main Tabs).
+struct SettingsLinkCard<Destination: View>: View {
+    let title: LocalizedStringKey
+    let icon: String
+    let color: Color
+    let caption: LocalizedStringKey
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
+        VStack(spacing: 12) {
+            NavigationLink {
+                destination()
+            } label: {
+                HStack {
+                    Label {
+                        Text(title)
+                    } icon: {
+                        Image(systemName: icon)
+                            .foregroundStyle(color)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .padding()
+                .contentShape(Rectangle())
+            }
+            .borderlessButton()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
     }
 }
 

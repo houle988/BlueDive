@@ -57,6 +57,9 @@ enum ImportError: LocalizedError {
     case saveFailed(Error)
     case unsupportedFormat
     case subsurfaceUnsupportedVersion
+    /// An XML file for a main tab the window hides (Settings → Main Tabs), with the tab's name
+    /// in the in-app language (`MainTab.title`, read on the MainActor when the error is made).
+    case tabHidden(tabName: String)
 
     var errorDescription: String? {
         let bundle = Bundle.forAppLanguage()
@@ -75,6 +78,9 @@ enum ImportError: LocalizedError {
             return String(format: fmt, error.localizedDescription)
         case .unsupportedFormat:
             return NSLocalizedString("Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, Subsurface XML, and Garmin FIT.", bundle: bundle, value: "Unrecognised file format. Supported formats are MacDive XML, BlueDive XML, UDDF, Subsurface XML, and Garmin FIT.", comment: "Error message displayed when an unsupported file format is selected for import.")
+        case .tabHidden(let tabName):
+            let fmt = NSLocalizedString("The %@ tab is hidden, so this file cannot be imported. Show it in Settings → Appearance & Language → Main Tabs, then open the file again.", bundle: bundle, value: "The %@ tab is hidden, so this file cannot be imported. Show it in Settings → Appearance & Language → Main Tabs, then open the file again.", comment: "Import error when an XML file is opened for a main tab the user hid; %@ is the tab's name")
+            return String(format: fmt, tabName)
         case .subsurfaceUnsupportedVersion:
             return NSLocalizedString("This Subsurface file uses an old format (version 2) that is not supported. Re-export it from Subsurface 4.6 or later.", bundle: bundle, value: "This Subsurface file uses an old format (version 2) that is not supported. Re-export it from Subsurface 4.6 or later.", comment: "Error shown when importing a Subsurface version 2 file, which is not supported.")
         }
@@ -149,6 +155,17 @@ extension ContentView {
             importError = .fileSelectionFailed(error)
             showErrorAlert = true
         }
+    }
+
+    /// Whether an XML file for `tab` is refused because this window hides that tab (Settings →
+    /// Appearance & Language → Main Tabs): its import runs in the tab's own view, which is not
+    /// there. Shows the import error saying how to show the tab. Decided here, once, in the
+    /// window that read the file, before anything is routed: no pending file is left behind.
+    func refuseIfTabHidden(_ tab: MainTab) -> Bool {
+        guard !shownMainTabs.contains(tab) else { return false }
+        importError = .tabHidden(tabName: tab.title)
+        showErrorAlert = true
+        return true
     }
 
     /// Handles a file URL delivered by the OS via document association (Files app, share
@@ -300,6 +317,7 @@ extension ContentView {
 
         } else if isGearXML {
             // BlueDive Gear XML — route to Equipment tab via coordinator + notification.
+            if refuseIfTabHidden(.equipment) { return }
             if let data = rawData {
                 importCoordinator.pendingGearXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
                 NotificationCenter.default.post(name: .importGearXML, object: nil)
@@ -307,6 +325,7 @@ extension ContentView {
 
         } else if isCertXML {
             // BlueDive Certification XML — route to Documents tab via coordinator + notification.
+            if refuseIfTabHidden(.documents) { return }
             if let data = rawData {
                 importCoordinator.pendingCertXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
                 NotificationCenter.default.post(name: .importCertificationXML, object: nil)
@@ -314,6 +333,7 @@ extension ContentView {
 
         } else if isInsuranceXML {
             // BlueDive Insurance XML — route to Documents tab via coordinator + notification.
+            if refuseIfTabHidden(.documents) { return }
             if let data = rawData {
                 importCoordinator.pendingInsuranceXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
                 NotificationCenter.default.post(name: .importInsuranceXML, object: nil)
@@ -321,6 +341,7 @@ extension ContentView {
 
         } else if isSpeciesXML {
             // BlueDive species catalogue XML — route to Marine Life tab via coordinator + notification.
+            if refuseIfTabHidden(.marineLife) { return }
             if let data = rawData {
                 importCoordinator.pendingSpeciesXML = PendingXMLImport(id: UUID(), data: data, fileName: url.lastPathComponent)
                 NotificationCenter.default.post(name: .importSpeciesXML, object: nil)

@@ -2,7 +2,8 @@ import Foundation
 import Testing
 @testable import BlueDive
 
-/// Settings → Dive Profile → Dive Detail Tabs: the order of the dive detail tabs.
+/// Tab layouts: Settings → Dive Profile → Dive Detail Tabs and Settings → Appearance & Language →
+/// Main Tabs.
 struct TabLayoutTests {
 
     private let defaults = ["first", "a", "b", "c", "d"]
@@ -56,5 +57,19 @@ struct TabLayoutTests {
         #expect(DiveTab.visibleCases.first == .menu)
         #expect(!DiveTab.visibleCases.contains(.xmlExport))
         #expect(!DiveTab.visibleCases.contains(.uddfExport))
+    }
+
+    // MARK: Main tabs
+
+    @Test func mainTabRawValuesAreStable() {
+        // Saved layouts store these strings: changing one would lose the user's layout.
+        #expect(MainTab.allCases.map(\.rawValue) == ["Dives", "Map", "Equipment", "Marine Life", "Documents"])
+    }
+
+    @Test func aStoredMainTabOrderKeepsDivesFirstAndAddsMissingTabs() {
+        let order = TabLayout.resolvedOrder(stored: ["Documents", "Dives", "Map"],
+                                            defaults: MainTab.allCases.map(\.rawValue),
+                                            locked: MainTab.dives.rawValue)
+        #expect(order == ["Dives", "Documents", "Map", "Equipment", "Marine Life"])
     }
 }
