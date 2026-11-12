@@ -14,56 +14,20 @@ extension BluetoothScannerView {
 
     @ViewBuilder
     var syncStatusHeader: some View {
-        VStack(spacing: 12) {
-            // Status icon
-            ZStack {
-                Circle()
-                    .fill(syncStateColor.opacity(0.15))
-                    .frame(width: 80, height: 80)
-
-                Group {
-                    switch syncState {
-                    case .scanning:
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                            .font(.system(size: 32))
-                            .foregroundStyle(syncStateColor)
-                            .symbolEffect(.variableColor.iterative.reversing)
-                    case .connecting:
-                        Image(systemName: "link")
-                            .font(.system(size: 32))
-                            .foregroundStyle(syncStateColor)
-                            .symbolEffect(.pulse)
-                    case .downloading:
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 32))
-                            .foregroundStyle(syncStateColor)
-                            .symbolEffect(.bounce.byLayer)
-                    case .importing:
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.system(size: 32))
-                            .foregroundStyle(syncStateColor)
-                            .symbolEffect(.bounce)
-                    case .completed:
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.green)
-                    case .error:
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.red)
-                    case .idle:
-                        Image(systemName: "antenna.radiowaves.left.and.right.circle")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .accessibilityHidden(true)
-
-            // Status text
+        VStack(spacing: 8) {
+            // Status text, with the state's icon inline before the title (in the state's
+            // colour and animated while a step is in progress) instead of a large circle,
+            // so the header takes less height.
             VStack(spacing: 4) {
-                Text(syncStateTitle)
-                    .font(.headline)
+                HStack(spacing: 8) {
+                    syncStatusSymbol
+                        .font(.headline)
+                        .imageScale(.large)
+                        .accessibilityHidden(true)
+
+                    Text(syncStateTitle)
+                        .font(.headline)
+                }
 
                 Text(syncStateSubtitle)
                     .font(.subheadline)
@@ -83,15 +47,13 @@ extension BluetoothScannerView {
                             .controlSize(.small)
                     }
 
+                    // No caption before the first dive is read: the title already says
+                    // "Downloading...".
                     if diveCountDuringDownload > 1 {
                         let downloadedCount = diveCountDuringDownload - 1
                         Text(verbatim: downloadedCount == 1
                         ? NSLocalizedString("1 dive downloaded", bundle: Bundle.forAppLanguage(), comment: "A text label displayed when exactly one dive has been downloaded.")
                         : String(format: NSLocalizedString("%lld dives downloaded", bundle: Bundle.forAppLanguage(), comment: "A text label displaying the number of dives that have been successfully downloaded."), downloadedCount))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(verbatim: NSLocalizedString("Downloading...", bundle: Bundle.forAppLanguage(), comment: "A placeholder text displayed when downloading dives."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -105,6 +67,38 @@ extension BluetoothScannerView {
         .padding()
         .frame(maxWidth: .infinity)
         .background(.regularMaterial)
+    }
+
+    /// The state's icon shown before the header title.
+    @ViewBuilder
+    private var syncStatusSymbol: some View {
+        switch syncState {
+        case .scanning:
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .foregroundStyle(syncStateColor)
+                .symbolEffect(.variableColor.iterative.reversing)
+        case .connecting:
+            Image(systemName: "link")
+                .foregroundStyle(syncStateColor)
+                .symbolEffect(.pulse)
+        case .downloading:
+            Image(systemName: "arrow.down.circle")
+                .foregroundStyle(syncStateColor)
+                .symbolEffect(.bounce.byLayer)
+        case .importing:
+            Image(systemName: "square.and.arrow.down")
+                .foregroundStyle(syncStateColor)
+                .symbolEffect(.bounce)
+        case .completed:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .error:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+        case .idle:
+            Image(systemName: "antenna.radiowaves.left.and.right.circle")
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Main Content
@@ -269,16 +263,15 @@ extension BluetoothScannerView {
         Form {
             Section {
                 if bleManager.discoveredDevices.isEmpty {
-                    ContentUnavailableView {
-                        Label("Searching...", systemImage: "antenna.radiowaves.left.and.right")
-                    } description: {
-                        Text("Make sure your dive computer is turned on and in Bluetooth transfer mode.")
-                    }
-                    #if os(macOS)
-                    // A macOS Form row sizes the view to its content and leading-aligns it;
-                    // fill the row so it is centred as on iOS (where it already fills).
-                    .frame(maxWidth: .infinity)
-                    #endif
+                    // Only the hint: the status header above already shows the search state
+                    // (and says "Ready" once a scan has stopped, which a "Searching..." title
+                    // here would contradict).
+                    Text("Make sure your dive computer is turned on and in Bluetooth transfer mode.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                 } else {
                     ForEach(bleManager.discoveredDevices, id: \.id) { peripheral in
                         DeviceRow(
@@ -410,128 +403,130 @@ extension BluetoothScannerView {
 
     // MARK: - Completed View
 
-    @ViewBuilder
     private func completedView(imported: Int, merged: Int, skipped: Int) -> some View {
-        // Laid out as before when everything fits; scrolls only when the counts, notes and
-        // weather status do not (small iPhone, landscape, large text), so Close stays reachable.
-        ViewThatFits(in: .vertical) {
-            completedContent(imported: imported, merged: merged, skipped: skipped)
-            ScrollView {
-                completedContent(imported: imported, merged: merged, skipped: skipped)
+        // The status header already shows the icon, the title and the headline count; the body
+        // lists the weather question, the synced dives, the count breakdown and the notes.
+        // No Close button: the toolbar's close button does it.
+        let dives = resolvedSyncedDives
+        // With more than one kind of count, every count is listed, the headline's included, so
+        // the breakdown is complete; with a single kind, the header alone carries it.
+        let countKinds = [imported, merged, skipped, cutoffFilteredCount].filter { $0 > 0 }.count
+        let listsCounts = countKinds > 1
+        let showsImported = listsCounts && imported > 0
+        let showsMerged = listsCounts && merged > 0
+        let showsSkipped = listsCounts && skipped > 0
+        let showsCutoff = listsCounts && cutoffFilteredCount > 0
+        let showsCutoffExplanation = cutoffFilteredCount > 0 && cutoffAppliedDate != nil
+        // Surfaces the same partial-sync warning the pre-import confirmation alert shows —
+        // needed here specifically because that alert is skipped when the cutoff filters
+        // out every downloaded dive. `skipped == 0` is the gate that keeps this from ALSO
+        // re-showing the warning for the pre-existing, unrelated case where every
+        // downloaded dive turned out to be an exact duplicate: that case always reaches
+        // completion through showingImportConfirmation, which already displayed the
+        // warning once. `cutoffFilteredCount > 0` cannot exclude it on its own, because a
+        // sync can be both partly duplicate and partly cutoff-filtered (e.g. a re-sync
+        // after the fingerprint record was lost). The all-filtered branch, by contrast,
+        // always reports .completed(imported: 0, merged: 0, skipped: 0), so the extra
+        // gate never suppresses the warning where it is genuinely needed.
+        let showsPartialWarning = isPartialSync && cutoffFilteredCount > 0 && imported == 0 && merged == 0 && skipped == 0
+        let showsDetails = showsImported || showsMerged || showsSkipped || showsCutoff || showsCutoffExplanation
+            || cutoffStopDate != nil || showsPartialWarning
+
+        return Form {
+            // First: the screen's only question, and it is asked once.
+            if let weatherFetchStatus {
+                Section {
+                    weatherFetchStatusView(weatherFetchStatus)
+                        .frame(maxWidth: .infinity)
+                }
+            } else if let pendingWeatherFetch {
+                Section {
+                    weatherFetchConfirmationView(pendingWeatherFetch)
+                        .frame(maxWidth: .infinity)
+                }
             }
+
+            if !dives.isEmpty {
+                let hiddenCount = syncedDives.count - Self.syncedDiveListLimit
+                Section {
+                    ForEach(dives) { item in
+                        SyncedDiveRow(dive: item.dive, isNew: item.isNew)
+                    }
+                } header: {
+                    HStack {
+                        Text("Synced Dives")
+                        Spacer()
+                        Text(verbatim: Double(syncedDives.count).localizedString(decimals: 0))
+                            .foregroundStyle(.secondary)
+                    }
+                } footer: {
+                    if hiddenCount > 0 {
+                        Text(verbatim: hiddenCount == 1
+                            ? NSLocalizedString("1 more dive not shown", bundle: .forAppLanguage(), value: "1 more dive not shown", comment: "Footer under the Synced Dives list after a Bluetooth sync, when exactly one older synced dive is left out of the list (it shows the most recent ones only).")
+                            : String(format: NSLocalizedString("%@ more dives not shown", bundle: .forAppLanguage(), value: "%@ more dives not shown", comment: "Footer under the Synced Dives list after a Bluetooth sync, when older synced dives are left out of the list (it shows the most recent ones only). %@ is the locale-formatted number of dives left out."), Double(hiddenCount).localizedString(decimals: 0)))
+                    }
+                }
+            }
+
+            if showsDetails {
+                Section {
+                    if showsImported {
+                        detailRow(importedCountText(imported), systemImage: "plus.circle", color: .green)
+                    }
+                    if showsMerged {
+                        detailRow(mergedCountText(merged), systemImage: "arrow.triangle.2.circlepath", color: .blue)
+                    }
+                    if showsSkipped {
+                        detailRow(skippedCountText(skipped), systemImage: "checkmark.circle", color: .secondary)
+                    }
+                    if showsCutoff {
+                        detailRow(cutoffCountText(cutoffFilteredCount), systemImage: "calendar.badge.minus", color: .orange)
+                    }
+                } footer: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if showsCutoffExplanation, let cutoffAppliedDate {
+                            Text(verbatim: String(format: NSLocalizedString("They were downloaded from your dive computer, then discarded because they were recorded before %@.", bundle: .forAppLanguage(), value: "They were downloaded from your dive computer, then discarded because they were recorded before %@.", comment: "Explanation in the Bluetooth sync results for dives discarded by the import cutoff date. %@ is the cutoff date."), cutoffAppliedDate.formatted(.dateTime.locale(locale).day().month(.wide).year())))
+                        }
+
+                        // The download ended at the import cutoff: say so, since the dives it
+                        // skipped were never downloaded and so are not counted anywhere above.
+                        if let cutoffStopDate {
+                            Text(verbatim: String(format: NSLocalizedString("The sync stopped at the first dive recorded before %@ — older dives were not downloaded.", bundle: .forAppLanguage(), value: "The sync stopped at the first dive recorded before %@ — older dives were not downloaded.", comment: "Note in the Bluetooth sync results when the download ended at the user's import cutoff date, so older dives were never transferred. %@ is the cutoff date."), cutoffStopDate.formatted(.dateTime.locale(locale).day().month(.wide).year())))
+                        }
+
+                        if showsPartialWarning {
+                            Text(verbatim: NSLocalizedString("Sync was incomplete — one or more older dives on the device could not be read.", bundle: .forAppLanguage(), value: "Sync was incomplete — one or more older dives on the device could not be read.", comment: "Note appended to the import confirmation alert when a BLE sync completed only partially due to a protocol error on the dive computer (e.g. a corrupt dive slot)."))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func detailRow(_ text: String, systemImage: String, color: Color) -> some View {
+        Label {
+            Text(verbatim: text)
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(color)
         }
     }
 
-    private func completedContent(imported: Int, merged: Int, skipped: Int) -> some View {
-        VStack(spacing: 20) {
-            Spacer()
+    /// The most recent synced dives listed on the completed screen. A Download All Dives sync can
+    /// return a computer's whole history; the counts below the list still give the totals.
+    static let syncedDiveListLimit = 50
 
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(.green)
-                .accessibilityHidden(true)
-
-            VStack(spacing: 8) {
-                if imported + merged > 0 {
-                    Text("Sync Complete")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                } else if cutoffFilteredCount > 0 {
-                    Text("Older Dives Skipped")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                } else {
-                    Text("No New Dives")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                }
-
-                if imported > 0 {
-                    // %@ + localizedString, not %lld + a raw Int: a dive count can reach four
-                    // digits and must carry the OS region's thousands separator per the Number
-                    // Formatting rule. Shares its key with syncStateSubtitle's cutoff-aware branch
-                    // so the same count never renders two different ways on one screen.
-                    Text(verbatim: imported == 1
-                        ? NSLocalizedString("1 dive imported", bundle: .forAppLanguage(), comment: "A label displayed when exactly one dive has been imported.")
-                        : String(format: NSLocalizedString("%@ dives imported", bundle: .forAppLanguage(), value: "%@ dives imported", comment: "A label in the Bluetooth sync results showing how many dives were imported. %@ is the locale-formatted dive count."), Double(imported).localizedString(decimals: 0)))
-                        .foregroundStyle(.secondary)
-                }
-
-                if merged > 0 {
-                    // %@ + localizedString, not %lld + a raw Int — same rule as the imported
-                    // count above, and shares its key with syncStateSubtitle's merged branch so
-                    // the same count never renders two different ways on one screen.
-                    Text(verbatim: merged == 1
-                        ? NSLocalizedString("1 dive updated", bundle: .forAppLanguage(), comment: "A label displayed when exactly one dive has been updated.")
-                        : String(format: NSLocalizedString("%@ dives updated", bundle: .forAppLanguage(), value: "%@ dives updated", comment: "A label indicating dives have been updated. %@ is the locale-formatted dive count."), Double(merged).localizedString(decimals: 0)))
-                        .foregroundStyle(.secondary)
-                }
-
-                if skipped > 0 {
-                    Text(verbatim: skipped == 1
-                        ? NSLocalizedString("1 dive already in logbook", bundle: .forAppLanguage(), comment: "A footnote when exactly one dive was skipped because it was already in the logbook.")
-                        : String(format: NSLocalizedString("%@ dives already in logbook", bundle: .forAppLanguage(), value: "%@ dives already in logbook", comment: "A footnote showing how many dives were skipped because they were already in the logbook. %@ is the locale-formatted dive count."), Double(skipped).localizedString(decimals: 0)))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if cutoffFilteredCount > 0 {
-                    Text(verbatim: cutoffFilteredCount == 1
-                        ? NSLocalizedString("1 older dive not imported", bundle: .forAppLanguage(), value: "1 older dive not imported", comment: "A footnote in the Bluetooth sync results when exactly one downloaded dive was discarded because it was recorded before the user's import cutoff date.")
-                        : String(format: NSLocalizedString("%@ older dives not imported", bundle: .forAppLanguage(), value: "%@ older dives not imported", comment: "A footnote in the Bluetooth sync results showing how many downloaded dives were discarded because they were recorded before the user's import cutoff date. %@ is the locale-formatted dive count."), Double(cutoffFilteredCount).localizedString(decimals: 0)))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if let cutoffAppliedDate {
-                        Text(verbatim: String(format: NSLocalizedString("They were downloaded from your dive computer, then discarded because they were recorded before %@.", bundle: .forAppLanguage(), value: "They were downloaded from your dive computer, then discarded because they were recorded before %@.", comment: "Explanation in the Bluetooth sync results for dives discarded by the import cutoff date. %@ is the cutoff date."), cutoffAppliedDate.formatted(.dateTime.locale(locale).day().month(.wide).year())))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-
-                // The download ended at the import cutoff: say so, since the dives it skipped were
-                // never downloaded and so are not counted anywhere above.
-                if let cutoffStopDate {
-                    Text(verbatim: String(format: NSLocalizedString("The sync stopped at the first dive recorded before %@ — older dives were not downloaded.", bundle: .forAppLanguage(), value: "The sync stopped at the first dive recorded before %@ — older dives were not downloaded.", comment: "Note in the Bluetooth sync results when the download ended at the user's import cutoff date, so older dives were never transferred. %@ is the cutoff date."), cutoffStopDate.formatted(.dateTime.locale(locale).day().month(.wide).year())))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-
-                // Surfaces the same partial-sync warning the pre-import confirmation alert shows —
-                // needed here specifically because that alert is skipped when the cutoff filters
-                // out every downloaded dive. `skipped == 0` is the gate that keeps this from ALSO
-                // re-showing the warning for the pre-existing, unrelated case where every
-                // downloaded dive turned out to be an exact duplicate: that case always reaches
-                // completion through showingImportConfirmation, which already displayed the
-                // warning once. `cutoffFilteredCount > 0` cannot exclude it on its own, because a
-                // sync can be both partly duplicate and partly cutoff-filtered (e.g. a re-sync
-                // after the fingerprint record was lost). The all-filtered branch, by contrast,
-                // always reports .completed(imported: 0, merged: 0, skipped: 0), so the extra
-                // gate never suppresses the warning where it is genuinely needed.
-                if isPartialSync && cutoffFilteredCount > 0 && imported == 0 && merged == 0 && skipped == 0 {
-                    Text(verbatim: NSLocalizedString("Sync was incomplete — one or more older dives on the device could not be read.", bundle: .forAppLanguage(), value: "Sync was incomplete — one or more older dives on the device could not be read.", comment: "Note appended to the import confirmation alert when a BLE sync completed only partially due to a protocol error on the dive computer (e.g. a corrupt dive slot)."))
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .multilineTextAlignment(.center)
-                }
-            }
-
-            if let weatherFetchStatus {
-                weatherFetchStatusView(weatherFetchStatus)
-            } else if let pendingWeatherFetch {
-                weatherFetchConfirmationView(pendingWeatherFetch)
-            }
-
-            Button("Close") {
-                dismiss()
-            }
-            .buttonStyle(.borderedProminent)
-
-            Spacer()
+    /// The listed synced dives still in the logbook, newest first (`syncedDives` is stored
+    /// sorted), so a redraw resolves at most `syncedDiveListLimit` dives.
+    private var resolvedSyncedDives: [SyncedDiveItem] {
+        syncedDives.prefix(Self.syncedDiveListLimit).compactMap { entry -> SyncedDiveItem? in
+            // Re-checked: the dive may have been deleted (here or on another device) meanwhile.
+            guard let dive = modelContext.model(for: entry.id) as? Dive,
+                  !dive.isDeleted, dive.modelContext != nil else { return nil }
+            return SyncedDiveItem(dive: dive, isNew: entry.isNew)
         }
-        .padding()
     }
 
     /// The weather question after a download, asked inline rather than in an alert (see
@@ -574,20 +569,11 @@ extension BluetoothScannerView {
         VStack(spacing: 20) {
             Spacer()
 
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(.red)
-                .accessibilityHidden(true)
-
-            VStack(spacing: 8) {
-                Text("Sync Error")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-
-                Text(message)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+            // The status header shows the icon, "Sync Error" and a generic line; the detailed
+            // message, which can be long, is shown only here.
+            Text(message)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             HStack(spacing: 12) {
                 Button("Retry") {
@@ -855,7 +841,7 @@ extension BluetoothScannerView {
             }
             return NSLocalizedString("No New Dives", bundle: bundle, comment: "Title shown when there are no new dives to import from the dive computer")
         case .error:
-            return NSLocalizedString("Error", bundle: bundle, comment: "The title of an alert that appears when there is a validation error.")
+            return NSLocalizedString("Sync Error", bundle: bundle, comment: "Title shown in the Bluetooth scanner when a sync failed.")
         }
     }
 
@@ -880,52 +866,68 @@ extension BluetoothScannerView {
         case .importing:
             return NSLocalizedString("Saving to logbook...", bundle: bundle, comment: "Subtitle shown while saving downloaded dives to the logbook")
         case .completed(let imported, let merged, let skipped):
-            // Built as a base message (the pre-existing, cutoff-unaware priority chain, left
-            // exactly as-is so a sync with no cutoff involved is byte-for-byte unchanged) with
-            // the cutoff detail appended when applicable — rather than a growing set of
-            // special-cased conditions — so no combination of imported/merged/skipped/cutoff
-            // counts can silently omit a detail that completedView's body always shows.
-            let base: String
-            if imported == 0 && merged == 0 && skipped == 0 && cutoffFilteredCount == 0 {
-                base = NSLocalizedString("Your logbook is up to date", bundle: bundle, comment: "Subtitle shown when the logbook is already up to date after sync")
-            } else if merged > 0 && imported == 0 {
-                base = merged == 1
-                    ? NSLocalizedString("1 dive updated", bundle: bundle, comment: "A label displayed when exactly one dive has been updated.")
-                    : String(format: NSLocalizedString("%@ dives updated", bundle: bundle, value: "%@ dives updated", comment: "A label indicating dives have been updated. %@ is the locale-formatted dive count."), Double(merged).localizedString(decimals: 0))
-            } else if skipped > 0 {
-                base = skipped == 1
-                    ? NSLocalizedString("1 dive already present", bundle: bundle, comment: "Subtitle displayed when exactly one dive is already present in the logbook.")
-                    : String(format: NSLocalizedString("%@ dives already present", bundle: bundle, value: "%@ dives already present", comment: "Subtitle showing the number of dives already present in the logbook. %@ is the locale-formatted dive count."), Double(skipped).localizedString(decimals: 0))
-            } else if imported > 0 && (cutoffFilteredCount > 0 || cutoffStopDate != nil) {
-                // "All dives have been imported" is only a true statement when nothing was held
-                // back. With a cutoff in play some dives were deliberately left out — discarded
-                // after download, or never downloaded because the sync stopped at the cutoff —
-                // so report the count that actually made it into the logbook instead. Both the
-                // singular and the plural reuse the same keys completedView's body uses, so the
-                // header and the body render an identical count identically.
-                base = imported == 1
-                    ? NSLocalizedString("1 dive imported", bundle: bundle, comment: "A label displayed when exactly one dive has been imported.")
-                    : String(format: NSLocalizedString("%@ dives imported", bundle: bundle, value: "%@ dives imported", comment: "Subtitle showing how many dives were imported when a cutoff also discarded older dives during the same sync. %@ is the locale-formatted dive count."), Double(imported).localizedString(decimals: 0))
-            } else if imported > 0 {
-                base = NSLocalizedString("All dives have been imported", bundle: bundle, comment: "Subtitle shown when all dives have been successfully imported")
-            } else {
-                // imported == 0, merged == 0, skipped == 0, but cutoffFilteredCount > 0 —
-                // nothing else to report; the cutoff detail below is the entire message.
-                base = ""
+            // One line, matching the title; completedView lists the count breakdown and notes.
+            switch completedHeadline(imported: imported, merged: merged, skipped: skipped) {
+            case .synced:
+                // Both counts are non-zero here, so the total is always 2 or more.
+                return String(format: NSLocalizedString("%@ dives synced", bundle: bundle, value: "%@ dives synced", comment: "Subtitle after a Bluetooth sync that both added and updated dives. %@ is the locale-formatted total of added and updated dives (2 or more), matching the Synced Dives list below."), Double(imported + merged).localizedString(decimals: 0))
+            case .imported: return importedCountText(imported)
+            case .merged: return mergedCountText(merged)
+            case .cutoff: return cutoffCountText(cutoffFilteredCount)
+            case .skipped: return skippedCountText(skipped)
+            case .upToDate:
+                return NSLocalizedString("Your logbook is up to date", bundle: bundle, comment: "Subtitle shown when the logbook is already up to date after sync")
             }
-            guard cutoffFilteredCount > 0 else { return base }
-            // Deliberately different wording from completedView's body ("N older dives not
-            // imported") — every other case in this subtitle already varies its phrasing from
-            // the body's for the same count (e.g. "dive already present" vs "dive already in
-            // logbook"), specifically so the header and body don't read as a literal duplicate
-            // when both are visible on screen at once.
-            let cutoffPart = cutoffFilteredCount == 1
-                ? NSLocalizedString("1 older dive skipped", bundle: bundle, value: "1 older dive skipped", comment: "Subtitle footnote when exactly one downloaded dive was discarded because it was recorded before the user's import cutoff date.")
-                : String(format: NSLocalizedString("%@ older dives skipped", bundle: bundle, value: "%@ older dives skipped", comment: "Subtitle footnote showing how many downloaded dives were discarded because they were recorded before the user's import cutoff date. %@ is the locale-formatted dive count."), Double(cutoffFilteredCount).localizedString(decimals: 0))
-            return base.isEmpty ? cutoffPart : "\(base)\n\(cutoffPart)"
-        case .error(let message):
-            return message
+        case .error:
+            // Generic on purpose: the detailed message, which can be long, is in errorView.
+            return NSLocalizedString("The sync could not be completed.", bundle: bundle, value: "The sync could not be completed.", comment: "Subtitle shown in the Bluetooth scanner header when a sync failed. The detailed error message is shown below it.")
         }
+    }
+
+    // MARK: - Completed Counts
+
+    /// The count the header shows under the completed title. It follows the title's own order
+    /// (Sync Complete → added and updated together, else imported, else updated; Older Dives
+    /// Skipped → the cutoff count; No New Dives → already in logbook, else up to date).
+    enum CompletedHeadline {
+        case synced, imported, merged, cutoff, skipped, upToDate
+    }
+
+    func completedHeadline(imported: Int, merged: Int, skipped: Int) -> CompletedHeadline {
+        if imported > 0 && merged > 0 { return .synced }
+        if imported > 0 { return .imported }
+        if merged > 0 { return .merged }
+        if cutoffFilteredCount > 0 { return .cutoff }
+        if skipped > 0 { return .skipped }
+        return .upToDate
+    }
+
+    // %@ + localizedString, not %lld + a raw Int: a dive count can reach four digits and must
+    // carry the OS region's thousands separator per the Number Formatting rule.
+
+    /// "Added", not "imported": an updated dive is imported too, so "imported" would read as the total.
+    private func importedCountText(_ count: Int) -> String {
+        count == 1
+            ? NSLocalizedString("1 dive added", bundle: .forAppLanguage(), value: "1 dive added", comment: "Bluetooth sync results: exactly one new dive was added to the logbook (as opposed to existing dives updated).")
+            : String(format: NSLocalizedString("%@ dives added", bundle: .forAppLanguage(), value: "%@ dives added", comment: "Bluetooth sync results: how many new dives were added to the logbook (as opposed to existing dives updated). %@ is the locale-formatted dive count."), Double(count).localizedString(decimals: 0))
+    }
+
+    private func mergedCountText(_ count: Int) -> String {
+        count == 1
+            ? NSLocalizedString("1 dive updated", bundle: .forAppLanguage(), comment: "A label displayed when exactly one dive has been updated.")
+            : String(format: NSLocalizedString("%@ dives updated", bundle: .forAppLanguage(), value: "%@ dives updated", comment: "A label indicating dives have been updated. %@ is the locale-formatted dive count."), Double(count).localizedString(decimals: 0))
+    }
+
+    private func skippedCountText(_ count: Int) -> String {
+        count == 1
+            ? NSLocalizedString("1 dive already in logbook", bundle: .forAppLanguage(), comment: "A footnote when exactly one dive was skipped because it was already in the logbook.")
+            : String(format: NSLocalizedString("%@ dives already in logbook", bundle: .forAppLanguage(), value: "%@ dives already in logbook", comment: "A footnote showing how many dives were skipped because they were already in the logbook. %@ is the locale-formatted dive count."), Double(count).localizedString(decimals: 0))
+    }
+
+    private func cutoffCountText(_ count: Int) -> String {
+        count == 1
+            ? NSLocalizedString("1 older dive not imported", bundle: .forAppLanguage(), value: "1 older dive not imported", comment: "A footnote in the Bluetooth sync results when exactly one downloaded dive was discarded because it was recorded before the user's import cutoff date.")
+            : String(format: NSLocalizedString("%@ older dives not imported", bundle: .forAppLanguage(), value: "%@ older dives not imported", comment: "A footnote in the Bluetooth sync results showing how many downloaded dives were discarded because they were recorded before the user's import cutoff date. %@ is the locale-formatted dive count."), Double(count).localizedString(decimals: 0))
     }
 
     private func isConnecting(to peripheral: DiscoveredDevice) -> Bool {
@@ -938,4 +940,12 @@ extension BluetoothScannerView {
         return peripheral.identifier == selectedDevice.identifier
     }
 
+}
+
+/// A synced dive resolved for display on the completed screen (built on each render, never
+/// stored in @State).
+private struct SyncedDiveItem: Identifiable {
+    let dive: Dive
+    let isNew: Bool
+    var id: PersistentIdentifier { dive.persistentModelID }
 }

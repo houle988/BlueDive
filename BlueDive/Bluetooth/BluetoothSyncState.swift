@@ -29,3 +29,12 @@ enum BluetoothSyncState: Equatable {
 struct PendingWeatherFetch: Equatable {
     var ids: [PersistentIdentifier]
 }
+
+// MARK: - Synced Dives
+
+/// A dive the last import added or updated, listed on the completed screen. By persistent ID,
+/// like PendingWeatherFetch: @Model references must not be held in @State.
+struct SyncedDive: Equatable, Identifiable {
+    let id: PersistentIdentifier
+    let isNew: Bool
+}

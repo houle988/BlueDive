@@ -206,8 +206,12 @@ extension BluetoothScannerView {
             downloadedDives = []
             selectedDevice = nil
             connectedDeviceName = nil
+            // After the save, so the dives have their permanent persistent IDs. Sorted once here,
+            // newest first, so the completed screen does not re-sort on every redraw.
+            syncedDives = weatherCandidates
+                .sorted { $0.dive.timestamp > $1.dive.timestamp }
+                .map { SyncedDive(id: $0.dive.persistentModelID, isNew: $0.isNew) }
             syncState = .completed(imported: importedCount, merged: mergedCount, skipped: skippedCount)
-            // After the save, so the dives have their permanent persistent IDs.
             offerWeatherFetch(for: weatherCandidates)
         }
     }

@@ -64,6 +64,8 @@ struct BluetoothScannerView: View {
     /// alert: it would follow the Import alert while that one is still closing and could be
     /// dropped.
     @State var pendingWeatherFetch: PendingWeatherFetch?
+    /// The dives the last import added or updated, listed on the completed screen.
+    @State var syncedDives: [SyncedDive] = []
     @Environment(\.scenePhase) var scenePhase
 
     /// Screen stays awake during a sync, and while the weather fetch runs after the import:

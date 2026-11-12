@@ -212,6 +212,7 @@ extension BluetoothScannerView {
         }
 
         clearCutoffResults()
+        syncedDives = []
 
         let deviceName = peripheral.name ?? "Unknown Device"
         let deviceAddress = peripheral.identifier.uuidString

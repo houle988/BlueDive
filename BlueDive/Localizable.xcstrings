@@ -579,6 +579,41 @@
         }
       }
     },
+    "%@ dives added" : {
+      "comment" : "Bluetooth sync results: how many new dives were added to the logbook (as opposed to existing dives updated). %@ is the locale-formatted dive count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ Tauchgänge hinzugefügt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ inmersiones añadidas"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées ajoutées"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ dykk lagt til"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ duiken toegevoegd"
+          }
+        }
+      }
+    },
     "%@ dives already in logbook" : {
       "comment" : "A footnote showing how many dives were skipped because they were already in the logbook. %@ is the locale-formatted dive count.",
       "localizations" : {
@@ -616,6 +651,7 @@
     },
     "%@ dives already present" : {
       "comment" : "Subtitle showing the number of dives already present in the logbook. %@ is the locale-formatted dive count.",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -691,7 +727,8 @@
       }
     },
     "%@ dives imported" : {
-      "comment" : "A label in the Bluetooth sync results showing how many dives were imported. %@ is the locale-formatted dive count.\nSubtitle showing how many dives were imported when a cutoff also discarded older dives during the same sync. %@ is the locale-formatted dive count.",
+      "comment" : "A label in the Bluetooth sync results showing how many dives were imported. %@ is the locale-formatted dive count.",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -721,6 +758,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ duiken geïmporteerd"
+          }
+        }
+      }
+    },
+    "%@ dives synced" : {
+      "comment" : "Subtitle after a Bluetooth sync that both added and updated dives. %@ is the locale-formatted total of added and updated dives (2 or more), matching the Synced Dives list below.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ Tauchgänge synchronisiert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ inmersiones sincronizadas"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plongées synchronisées"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ dykk synkronisert"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ duiken gesynchroniseerd"
           }
         }
       }
@@ -900,6 +972,41 @@
         }
       }
     },
+    "%@ more dives not shown" : {
+      "comment" : "Footer under the Synced Dives list after a Bluetooth sync, when older synced dives are left out of the list (it shows the most recent ones only). %@ is the locale-formatted number of dives left out.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ weitere Tauchgänge nicht angezeigt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ inmersiones más sin mostrar"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ autres plongées non affichées"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ dykk til vises ikke"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nog %@ duiken niet weergegeven"
+          }
+        }
+      }
+    },
     "%@ no longer recognizes this device. Forget it in this device's Bluetooth settings, turn Bluetooth on the dive computer off and on, then try again." : {
       "comment" : "Error shown when a dive computer refuses the connection because it no longer has this iPhone's or Mac's Bluetooth pairing (e.g. after pairing with another device). %@ is the dive computer name.",
       "localizations" : {
@@ -1054,6 +1161,7 @@
     },
     "%@ older dives skipped" : {
       "comment" : "Subtitle footnote showing how many downloaded dives were discarded because they were recorded before the user's import cutoff date. %@ is the locale-formatted dive count.",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -4011,6 +4119,41 @@
         }
       }
     },
+    "1 dive added" : {
+      "comment" : "Bluetooth sync results: exactly one new dive was added to the logbook (as opposed to existing dives updated).",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 Tauchgang hinzugefügt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 inmersión añadida"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 plongée ajoutée"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ett dykk lagt til"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 duik toegevoegd"
+          }
+        }
+      }
+    },
     "1 dive already in logbook" : {
       "comment" : "A footnote when exactly one dive was skipped because it was already in the logbook.",
       "localizations" : {
@@ -4054,6 +4197,7 @@
     },
     "1 dive already present" : {
       "comment" : "Subtitle displayed when exactly one dive is already present in the logbook.",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -4136,6 +4280,7 @@
     },
     "1 dive imported" : {
       "comment" : "A label displayed when exactly one dive has been imported.",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -4421,6 +4566,41 @@
         }
       }
     },
+    "1 more dive not shown" : {
+      "comment" : "Footer under the Synced Dives list after a Bluetooth sync, when exactly one older synced dive is left out of the list (it shows the most recent ones only).",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 weiterer Tauchgang nicht angezeigt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 inmersión más sin mostrar"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 autre plongée non affichée"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ett dykk til vises ikke"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nog 1 duik niet weergegeven"
+          }
+        }
+      }
+    },
     "1 more dive was downloaded but will not be imported — it was recorded before %@." : {
       "comment" : "Note appended to the Bluetooth import confirmation alert when exactly one downloaded dive falls before the user's import cutoff date. %@ is the cutoff date.",
       "localizations" : {
@@ -4493,6 +4673,7 @@
     },
     "1 older dive skipped" : {
       "comment" : "Subtitle footnote when exactly one downloaded dive was discarded because it was recorded before the user's import cutoff date.",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -7362,6 +7543,7 @@
     },
     "All dives have been imported" : {
       "comment" : "Subtitle shown when all dives have been successfully imported",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -41504,6 +41686,48 @@
         }
       }
     },
+    "New (synced dive)" : {
+      "comment" : "Badge on a dive the Bluetooth sync just added to the logbook.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Neu"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nueva"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ny"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nieuw"
+          }
+        }
+      }
+    },
     "New Category…" : {
       "localizations" : {
         "de" : {
@@ -62896,7 +63120,7 @@
       }
     },
     "Sync Error" : {
-      "comment" : "A label displayed in the iCloud sync status sheet when a CloudKit sync error has occurred.",
+      "comment" : "A label displayed in the iCloud sync status sheet when a CloudKit sync error has occurred.\nTitle shown in the Bluetooth scanner when a sync failed.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -63137,6 +63361,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Laatste synchronisatie: %@"
+          }
+        }
+      }
+    },
+    "Synced Dives" : {
+      "comment" : "A heading for the list of dives that were successfully synced.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Synchronisierte Tauchgänge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inmersiones sincronizadas"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plongées synchronisées"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Synkroniserte dykk"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gesynchroniseerde duiken"
           }
         }
       }
@@ -65377,6 +65637,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "De synchronisatiebladwijzer wordt ook opgeslagen als geen enkele duik op de computer nieuwer is dan je datum, zodat de volgende synchronisatie nog steeds alleen echt nieuwe duiken ophaalt."
+          }
+        }
+      }
+    },
+    "The sync could not be completed." : {
+      "comment" : "Subtitle shown in the Bluetooth scanner header when a sync failed. The detailed error message is shown below it.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Synchronisierung konnte nicht abgeschlossen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo completar la sincronización."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La synchronisation n'a pas pu être effectuée."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Synkroniseringen kunne ikke fullføres."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De synchronisatie kon niet worden voltooid."
           }
         }
       }
@@ -69582,6 +69877,48 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "Bijgewerkt"
+          }
+        }
+      }
+    },
+    "Updated (synced dive)" : {
+      "comment" : "Badge on an existing dive the Bluetooth sync just refreshed with the dive computer's data (Download All Dives).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aktualisiert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizada"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mise à jour"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Oppdatert"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "Bijgewerkt"
           }
         }

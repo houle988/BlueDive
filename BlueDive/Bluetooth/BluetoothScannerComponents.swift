@@ -212,9 +212,15 @@ struct KnownDeviceRow: View {
                         .foregroundStyle(.primary)
 
                     if let name = diverName {
-                        Label(name, systemImage: "person.fill")
-                            .font(.caption)
-                            .foregroundStyle(.teal)
+                        // Not a Label: in a List/Form row iOS gives a Label's icon a fixed-width
+                        // column, which leaves a wide gap before the name.
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.fill")
+                                .accessibilityHidden(true)
+                            Text(name)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.teal)
                     }
 
                     Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()))
@@ -260,9 +266,14 @@ struct DeviceReassociationPickerSheet: View {
                                 DiveComputerIconView(name: candidate.computerName, isSelected: false)
                                 VStack(alignment: .leading, spacing: 3) {
                                     if let name = candidate.diverName {
-                                        Label(name, systemImage: "person.fill")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.primary)
+                                        // Not a Label, for the same reason as in KnownDeviceRow.
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "person.fill")
+                                                .accessibilityHidden(true)
+                                            Text(name)
+                                        }
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.primary)
                                         Text(candidate.computerName)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -415,5 +426,68 @@ struct ModelPickerSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Synced Dive Row
+
+/// One dive added or updated by a Bluetooth import, on the sync results screen.
+struct SyncedDiveRow: View {
+    let dive: Dive
+    let isNew: Bool
+
+    @Environment(\.locale) private var locale
+    private let prefs = UserPreferences.shared
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if let number = dive.diveNumber {
+                        // Same form as the dive list: a dive number is an identifier, not a count.
+                        Text(verbatim: "#\(number)")
+                            .font(.headline)
+                            .foregroundStyle(.cyan)
+                    }
+                    Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
+                        .font(.headline)
+                }
+
+                let site = dive.siteName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !site.isEmpty {
+                    Text(verbatim: site)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                }
+
+                Text(verbatim: dive.displayMaxDepth.localizedString(decimals: 1) + prefs.depthUnit.symbol + " · " + dive.formattedDuration)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            badge
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var badge: some View {
+        // Own keys: the badge agrees with "dive" (fr-CA "Nouvelle", "Mise à jour").
+        if isNew {
+            badgeLabel(NSLocalizedString("New (synced dive)", bundle: .forAppLanguage(), value: "New", comment: "Badge on a dive the Bluetooth sync just added to the logbook."), color: .green)
+        } else {
+            badgeLabel(NSLocalizedString("Updated (synced dive)", bundle: .forAppLanguage(), value: "Updated", comment: "Badge on an existing dive the Bluetooth sync just refreshed with the dive computer's data (Download All Dives)."), color: .blue)
+        }
+    }
+
+    private func badgeLabel(_ text: String, color: Color) -> some View {
+        Text(verbatim: text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.15), in: Capsule())
     }
 }

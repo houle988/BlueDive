@@ -19,7 +19,7 @@ enum CountryLookup {
     /// The country's emoji flag, or nil when the name matches no known country (for text that
     /// shows the flag only beside a recognised country, without `resolve`'s white flag).
     static func flag(for country: String?) -> String? {
-        code(for: country).flatMap(emojiFlag(for:))
+        code(for: country).flatMap { emojiFlag(for: $0) }
     }
 
     // MARK: - Private helpers
