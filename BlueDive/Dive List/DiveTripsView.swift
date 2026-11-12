@@ -10,6 +10,10 @@ struct DiveTrip: Identifiable {
     let name: String
     let location: String
     let dives: [Dive]
+    /// The trip's countries as stored in its dives, most dives first (ties: the earlier
+    /// country first). Spellings that differ only by case or spaces count as one country,
+    /// shown with its most common spelling. Dives without a country are not counted.
+    var countries: [String] = []
 
     var startDate: Date { dives.map(\.timestamp).min() ?? .now }
     var endDate: Date   { dives.map(\.timestamp).max() ?? .now }
@@ -154,23 +158,61 @@ struct TripBuilder {
     }
 
     private static func makeTrip(from dives: [Dive]) -> DiveTrip {
-        // Use the most common location as trip name
-        let locationCounts = Dictionary(grouping: dives, by: \.location)
-            .mapValues(\.count)
-        let topLocation = locationCounts.max(by: { $0.value < $1.value })?.key ?? dives.first?.location ?? "Unknown"
-        let siteCounts = Dictionary(grouping: dives, by: \.siteName)
-            .mapValues(\.count)
-        let topSite = siteCounts.max(by: { $0.value < $1.value })?.key ?? topLocation
+        let countries = countries(of: dives)
+        // The trip is named after its most common location, else its most common site, else
+        // its main country: dives without a location (manual or imported ones) no longer give
+        // a blank name.
+        let topLocation = mostCommon(dives.map(\.location))
+        let topSite = mostCommon(dives.map(\.siteName))
+        let place = topLocation ?? topSite ?? countries.first
+            ?? NSLocalizedString("Trip", bundle: Bundle.forAppLanguage(), value: "Trip", comment: "A trip: the PDF logbook's Trip field label, and the name of a trip whose dives have no location, site or country")
 
         let name: String
         if let firstTimestamp = dives.first?.timestamp,
            let year = Calendar.current.dateComponents([.year], from: firstTimestamp).year {
-            name = "\(topLocation) \(year)"
+            name = "\(place) \(year)"
         } else {
-            name = topLocation
+            name = place
         }
 
-        return DiveTrip(name: name, location: topSite, dives: dives)
+        return DiveTrip(name: name, location: topSite ?? place, dives: dives, countries: countries)
+    }
+
+    /// The most frequent non-empty value (trimmed), the earliest one on a tie, so a trip keeps
+    /// the same name from one build to the next. Nil when every value is empty.
+    private static func mostCommon(_ values: [String]) -> String? {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        for value in values {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if counts[trimmed] == nil { order.append(trimmed) }
+            counts[trimmed, default: 0] += 1
+        }
+        return order.enumerated().max { a, b in
+            let (countA, countB) = (counts[a.element] ?? 0, counts[b.element] ?? 0)
+            return countA != countB ? countA < countB : a.offset > b.offset
+        }?.element
+    }
+
+    /// `DiveTrip.countries` for these dives (in date order).
+    private static func countries(of dives: [Dive]) -> [String] {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        var spellings: [String: [String: Int]] = [:]
+        for dive in dives {
+            guard let key = countryKey(dive.siteCountry), let country = dive.siteCountry else { continue }
+            if counts[key] == nil { order.append(key) }
+            counts[key, default: 0] += 1
+            spellings[key, default: [:]][country.trimmingCharacters(in: .whitespacesAndNewlines), default: 0] += 1
+        }
+        let ranked = order.enumerated().sorted { a, b in
+            let (countA, countB) = (counts[a.element] ?? 0, counts[b.element] ?? 0)
+            return countA != countB ? countA > countB : a.offset < b.offset
+        }
+        return ranked.compactMap { _, key in
+            spellings[key]?.max { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key }?.key
+        }
     }
 }
 
@@ -457,6 +499,10 @@ struct TripCard: View {
                             .font(.caption)
                     }
                     .foregroundStyle(.white.opacity(0.8))
+
+                    if !trip.countries.isEmpty {
+                        countriesLine(trip.countries)
+                    }
                 }
                 .padding(12)
             }
@@ -543,6 +589,27 @@ struct TripCard: View {
         formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMMyyyy", options: 0, locale: locale)
         let end = formatter.string(from: trip.endDate)
         return "\(start) – \(end)"
+    }
+
+    /// The trip's countries with their flags, so a trip is recognisable when its location
+    /// name is not: the first two, then "+N". VoiceOver reads every country, without flags.
+    private func countriesLine(_ countries: [String]) -> some View {
+        // A country the lookup does not know shows its name alone.
+        let shown = countries.prefix(2).map { country -> String in
+            CountryLookup.flag(for: country).map { "\($0) \(country)" } ?? country
+        }
+        var line = shown.joined(separator: " · ")
+        if countries.count > 2 {
+            line += " " + String(
+                format: NSLocalizedString("+%lld", bundle: Bundle.forAppLanguage(), value: "+%lld", comment: "Number of further items not shown (gear in a gear group, countries of a trip)"),
+                countries.count - 2
+            )
+        }
+        return Text(verbatim: line)
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.8))
+            .lineLimit(1)
+            .accessibilityLabel(Text(verbatim: countries.joined(separator: ", ")))
     }
 }
 
@@ -676,7 +743,7 @@ struct TripDetailSheet: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 TripHeroStat(value: Double(trip.totalDives).localizedString(decimals: 0), label: "Dives", icon: "bubbles.and.sparkles.fill", color: .cyan)
                 TripHeroStat(value: trip.formattedTotalTime, label: "Underwater", icon: "timer", color: .green)
-                TripHeroStat(value: Double(trip.durationDays).localizedString(decimals: 0) + "d", label: "Trip Duration", icon: "calendar", color: .orange)
+                TripHeroStat(value: String(format: NSLocalizedString("%@d", bundle: Bundle.forAppLanguage(), value: "%@d", comment: "Trip duration in days, abbreviated (e.g. 24d)"), Double(trip.durationDays).localizedString(decimals: 0)), label: "Trip Duration", icon: "calendar", color: .orange)
                 TripHeroStat(value: trip.averageMaxDepth.localizedString(decimals: 1) + " " + prefs.depthUnit.symbol, label: "Avg. Depth", icon: "arrow.down.circle", color: .blue)
                 TripHeroStat(value: Double(trip.uniqueSites).localizedString(decimals: 0), label: "Sites", icon: "mappin.and.ellipse", color: .purple)
                 if averageRMV > 0 {

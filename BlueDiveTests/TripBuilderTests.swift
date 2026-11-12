@@ -82,6 +82,66 @@ struct TripBuilderTests {
         #expect(trips(dives, splitOnCountry: true) == [[1, 2], [3]])
     }
 
+    /// The countries a trip card shows: most dives first, ties in date order, one entry per
+    /// country (its most common spelling), dives without a country left out.
+    @Test func tripCountriesAreRankedByDives() {
+        let dives = [
+            dive(day: 1, country: "Germany"),
+            dive(day: 2, country: "Switzerland"),
+            dive(day: 3, country: "switzerland "),
+            dive(day: 4, country: "Switzerland"),
+            dive(day: 5),
+            dive(day: 6, country: "France"),
+            dive(day: 7, country: "Germany"),
+            dive(day: 8, country: "Italy"),
+        ]
+        let trip = TripBuilder.buildTrips(from: dives, maxGapDays: 3, splitOnCountryChange: false)
+        #expect(trip.map(\.countries) == [["Switzerland", "Germany", "France", "Italy"]])
+    }
+
+    @Test func aTripWithoutCountriesHasNone() {
+        let trip = TripBuilder.buildTrips(from: [dive(day: 1), dive(day: 2, country: " ")], maxGapDays: 3, splitOnCountryChange: false)
+        #expect(trip.map(\.countries) == [[]])
+    }
+
+    /// The name of the single trip these dives form.
+    private func tripName(_ dives: [Dive]) -> String? {
+        TripBuilder.buildTrips(from: dives, maxGapDays: 3, splitOnCountryChange: false).first?.name
+    }
+
+    private func dive(day: Int, location: String, site: String = "", country: String? = nil) -> Dive {
+        let dive = dive(day: day, country: country)
+        dive.location = location
+        dive.siteName = site
+        return dive
+    }
+
+    /// Empty locations are skipped, even when most dives have none.
+    @Test func theNameSkipsEmptyLocations() {
+        let dives = [dive(day: 1, location: ""), dive(day: 2, location: " "), dive(day: 3, location: "Reef Town")]
+        #expect(tripName(dives) == "Reef Town 2030")
+    }
+
+    /// A tie goes to the earliest location, whatever the build.
+    @Test func aTiedNameGoesToTheEarliestLocation() {
+        let dives = [dive(day: 1, location: "North Bay"), dive(day: 2, location: "South Bay"),
+                     dive(day: 3, location: "South Bay"), dive(day: 4, location: "North Bay")]
+        for _ in 0..<20 { #expect(tripName(dives) == "North Bay 2030") }
+    }
+
+    /// Without any location, the site names the trip, then the country.
+    @Test func theNameFallsBackToTheSiteThenTheCountry() {
+        #expect(tripName([dive(day: 1, location: "", site: "Coral Garden", country: "Egypt")]) == "Coral Garden 2030")
+        #expect(tripName([dive(day: 1, location: "", site: "", country: "Egypt")]) == "Egypt 2030")
+    }
+
+    /// A trip with nothing to name it after still gets a name, never a lone year.
+    @Test func aTripWithoutPlacesStillHasAName() {
+        let name = tripName([dive(day: 1, location: "")]) ?? ""
+        #expect(name.hasSuffix(" 2030"))
+        #expect(name.count > " 2030".count)
+    }
+
     /// The gap still applies when the country stays the same.
     @Test func theGapStillSplitsWithinOneCountry() {
         let dives = [dive(day: 1, country: "Egypt"), dive(day: 10, country: "Egypt")]

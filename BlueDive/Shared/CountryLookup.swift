@@ -9,16 +9,26 @@ enum CountryLookup {
     /// Resolves a country name to its emoji flag and accent colour.
     /// Returns a white flag with grey colour when the country is unknown.
     static func resolve(_ country: String?) -> (flag: String, color: Color) {
-        guard let country, !country.isEmpty,
-              let code = normalizedNameToCode[normalizedKey(country)],
-              let flag = emojiFlag(for: code) else {
+        guard let code = code(for: country), let flag = emojiFlag(for: code) else {
             return ("🏳️", .gray)
         }
         let color = accentColor[code] ?? .cyan
         return (flag, color)
     }
 
+    /// The country's emoji flag, or nil when the name matches no known country (for text that
+    /// shows the flag only beside a recognised country, without `resolve`'s white flag).
+    static func flag(for country: String?) -> String? {
+        code(for: country).flatMap(emojiFlag(for:))
+    }
+
     // MARK: - Private helpers
+
+    /// The ISO code of a country name, ignoring surrounding spaces, case and accents.
+    private static func code(for country: String?) -> String? {
+        guard let trimmed = country?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return normalizedNameToCode[normalizedKey(trimmed)]
+    }
 
     /// Strips diacritics and lowercases a string for accent-insensitive lookups.
     private static func normalizedKey(_ string: String) -> String {

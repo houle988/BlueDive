@@ -180,10 +180,17 @@ struct PDFDiveLogbook {
             let minFontSize: CGFloat = 5.0
             let maxTextWidth = columnWidth - 8
 
+            let valRect = CGRect(x: sx + 5, y: sy - 16, width: maxTextWidth, height: 9)
+            // An emoji (a country flag) falls back to a font whose line is taller than the
+            // value's frame, which then fits no line and draws nothing: cap the line height at
+            // the frame's (plain text at these sizes is already below it).
+            let valueParagraphStyle = NSMutableParagraphStyle()
+            valueParagraphStyle.lineBreakMode = .byTruncatingTail
+            valueParagraphStyle.maximumLineHeight = valRect.height
             var valAttrs: [NSAttributedString.Key: Any] = [
                 .font: mediumFont(size: fontSize),
                 .foregroundColor: platformColor(textWhite),
-                .paragraphStyle: paragraphStyle
+                .paragraphStyle: valueParagraphStyle
             ]
             var textWidth = (field.value as NSString).size(withAttributes: valAttrs).width
             while textWidth > maxTextWidth && fontSize > minFontSize {
@@ -192,7 +199,6 @@ struct PDFDiveLogbook {
                 textWidth = (field.value as NSString).size(withAttributes: valAttrs).width
             }
 
-            let valRect = CGRect(x: sx + 5, y: sy - 16, width: maxTextWidth, height: 9)
             let valStr = NSAttributedString(string: field.value, attributes: valAttrs)
             drawWrappedText(valStr, in: ctx, rect: valRect)
         }
@@ -499,7 +505,10 @@ struct PDFDiveLogbook {
 
         let countryStr: String = {
             if let country = dive.siteCountry, !country.isEmpty {
-                return country
+                // The flag follows the country only when the name is a known country (printed
+                // trimmed, so a stray space does not double the gap before the flag).
+                guard let flag = CountryLookup.flag(for: country) else { return country }
+                return "\(country.trimmingCharacters(in: .whitespacesAndNewlines)) \(flag)"
             }
             return "—"
         }()
