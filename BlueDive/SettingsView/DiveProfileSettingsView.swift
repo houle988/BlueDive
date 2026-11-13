@@ -188,7 +188,7 @@ struct DiveProfileSettingsView: View {
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    Text("When on, the profile chart of the selected dive is shown above the dive list. Click a dive to select it; double-click it or press Return to open it. When off, a click opens the dive.")
+                    Text("When on, the profile chart of the selected dive is shown above the dive list. Drag the line below the chart to resize it. Click a dive to select it; double-click it or press Return to open it. When off, a click opens the dive.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)

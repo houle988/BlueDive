@@ -414,7 +414,10 @@ struct ContentView: View {
                 VStack(spacing: 0) {
                     #if os(macOS)
                     if !store.dives.isEmpty && prefs.showDiveListProfilePreview {
-                        DiveProfilePreviewPanel(selection: listSelection)
+                        ResizableProfilePreview(selection: listSelection)
+                            // Above the list, so the line drawn while dragging the divider down
+                            // stays visible over the list's rows.
+                            .zIndex(1)
                     }
                     #endif
                     contentSection
@@ -1299,16 +1302,145 @@ final class DiveListSelection {
     var diveID: UUID?
 }
 
+/// The profile preview above the dive list, with a divider below it that the user drags (or
+/// adjusts with VoiceOver) to share the tab's height between the chart and the list; the share
+/// is remembered between launches. While dragging, only a line follows the mouse: the chart is
+/// redrawn at the new height as soon as the mouse stops and when it is released, as redrawing a
+/// long profile on every mouse move lags.
+private struct ResizableProfilePreview: View {
+    let selection: DiveListSelection
+    /// Share of the tab's height the preview takes.
+    @AppStorage("diveListPreviewFraction") private var fraction: Double = 0.4
+    /// The tab's height (the preview's container), measured for the drag.
+    @State private var containerHeight: CGFloat = 0
+    /// Where the line is while the divider is dragged (nil when it is not).
+    @State private var dragFraction: Double?
+    /// The share the pane shows during a drag, set when the mouse pauses; `fraction` is saved
+    /// when the drag ends, so UserDefaults is written once per drag.
+    @State private var appliedFraction: Double?
+    /// The share when the drag began, so the line follows the mouse from a fixed reference.
+    @State private var dragStartFraction: Double?
+    /// Applies the line's position once the mouse has paused (restarted on every move).
+    @State private var pauseTask: Task<Void, Never>?
+
+    private static let fractionRange = 0.25...0.85
+    /// Height the chart needs: its smallest plot (`ChartHeightRule.listPreview`), a row of
+    /// chips, the legend and the panel's padding. The pane never gets lower, so the chart
+    /// never spills over the divider.
+    private static let minPaneHeight: CGFloat = 260
+    /// Height left for the dive list (a few rows), whatever the share.
+    private static let minListHeight: CGFloat = 150
+    private static let dividerHeight: CGFloat = 14
+    /// How long the mouse must stay still during a drag before the chart is redrawn at the line:
+    /// about 6 frames, short enough to feel immediate, long enough not to mistake the gap
+    /// between mouse events during a slow drag for a pause.
+    private static let pauseDelay: Duration = .milliseconds(100)
+    /// Share VoiceOver's increment and decrement change.
+    private static let accessibilityStep = 0.05
+
+    /// The share the pane is drawn at.
+    private var paneFraction: Double { appliedFraction ?? fraction }
+
+    /// The preview's height for `share` of a tab `total` points high, kept between the chart's
+    /// minimum and what leaves the list its minimum.
+    private func paneHeight(in total: CGFloat, share: Double) -> CGFloat {
+        let maximum = max(total - Self.minListHeight - Self.dividerHeight, Self.minPaneHeight)
+        return min(max(total * share, Self.minPaneHeight), maximum)
+    }
+
+    private func clamped(_ value: Double) -> Double {
+        min(max(value, Self.fractionRange.lowerBound), Self.fractionRange.upperBound)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DiveProfilePreviewPanel(selection: selection)
+                .containerRelativeFrame(.vertical) { height, _ in
+                    paneHeight(in: height, share: paneFraction)
+                }
+                // Safety net: a chart taller than its minimum (chips or legend wrapped onto a
+                // second line in a narrow window) is cut at the divider rather than drawn over it.
+                .clipped()
+            divider
+        }
+        // The line during a drag, drawn over the preview or the list where the divider will go.
+        .overlay(alignment: .top) {
+            if let dragFraction, containerHeight > 0 {
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(height: 2)
+                    .offset(y: paneHeight(in: containerHeight, share: dragFraction) + Self.dividerHeight / 2 - 1)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        // Measures the tab's height (the same container the pane is sized from), for the drag.
+        .background {
+            Color.clear
+                .containerRelativeFrame(.vertical) { height, _ in height }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { containerHeight = $0 }
+                .accessibilityHidden(true)
+        }
+        .onDisappear { pauseTask?.cancel() }
+    }
+
+    /// The drag handle between the preview and the list.
+    private var divider: some View {
+        ZStack {
+            Rectangle()
+                .fill(.bar)
+            Capsule()
+                .fill(.secondary)
+                .frame(width: 36, height: 4)
+        }
+        .frame(height: Self.dividerHeight)
+        .contentShape(Rectangle())
+        .pointerStyle(.rowResize)
+        .gesture(
+            // Global coordinates: a translation measured in the divider's own coordinates would
+            // change under the mouse when the pane is resized at a pause.
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { value in
+                    guard containerHeight > 0 else { return }
+                    let start = dragStartFraction ?? paneFraction
+                    dragStartFraction = start
+                    let share = clamped(start + value.translation.height / containerHeight)
+                    dragFraction = share
+                    // Redraw the chart at the line once the mouse pauses.
+                    pauseTask?.cancel()
+                    pauseTask = Task { @MainActor in
+                        try? await Task.sleep(for: Self.pauseDelay)
+                        guard !Task.isCancelled else { return }
+                        appliedFraction = share
+                    }
+                }
+                .onEnded { _ in
+                    pauseTask?.cancel()
+                    if let dragFraction { fraction = dragFraction }
+                    dragFraction = nil
+                    appliedFraction = nil
+                    dragStartFraction = nil
+                }
+        )
+        // VoiceOver: one adjustable element, its value the preview's share of the tab.
+        .accessibilityElement()
+        .accessibilityLabel(Text("Preview Height"))
+        .accessibilityValue(Text(verbatim: (fraction * 100).localizedString(decimals: 0) + " %"))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: fraction = clamped(fraction + Self.accessibilityStep)
+            case .decrement: fraction = clamped(fraction - Self.accessibilityStep)
+            @unknown default: break
+            }
+        }
+    }
+}
+
 /// Profile chart of the selected dive, shown above the main dive list. Empty until a dive
 /// is selected.
 private struct DiveProfilePreviewPanel: View {
     let selection: DiveListSelection
     @Environment(DiveStore.self) private var store
-
-    /// Space the placeholder reserves before the first selection: the plot (which follows the
-    /// window height) plus roughly one row of chips and one legend line, so the list moves
-    /// little when the first chart appears.
-    private static let chipsAndLegendHeight: CGFloat = 100
 
     var body: some View {
         Group {
@@ -1319,9 +1451,7 @@ private struct DiveProfilePreviewPanel: View {
                 if dive.profileSamples.isEmpty {
                     Text("No profile data available")
                         .foregroundStyle(.secondary)
-                        .containerRelativeFrame(.vertical) { height, _ in
-                            ChartHeightRule.listPreview.height(for: height) + Self.chipsAndLegendHeight
-                        }
+                        .frame(maxHeight: .infinity)
                 } else {
                     // Same chart as the dive detail view: chips, every line and the legend.
                     UnifiedDiveChartOptimized(dive: dive, chartHeightRule: .listPreview)
@@ -1329,12 +1459,10 @@ private struct DiveProfilePreviewPanel: View {
             } else {
                 Text("Select a dive to preview its profile")
                     .foregroundStyle(.secondary)
-                    .containerRelativeFrame(.vertical) { height, _ in
-                        ChartHeightRule.listPreview.height(for: height) + Self.chipsAndLegendHeight
-                    }
+                    .frame(maxHeight: .infinity)
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }

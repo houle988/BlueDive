@@ -728,7 +728,8 @@ private struct StaticChartLayer: View, Equatable {
 
     /// Most depth intervals the chart shows, so its gridlines (and the right-axis labels
     /// on them) stay readable: 10 on the dive detail chart (about 28 pt apart at its
-    /// 300 pt minimum height), 5 on the shorter macOS dive-list preview.
+    /// 300 pt minimum height), 5 on the macOS dive-list preview (its plot can be as low as
+    /// 120 pt).
     private var maxDepthIntervals: Double {
         #if os(macOS)
         return heightRule == .listPreview ? 5 : 10
@@ -1971,13 +1972,17 @@ struct ChartHeightRule: Equatable {
     let fraction: CGFloat
     let minHeight: CGFloat
     let maxHeight: CGFloat
+    /// The plot takes all the height its parent leaves it (at least `minHeight`)
+    /// instead of a fraction of its container.
+    var fills = false
 
     /// Dive detail view: 45 % of the visible height, never below the iOS height (300 pt)
     /// or above 600 pt.
     static let detail = ChartHeightRule(fraction: 0.45, minHeight: 300, maxHeight: 600)
-    /// Profile preview above the dive list: lower, because the panel shares the window with
-    /// the list and cannot scroll out of its way.
-    static let listPreview = ChartHeightRule(fraction: 0.30, minHeight: 160, maxHeight: 400)
+    /// Profile preview above the dive list, whose height the user sets with the divider below
+    /// it: the plot fills what the chips and legend leave of the pane, so the gap above the
+    /// divider stays the same wherever it is.
+    static let listPreview = ChartHeightRule(fraction: 1, minHeight: 120, maxHeight: .infinity, fills: true)
 
     func height(for containerHeight: CGFloat) -> CGFloat {
         min(max(containerHeight * fraction, minHeight), maxHeight)
@@ -1985,9 +1990,14 @@ struct ChartHeightRule: Equatable {
 }
 
 private extension View {
+    @ViewBuilder
     func macChartHeight(_ rule: ChartHeightRule) -> some View {
-        containerRelativeFrame(.vertical) { height, _ in
-            rule.height(for: height)
+        if rule.fills {
+            frame(minHeight: rule.minHeight, maxHeight: .infinity)
+        } else {
+            containerRelativeFrame(.vertical) { height, _ in
+                rule.height(for: height)
+            }
         }
     }
 }
@@ -2012,7 +2022,8 @@ private struct ProfilePhotoMarker: Identifiable {
 struct UnifiedDiveChartOptimized: View {
     let dive: Dive
     #if os(macOS)
-    /// How the plot height follows the window (`.listPreview` in the dive list's preview).
+    /// How the plot height is set: a share of the window (`.detail`), or the pane above the dive
+    /// list (`.listPreview`, sized by its divider).
     var chartHeightRule: ChartHeightRule = .detail
     #endif
     @State private var sharedVisibility = SharedChartLineVisibility.shared

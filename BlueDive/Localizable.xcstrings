@@ -50390,6 +50390,40 @@
         }
       }
     },
+    "Preview Height" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Höhe der Profilvorschau"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Altura de la vista previa del perfil"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hauteur de l’aperçu du profil"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Høyde på profilforhåndsvisningen"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoogte van het profielvoorbeeld"
+          }
+        }
+      }
+    },
     "Previous dive" : {
       "localizations" : {
         "de" : {
@@ -73285,36 +73319,36 @@
         }
       }
     },
-    "When on, the profile chart of the selected dive is shown above the dive list. Click a dive to select it; double-click it or press Return to open it. When off, a click opens the dive." : {
+    "When on, the profile chart of the selected dive is shown above the dive list. Drag the line below the chart to resize it. Click a dive to select it; double-click it or press Return to open it. When off, a click opens the dive." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wenn aktiviert, wird das Profildiagramm des ausgewählten Tauchgangs über der Tauchgangsliste angezeigt. Klicke auf einen Tauchgang, um ihn auszuwählen; doppelklicke darauf oder drücke die Eingabetaste, um ihn zu öffnen. Ist die Option deaktiviert, öffnet ein Klick den Tauchgang."
+            "state" : "needs_review",
+            "value" : "Wenn aktiviert, wird das Profildiagramm des ausgewählten Tauchgangs über der Tauchgangsliste angezeigt. Ziehe die Linie unter dem Diagramm, um seine Größe zu ändern. Klicke auf einen Tauchgang, um ihn auszuwählen; doppelklicke darauf oder drücke die Eingabetaste, um ihn zu öffnen. Ist die Option deaktiviert, öffnet ein Klick den Tauchgang."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Si está activado, el gráfico del perfil de la inmersión seleccionada se muestra encima de la lista de inmersiones. Haz clic en una inmersión para seleccionarla; haz doble clic en ella o pulsa Retorno para abrirla. Si está desactivado, un clic abre la inmersión."
+            "state" : "needs_review",
+            "value" : "Si está activado, el gráfico del perfil de la inmersión seleccionada se muestra encima de la lista de inmersiones. Arrastra la línea debajo del gráfico para cambiar su tamaño. Haz clic en una inmersión para seleccionarla; haz doble clic en ella o pulsa Retorno para abrirla. Si está desactivado, un clic abre la inmersión."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lorsque cette option est activée, le graphique du profil de la plongée sélectionnée s’affiche au-dessus de la liste des plongées. Cliquez sur une plongée pour la sélectionner; double-cliquez dessus ou appuyez sur Retour pour l’ouvrir. Lorsqu’elle est désactivée, un clic ouvre la plongée."
+            "value" : "Lorsque cette option est activée, le graphique du profil de la plongée sélectionnée s’affiche au-dessus de la liste des plongées. Faites glisser la ligne sous le graphique pour le redimensionner. Cliquez sur une plongée pour la sélectionner; double-cliquez dessus ou appuyez sur Retour pour l’ouvrir. Lorsqu’elle est désactivée, un clic ouvre la plongée."
           }
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Når dette er på, vises profildiagrammet for det valgte dykket over dykkelisten. Klikk på et dykk for å velge det; dobbeltklikk på det eller trykk på returtasten for å åpne det. Når dette er av, åpner et klikk dykket."
+            "state" : "needs_review",
+            "value" : "Når dette er på, vises profildiagrammet for det valgte dykket over dykkelisten. Dra linjen under diagrammet for å endre størrelsen på det. Klikk på et dykk for å velge det; dobbeltklikk på det eller trykk på returtasten for å åpne det. Når dette er av, åpner et klikk dykket."
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Als deze optie is ingeschakeld, wordt de profielgrafiek van de geselecteerde duik boven de duiklijst weergegeven. Klik op een duik om deze te selecteren; dubbelklik erop of druk op Return om deze te openen. Is deze optie uitgeschakeld, dan opent een klik de duik."
+            "state" : "needs_review",
+            "value" : "Als deze optie is ingeschakeld, wordt de profielgrafiek van de geselecteerde duik boven de duiklijst weergegeven. Sleep de lijn onder de grafiek om het formaat ervan te wijzigen. Klik op een duik om deze te selecteren; dubbelklik erop of druk op Return om deze te openen. Is deze optie uitgeschakeld, dan opent een klik de duik."
           }
         }
       }
