@@ -6,21 +6,31 @@ This target is [libdivecomputer](https://github.com/libdivecomputer/libdivecompu
 
 | Field | Value |
 |---|---|
-| Upstream commit | `9e6c3c8328562b9b82abce7b476d86e79046d446` (2026-09-11, "Add missing fields to the i770R parser") |
-| Version (`version.h`) | 0.10.0 |
-| Taken from | libdc-swift `working` @ `fd5b0db` (the copy BlueDive shipped), unchanged (`Docs/DECISIONS.md`, O5) |
-| Vendored on | 2026-11-02 |
+| Upstream commit | `14f92934c0aedbba7a5aafe8915e8a96d944335c` (2026-11-12, "Retry a corrupt flash read on the Aqualung i330R and Apeks DSX") |
+| Version (`version.h`) | 0.10.0 (upstream `0.10.0-devel`; the suffix is not used, see below) |
+| Previous snapshot | `9e6c3c8` (2026-09-11), taken from libdc-swift `working` @ `fd5b0db` (`Docs/DECISIONS.md`, O5) |
+| Synced on | 2026-11-13 |
 
-### Verification against upstream (2026-11-02)
+### Changes since the previous snapshot
 
-`diff -r` of this tree against a clone of upstream at `9e6c3c8`:
+| Upstream commit | File | Change |
+|---|---|---|
+| `885c1cf` | `src/mares_iconhd.c` | Detects a NAK packet and reads its error code |
+| `b33112b` | `src/mares_iconhd.c` | A dive whose data is unavailable (`0x08000020`) is returned with its header only instead of ending the download |
+| `2c40452` | `src/oceanic_atom2_parser.c` | Apeks DSX: corrected helium offset (changes parsed gas mixes of DSX dives) |
+| `14f9293` | `src/pelagic_i330r.c` | i330R / DSX: a failed flash read (protocol error or timeout) is retried up to 3 times, with a 1 s sleep and an input purge. `DCIOStream` sets no `purge` callback (`Docs/DECISIONS.md`), so queued packets are not discarded before the retry |
+
+No new backends, `DC_FAMILY_*`, descriptor rows, BLE filters, `DC_IOCTL_*`, `dc_sample_type_t` or `dc_field_type_t` members.
+
+### Verification against upstream (2026-11-13)
+
+`diff -r` of this tree against a clone of upstream at `14f9293`:
 
 | Path | Result |
 |---|---|
 | `src/` | **Identical**, except `src/libdivecomputer.rc` (Windows resource, not copied) |
-| `include/libdivecomputer/` | **Identical**, except `version.h` (hand-generated, see below) and `Makefile.am` (not copied) |
-| `COPYING`, `README`, `Makefile.am` | Identical |
-| `configure.ac`, `NEWS` | **Older than upstream** (left as shipped): `configure.ac` still says minor version 9 and uses `AC_PROG_CC_C99` unconditionally; `NEWS` lacks the 0.9.0 entry. Neither file is compiled. Take upstream's copies at the next sync. |
+| `include/libdivecomputer/` | **Identical**, except `version.h` (hand-generated, see below) |
+| `COPYING`, `README`, `NEWS`, `configure.ac`, `Makefile.am`, `libdivecomputer.pc.in` | Identical |
 
 No local C patches are applied.
 
@@ -37,7 +47,7 @@ No local C patches are applied.
 
 ## version.h
 
-Autotools is not run, so `include/libdivecomputer/version.h` is derived by hand from `version.h.in` using `m4_define([dc_version_major|minor|micro], …)` in upstream's `configure.ac`. Regenerate it at every sync.
+Autotools is not run, so `include/libdivecomputer/version.h` is derived by hand from `version.h.in` using `m4_define([dc_version_major|minor|micro], …)` in upstream's `configure.ac`. `DC_VERSION` omits `dc_version_suffix` (e.g. `devel`). Regenerate it at every sync.
 
 ## Build settings (`Package.swift`)
 

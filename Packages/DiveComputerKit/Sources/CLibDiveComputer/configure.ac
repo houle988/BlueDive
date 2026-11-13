@@ -1,6 +1,6 @@
 # Versioning.
 m4_define([dc_version_major],[0])
-m4_define([dc_version_minor],[9])
+m4_define([dc_version_minor],[10])
 m4_define([dc_version_micro],[0])
 m4_define([dc_version_suffix],[devel])
 m4_define([dc_version],dc_version_major.dc_version_minor.dc_version_micro[]m4_ifset([dc_version_suffix],-[dc_version_suffix]))
@@ -62,7 +62,7 @@ AM_CONDITIONAL([ENABLE_DOC], [test "x$enable_doc" = "xyes"])
 
 # Checks for programs.
 AC_PROG_CC
-AC_PROG_CC_C99
+m4_version_prereq([2.70], [], [AC_PROG_CC_C99])
 AC_CHECK_PROGS([DOXYGEN], [doxygen])
 AC_CHECK_PROGS([MANDOC], [mandoc])
 
