@@ -23,12 +23,12 @@ struct MarineLifeView: View {
     @State private var shownUnlinkedSpecies: SpeciesAggregate?
     /// The catalogue species whose row was swiped to delete, until confirmed.
     @State private var speciesToDelete: Species?
-    #if os(macOS)
-    /// Whether the species rows show their one-line version (wide window), reported by the
-    /// rows; the pinned column header is shown only then. Starts one-line: the main window opens
-    /// maximized.
+    /// Whether the species rows show their one-line version (wide window: macOS, iPad at regular
+    /// width), reported by the rows; the pinned column header is shown only then. Starts
+    /// one-line: the main window opens maximized.
     @State private var speciesListLayout = OneLineRowsLayout()
-    #endif
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    private var wideWindow = WideWindowLayout()
 
     // Cached aggregates
     @State private var cachedSpecies: [SpeciesAggregate] = []
@@ -512,6 +512,10 @@ struct MarineLifeView: View {
                             MarineLifeColumnHeader()
                         }
                         #else
+                        // iPad in a wide window: the same column labels over the one-line rows.
+                        .pinnedColumnHeaderOnIPad(speciesListLayout, isShown: wideWindow.isActive) {
+                            MarineLifeColumnHeader()
+                        }
                         .softTopScrollEdge()
                         #endif
                         .opacity(appeared ? 1.0 : 0.0)
@@ -969,21 +973,21 @@ struct MarineLifeView: View {
 
     @ViewBuilder
     private func speciesRow(index: Int, species: SpeciesAggregate) -> some View {
-        #if os(macOS)
-        // The Mac window is wide: one line with every value in a fixed-width column so the
-        // rows line up, falling back to the stacked iOS row when the window is too narrow.
-        // Each version tells the list which one is shown, so its column header is only there
-        // with one-line rows (`OneLineRowsLayout`).
-        ViewThatFits(in: .horizontal) {
-            wideSpeciesRow(index: index, species: species)
-                .reportsOneLine(true, to: speciesListLayout)
-                .reportsRowContentWidth(to: speciesListLayout)
+        // In a wide window (macOS; iPad at regular width): one line with every value in a
+        // fixed-width column so the rows line up, falling back to the stacked row when the
+        // window is too narrow. Each version tells the list which one is shown, so its column
+        // header is only there with one-line rows (`OneLineRowsLayout`).
+        if wideWindow.isActive {
+            ViewThatFits(in: .horizontal) {
+                wideSpeciesRow(index: index, species: species)
+                    .reportsOneLine(true, to: speciesListLayout)
+                    .reportsRowContentWidth(to: speciesListLayout)
+                stackedSpeciesRow(index: index, species: species)
+                    .reportsOneLine(false, to: speciesListLayout)
+            }
+        } else {
             stackedSpeciesRow(index: index, species: species)
-                .reportsOneLine(false, to: speciesListLayout)
         }
-        #else
-        stackedSpeciesRow(index: index, species: species)
-        #endif
     }
 
     /// Image, then name / scientific name / dives + last seen / quantities, the dive count trailing.
@@ -1023,8 +1027,7 @@ struct MarineLifeView: View {
         .accessibilityElement(children: .combine)
     }
 
-    #if os(macOS)
-    /// One line (macOS): image, name, scientific name, last seen, quantities and dive count,
+    /// One line (macOS, wide iPad): image, name, scientific name, last seen, quantities and dive count,
     /// each in its own fixed-width column (`MarineLifeColumns`, shared with
     /// `MarineLifeColumnHeader` so the labels stay over their values).
     private func wideSpeciesRow(index: Int, species: SpeciesAggregate) -> some View {
@@ -1071,7 +1074,6 @@ struct MarineLifeView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
-    #endif
 
     // Row parts, shared by the stacked and one-line rows.
 
@@ -1168,10 +1170,9 @@ struct MarineLifeView: View {
     }
 }
 
-#if os(macOS)
-// MARK: - Marine Life List Columns (macOS)
+// MARK: - Marine Life List Columns (macOS, wide iPad)
 
-/// Column widths of the one-line species row on macOS, shared by `MarineLifeView`'s row and
+/// Column widths of the one-line species row (macOS, wide iPad), shared by `MarineLifeView`'s row and
 /// `MarineLifeColumnHeader` so the header labels stay aligned with the values.
 enum MarineLifeColumns {
     static let spacing: CGFloat = 12
@@ -1196,7 +1197,7 @@ enum MarineLifeColumns {
         + spacing * 5 + 8
 }
 
-/// Column labels over the one-line species rows (macOS), pinned to the top of the list with
+/// Column labels over the one-line species rows (macOS, wide iPad), pinned to the top of the list with
 /// `pinnedColumnHeader`, which shows them only while the rows are one-line (`OneLineRowsLayout`).
 struct MarineLifeColumnHeader: View {
     @State private var prefs = UserPreferences.shared
@@ -1222,7 +1223,6 @@ struct MarineLifeColumnHeader: View {
         }
     }
 }
-#endif
 
 // MARK: - Unlinked Sightings
 

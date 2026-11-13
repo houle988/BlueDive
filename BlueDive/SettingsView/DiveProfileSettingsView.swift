@@ -170,40 +170,46 @@ struct DiveProfileSettingsView: View {
                 )
                 .padding(.horizontal)
 
-                #if os(macOS)
-                // The dive list's profile preview exists only on macOS (also toggled from
-                // View → Show Profile Preview).
-                VStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle(isOn: $prefs.showDiveListProfilePreview) {
-                            Label {
-                                Text("Show profile preview in dive list")
-                            } icon: {
-                                Image(systemName: "chart.xyaxis.line")
-                                    .foregroundStyle(.cyan)
+                // The dive list's profile preview: macOS (also toggled from View → Show Profile
+                // Preview) and iPad, where it shows in a wide window. iPhone has no preview.
+                if WideWindowLayout.isSupportedOnDevice {
+                    VStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle(isOn: $prefs.showDiveListProfilePreview) {
+                                Label {
+                                    Text("Show profile preview in dive list")
+                                } icon: {
+                                    Image(systemName: "chart.xyaxis.line")
+                                        .foregroundStyle(.cyan)
+                                }
                             }
+                            .fullWidthSwitch()
                         }
-                        .fullWidthSwitch()
-                    }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+                        .padding()
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    Text("When on, the profile chart of the selected dive is shown above the dive list. Drag the line below the chart to resize it. Click a dive to select it; double-click it or press Return to open it. When off, a click opens the dive.")
+                        Group {
+                            #if os(macOS)
+                            Text("When on, the profile chart of the selected dive is shown above the dive list. Drag the line below the chart to resize it. Click a dive to select it; double-click it or press Return to open it. When off, a click opens the dive.")
+                            #else
+                            Text("When on, the profile chart of the selected dive is shown above the dive list in a wide window. Drag the line below the chart to resize it. Tap a dive to select it; tap it again to open it. When off, a tap opens the dive.")
+                            #endif
+                        }
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.primary.opacity(0.03))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                    .padding(.horizontal)
                 }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal)
-                #endif
 
                 diveDetailTabsCard
             }

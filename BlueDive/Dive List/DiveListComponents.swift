@@ -5,12 +5,26 @@ import SwiftUI
 struct DiveRowView: View {
     let summary: DiveSummary
     let diveNumber: Int   // fallback when diveNumber is nil
+    /// The "›" of a row that opens a page (the main dive list), drawn after the stacked row only:
+    /// a one-line row has none, so its columns stay under the header. iOS only: macOS rows,
+    /// like its lists, draw no chevron, so it is ignored there.
+    var showsChevron = false
+    /// The main dive list's selection on iPad (nil elsewhere): while its profile preview is
+    /// shown, a first tap only selects a row, so only the selected row (which a tap opens)
+    /// shows the "›".
+    var chevronSelection: DiveListSelection? = nil
     private let prefs = UserPreferences.shared
     @Environment(\.locale) private var locale
-    #if os(macOS)
     @Environment(OneLineRowsLayout.self) private var oneLineLayout: OneLineRowsLayout?
-    #endif
-    
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    private var wideWindow = WideWindowLayout()
+
+    /// Whether the one-line row is tried before the stacked one: on macOS, and on iPad in a
+    /// wide window (regular width). iPhone, and iPad in a narrow window, keep the stacked row.
+    private var usesOneLineRows: Bool {
+        wideWindow.isActive
+    }
+
     var body: some View {
         #if os(macOS)
         // The Mac window is wide: one line with every value in a fixed-width column so the
@@ -29,10 +43,37 @@ struct DiveRowView: View {
         }
         .accessibilityElement(children: .combine)
         #else
-        stackedRow
+        if usesOneLineRows {
+            // As on macOS: one line in columns when the row is wide enough, else the stacked row.
+            ViewThatFits(in: .horizontal) {
+                wideRow
+                    .reportsOneLine(true, to: oneLineLayout)
+                    .reportsRowContentWidth(to: oneLineLayout)
+                stackedRowWithChevron
+                    .reportsOneLine(false, to: oneLineLayout)
+            }
             .accessibilityElement(children: .combine)
+        } else {
+            stackedRowWithChevron
+                .accessibilityElement(children: .combine)
+        }
         #endif
     }
+
+    #if os(iOS)
+    /// The stacked row, with the "›" when the row opens a page (`showsChevron`).
+    @ViewBuilder
+    private var stackedRowWithChevron: some View {
+        if showsChevron {
+            HStack(spacing: 8) {
+                stackedRow
+                DiveRowChevron(selection: chevronSelection, summaryID: summary.id)
+            }
+        } else {
+            stackedRow
+        }
+    }
+    #endif
 
     /// Number, flag and badges (centred), then site / duration + surface interval / location /
     /// date / gas stacked, depth trailing.
@@ -52,8 +93,7 @@ struct DiveRowView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    #if os(macOS)
-    /// One line (macOS): number, flag, site + location, date, duration, surface interval,
+    /// One line (macOS, wide iPad): number, flag, site + location, date, duration, surface interval,
     /// gas, depth and badges, each in its own fixed-width column (`DiveListColumns`, shared
     /// with `DiveListColumnHeader` so the labels stay over their values).
     private var wideRow: some View {
@@ -102,7 +142,6 @@ struct DiveRowView: View {
         .padding(.vertical, 8)
         .oneLineRowWidth(columnsWidth: DiveListColumns.rowWidth)
     }
-    #endif
 
     private var diveIcon: some View {
         VStack(spacing: 4) {
@@ -269,10 +308,9 @@ struct DiveRowView: View {
     }
 }
 
-#if os(macOS)
-// MARK: - Dive List Columns (macOS)
+// MARK: - Dive List Columns (macOS, wide iPad)
 
-/// Column widths of the one-line dive row on macOS, shared by `DiveRowView` and
+/// Column widths of the one-line dive row (macOS, wide iPad), shared by `DiveRowView` and
 /// `DiveListColumnHeader` so the header labels stay aligned with the values.
 enum DiveListColumns {
     static let spacing: CGFloat = 12
@@ -292,7 +330,7 @@ enum DiveListColumns {
         + gas + depth + media + spacing * 8
 }
 
-/// Column labels over the one-line dive rows (macOS), pinned above the list with
+/// Column labels over the one-line dive rows (macOS, wide iPad), pinned above the list with
 /// `pinnedColumnHeader`, which shows them only while the rows are one-line (`OneLineRowsLayout`).
 struct DiveListColumnHeader: View {
     var body: some View {
@@ -331,7 +369,6 @@ struct DiveListColumnHeader: View {
             .multilineTextAlignment(alignment)
     }
 }
-#endif
 
 // MARK: - Stat Mini Box
 
@@ -360,3 +397,26 @@ struct StatMiniBox: View {
     }
 }
 
+#if os(iOS)
+/// The "›" after a stacked dive row. Hidden (its space kept, so the row's texts never move)
+/// while the profile preview is shown, except on the selected row: a tap there opens the dive,
+/// elsewhere it only selects. Its own view, reading the selection itself, so a selection change
+/// redraws the chevrons, not the rows.
+private struct DiveRowChevron: View {
+    let selection: DiveListSelection?
+    let summaryID: UUID
+
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .opacity(isShown ? 1 : 0)
+            .accessibilityHidden(true)
+    }
+
+    private var isShown: Bool {
+        guard let selection, selection.isPreviewShown else { return true }
+        return selection.diveID == summaryID
+    }
+}
+#endif

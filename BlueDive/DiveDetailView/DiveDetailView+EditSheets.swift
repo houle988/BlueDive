@@ -1168,11 +1168,8 @@ struct EditEquipmentView: View {
     }
 
     private func gearListRow(_ gear: Gear) -> some View {
-        #if os(macOS)
+        // Stacked: this list has no column header.
         GearRow(gear: gear, allowsOneLine: false)
-        #else
-        GearRow(gear: gear)
-        #endif
     }
 
     private func applyGearGroup(_ group: GearGroup) {

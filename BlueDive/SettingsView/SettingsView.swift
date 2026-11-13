@@ -620,15 +620,24 @@ class UserPreferences {
     var initialReplaceExistingWeather: Bool {
         replaceWeatherMode.initialValue(lastChoice: replaceWeatherLastChoice)
     }
-    #if os(macOS)
     /// When true, the main dive list shows the profile chart of the selected dive above the
-    /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
-    /// list has no chart and a click opens the dive. On by default.
+    /// list; a click (macOS) or a tap (iPad) selects a dive, a double-click or Return (macOS) or
+    /// a second tap (iPad) opens it. When false, the list has no chart and a click or tap opens
+    /// the dive. On iPad it applies only in a wide window, and iPhone never shows the preview.
+    /// On by default on macOS, off on iPad (see `defaultShowsDiveListProfilePreview`).
     /// No App Group write: the widget does not show the dive list.
     var showDiveListProfilePreview: Bool {
         didSet { UserDefaults.standard.set(showDiveListProfilePreview, forKey: "showDiveListProfilePreview") }
     }
-    #endif
+    /// On macOS the preview is on until turned off; on iPad it is opt-in, as it changes what
+    /// the first tap on a dive does.
+    static var defaultShowsDiveListProfilePreview: Bool {
+        #if os(macOS)
+        true
+        #else
+        false
+        #endif
+    }
 
     init() {
         self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "meters") ?? .meters
@@ -663,10 +672,9 @@ class UserPreferences {
         self.taxonomyNameLanguage = UserDefaults.standard.string(forKey: "taxonomyNameLanguage") ?? ""
         self.useINaturalistCommonNames = UserDefaults.standard.object(forKey: "useINaturalistCommonNames") as? Bool ?? true
         self.useAlternativeINaturalistPhoto = UserDefaults.standard.object(forKey: "useAlternativeINaturalistPhoto") as? Bool ?? true
-        #if os(macOS)
-        // On by default: an absent key reads as true.
-        self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
-        #endif
+        // An absent key reads as the platform default (on for macOS, off for iPad).
+        self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool
+            ?? Self.defaultShowsDiveListProfilePreview
         // Seed shared container after self is fully initialised (required by @Observable)
         let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
         shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
@@ -703,9 +711,7 @@ class UserPreferences {
         taxonomyNameLanguage = ""
         useINaturalistCommonNames = true
         useAlternativeINaturalistPhoto = true
-        #if os(macOS)
-        showDiveListProfilePreview = true
-        #endif
+        showDiveListProfilePreview = Self.defaultShowsDiveListProfilePreview
         SharedChartLineVisibility.shared.value = ChartLineVisibility()
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)

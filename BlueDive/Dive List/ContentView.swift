@@ -103,18 +103,28 @@ struct ContentView: View {
     /// Appearance & Language → Main Tabs).
     @Environment(\.shownMainTabs) var shownMainTabs
     @State private var collapsedDiverSections: Set<String> = []
-    #if os(macOS)
-    /// Whether the dive rows show their one-line version (wide window), and their width, reported
-    /// by the rows; the column header pinned above the list is shown only then, at that width.
-    /// Starts one-line: the main window opens maximized.
+    /// Whether the dive rows show their one-line version (wide window: macOS, iPad at regular
+    /// width), and their width, reported by the rows; the column header pinned above the list is
+    /// shown only then, at that width. Starts one-line: the main window opens maximized.
     @State private var diveListLayout = OneLineRowsLayout()
-    /// Selected dive (click or arrow keys); the profile preview above the list shows it.
-    /// An observable object rather than a `UUID?` `@State` so a selection change redraws only
-    /// the panel and the row highlights, not this body (the list reads it only in actions).
-    @State private var listSelection = DiveListSelection()
+    #if os(macOS)
     /// Keyboard focus of the dive list, for the arrow keys and Return.
     @FocusState private var isDiveListFocused: Bool
     #endif
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    private var wideWindow = WideWindowLayout()
+    /// Selected dive (a click or the arrow keys on macOS, a tap on iPad); the profile preview
+    /// above the list shows it. An observable object rather than a `UUID?` `@State` so a
+    /// selection change redraws only the panel and the row highlights, not this body (the list
+    /// reads it only in actions).
+    @State private var listSelection = DiveListSelection()
+
+    /// Whether the profile preview is shown above the list: when the setting is on, on macOS and
+    /// on iPad in a wide window (`WideWindowLayout`); a narrow iPad window (Slide Over, a narrow
+    /// Split View or Stage Manager window) keeps the plain list. iPhone never shows it.
+    private var showsProfilePreview: Bool {
+        prefs.showDiveListProfilePreview && wideWindow.isActive
+    }
     /// Dive opened by `openDive` (a tap on a row on iOS; a double-click or Return on macOS),
     /// pushed through `navigationDestination(item:)`.
     @State private var openedDiveTarget: DiveNavTarget?
@@ -230,7 +240,8 @@ struct ContentView: View {
     /// `List(selection:)`, whose highlight fills the row with the accent colour and washes out
     /// its coloured chips. With the preview turned off (Settings → Dive Profile, or View →
     /// Show Profile Preview) the list is plain and a click opens the dive, as on iOS.
-    /// On iOS this is exactly `List { … }`; a tap opens the dive.
+    /// On iOS this is exactly `List { … }`; the row decides what a tap does (on iPad with the
+    /// preview shown it selects: see `tapSelectableDiveRow`).
     @ViewBuilder
     private func diveListContainer<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         #if os(macOS)
@@ -268,8 +279,10 @@ struct ContentView: View {
     /// without evaluating every row. A row choosing between two shapes (link or selectable)
     /// would make it evaluate all rows — with their modifiers — on every list update, which
     /// macOS does each time the Dives tab is shown or hidden (about a second at 2 000 dives).
-    /// So on macOS the profile-preview setting picks the row kind once for the whole list.
-    /// On iOS this is the link-row `ForEach` alone.
+    /// So on macOS the profile-preview setting picks the row kind once for the whole list. On
+    /// iOS the device does: iPad always uses the selectable row (which opens on the first tap
+    /// while the preview is hidden), so a size-class change never swaps the rows; iPhone uses
+    /// the link row.
     @ViewBuilder
     private func diveRows(
         _ summaries: [DiveSummary],
@@ -288,8 +301,14 @@ struct ContentView: View {
             }
         }
         #else
-        diveRowsForEach(summaries, onDelete: onDelete) { summary in
-            linkDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0))
+        if WideWindowLayout.isSupportedOnDevice {
+            diveRowsForEach(summaries, onDelete: onDelete) { summary in
+                tapSelectableDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0))
+            }
+        } else {
+            diveRowsForEach(summaries, onDelete: onDelete) { summary in
+                linkDiveRow(summary, rowNumber: diveCount - (store.diveIndexLookup[summary.id] ?? 0))
+            }
         }
         #endif
     }
@@ -305,13 +324,9 @@ struct ContentView: View {
         let lastID = summaries.last?.id
         return ForEach(summaries) { summary in
             row(summary)
-            #if os(macOS)
-            .listRowBackground(Color.primary.opacity(0.07)
-                                   .overlay { DiveRowSelectionHighlight(selection: listSelection, summaryID: summary.id) },
+            .listRowBackground(rowBackground(summary.id),
                                macFirst: summary.id == firstID, macLast: summary.id == lastID)
-            #else
-            .listRowBackground(Color.primary.opacity(0.07),
-                               macFirst: summary.id == firstID, macLast: summary.id == lastID)
+            #if os(iOS)
             // iOS starts the separator at the row's first Text (here the "#123" badge, whose
             // position varies with its width): start it at the row's leading edge instead, as
             // in the Equipment, Marine Life and Documents lists.
@@ -339,6 +354,19 @@ struct ContentView: View {
         .onDelete(perform: onDelete)
     }
 
+    /// A dive row's background, with the selected row's highlight on macOS and iPad (where the
+    /// profile preview can be shown). iPhone has no preview: the plain background, no highlight
+    /// to observe. The device type never changes while the app runs, so the row keeps its shape.
+    @ViewBuilder
+    private func rowBackground(_ summaryID: UUID) -> some View {
+        if WideWindowLayout.isSupportedOnDevice {
+            Color.primary.opacity(0.07)
+                .overlay { DiveRowSelectionHighlight(selection: listSelection, summaryID: summaryID) }
+        } else {
+            Color.primary.opacity(0.07)
+        }
+    }
+
     /// A dive row that opens the dive when clicked or tapped: a plain button, as the rows of
     /// the Equipment, Marine Life and Documents tabs, rather than a NavigationLink, so
     /// `openDive` can delay the push on iOS until a closing sheet is gone.
@@ -346,16 +374,9 @@ struct ContentView: View {
         Button {
             openDive(summary.id)
         } label: {
-            HStack(spacing: 8) {
-                DiveRowView(summary: summary, diveNumber: rowNumber)
-                #if os(iOS)
-                // The chevron an iOS NavigationLink row draws: the row opens a page, not a sheet.
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-                #endif
-            }
+            // With the chevron an iOS NavigationLink row draws (the row opens a page, not a
+            // sheet); macOS ignores it. iPad uses `tapSelectableDiveRow`, with the same chevron.
+            DiveRowView(summary: summary, diveNumber: rowNumber, showsChevron: true)
             // The whole row opens the dive, including the gaps between its texts (a plain
             // Button only responds where something is drawn).
             .contentShape(Rectangle())
@@ -389,6 +410,31 @@ struct ContentView: View {
     }
     #endif
 
+    #if os(iOS)
+    /// A dive row on iPad: while the profile preview is shown, a tap selects it (the preview
+    /// shows it) and a tap on the selected row opens it; otherwise a tap opens it, as a link row.
+    private func tapSelectableDiveRow(_ summary: DiveSummary, rowNumber: Int) -> some View {
+        Button {
+            if !listSelection.isPreviewShown || listSelection.diveID == summary.id {
+                openDive(summary.id)
+            } else {
+                listSelection.diveID = summary.id
+            }
+        } label: {
+            DiveRowView(summary: summary, diveNumber: rowNumber, showsChevron: true,
+                        chevronSelection: listSelection)
+            // The whole row responds, including the gaps between its texts.
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // VoiceOver: activating does what a tap does; "Open Dive" opens the dive at once.
+        .accessibilityAction(named: Text("Open Dive")) {
+            openDive(summary.id)
+        }
+        .modifier(DiveRowSelectionAccessibility(selection: listSelection, summaryID: summary.id))
+    }
+    #endif
+
     /// Dive detail view for a list row.
     @ViewBuilder
     private func diveDetailDestination(_ target: DiveNavTarget) -> some View {
@@ -412,14 +458,12 @@ struct ContentView: View {
                 AppBackground(opaque: false).ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    #if os(macOS)
-                    if !store.dives.isEmpty && prefs.showDiveListProfilePreview {
+                    if !store.dives.isEmpty && showsProfilePreview {
                         ResizableProfilePreview(selection: listSelection)
                             // Above the list, so the line drawn while dragging the divider down
                             // stays visible over the list's rows.
                             .zIndex(1)
                     }
-                    #endif
                     contentSection
                 }
             }
@@ -700,7 +744,6 @@ struct ContentView: View {
         .onChange(of: store.cachedUniqueDivers) { _, newDivers in
             collapsedDiverSections.formIntersection(newDivers)
         }
-        #if os(macOS)
         // Clear the profile preview's selection once its dive is no longer listed (diver
         // filter, search or filter sheet), so the preview never shows a dive the list hides.
         .onChange(of: store.cachedFilteredSummaries) { _, summaries in
@@ -709,7 +752,17 @@ struct ContentView: View {
                 listSelection.diveID = nil
             }
         }
-        #endif
+        // The highlight (and on iPad what a tap does) follows whether the preview is shown (an
+        // iPad window narrowed, or the setting); the selection itself is kept, so the preview
+        // shows it again when the window widens (iPadOS also switches size class briefly while
+        // taking app-switcher snapshots).
+        .onChange(of: showsProfilePreview, initial: true) { _, shows in
+            listSelection.isPreviewShown = shows
+        }
+        // Turning the preview off drops the selection: rows then open on the first tap.
+        .onChange(of: prefs.showDiveListProfilePreview) { _, isOn in
+            if !isOn { listSelection.diveID = nil }
+        }
         .background(filterObservers)
         // Warm-launch: handle file URLs that arrive while the app is already running. Re-read
         // the shared coordinator rather than the value handed to this closure: every Dives list
@@ -954,6 +1007,9 @@ struct ContentView: View {
                     // Column labels pinned above the list, once for all diver sections.
                     .pinnedColumnHeader(diveListLayout) { DiveListColumnHeader() }
                     .environment(diveListLayout)
+                    #else
+                    // iPad in a wide window: the same column labels over the one-line rows.
+                    .pinnedColumnHeaderOnIPad(diveListLayout, isShown: wideWindow.isActive) { DiveListColumnHeader() }
                     #endif
                 } else {
                     diveListContainer {
@@ -983,6 +1039,9 @@ struct ContentView: View {
                     // Column labels pinned above the list, so they stay visible while it scrolls.
                     .pinnedColumnHeader(diveListLayout) { DiveListColumnHeader() }
                     .environment(diveListLayout)
+                    #else
+                    // iPad in a wide window: the same column labels over the one-line rows.
+                    .pinnedColumnHeaderOnIPad(diveListLayout, isShown: wideWindow.isActive) { DiveListColumnHeader() }
                     #endif
                 }
             }
@@ -1157,14 +1216,12 @@ struct ContentView: View {
                 .map { displayed[$0].diverName }
                 .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         )
-        #if os(macOS)
         // Drop the preview's selection before its dive is deleted: the store's dive map is only
         // rebuilt on the next @Query delivery, and reading a deleted Dive in between crashes.
         if let selectedID = listSelection.diveID,
            offsets.contains(where: { $0 < displayed.count && displayed[$0].id == selectedID }) {
             listSelection.diveID = nil
         }
-        #endif
         withAnimation {
             for index in offsets where index < displayed.count {
                 modelContext.delete(displayed[index])
@@ -1190,12 +1247,10 @@ struct ContentView: View {
         // Capture the diver name before deletion so the remaining dives in that
         // group can be re-sequenced afterward.
         let affectedDiver = dive.diverName
-        #if os(macOS)
         // Drop the preview's selection before its dive is deleted (see confirmDeleteItems).
         if listSelection.diveID == dive.id {
             listSelection.diveID = nil
         }
-        #endif
         withAnimation {
             modelContext.delete(dive)
             try? modelContext.save()
@@ -1293,13 +1348,16 @@ struct ContentView: View {
     }
 }
 
-#if os(macOS)
-// MARK: - Dive Selection & Profile Preview (macOS)
+// MARK: - Dive Selection & Profile Preview (macOS, iPad)
 
 /// Selected dive of the main dive list.
 @MainActor @Observable
 final class DiveListSelection {
     var diveID: UUID?
+    /// Whether the profile preview is shown (set by the list). Only then is the selected row
+    /// highlighted; on iPad it also decides what a tap does (select, or open at once), which
+    /// rows show the "›" and the VoiceOver selected trait and hints.
+    var isPreviewShown = true
 }
 
 /// The profile preview above the dive list, with a divider below it that the user drags (or
@@ -1322,11 +1380,15 @@ private struct ResizableProfilePreview: View {
     @State private var dragStartFraction: Double?
     /// Applies the line's position once the mouse has paused (restarted on every move).
     @State private var pauseTask: Task<Void, Never>?
+    /// The height the shown chart needs: its chips and legend (which wrap onto more lines in a
+    /// narrower window, and are stacked on iPad) around its smallest plot, plus the panel's
+    /// padding; 0 while no chart is shown. Measured by the panel.
+    @State private var chartMinimumHeight: CGFloat = 0
 
     private static let fractionRange = 0.25...0.85
-    /// Height the chart needs: its smallest plot (`ChartHeightRule.listPreview`), a row of
-    /// chips, the legend and the panel's padding. The pane never gets lower, so the chart
-    /// never spills over the divider.
+    /// The pane's lowest height while no chart is measured yet (no dive selected): about the
+    /// smallest plot with a row of chips and a one-line legend. Once a chart is shown, the
+    /// pane never gets lower than that chart needs (`chartMinimumHeight`).
     private static let minPaneHeight: CGFloat = 260
     /// Height left for the dive list (a few rows), whatever the share.
     private static let minListHeight: CGFloat = 150
@@ -1344,8 +1406,10 @@ private struct ResizableProfilePreview: View {
     /// The preview's height for `share` of a tab `total` points high, kept between the chart's
     /// minimum and what leaves the list its minimum.
     private func paneHeight(in total: CGFloat, share: Double) -> CGFloat {
-        let maximum = max(total - Self.minListHeight - Self.dividerHeight, Self.minPaneHeight)
-        return min(max(total * share, Self.minPaneHeight), maximum)
+        // The chart's own need comes first: the legend stays visible, the list gives way.
+        let minimum = max(Self.minPaneHeight, chartMinimumHeight)
+        let maximum = max(total - Self.minListHeight - Self.dividerHeight, minimum)
+        return min(max(total * share, minimum), maximum)
     }
 
     private func clamped(_ value: Double) -> Double {
@@ -1354,12 +1418,12 @@ private struct ResizableProfilePreview: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DiveProfilePreviewPanel(selection: selection)
+            DiveProfilePreviewPanel(selection: selection) { chartMinimumHeight = $0 }
                 .containerRelativeFrame(.vertical) { height, _ in
                     paneHeight(in: height, share: paneFraction)
                 }
-                // Safety net: a chart taller than its minimum (chips or legend wrapped onto a
-                // second line in a narrow window) is cut at the divider rather than drawn over it.
+                // Safety net while a new chart is being measured: cut at the divider rather than
+                // drawn over it.
                 .clipped()
             divider
         }
@@ -1394,8 +1458,15 @@ private struct ResizableProfilePreview: View {
                 .frame(width: 36, height: 4)
         }
         .frame(height: Self.dividerHeight)
+        #if os(macOS)
         .contentShape(Rectangle())
         .pointerStyle(.rowResize)
+        #else
+        // A finger needs a taller target than the 14 pt strip: about 44 pt, all of it above the
+        // strip (over the chart's bottom padding and the bottom of the chart, which has no touch
+        // actions), so a scroll starting on the list still scrolls it.
+        .contentShape(ExtendedUpwardShape(extra: 30))
+        #endif
         .gesture(
             // Global coordinates: a translation measured in the divider's own coordinates would
             // change under the mouse when the pane is resized at a pause.
@@ -1440,7 +1511,23 @@ private struct ResizableProfilePreview: View {
 /// is selected.
 private struct DiveProfilePreviewPanel: View {
     let selection: DiveListSelection
+    /// Told the height the shown chart needs (0 when none is shown), so the pane above the
+    /// list never hides its chips or legend.
+    let onMinimumHeightChange: (CGFloat) -> Void
     @Environment(DiveStore.self) private var store
+    /// The chart's whole height and its plot's height, measured: what is left is its chips and
+    /// legend, whose height depends on the dive's lines and the window's width.
+    @State private var chartHeight: CGFloat = 0
+    @State private var plotHeight: CGFloat = 0
+
+    /// The panel's vertical padding (top and bottom).
+    private static let verticalPadding: CGFloat = 10
+
+    /// The height the shown chart needs at its smallest plot, or 0 while none is measured.
+    private var minimumHeight: CGFloat {
+        guard chartHeight > 0, plotHeight > 0 else { return 0 }
+        return (chartHeight - plotHeight) + ChartHeightRule.listPreview.minHeight + 2 * Self.verticalPadding
+    }
 
     var body: some View {
         Group {
@@ -1454,7 +1541,14 @@ private struct DiveProfilePreviewPanel: View {
                         .frame(maxHeight: .infinity)
                 } else {
                     // Same chart as the dive detail view: chips, every line and the legend.
-                    UnifiedDiveChartOptimized(dive: dive, chartHeightRule: .listPreview)
+                    UnifiedDiveChartOptimized(dive: dive, chartHeightRule: .listPreview,
+                                              onPlotHeightChange: { plotHeight = $0 })
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chartHeight = $0 }
+                        // No chart, nothing to keep room for.
+                        .onDisappear {
+                            chartHeight = 0
+                            plotHeight = 0
+                        }
                 }
             } else {
                 Text("Select a dive to preview its profile")
@@ -1464,18 +1558,37 @@ private struct DiveProfilePreviewPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, Self.verticalPadding)
+        .onChange(of: minimumHeight, initial: true) { _, height in
+            onMinimumHeightChange(height)
+        }
     }
 }
 
 /// Adds the selected trait to the selected dive row for VoiceOver. A modifier reading the
-/// selection itself, so only the rows (not the list body) update when it changes.
+/// selection itself, so only the rows (not the list body) update when it changes. On iPad, while
+/// the preview is shown, it also tells what activating the row does: a first tap selects it
+/// (the preview shows it), a second opens it. On macOS activating the row always opens it, so
+/// no hint.
 private struct DiveRowSelectionAccessibility: ViewModifier {
     let selection: DiveListSelection
     let summaryID: UUID
 
     func body(content: Content) -> some View {
+        #if os(macOS)
         content.accessibilityAddTraits(selection.diveID == summaryID ? .isSelected : [])
+        #else
+        // One chain whatever the state, so selecting a row never rebuilds it (VoiceOver keeps
+        // its focus on the row it just activated). While the preview is hidden, no selected
+        // trait (the kept selection has no highlight) and no hint: a tap then opens the dive,
+        // as on any link row.
+        let isSelected = selection.diveID == summaryID
+        content
+            .accessibilityAddTraits(isSelected && selection.isPreviewShown ? .isSelected : [])
+            .accessibilityHint(!selection.isPreviewShown ? Text(verbatim: "")
+                               : isSelected ? Text("Opens the dive.")
+                               : Text("Shows the dive's profile above the list."))
+        #endif
     }
 }
 
@@ -1487,10 +1600,10 @@ private struct DiveRowSelectionAccessibility: ViewModifier {
 private struct DiveRowSelectionHighlight: View {
     let selection: DiveListSelection
     let summaryID: UUID
-    @State private var prefs = UserPreferences.shared
 
     var body: some View {
-        if prefs.showDiveListProfilePreview && selection.diveID == summaryID {
+        if selection.isPreviewShown && selection.diveID == summaryID {
+            #if os(macOS)
             // Inset and radius match the ring macOS draws around a right-clicked row (measured
             // on screen: about 9 pt from the row's sides, 1 pt from its top and bottom, 8 pt
             // radius), so the ring sits exactly on the fill's edge.
@@ -1498,7 +1611,22 @@ private struct DiveRowSelectionHighlight: View {
                 .fill(Color.cyan.opacity(0.22))
                 .padding(.horizontal, 9)
                 .padding(.vertical, 1)
+            #else
+            // The whole row's background: iPad clips it to the card's rounded corners itself.
+            Rectangle()
+                .fill(Color.cyan.opacity(0.22))
+            #endif
         }
+    }
+}
+
+#if os(iOS)
+/// A rectangle extended `extra` points above the view's frame: the divider's touch target.
+private struct ExtendedUpwardShape: Shape {
+    let extra: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: rect.minX, y: rect.minY - extra, width: rect.width, height: rect.height + extra))
     }
 }
 #endif

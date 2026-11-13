@@ -758,6 +758,12 @@ extension View {
 /// within a line.
 struct WrappingChipLayout: Layout {
     var spacing: CGFloat
+    /// Whether the layout takes the whole proposed width (the default), or only its widest line,
+    /// so a parent can centre it (the dive profile's stacked legend on macOS and iPad).
+    var fillsProposedWidth = true
+    /// Whether each line is centred in the layout's width (the dive profile's stacked legend on
+    /// macOS and iPad), rather than starting at its leading edge (the default).
+    var centersLines = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
@@ -767,13 +773,14 @@ struct WrappingChipLayout: Layout {
         // Fill a finite proposed width; with no width limit (nil or infinite proposal),
         // report the widest line instead of an infinite size.
         let proposedWidth = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+        guard fillsProposedWidth else { return CGSize(width: min(width, proposedWidth ?? width), height: height) }
         return CGSize(width: proposedWidth ?? width, height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var y = bounds.minY
         for row in arrangeRows(maxWidth: bounds.width, subviews: subviews) {
-            var x = bounds.minX
+            var x = centersLines ? bounds.minX + max(bounds.width - row.width, 0) / 2 : bounds.minX
             for (index, size) in zip(row.indices, row.sizes) {
                 subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
                                       proposal: ProposedViewSize(size))
@@ -885,13 +892,65 @@ struct ProportionalHStack: Layout {
 }
 #endif
 
-// MARK: - One-Line List Rows (macOS wide-window layouts)
+// MARK: - One-Line List Rows (wide-window layouts)
 
-#if os(macOS)
-/// Whether a list's rows show their one-line (column) version (macOS wide-window layouts:
-/// Dives, Equipment, Documents, Marine Life). Owned by the list's view in `@State` and put in
-/// the List's environment; each row writes it from the version `ViewThatFits` shows, so the
-/// list shows its column header — pinned above the list (`pinnedColumnHeader`) or as a row
+/// Whether a view uses the wide-window layouts (one-line rows with a column header, the chart's
+/// one-row chips and one-line legend, the dive list's profile preview): always on macOS; on iPad
+/// in a wide window (regular width) at a text size below the accessibility sizes, where the
+/// one-line rows' fixed columns would cut the text off. iPhone, and iPad in Slide Over, a narrow
+/// Split View or a narrow window, keep the stacked layouts. Declare it once in a view
+/// (`private var wideWindow = WideWindowLayout()`) and read `isActive`.
+struct WideWindowLayout: DynamicProperty {
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #endif
+
+    var isActive: Bool {
+        #if os(macOS)
+        true
+        #else
+        Self.isSupportedOnDevice && horizontalSizeClass == .regular
+            && !dynamicTypeSize.isAccessibilitySize
+        #endif
+    }
+
+    /// Whether this device can show the wide-window layouts at all: macOS and iPad, never
+    /// iPhone. Constant while the app runs, so a branch on it never changes a view's shape.
+    static var isSupportedOnDevice: Bool {
+        #if os(macOS)
+        true
+        #else
+        UIDevice.current.userInterfaceIdiom == .pad
+        #endif
+    }
+}
+
+#if os(iOS)
+extension View {
+    /// `pinnedColumnHeader` on iPad only: iPhone never shows the column labels, so its lists
+    /// keep exactly their view tree (no empty header bar). The device type never changes while
+    /// the app runs, so the view tree never switches.
+    @ViewBuilder
+    func pinnedColumnHeaderOnIPad<Header: View>(
+        _ layout: OneLineRowsLayout,
+        isShown: Bool,
+        @ViewBuilder header: () -> Header
+    ) -> some View {
+        if WideWindowLayout.isSupportedOnDevice {
+            pinnedColumnHeader(layout, isShown: isShown, header: header)
+                .environment(layout)
+        } else {
+            self
+        }
+    }
+}
+#endif
+
+/// Whether a list's rows show their one-line (column) version (wide-window layouts, see
+/// `WideWindowLayout`: the Dives, Equipment, Documents and Marine Life lists on macOS and on
+/// iPad in a wide window). Owned by the list's view in `@State` and put in the List's
+/// environment; each row writes it from the version `ViewThatFits` shows, so the list shows its column header — pinned above the list (`pinnedColumnHeader`) or as a row
 /// (`columnHeaderRow`) — only with one-line rows (no empty header in the stacked layout).
 /// Rows only write it, never read it in `body`, so a change redraws the header, not the rows. A stable
 /// reference rather than a Binding, which would change on every parent redraw.
@@ -907,8 +966,8 @@ struct ProportionalHStack: Layout {
     /// Marine Life): the widest one-line row, the Dives row (`DiveListColumns`: 1 012 pt).
     /// `ViewThatFits` switches a row to its stacked version when the List gives it less than its
     /// natural width, so the same value makes all the lists switch at the same window width, as
-    /// long as their rows get the same width: use the `.sidebar` list style on macOS (16 pt row
-    /// insets each side). A `.plain` list gives its rows 15 pt more (measured), so its rows
+    /// long as their rows get the same width: use the `.sidebar` list style (16 pt row insets each
+    /// side on macOS). A `.plain` list gives its rows 15 pt more (measured), so its rows
     /// would switch at a narrower window. Raise it if a one-line row gets wider than this.
     static let rowWidth: CGFloat = 1012
 }
@@ -932,8 +991,8 @@ struct ColumnHeaderRowContent<Labels: View>: View {
     }
 }
 
-/// A column header pinned above a list (macOS), so its labels stay visible while the list
-/// scrolls. Shown only while `isShown` and the rows are one-line, at the width the List gives
+/// A column header pinned above a list (macOS, and iPad in a wide window), so its labels stay
+/// visible while the list scrolls. Shown only while `isShown` and the rows are one-line, at the width the List gives
 /// those rows (`OneLineRowsLayout.rowContentWidth`), centred as the rows are between their equal
 /// side insets. Its own view, so a layout change redraws only it.
 struct PinnedColumnHeader<Header: View>: View {
@@ -955,8 +1014,8 @@ struct PinnedColumnHeader<Header: View>: View {
 }
 
 extension View {
-    /// Pins a column header to the top of a list (macOS; see `PinnedColumnHeader`): a bar with
-    /// the system scroll edge effect on macOS 26+, a safe-area inset over the bar material before.
+    /// Pins a column header to the top of a list (see `PinnedColumnHeader`): a bar with the
+    /// system scroll edge effect on iOS 26+ and macOS 26+, a safe-area inset over the bar material before.
     /// The list's one-line rows report their width with `reportsRowContentWidth(to:)`.
     @ViewBuilder
     func pinnedColumnHeader<Header: View>(
@@ -965,7 +1024,7 @@ extension View {
         @ViewBuilder header: () -> Header
     ) -> some View {
         let pinned = PinnedColumnHeader(layout: layout, isShown: isShown, header: header())
-        if #available(macOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *) {
             safeAreaBar(edge: .top, spacing: 0) {
                 pinned
             }
@@ -979,13 +1038,21 @@ extension View {
 
     /// Shows a column header as a plain List row: no row background or separator. A row, not a
     /// section header, so it has exactly the rows' width and insets (a sidebar section header is
-    /// wider and shrinks on hover for its disclosure chevron, which shifts the labels). It has
-    /// the card rows' insets (`MacListCard.rowInsets`), so its labels stay over their columns.
+    /// wider and shrinks on hover for its disclosure chevron, which shifts the labels). On macOS
+    /// it has the card rows' insets (`MacListCard.rowInsets`); on iPad the list's own row insets,
+    /// as the rows. Either way its labels stay over their columns.
+    @ViewBuilder
     func columnHeaderRow() -> some View {
+        #if os(macOS)
         self
             .listRowInsets(MacListCard.rowInsets)
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+        #else
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+        #endif
     }
 
     /// Gives a one-line row (or its column header) the shared natural width
@@ -1026,4 +1093,3 @@ extension View {
         }
     }
 }
-#endif

@@ -33,11 +33,12 @@ struct GearListView: View {
     @State private var showInactive = false
     @State private var showFilterSheet = false
     @State private var collapsedSections: Set<String> = []
-    #if os(macOS)
-    /// Whether the rows show their one-line version (wide window), reported by the rows; the
-    /// column header row is shown only then. Starts one-line: the main window opens maximized.
+    /// Whether the rows show their one-line version (wide window: macOS, iPad at regular width),
+    /// reported by the rows; the column header row is shown only then. Starts one-line: the main
+    /// window opens maximized.
     @State private var gearListLayout = OneLineRowsLayout()
-    #endif
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    private var wideWindow = WideWindowLayout()
     @State private var showTankTemplates = false
     @State private var showGearGroups = false
     @State private var showImportPicker = false
@@ -650,6 +651,11 @@ struct GearListView: View {
         // only when some gear matches; otherwise "No equipment found").
         .pinnedColumnHeader(gearListLayout) { GearListColumnHeader() }
         .environment(gearListLayout)
+        #else
+        // iPad in a wide window: the same column labels over the one-line rows.
+        .pinnedColumnHeaderOnIPad(gearListLayout, isShown: wideWindow.isActive) {
+            GearListColumnHeader()
+        }
         #endif
         .refreshable {
             try? modelContext.save()
@@ -1225,20 +1231,19 @@ struct GearListView: View {
 
 struct GearRow: View {
     let gear: Gear
-    #if os(macOS)
     /// false: always the stacked row (a list without a column header, e.g. a sheet's picker).
     var allowsOneLine = true
     @Environment(\.locale) private var locale
     @Environment(OneLineRowsLayout.self) private var oneLineLayout: OneLineRowsLayout?
-    #endif
-    
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    private var wideWindow = WideWindowLayout()
+
     var body: some View {
-        #if os(macOS)
-        // The Mac window is wide: one line with every value in a fixed-width column so the
-        // rows line up, falling back to the stacked iOS row when the window is too narrow.
-        // Each version tells the list which one is shown, so its pinned column header is only
-        // there with one-line rows (`OneLineRowsLayout`), at their width.
-        if allowsOneLine {
+        // In a wide window (macOS; iPad at regular width): one line with every value in a
+        // fixed-width column so the rows line up, falling back to the stacked row when the
+        // window is too narrow. Each version tells the list which one is shown, so its pinned
+        // column header is only there with one-line rows (`OneLineRowsLayout`), at their width.
+        if allowsOneLine && wideWindow.isActive {
             ViewThatFits(in: .horizontal) {
                 wideRow
                     .reportsOneLine(true, to: oneLineLayout)
@@ -1249,9 +1254,6 @@ struct GearRow: View {
         } else {
             stackedRow
         }
-        #else
-        stackedRow
-        #endif
     }
 
     /// Icon, then name / weight + dives / diver on three lines, service indicator trailing.
@@ -1280,8 +1282,7 @@ struct GearRow: View {
         .contentShape(Rectangle())
     }
 
-    #if os(macOS)
-    /// One line (macOS): icon, name, manufacturer + model, weight, dives, diver, next service
+    /// One line (macOS, wide iPad): icon, name, manufacturer + model, weight, dives, diver, next service
     /// date and service indicator, each in its own fixed-width column (`GearListColumns`, shared
     /// with `GearListColumnHeader` so the labels stay over their values).
     private var wideRow: some View {
@@ -1355,7 +1356,6 @@ struct GearRow: View {
         return prefs.weightUnit.formatted(gear.weightContribution,
                                           from: WeightUnit.from(importFormat: gear.weightContributionUnit ?? prefs.weightUnit.symbol))
     }
-    #endif
 
     /// Active/inactive dot and the gear name.
     private var nameLine: some View {
@@ -1443,10 +1443,9 @@ struct GearServiceIndicator: View {
     }
 }
 
-#if os(macOS)
-// MARK: - Equipment List Columns (macOS)
+// MARK: - Equipment List Columns (macOS, wide iPad)
 
-/// Column widths of the one-line Equipment row on macOS, shared by `GearRow` and
+/// Column widths of the one-line Equipment row (macOS, wide iPad), shared by `GearRow` and
 /// `GearListColumnHeader` so the header labels stay aligned with the values.
 enum GearListColumns {
     static let spacing: CGFloat = 12
@@ -1465,7 +1464,7 @@ enum GearListColumns {
         + indicator + spacing * 7
 }
 
-/// Column labels over the one-line Equipment rows (macOS), pinned above the list with
+/// Column labels over the one-line Equipment rows (macOS, wide iPad), pinned above the list with
 /// `pinnedColumnHeader`, which shows them only while the rows are one-line (`OneLineRowsLayout`).
 struct GearListColumnHeader: View {
     var body: some View {
@@ -1490,7 +1489,6 @@ struct GearListColumnHeader: View {
         }
     }
 }
-#endif
 
 // MARK: - Equipment Filter Sheet
 

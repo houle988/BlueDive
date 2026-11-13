@@ -563,16 +563,15 @@ private struct StaticChartLayer: View, Equatable {
     let tissueProfile: BuhlmannProfile?
     /// Changes each time `tissueProfile` is rebuilt, so the Equatable check redraws the lines.
     let tissueProfileVersion: Int
-    #if os(macOS)
-    /// How the plot height follows the window: the dive detail view's rule by default, a
-    /// lower one for the dive list's profile preview.
+    /// How the plot height is set: the dive detail view's rule by default, the dive list's
+    /// profile preview filling its pane.
     var heightRule: ChartHeightRule = .detail
-    #endif
+    /// Told the plot's height when it fills its pane (`heightRule.fills`), so the dive list's
+    /// preview can keep room for the chips and legend around it. Not compared by `==`.
+    var onPlotHeightChange: ((CGFloat) -> Void)? = nil
 
     static func == (lhs: StaticChartLayer, rhs: StaticChartLayer) -> Bool {
-        #if os(macOS)
         guard lhs.heightRule == rhs.heightRule else { return false }
-        #endif
         return lhs.dive.id == rhs.dive.id &&
         lhs.profileID == rhs.profileID &&
         lhs.tissueProfileVersion == rhs.tissueProfileVersion &&
@@ -728,14 +727,10 @@ private struct StaticChartLayer: View, Equatable {
 
     /// Most depth intervals the chart shows, so its gridlines (and the right-axis labels
     /// on them) stay readable: 10 on the dive detail chart (about 28 pt apart at its
-    /// 300 pt minimum height), 5 on the macOS dive-list preview (its plot can be as low as
+    /// 300 pt minimum height), 5 on the dive-list preview (macOS, wide iPad) (its plot can be as low as
     /// 120 pt).
     private var maxDepthIntervals: Double {
-        #if os(macOS)
-        return heightRule == .listPreview ? 5 : 10
-        #else
-        return 10
-        #endif
+        heightRule == .listPreview ? 5 : 10
     }
 
     /// Depth below the surface line that the plot shows on a grid `step` apart (display
@@ -1050,11 +1045,7 @@ private struct StaticChartLayer: View, Equatable {
                 }
             }
         }
-        #if os(macOS)
-        .macChartHeight(heightRule)
-        #else
-        .frame(height: 300)
-        #endif
+        .chartHeight(heightRule, onPlotHeightChange: onPlotHeightChange)
     }
 
     // MARK: - Gas change markers
@@ -1963,11 +1954,12 @@ struct MetricLegendRow: View {
     }
 }
 
-#if os(macOS)
-// MARK: - Chart Height (macOS)
+// MARK: - Chart Height
 
-/// Mac windows are tall and resizable: the plot grows with the visible height of its container
-/// (the enclosing scroll view, or the window), as a fraction of it clamped to a range.
+/// How the plot height is set. On macOS, whose windows are tall and resizable, the dive detail
+/// chart grows with the visible height of its container (the enclosing scroll view, or the
+/// window), as a fraction of it clamped to a range; on iOS it keeps its 300 pt. The dive list's
+/// profile preview (macOS, and iPad in a wide window) fills its pane on both.
 struct ChartHeightRule: Equatable {
     let fraction: CGFloat
     let minHeight: CGFloat
@@ -1991,17 +1983,22 @@ struct ChartHeightRule: Equatable {
 
 private extension View {
     @ViewBuilder
-    func macChartHeight(_ rule: ChartHeightRule) -> some View {
+    func chartHeight(_ rule: ChartHeightRule, onPlotHeightChange: ((CGFloat) -> Void)? = nil) -> some View {
         if rule.fills {
             frame(minHeight: rule.minHeight, maxHeight: .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onPlotHeightChange?($0) }
         } else {
+            #if os(macOS)
             containerRelativeFrame(.vertical) { height, _ in
                 rule.height(for: height)
             }
+            #else
+            // The iOS plot height (the rule's minimum, 300 pt for the dive detail chart).
+            frame(height: rule.minHeight)
+            #endif
         }
     }
 }
-#endif
 
 // MARK: - Profile Photo Marker
 
@@ -2021,11 +2018,13 @@ private struct ProfilePhotoMarker: Identifiable {
 /// Graphique unifié interactif pour le profil de plongée - VERSION OPTIMISÉE
 struct UnifiedDiveChartOptimized: View {
     let dive: Dive
-    #if os(macOS)
-    /// How the plot height is set: a share of the window (`.detail`), or the pane above the dive
-    /// list (`.listPreview`, sized by its divider).
+    /// How the plot height is set: the dive detail chart's (`.detail`), or the pane above the
+    /// dive list (`.listPreview`, sized by its divider).
     var chartHeightRule: ChartHeightRule = .detail
-    #endif
+    /// Told the plot's height when it fills its pane (see `StaticChartLayer.onPlotHeightChange`).
+    var onPlotHeightChange: ((CGFloat) -> Void)? = nil
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    private var wideWindow = WideWindowLayout()
     @State private var sharedVisibility = SharedChartLineVisibility.shared
     /// The shared line selection (see `SharedChartLineVisibility`), so every chart on screen
     /// shows the same chips and lines.
@@ -2492,48 +2491,30 @@ struct UnifiedDiveChartOptimized: View {
 
     private var toggleControls: some View {
         VStack(spacing: 12) {
-            #if os(macOS)
-            // The Mac window is usually wide enough for all the chips on one row;
-            // fall back to the two iOS rows when it is not. ViewThatFits measures
-            // the chips at their full-label width, so the single row is only used
-            // when no chip would have to switch to its short label.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    primaryToggleChips()
-                    secondaryToggleChips
-                    photosChip(showsLabel: true)
-                }
-                VStack(spacing: 12) {
-                    HStack(spacing: 12) { primaryToggleChips() }
+            if usesWideChartLayout {
+                // A wide window (macOS, iPad at regular width) is usually wide enough for all
+                // the chips on one row; else two rows with their full labels; the compact rows
+                // (short labels) are the last resort. ViewThatFits measures the chips at their
+                // full-label width, so the single row is only used when no chip would have to
+                // switch to its short label.
+                ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) {
+                        primaryToggleChips()
                         secondaryToggleChips
                         photosChip(showsLabel: true)
                     }
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) { primaryToggleChips() }
+                        HStack(spacing: 12) {
+                            secondaryToggleChips
+                            photosChip(showsLabel: true)
+                        }
+                    }
+                    compactToggleRows
                 }
+            } else {
+                compactToggleRows
             }
-            #else
-            // Full labels when the row has room; else Temperature by its short label with GF
-            // still labelled; GF icon only where even that does not fit (a small iPhone,
-            // a long language, large text).
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { primaryToggleChips() }
-                HStack(spacing: 12) { primaryToggleChips(shortLabels: true) }
-                HStack(spacing: 12) { primaryToggleChips(shortLabels: true, gfShowsLabel: false) }
-            }
-
-            // Labelled like the other chips when the row has room; icon only where a fourth
-            // labelled chip would not fit (a small iPhone).
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    secondaryToggleChips
-                    photosChip(showsLabel: true)
-                }
-                HStack(spacing: 12) {
-                    secondaryToggleChips
-                    photosChip(showsLabel: false)
-                }
-            }
-            #endif
             // Preceded by a swatch of the depth line (same colour and width as `depthMarks`),
             // drawn like the legend's line swatches; decorative, the text already says it.
             HStack(spacing: 6) {
@@ -2552,6 +2533,31 @@ struct UnifiedDiveChartOptimized: View {
         .padding(.horizontal)
     }
 
+    /// The chips in two rows (iPhone, iPad in a narrow window): full labels when the row has
+    /// room; else Temperature by its short label with GF still labelled; GF icon only where even
+    /// that does not fit (a small iPhone, a long language, large text). The second row's chips are
+    /// labelled like the others when it has room, icon only where a fourth labelled chip would
+    /// not fit.
+    private var compactToggleRows: some View {
+        VStack(spacing: 12) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { primaryToggleChips() }
+                HStack(spacing: 12) { primaryToggleChips(shortLabels: true) }
+                HStack(spacing: 12) { primaryToggleChips(shortLabels: true, gfShowsLabel: false) }
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    secondaryToggleChips
+                    photosChip(showsLabel: true)
+                }
+                HStack(spacing: 12) {
+                    secondaryToggleChips
+                    photosChip(showsLabel: false)
+                }
+            }
+        }
+    }
+
     // MARK: - Chart View
 
     private var chartView: some View {
@@ -2565,11 +2571,7 @@ struct UnifiedDiveChartOptimized: View {
         let deepestSampleDepth = dive.displayProfileDepth(dive.profileSamples.lazy.map(\.depth).max() ?? 0)
         let depthBase = max(dive.displayMaxDepth, deepestSampleDepth)
 
-        #if os(macOS)
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, tissueProfile: tissueProfile, tissueProfileVersion: gfCache.version, heightRule: chartHeightRule)
-        #else
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, tissueProfile: tissueProfile, tissueProfileVersion: gfCache.version)
-        #endif
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, tissueProfile: tissueProfile, tissueProfileVersion: gfCache.version, heightRule: chartHeightRule, onPlotHeightChange: onPlotHeightChange)
         return layer
             .equatable()
             // chartOverlay gives us a ChartProxy so we can read the exact plot-area
@@ -2943,34 +2945,42 @@ struct UnifiedDiveChartOptimized: View {
 
     // MARK: - Legend View
 
+    /// Whether the chips and the legend use the wide-window layout (one row or line, with
+    /// fallbacks): on macOS, and on iPad in a wide window (regular width). iPhone, and iPad in a
+    /// narrow window, keep the two chip rows and the stacked legend.
+    private var usesWideChartLayout: Bool {
+        wideWindow.isActive
+    }
+
     @ViewBuilder
     private var legendView: some View {
-        #if os(macOS)
-        // The Mac window is usually wide enough for the whole legend on one line.
-        // When it is not (narrow window, or many tank-pressure / PPO₂-sensor entries),
-        // split the shown groups evenly over two lines; the stacked iOS layout is the
-        // last resort for very narrow windows.
-        let groups = shownLegendGroups
-        let firstLineCount = (groups.count + 1) / 2
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                legendTitle
-                legendLine(groups)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                legendTitle
-                VStack(alignment: .leading, spacing: 6) {
-                    legendLine(Array(groups.prefix(firstLineCount)))
-                    legendLine(Array(groups.dropFirst(firstLineCount)))
+        if usesWideChartLayout {
+            // A wide window is usually wide enough for the whole legend on one line.
+            // When it is not (narrower window, or many tank-pressure / PPO₂-sensor entries),
+            // split the shown groups evenly over two lines; the stacked layout is the
+            // last resort for very narrow windows.
+            let groups = shownLegendGroups
+            let firstLineCount = (groups.count + 1) / 2
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    legendTitle
+                    legendLine(groups)
                 }
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    legendTitle
+                    // The shorter line centred under the longer one, as the stacked legend's.
+                    VStack(alignment: .center, spacing: 6) {
+                        legendLine(Array(groups.prefix(firstLineCount)))
+                        legendLine(Array(groups.dropFirst(firstLineCount)))
+                    }
+                }
+                stackedLegend
             }
-            stackedLegend
-        }
-        .padding(.horizontal)
-        #else
-        stackedLegend
             .padding(.horizontal)
-        #endif
+        } else {
+            stackedLegend
+                .padding(.horizontal)
+        }
     }
 
     private var legendTitle: some View {
@@ -2980,12 +2990,20 @@ struct UnifiedDiveChartOptimized: View {
             .foregroundStyle(.secondary)
     }
 
+    /// Whether the stacked legend's lines are each centred, like the legend's other layouts
+    /// (macOS, iPad), rather than spanning the full width from the leading edge (iPhone).
+    private var centersStackedLegend: Bool {
+        WideWindowLayout.isSupportedOnDevice
+    }
+
     /// Title above the legend groups, one group per line.
     private var stackedLegend: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Each line centred on macOS and iPad, at the leading edge on iPhone.
+        let alignment: HorizontalAlignment = centersStackedLegend ? .center : .leading
+        return VStack(alignment: alignment, spacing: 8) {
             legendTitle
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: alignment, spacing: 6) {
                 if showsDepthLegend { depthLegendGroup }
                 if showsTemperatureLegend { temperatureLegendGroup }
                 if showsPressureLegend { pressureLegendGroup(wrapping: true) }
@@ -2999,9 +3017,8 @@ struct UnifiedDiveChartOptimized: View {
         }
     }
 
-    #if os(macOS)
     /// Indices (0 = depth … 7 = gas switch, 8 = setpoint, the stacked legend's order) of the legend
-    /// groups currently shown (macOS only).
+    /// groups currently shown (the wide legend's lines).
     private var shownLegendGroups: [Int] {
         let shown = [showsDepthLegend, showsTemperatureLegend, showsPressureLegend,
                      showsNDLLegend, showsGFLegend, showsPPO2Legend, showsDecoLegend, hasGasChangeData,
@@ -3009,7 +3026,7 @@ struct UnifiedDiveChartOptimized: View {
         return shown.indices.filter { shown[$0] }
     }
 
-    /// The given legend groups side by side, separated by a vertical line (macOS only).
+    /// The given legend groups side by side, separated by a vertical line (wide legend).
     private func legendLine(_ groups: [Int]) -> some View {
         HStack(spacing: 8) {
             ForEach(Array(groups.enumerated()), id: \.element) { position, group in
@@ -3042,7 +3059,6 @@ struct UnifiedDiveChartOptimized: View {
             .frame(width: 1.5, height: 14)
             .padding(.horizontal, 4)
     }
-    #endif
 
     // MARK: Legend Groups
 
@@ -3088,7 +3104,7 @@ struct UnifiedDiveChartOptimized: View {
         let tankIndices = chartTankIndicesForLegend
         if tankIndices.count > 1 {
             if wrapping {
-                WrappingChipLayout(spacing: 8) { tankPressureLegendRows(tankIndices) }
+                WrappingChipLayout(spacing: 8, fillsProposedWidth: !centersStackedLegend, centersLines: centersStackedLegend) { tankPressureLegendRows(tankIndices) }
             } else {
                 tankPressureLegendRows(tankIndices)
             }
@@ -3113,7 +3129,7 @@ struct UnifiedDiveChartOptimized: View {
     @ViewBuilder
     private func gfLegendGroup(wrapping: Bool) -> some View {
         if wrapping {
-            WrappingChipLayout(spacing: 8) { gfLegendEntries }
+            WrappingChipLayout(spacing: 8, fillsProposedWidth: !centersStackedLegend, centersLines: centersStackedLegend) { gfLegendEntries }
         } else {
             HStack(spacing: 8) { gfLegendEntries }
         }
@@ -3176,7 +3192,7 @@ struct UnifiedDiveChartOptimized: View {
             // The group is shown only when it has a row (`ppo2LegendHasRow`).
             MetricLegendRow(color: .indigo, label: "PPO₂", range: ppo2RangeText(ppo2LegendRange))
         } else if wrapping {
-            WrappingChipLayout(spacing: 8) { sensorPPO2LegendRows(sensorIndices) }
+            WrappingChipLayout(spacing: 8, fillsProposedWidth: !centersStackedLegend, centersLines: centersStackedLegend) { sensorPPO2LegendRows(sensorIndices) }
         } else {
             sensorPPO2LegendRows(sensorIndices)
         }
@@ -3235,7 +3251,7 @@ struct UnifiedDiveChartOptimized: View {
     @ViewBuilder
     private func setpointLegendGroup(wrapping: Bool) -> some View {
         if wrapping {
-            WrappingChipLayout(spacing: 8) { setpointLegendEntries }
+            WrappingChipLayout(spacing: 8, fillsProposedWidth: !centersStackedLegend, centersLines: centersStackedLegend) { setpointLegendEntries }
         } else {
             HStack(spacing: 8) { setpointLegendEntries }
         }

@@ -39,12 +39,18 @@ struct DocumentsView: View {
 
     // MARK: - Collapse State (namespaced: "cert:" prefix for orgs, "ins:" prefix for insurers)
     @State private var collapsedSections: Set<String> = []
-    #if os(macOS)
-    /// Whether the document rows show their one-line version (wide window), reported by the
-    /// rows; the column header rows are shown only then. Starts one-line: the main window opens
-    /// maximized.
+    /// Whether the document rows show their one-line version (wide window: macOS, iPad at
+    /// regular width), reported by the rows; the column header rows are shown only then. Starts
+    /// one-line: the main window opens maximized.
     @State private var documentsLayout = OneLineRowsLayout()
-    #endif
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    private var wideWindow = WideWindowLayout()
+
+    /// Whether the rows may use their one-line version, with column labels: on macOS, and on
+    /// iPad in a wide window. iPhone, and iPad in a narrow window, keep the stacked rows.
+    private var usesOneLineRows: Bool {
+        wideWindow.isActive
+    }
 
     // MARK: - Certification State
     @State private var showAddCertification = false
@@ -230,16 +236,14 @@ struct DocumentsView: View {
                             } else if !groupedCertifications.isEmpty {
                                 ForEach(groupedCertifications, id: \.key) { agency, certs in
                                     Section(isExpanded: sectionBinding("cert:" + agency)) {
-                                        #if os(macOS)
                                         // Column labels as a row, so they share the rows' width,
                                         // in "All" only: there certifications and insurance
                                         // (different columns) share the list. A single filter
                                         // pins them above the list instead (see the List).
-                                        if selectedSection == .all && documentsLayout.isOneLine {
+                                        if usesOneLineRows && selectedSection == .all && documentsLayout.isOneLine {
                                             CertificationColumnHeader()
                                                 .columnHeaderRow()
                                         }
-                                        #endif
                                         // By record, not by `id`: two certifications can share an id
                                         // (e.g. the same file imported on two devices before they synced).
                                         ForEach(certs, id: \.persistentModelID) { cert in
@@ -298,14 +302,12 @@ struct DocumentsView: View {
                                         ? NSLocalizedString("Other", bundle: Bundle.forAppLanguage(), comment: "Fallback insurer group header when insurer name is blank.")
                                         : insurer
                                     Section(isExpanded: sectionBinding("ins:" + insurer)) {
-                                        #if os(macOS)
                                         // Column labels as a row in "All" only; see the
                                         // certification sections.
-                                        if selectedSection == .all && documentsLayout.isOneLine {
+                                        if usesOneLineRows && selectedSection == .all && documentsLayout.isOneLine {
                                             InsuranceColumnHeader()
                                                 .columnHeaderRow()
                                         }
-                                        #endif
                                         // By record, not by `id` (see the certification sections).
                                         ForEach(policies, id: \.persistentModelID) { insurance in
                                             insuranceRow(insurance, isFirst: insurance.persistentModelID == policies.first?.persistentModelID,
@@ -369,6 +371,20 @@ struct DocumentsView: View {
                         documentsLayout,
                         isShown: (selectedSection == .certifications && !groupedCertifications.isEmpty)
                             || (selectedSection == .insurance && !groupedInsurances.isEmpty)
+                    ) {
+                        if selectedSection == .insurance {
+                            InsuranceColumnHeader()
+                        } else {
+                            CertificationColumnHeader()
+                        }
+                    }
+                    #else
+                    // iPad in a wide window: the same pinned labels (one filter) as on macOS.
+                    .pinnedColumnHeaderOnIPad(
+                        documentsLayout,
+                        isShown: usesOneLineRows
+                            && ((selectedSection == .certifications && !groupedCertifications.isEmpty)
+                                || (selectedSection == .insurance && !groupedInsurances.isEmpty))
                     ) {
                         if selectedSection == .insurance {
                             InsuranceColumnHeader()
@@ -653,19 +669,20 @@ struct DocumentsView: View {
     @ViewBuilder
     private func certRow(_ cert: Certification, isFirst: Bool, isLast: Bool) -> some View {
         Button { selectedCertification = cert } label: {
-            #if os(macOS)
-            // One line in a wide window, the stacked row otherwise (as on iOS); each version
-            // reports which one is shown, so the column header row comes and goes with them.
-            ViewThatFits(in: .horizontal) {
-                CertificationOneLineRow(certification: cert, showExpired: cert.isExpired)
-                    .reportsOneLine(true, to: documentsLayout)
-                    .reportsRowContentWidth(to: documentsLayout)
+            // One line in a wide window (macOS; iPad at regular width), the stacked row
+            // otherwise; each version reports which one is shown, so the column header row
+            // comes and goes with them.
+            if usesOneLineRows {
+                ViewThatFits(in: .horizontal) {
+                    CertificationOneLineRow(certification: cert, showExpired: cert.isExpired)
+                        .reportsOneLine(true, to: documentsLayout)
+                        .reportsRowContentWidth(to: documentsLayout)
+                    CertificationRow(certification: cert, showExpired: cert.isExpired)
+                        .reportsOneLine(false, to: documentsLayout)
+                }
+            } else {
                 CertificationRow(certification: cert, showExpired: cert.isExpired)
-                    .reportsOneLine(false, to: documentsLayout)
             }
-            #else
-            CertificationRow(certification: cert, showExpired: cert.isExpired)
-            #endif
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -702,18 +719,18 @@ struct DocumentsView: View {
     @ViewBuilder
     private func insuranceRow(_ insurance: DivingInsurance, isFirst: Bool, isLast: Bool) -> some View {
         Button { selectedInsurance = insurance } label: {
-            #if os(macOS)
-            // One line in a wide window, the stacked row otherwise (as on iOS); see certRow.
-            ViewThatFits(in: .horizontal) {
-                InsuranceOneLineRow(insurance: insurance, showExpired: insurance.isExpired)
-                    .reportsOneLine(true, to: documentsLayout)
-                    .reportsRowContentWidth(to: documentsLayout)
+            // One line in a wide window, the stacked row otherwise; see certRow.
+            if usesOneLineRows {
+                ViewThatFits(in: .horizontal) {
+                    InsuranceOneLineRow(insurance: insurance, showExpired: insurance.isExpired)
+                        .reportsOneLine(true, to: documentsLayout)
+                        .reportsRowContentWidth(to: documentsLayout)
+                    InsuranceRow(insurance: insurance, showExpired: insurance.isExpired)
+                        .reportsOneLine(false, to: documentsLayout)
+                }
+            } else {
                 InsuranceRow(insurance: insurance, showExpired: insurance.isExpired)
-                    .reportsOneLine(false, to: documentsLayout)
             }
-            #else
-            InsuranceRow(insurance: insurance, showExpired: insurance.isExpired)
-            #endif
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -1349,8 +1366,8 @@ struct InlineDomainEmptyRow: View {
 
 // MARK: - Certification Row
 
-/// Stacked certification row (iOS, and macOS when the window is too narrow for the one-line
-/// row): icon, name / diver / level / number / dates, status dot. Plain list row like the Dives
+/// Stacked certification row (iPhone, and macOS or iPad when the window is too narrow for the
+/// one-line row): icon, name / diver / level / number / dates, status dot. Plain list row like the Dives
 /// and Equipment tabs; the List draws the row background and separator.
 struct CertificationRow: View {
     let certification: Certification
@@ -1997,10 +2014,9 @@ struct AddCertificationView: View {
         .modelContainer(for: [Certification.self, DivingInsurance.self], inMemory: true)
 }
 
-#if os(macOS)
-// MARK: - Document One-Line Rows (macOS)
+// MARK: - Document One-Line Rows (macOS, wide iPad)
 
-/// Column widths of the one-line certification and insurance rows on macOS, shared by the rows
+/// Column widths of the one-line certification and insurance rows (macOS, wide iPad), shared by the rows
 /// and their column headers so the labels stay aligned with the values.
 enum DocumentListColumns {
     static let spacing: CGFloat = 12
@@ -2027,7 +2043,7 @@ private func documentDate(_ date: Date, locale: Locale) -> String {
     return formatter.string(from: date)
 }
 
-/// One line (macOS): icon, name, diver, level, number, issue and expiration dates, status dot,
+/// One line (macOS, wide iPad): icon, name, diver, level, number, issue and expiration dates, status dot,
 /// in `DocumentListColumns`. Same information and colours as `CertificationRow`.
 struct CertificationOneLineRow: View {
     let certification: Certification
@@ -2099,7 +2115,7 @@ struct CertificationOneLineRow: View {
     }
 }
 
-/// One line (macOS): icon, insurer, diver, coverage, policy number, start and end dates, status
+/// One line (macOS, wide iPad): icon, insurer, diver, coverage, policy number, start and end dates, status
 /// dot, in `DocumentListColumns`. Same information and colours as `InsuranceRow`.
 struct InsuranceOneLineRow: View {
     let insurance: DivingInsurance
@@ -2159,7 +2175,7 @@ struct InsuranceOneLineRow: View {
     }
 }
 
-/// Column labels over the one-line certification rows (macOS): a row in each section in "All",
+/// Column labels over the one-line certification rows (macOS, wide iPad): a row in each section in "All",
 /// pinned above the list with the Certifications filter; shown only while the rows are one-line
 /// (`OneLineRowsLayout`).
 struct CertificationColumnHeader: View {
@@ -2186,7 +2202,7 @@ struct CertificationColumnHeader: View {
     }
 }
 
-/// Column labels over the one-line insurance rows (macOS): a row in each section in "All",
+/// Column labels over the one-line insurance rows (macOS, wide iPad): a row in each section in "All",
 /// pinned above the list with the Insurance filter; shown only while the rows are one-line
 /// (`OneLineRowsLayout`).
 struct InsuranceColumnHeader: View {
@@ -2212,4 +2228,3 @@ struct InsuranceColumnHeader: View {
         }
     }
 }
-#endif
