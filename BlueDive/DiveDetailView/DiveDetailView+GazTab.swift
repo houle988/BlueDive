@@ -15,20 +15,20 @@ extension DiveDetailView {
     var gazTabContent: some View {
         VStack(spacing: 20) {
             tankSelectorCard
-            #if os(macOS)
-            // The Mac window is wide enough to show the tank and the pressure cards side
-            // by side; fixedSize gives both the height of the taller one.
-            HStack(alignment: .top, spacing: 0) {
+            if usesTwoColumnCards {
+                // A wide window (`usesTwoColumnCards`) is wide enough to show the tank and the
+                // pressure cards side by side; fixedSize gives both the height of the taller one.
+                HStack(alignment: .top, spacing: 0) {
+                    gazInfoCard
+                        .frame(maxWidth: .infinity)
+                    pressureCard
+                        .frame(maxWidth: .infinity)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
                 gazInfoCard
-                    .frame(maxWidth: .infinity)
                 pressureCard
-                    .frame(maxWidth: .infinity)
             }
-            .fixedSize(horizontal: false, vertical: true)
-            #else
-            gazInfoCard
-            pressureCard
-            #endif
             decompressionCard
         }
         .onChange(of: dive.tanks.count) {
@@ -167,10 +167,10 @@ extension DiveDetailView {
             ConditionRow(icon: "cylinder.split.1x2", color: .indigo, label: "Format",
                         value: tank?.tankType.flatMap { $0.isEmpty ? nil : localizedTankFormat($0) } ?? "—")
         }
-        .fillsAvailableHeightOnMac()
+        .fillsAvailableHeightOnMac(iPadSideBySide: usesTwoColumnCards)
         .padding()
         .detailCardBackground()
-        .sideBySideCardPadding(.leading)
+        .sideBySideCardPadding(.leading, iPadSideBySide: usesTwoColumnCards)
     }
 
     var pressureCard: some View {
@@ -250,10 +250,10 @@ extension DiveDetailView {
                     .padding(.top, 2)
             }
         }
-        .fillsAvailableHeightOnMac()
+        .fillsAvailableHeightOnMac(iPadSideBySide: usesTwoColumnCards)
         .padding()
         .detailCardBackground()
-        .sideBySideCardPadding(.trailing)
+        .sideBySideCardPadding(.trailing, iPadSideBySide: usesTwoColumnCards)
     }
 
     var decompressionCard: some View {
@@ -269,38 +269,38 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            #if os(macOS)
-            // The Mac window is wide enough to put the deco stops in their own column
-            // beside the algorithm, CNS and dive type; without stops the card keeps a
-            // single full-width column.
-            if showsDecoStops {
-                HStack(alignment: .top, spacing: 48) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        decoSummaryRows
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    decoStopsList
+            if usesTwoColumnCards {
+                // A wide window (`usesTwoColumnCards`) is wide enough to put the deco stops in
+                // their own column beside the algorithm, CNS and dive type; without stops the card
+                // keeps a single full-width column.
+                if showsDecoStops {
+                    HStack(alignment: .top, spacing: 48) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            decoSummaryRows
+                        }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .overlay {
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.2))
-                        .frame(width: 1)
+
+                        decoStopsList
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .overlay {
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.2))
+                            .frame(width: 1)
+                    }
+                } else {
+                    decoSummaryRows
                 }
             } else {
                 decoSummaryRows
-            }
-            #else
-            decoSummaryRows
 
-            if showsDecoStops {
-                Divider()
-                    .background(.primary.opacity(0.2))
+                if showsDecoStops {
+                    Divider()
+                        .background(.primary.opacity(0.2))
 
-                decoStopsList
+                    decoStopsList
+                }
             }
-            #endif
         }
         .padding()
         .detailCardBackground()

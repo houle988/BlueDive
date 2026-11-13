@@ -42,89 +42,90 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            #if os(macOS)
-            // The Mac window is wide enough for two columns: the first five rows on the
-            // left, the other four on the right. A Grid keeps each pair of rows aligned,
-            // while each column draws its own dividers and a vertical line separates them.
-            Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
-                GridRow {
-                    siteNameRow.detailGridCell(column: 0, row: 0)
-                    siteBodyOfWaterRow.detailGridCell(column: 1, row: 0)
+            if usesTwoColumnCards {
+                // A wide window (`usesTwoColumnCards`) is wide enough for two columns: the first
+                // five rows on the left, the other four on the right. A Grid keeps each pair of
+                // rows aligned, while each column draws its own dividers and a vertical line
+                // separates them.
+                Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
+                    GridRow {
+                        siteNameRow.detailGridCell(column: 0, row: 0)
+                        siteBodyOfWaterRow.detailGridCell(column: 1, row: 0)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        siteCountryRow.detailGridCell(column: 0, row: 1)
+                        siteEntryCoordinatesRow.detailGridCell(column: 1, row: 1)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        siteLocationRow.detailGridCell(column: 0, row: 2)
+                        siteExitCoordinatesRow.detailGridCell(column: 1, row: 2)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        difficultyDisplayRow.detailGridCell(column: 0, row: 3)
+                        siteAltitudeRow.detailGridCell(column: 1, row: 3)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    }
+                    GridRow {
+                        siteWaterTypeRow.detailGridCell(column: 0, row: 4)
+                        Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    }
                 }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
+                .overlay {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.2))
+                        .frame(width: 1)
                 }
-                GridRow {
-                    siteCountryRow.detailGridCell(column: 0, row: 1)
-                    siteEntryCoordinatesRow.detailGridCell(column: 1, row: 1)
-                }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
-                }
-                GridRow {
-                    siteLocationRow.detailGridCell(column: 0, row: 2)
-                    siteExitCoordinatesRow.detailGridCell(column: 1, row: 2)
-                }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
-                }
-                GridRow {
-                    difficultyDisplayRow.detailGridCell(column: 0, row: 3)
-                    siteAltitudeRow.detailGridCell(column: 1, row: 3)
-                }
-                GridRow {
-                    detailColumnDivider
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                }
-                GridRow {
-                    siteWaterTypeRow.detailGridCell(column: 0, row: 4)
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                }
+                .accessibilityElement(children: .contain)
+            } else {
+                siteNameRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                siteCountryRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                siteLocationRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                difficultyDisplayRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                siteWaterTypeRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                siteBodyOfWaterRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                siteEntryCoordinatesRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                siteExitCoordinatesRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                siteAltitudeRow
             }
-            .overlay {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1)
-            }
-            .accessibilityElement(children: .contain)
-            #else
-            siteNameRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            siteCountryRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            siteLocationRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            difficultyDisplayRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            siteWaterTypeRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            siteBodyOfWaterRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            siteEntryCoordinatesRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            siteExitCoordinatesRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            siteAltitudeRow
-            #endif
 
             // Map view — tap to open a larger, zoomable map.
             if hasMappableCoordinate {

@@ -719,13 +719,19 @@ private struct AppLanguageSheetLocale: ViewModifier {
 extension View {
     /// macOS: lets a card stretch to the height of its neighbour in a side-by-side
     /// layout (the pair's HStack uses `.fixedSize(horizontal: false, vertical: true)`).
-    /// Apply before the card's inner `.padding()`. iOS: returns the view unchanged.
+    /// Apply before the card's inner `.padding()`. iOS: returns the view unchanged, unless
+    /// `iPadSideBySide` (an iPad wide-window layout that puts the cards side by side, e.g. the
+    /// Gas tab's with `DiveDetailView.usesTwoColumnCards`), where it stretches as on macOS.
     @ViewBuilder
-    func fillsAvailableHeightOnMac() -> some View {
+    func fillsAvailableHeightOnMac(iPadSideBySide: Bool = false) -> some View {
         #if os(macOS)
         frame(maxHeight: .infinity, alignment: .topLeading)
         #else
-        self
+        if iPadSideBySide {
+            frame(maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            self
+        }
         #endif
     }
 
@@ -735,8 +741,11 @@ extension View {
     /// for Statistics' 24 pt stack) so the gap between two side-by-side cards matches the
     /// gap between the cards above and below them. `sideBySide: false` (a macOS fallback that
     /// stacks the same card full width) gives the standard padding on both sides.
+    /// `iPadSideBySide` (iOS): an iPad wide-window layout that puts the cards side by side, as
+    /// in `fillsAvailableHeightOnMac(iPadSideBySide:)`, gets the macOS padding.
     @ViewBuilder
-    func sideBySideCardPadding(_ side: HorizontalEdge, inner: CGFloat = 10, sideBySide: Bool = true) -> some View {
+    func sideBySideCardPadding(_ side: HorizontalEdge, inner: CGFloat = 10, sideBySide: Bool = true,
+                               iPadSideBySide: Bool = false) -> some View {
         #if os(macOS)
         if sideBySide {
             padding(side == .leading ? .leading : .trailing)
@@ -745,7 +754,12 @@ extension View {
             padding(.horizontal)
         }
         #else
-        padding(.horizontal)
+        if iPadSideBySide {
+            padding(side == .leading ? .leading : .trailing)
+                .padding(side == .leading ? .trailing : .leading, inner)
+        } else {
+            padding(.horizontal)
+        }
         #endif
     }
 }

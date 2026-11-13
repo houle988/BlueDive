@@ -126,7 +126,7 @@ extension DiveDetailView {
 
             // Nouveau graphique unifié interactif (guarded until after first render to avoid blocking open)
             if profileSamplesLoaded && !dive.profileSamples.isEmpty {
-                UnifiedDiveChartOptimized(dive: dive)
+                UnifiedDiveChartOptimized(dive: dive, chartHeightRule: detailChartHeightRule)
             }
         }
         .padding()
@@ -1378,102 +1378,102 @@ extension DiveDetailView {
                 .font(.headline)
                 .foregroundStyle(.primary)
 
-            #if os(macOS)
-            // The Mac window is wide enough for two columns of five rows. A Grid keeps
-            // each pair of rows aligned, while each column draws its own dividers and a
-            // vertical line separates the two columns.
-            Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
-                GridRow {
-                    diveInfoNumberRow.detailGridCell(column: 0, row: 0)
-                    diveInfoGuideRow.detailGridCell(column: 1, row: 0)
+            if usesTwoColumnCards {
+                // A wide window (`usesTwoColumnCards`) fits two columns of five rows. A Grid keeps
+                // each pair of rows aligned, while each column draws its own dividers and a
+                // vertical line separates the two columns.
+                Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
+                    GridRow {
+                        diveInfoNumberRow.detailGridCell(column: 0, row: 0)
+                        diveInfoGuideRow.detailGridCell(column: 1, row: 0)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        diveInfoDiverRow.detailGridCell(column: 0, row: 1)
+                        diveInfoCaptainRow.detailGridCell(column: 1, row: 1)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        diveInfoBuddiesRow.detailGridCell(column: 0, row: 2)
+                        diveInfoBoatRow.detailGridCell(column: 1, row: 2)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        diveInfoTypeRow.detailGridCell(column: 0, row: 3)
+                        diveInfoTagsRow.detailGridCell(column: 1, row: 3)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        diveInfoCenterRow.detailGridCell(column: 0, row: 4)
+                        diveInfoEntryTypeRow.detailGridCell(column: 1, row: 4)
+                    }
                 }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
+                .overlay {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.2))
+                        .frame(width: 1)
                 }
-                GridRow {
-                    diveInfoDiverRow.detailGridCell(column: 0, row: 1)
-                    diveInfoCaptainRow.detailGridCell(column: 1, row: 1)
-                }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
-                }
-                GridRow {
-                    diveInfoBuddiesRow.detailGridCell(column: 0, row: 2)
-                    diveInfoBoatRow.detailGridCell(column: 1, row: 2)
-                }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
-                }
-                GridRow {
-                    diveInfoTypeRow.detailGridCell(column: 0, row: 3)
-                    diveInfoTagsRow.detailGridCell(column: 1, row: 3)
-                }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
-                }
-                GridRow {
-                    diveInfoCenterRow.detailGridCell(column: 0, row: 4)
-                    diveInfoEntryTypeRow.detailGridCell(column: 1, row: 4)
-                }
+                .accessibilityElement(children: .contain)
+            } else {
+                diveInfoNumberRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoDiverRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoBuddiesRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoTypeRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoCenterRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoGuideRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoCaptainRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoBoatRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoTagsRow
+
+                Divider()
+                    .background(.primary.opacity(0.2))
+
+                diveInfoEntryTypeRow
             }
-            .overlay {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1)
-            }
-            .accessibilityElement(children: .contain)
-            #else
-            diveInfoNumberRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoDiverRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoBuddiesRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoTypeRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoCenterRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoGuideRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoCaptainRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoBoatRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoTagsRow
-
-            Divider()
-                .background(.primary.opacity(0.2))
-
-            diveInfoEntryTypeRow
-            #endif
         }
         .padding()
         .detailCardBackground()
@@ -1742,17 +1742,15 @@ extension DiveDetailView {
         }
     }
 
-    #if os(macOS)
-    /// Horizontal divider for one column of the two-column detail-card layouts (macOS only).
-    /// Wrapped in a VStack so the Divider is horizontal inside the Grid cell.
+    /// Horizontal divider for one column of the two-column detail-card layouts
+    /// (`usesTwoColumnCards`). Wrapped in a VStack so the Divider is horizontal inside the
+    /// Grid cell.
     var detailColumnDivider: some View {
         VStack {
             Divider()
                 .background(.primary.opacity(0.2))
         }
     }
-
-    #endif
 
     // Helper pour obtenir l'icône selon le type de plongée
     func diveTypeIcon(for type: String) -> String {
@@ -1882,18 +1880,16 @@ extension DiveDetailView {
     }
 }
 
-#if os(macOS)
 extension View {
-    /// One cell of a two-column detail-card `Grid` (macOS only): equal-width column, and
-    /// a VoiceOver sort priority that reads the whole left column (`column` 0) before the
-    /// right one (`column` 1), top to bottom — the same order as the single iOS column.
+    /// One cell of a two-column detail-card `Grid` (`usesTwoColumnCards`): equal-width
+    /// column, and a VoiceOver sort priority that reads the whole left column (`column` 0)
+    /// before the right one (`column` 1), top to bottom — the same order as the single column.
     /// The Grid must be marked `.accessibilityElement(children: .contain)`.
     func detailGridCell(column: Int, row: Int) -> some View {
         frame(maxWidth: .infinity, alignment: .leading)
             .accessibilitySortPriority(Double(1000 * (2 - column) - row))
     }
 }
-#endif
 
 /// One photo in a dive's photo grid: a 4:3 tile, the species tagged on it underneath, and the
 /// remove badge while editing. Its own struct so the grid's generated type stays shallow

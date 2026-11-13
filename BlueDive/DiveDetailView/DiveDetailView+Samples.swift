@@ -162,7 +162,7 @@ extension DiveDetailView {
                     .font(.headline)
                     .foregroundStyle(.primary)
             }
-            UnifiedDiveChartOptimized(dive: dive)
+            UnifiedDiveChartOptimized(dive: dive, chartHeightRule: detailChartHeightRule)
         }
         .padding()
         .detailCardBackground()

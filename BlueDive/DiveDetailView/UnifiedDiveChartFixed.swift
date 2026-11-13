@@ -89,7 +89,7 @@ struct ChartLineVisibility {
 }
 
 /// The chart's line selection, shared by every dive chart (dive detail, its Samples tab and,
-/// on macOS, the dive list's profile preview): a chip toggled in one chart updates the others
+/// on macOS and iPad, the dive list's profile preview): a chip toggled in one chart updates the others
 /// at once. Loaded once from UserDefaults; each change is persisted with `save()`.
 @Observable
 final class SharedChartLineVisibility {
@@ -563,8 +563,8 @@ private struct StaticChartLayer: View, Equatable {
     let tissueProfile: BuhlmannProfile?
     /// Changes each time `tissueProfile` is rebuilt, so the Equatable check redraws the lines.
     let tissueProfileVersion: Int
-    /// How the plot height is set: the dive detail view's rule by default, the dive list's
-    /// profile preview filling its pane.
+    /// How the plot height is set: the dive detail view's rule (`.detail` by default, or
+    /// `.wideDetail` in a wide window), or the dive list's profile preview filling its pane.
     var heightRule: ChartHeightRule = .detail
     /// Told the plot's height when it fills its pane (`heightRule.fills`), so the dive list's
     /// preview can keep room for the chips and legend around it. Not compared by `==`.
@@ -1956,10 +1956,10 @@ struct MetricLegendRow: View {
 
 // MARK: - Chart Height
 
-/// How the plot height is set. On macOS, whose windows are tall and resizable, the dive detail
-/// chart grows with the visible height of its container (the enclosing scroll view, or the
-/// window), as a fraction of it clamped to a range; on iOS it keeps its 300 pt. The dive list's
-/// profile preview (macOS, and iPad in a wide window) fills its pane on both.
+/// How the plot height is set: fixed (`detail`, 300 pt: iPhone, narrow iPad window), growing
+/// with the visible height of the enclosing scroll view as a fraction clamped to a range
+/// (`wideDetail`: the dive page in a wide window, macOS and iPad), or filling its pane
+/// (`listPreview`: the dive list's profile preview, sized by its divider).
 struct ChartHeightRule: Equatable {
     let fraction: CGFloat
     let minHeight: CGFloat
@@ -1967,10 +1967,16 @@ struct ChartHeightRule: Equatable {
     /// The plot takes all the height its parent leaves it (at least `minHeight`)
     /// instead of a fraction of its container.
     var fills = false
+    /// The plot takes `fraction` of the visible height of its scroll view (between `minHeight`
+    /// and `maxHeight`) and follows the window as it is resized; otherwise it is `minHeight`.
+    var growsWithWindow = false
 
-    /// Dive detail view: 45 % of the visible height, never below the iOS height (300 pt)
-    /// or above 600 pt.
-    static let detail = ChartHeightRule(fraction: 0.45, minHeight: 300, maxHeight: 600)
+    /// Dive detail view on iPhone and in a narrow iPad window: a fixed 300 pt.
+    static let detail = ChartHeightRule(fraction: 1, minHeight: 300, maxHeight: 300)
+    /// Dive detail view in a wide window (macOS; iPad, see `DiveDetailView.usesTwoColumnCards`):
+    /// 45 % of the visible height, never below the narrow height (300 pt) or above 600 pt.
+    static let wideDetail = ChartHeightRule(fraction: 0.45, minHeight: 300, maxHeight: 600,
+                                            growsWithWindow: true)
     /// Profile preview above the dive list, whose height the user sets with the divider below
     /// it: the plot fills what the chips and legend leave of the pane, so the gap above the
     /// divider stays the same wherever it is.
@@ -1987,15 +1993,13 @@ private extension View {
         if rule.fills {
             frame(minHeight: rule.minHeight, maxHeight: .infinity)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onPlotHeightChange?($0) }
-        } else {
-            #if os(macOS)
+        } else if rule.growsWithWindow {
             containerRelativeFrame(.vertical) { height, _ in
                 rule.height(for: height)
             }
-            #else
-            // The iOS plot height (the rule's minimum, 300 pt for the dive detail chart).
+        } else {
+            // A fixed plot height (the rule's minimum, 300 pt for the dive detail chart).
             frame(height: rule.minHeight)
-            #endif
         }
     }
 }
@@ -2018,8 +2022,8 @@ private struct ProfilePhotoMarker: Identifiable {
 /// Graphique unifié interactif pour le profil de plongée - VERSION OPTIMISÉE
 struct UnifiedDiveChartOptimized: View {
     let dive: Dive
-    /// How the plot height is set: the dive detail chart's (`.detail`), or the pane above the
-    /// dive list (`.listPreview`, sized by its divider).
+    /// How the plot height is set: the dive detail chart's (`.detail`, or `.wideDetail` in a
+    /// wide window), or the pane above the dive list (`.listPreview`, sized by its divider).
     var chartHeightRule: ChartHeightRule = .detail
     /// Told the plot's height when it fills its pane (see `StaticChartLayer.onPlotHeightChange`).
     var onPlotHeightChange: ((CGFloat) -> Void)? = nil
@@ -3077,8 +3081,8 @@ struct UnifiedDiveChartOptimized: View {
     }
 
     /// False for a CCR dive with setpoints but no PPO₂: it draws no PPO₂ trace (only the
-    /// setpoint line, in its own legend entry), so the PPO₂ group has no row — and, on macOS,
-    /// no separator.
+    /// setpoint line, in its own legend entry), so the PPO₂ group has no row — and, in the wide
+    /// legend (macOS, iPad in a wide window), no separator.
     private var ppo2LegendHasRow: Bool {
         !hasSetpointData || hasSensorPPO2Data || ppo2LegendRange != nil
     }
