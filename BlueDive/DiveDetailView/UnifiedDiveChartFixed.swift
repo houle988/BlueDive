@@ -2046,6 +2046,8 @@ struct UnifiedDiveChartOptimized: View {
     @State private var plotOriginX: CGFloat = 0     // leading edge of the plot area
     @State private var plotWidth: CGFloat = 1       // width of the plot area only
     @State private var lastTooltipUpdate: Date = .distantPast
+    /// Widest tooltip columns of the current drag, so the card never narrows while scrubbing.
+    @State private var tooltipWidthMemory = TooltipWidthMemory()
     @State private var cachedInterpolatedPoint: ChartInterpolatedPoint? = nil
     /// Pre-built per-sample PPO₂ map (UUID → value). Rebuilt once on toggle or dive change.
     @State private var cachedPPO2BySampleID: [UUID: Double] = [:]
@@ -2143,6 +2145,9 @@ struct UnifiedDiveChartOptimized: View {
         VStack(spacing: 16) {
             toggleControls
             chartView
+                // Above the legend, so a tooltip taller than a short plot covers it instead of
+                // being drawn under it.
+                .zIndex(1)
 
             if !dive.profileSamples.isEmpty {
                 legendView
@@ -2609,6 +2614,9 @@ struct UnifiedDiveChartOptimized: View {
                             .gesture(
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { value in
+                                        // A new drag starts with the tooltip at its own width,
+                                        // also after a cancelled drag (no `onEnded`).
+                                        tooltipWidthMemory.track(dragStartingAt: value.startLocation)
                                         // Clamp within the plot area, convert to data time.
                                         let localX = (value.location.x - origin)
                                             .clamped(to: 0...width)
@@ -2650,36 +2658,28 @@ struct UnifiedDiveChartOptimized: View {
                         .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
 
                         // ── Tooltip — last, so it is drawn over the photo markers while scrubbing.
+                        // Centred on the cursor, kept 8 pt inside the plot's edges.
                         if cursorX != nil, let point = cachedInterpolatedPoint {
-                            ChartTooltipView(
-                                point: point,
-                                visibility: visibility,
-                                dive: dive,
-                                decoStopEntries: cachedDecoStopEntries
-                            )
-                            .offset(x: tooltipOffsetX(
-                                screenX: cursorScreenX,
-                                plotOriginX: origin,
-                                plotWidth: width
-                            ))
+                            TooltipPlacementLayout(centerX: cursorScreenX,
+                                                   minX: origin + 8, maxX: origin + width - 8) {
+                                ChartTooltipView(
+                                    point: point,
+                                    visibility: visibility,
+                                    dive: dive,
+                                    decoStopEntries: cachedDecoStopEntries,
+                                    // The plot's size, less the 8 pt margin on each side.
+                                    maxHeight: height - 16,
+                                    maxWidth: width - 16,
+                                    widthMemory: tooltipWidthMemory
+                                )
+                            }
+                            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
                             .offset(y: 8)
                             .allowsHitTesting(false)
                         }
                     }
                 }
             }
-    }
-
-    // MARK: - Tooltip Helpers
-
-    /// Keeps the tooltip card within the plot area horizontally.
-    private func tooltipOffsetX(screenX: CGFloat, plotOriginX: CGFloat, plotWidth: CGFloat) -> CGFloat {
-        let tooltipWidth: CGFloat = 200
-        let padding: CGFloat = 8
-        let x = screenX - tooltipWidth / 2
-        let minX = plotOriginX + padding
-        let maxX = plotOriginX + plotWidth - tooltipWidth - padding
-        return x.clamped(to: minX...maxX)
     }
 
     // MARK: - Pressure Cache
@@ -3424,6 +3424,19 @@ struct ChartTooltipView: View {
     let visibility: ChartLineVisibility
     let dive: Dive
     let decoStopEntries: [(stop: DecoStop, entryTime: Double)]
+    /// Height the card may take (the plot's, less its margins); the rows are laid out in more
+    /// columns when one column would be taller.
+    var maxHeight: CGFloat = .infinity
+    /// Width the card may take (the plot's, less its margins); no column is added beyond it.
+    var maxWidth: CGFloat = .infinity
+    /// Widest columns of the current drag (see `TooltipWidthMemory`); nil, each column is as
+    /// wide as its rows.
+    var widthMemory: TooltipWidthMemory? = nil
+
+    /// The card's vertical padding (top and bottom).
+    private static let verticalPadding: CGFloat = 8
+    /// The card's horizontal padding (leading and trailing).
+    private static let horizontalPadding: CGFloat = 10
 
     @State private var prefs = UserPreferences.shared
 
@@ -3546,14 +3559,18 @@ struct ChartTooltipView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        TooltipColumnsLayout(maxHeight: maxHeight - 2 * Self.verticalPadding,
+                             maxWidth: maxWidth - 2 * Self.horizontalPadding,
+                             widthMemory: widthMemory) {
             // Time header
             Text(timeLabel)
                 .font(.system(.caption2, design: .monospaced))
                 .fontWeight(.bold)
                 .foregroundStyle(.white.opacity(0.6))
+                .layoutValue(key: TooltipSpansColumns.self, value: true)
 
             Divider().background(Color.white.opacity(0.25))
+                .layoutValue(key: TooltipSpansColumns.self, value: true)
 
             // Depth — always shown
             TooltipRow(icon: "arrow.down.to.line", color: .cyan, label: depthLabel)
@@ -3651,9 +3668,8 @@ struct ChartTooltipView: View {
                 TooltipTimeRows(tts: point.tts, rbt: rbt)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(width: 200, alignment: .leading)
+        .padding(.horizontal, Self.horizontalPadding)
+        .padding(.vertical, Self.verticalPadding)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.black.opacity(0.75))
@@ -3665,6 +3681,185 @@ struct ChartTooltipView: View {
         )
     }
 
+}
+
+/// Marks a view of `TooltipColumnsLayout` that spans all its columns (the time header and its
+/// divider) instead of being one of its rows.
+private nonisolated struct TooltipSpansColumns: LayoutValueKey {
+    static let defaultValue = false
+}
+
+/// The rows of `ChartTooltipView` below its header, in one column when they fit `maxHeight`,
+/// else in more columns, each filled top to bottom in reading order, so the card stays within
+/// a short plot (e.g. the profile preview above the dive list). A column holds at least
+/// `minimumRowsPerColumn` rows, and no column is added that would make the card wider than
+/// `maxWidth` (large text sizes, long translations): the columns then take more rows instead.
+/// In both cases the card can run past the plot's bottom edge (over the legend). The header
+/// and divider (`TooltipSpansColumns`) span every column.
+private struct TooltipColumnsLayout: Layout {
+    let maxHeight: CGFloat
+    let maxWidth: CGFloat
+    let widthMemory: TooltipWidthMemory?
+    private let spacing: CGFloat = 5
+    private let columnSpacing: CGFloat = 14
+    /// Rows a column holds even when the plot is shorter (the shortest profile preview fits
+    /// about three), so a busy tooltip does not spread over many narrow columns; the card then
+    /// runs past the plot's bottom edge, over the legend.
+    private let minimumRowsPerColumn = 4
+    /// Width of a lone column: the card's former fixed width (200 pt) less its padding, so the
+    /// one-column card (iPhone, the dive page) looks as it did. More columns use their rows' width.
+    private let singleColumnMinimumWidth: CGFloat = 180
+
+    private struct Arrangement {
+        /// Heights of the spanning views, in order.
+        var headerHeights: [CGFloat] = []
+        /// Indices of the rows (into the subviews) in each column.
+        var columns: [[Int]] = []
+        var columnWidths: [CGFloat] = []
+        var size: CGSize = .zero
+    }
+
+    private func arrange(_ subviews: Subviews) -> Arrangement {
+        var result = Arrangement()
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rows = subviews.indices.filter { !subviews[$0][TooltipSpansColumns.self] }
+        let headers = subviews.indices.filter { subviews[$0][TooltipSpansColumns.self] }
+        result.headerHeights = headers.map { sizes[$0].height }
+        let headerHeight = result.headerHeights.reduce(0, +) + CGFloat(headers.count) * spacing
+
+        func columnHeight(_ column: ArraySlice<Int>) -> CGFloat {
+            column.reduce(0) { $0 + sizes[$1].height } + CGFloat(max(column.count - 1, 0)) * spacing
+        }
+        // Each column takes as many rows as fit (at least `minimumRows`) before the next one
+        // starts, so a row appearing or leaving while the cursor moves only shifts the rows
+        // after it, and the number of columns changes only when the rows no longer fit.
+        let available = maxHeight - headerHeight
+        func columns(minimumRows: Int) -> [[Int]] {
+            var columns: [[Int]] = []
+            var column: [Int] = []
+            var height: CGFloat = 0
+            for row in rows {
+                let added = (column.isEmpty ? 0 : spacing) + sizes[row].height
+                if column.count >= minimumRows && height + added > available {
+                    columns.append(column)
+                    column = []
+                    height = 0
+                }
+                height += (column.isEmpty ? 0 : spacing) + sizes[row].height
+                column.append(row)
+            }
+            if !column.isEmpty { columns.append(column) }
+            return columns
+        }
+        // Each column as wide as its widest row, or as the widest it was earlier in the drag.
+        func widths(of columns: [[Int]]) -> [CGFloat] {
+            let minimumWidth = columns.count == 1 ? singleColumnMinimumWidth : 0
+            return columns.enumerated().map { index, column in
+                max(column.map { sizes[$0].width }.max() ?? 0, minimumWidth,
+                    widthMemory?.width(ofColumn: index) ?? 0)
+            }
+        }
+        func totalWidth(_ widths: [CGFloat]) -> CGFloat {
+            widths.reduce(0, +) + CGFloat(max(widths.count - 1, 0)) * columnSpacing
+        }
+        // Columns that would not fit side by side take more rows each, down to one column.
+        var minimumRows = minimumRowsPerColumn
+        result.columns = columns(minimumRows: minimumRows)
+        while result.columns.count > 1 && totalWidth(widths(of: result.columns)) > maxWidth {
+            minimumRows += 1
+            result.columns = columns(minimumRows: minimumRows)
+        }
+        result.columnWidths = widths(of: result.columns)
+        for (index, width) in result.columnWidths.enumerated() {
+            widthMemory?.record(width, ofColumn: index)
+        }
+
+        let rowsWidth = totalWidth(result.columnWidths)
+        let headerWidth = headers.map { sizes[$0].width }.max() ?? 0
+        let rowsHeight = result.columns.map { columnHeight($0[...]) }.max() ?? 0
+        result.size = CGSize(width: max(rowsWidth, headerWidth),
+                             height: headerHeight + rowsHeight - (rows.isEmpty ? spacing : 0))
+        return result
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let arrangement = arrange(subviews)
+        var y = bounds.minY
+        var headerIndex = 0
+        for index in subviews.indices where subviews[index][TooltipSpansColumns.self] {
+            let height = arrangement.headerHeights[headerIndex]
+            subviews[index].place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading,
+                                  proposal: ProposedViewSize(width: bounds.width, height: height))
+            y += height + spacing
+            headerIndex += 1
+        }
+        var x = bounds.minX
+        for (column, rows) in arrangement.columns.enumerated() {
+            var rowY = y
+            for index in rows {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: rowY), anchor: .topLeading,
+                                      proposal: ProposedViewSize(size))
+                rowY += size.height + spacing
+            }
+            x += arrangement.columnWidths[column] + columnSpacing
+        }
+    }
+}
+
+/// The widest each tooltip column has been during the current drag. A value gaining a digit
+/// ("9,5 m" → "11 m", "990 psi" → "1 000 psi") widens its column once; losing it does not
+/// narrow it again, so the card does not jitter while scrubbing. Reset when a new drag starts.
+/// A plain reference read and updated by `TooltipColumnsLayout` during layout: changing it
+/// triggers no view update, so the card is never a frame behind its content.
+nonisolated final class TooltipWidthMemory: @unchecked Sendable {
+    private var columnWidths: [CGFloat] = []
+    private var dragStart: CGPoint?
+
+    /// Records that column `index` is `width` wide, if that is wider than before this drag.
+    func record(_ width: CGFloat, ofColumn index: Int) {
+        while columnWidths.count <= index { columnWidths.append(0) }
+        columnWidths[index] = max(columnWidths[index], width)
+    }
+
+    /// The widest column `index` has been this drag, without recording anything.
+    func width(ofColumn index: Int) -> CGFloat {
+        index < columnWidths.count ? columnWidths[index] : 0
+    }
+
+    /// Forgets the widths when a drag starting elsewhere begins: a new drag, whether the last
+    /// one ended or was cancelled.
+    func track(dragStartingAt start: CGPoint) {
+        guard start != dragStart else { return }
+        dragStart = start
+        columnWidths.removeAll()
+    }
+}
+
+/// Places the chart tooltip centred on the cursor and inside `minX...maxX` (a card wider than
+/// that starts at `minX`), from the card's size in the same layout pass, so the card never
+/// sits for a frame where its previous width would have put it.
+private struct TooltipPlacementLayout: Layout {
+    let centerX: CGFloat
+    let minX: CGFloat
+    let maxX: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let x = (centerX - size.width / 2).clamped(to: minX...max(maxX - size.width, minX))
+            subview.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY), anchor: .topLeading,
+                          proposal: ProposedViewSize(size))
+        }
+    }
 }
 
 /// A labelled icon row inside `ChartTooltipView`. Used to be a plain function inlining
