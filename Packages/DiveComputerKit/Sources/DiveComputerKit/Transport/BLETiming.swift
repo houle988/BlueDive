@@ -15,8 +15,9 @@ enum BLETiming {
     static let notifyEnableWait: TimeInterval = 30
     /// Read timeout when libdivecomputer has not set one (-1).
     static let defaultReadTimeout: TimeInterval = 3
-    /// Until the first notification of a connection, shorter read timeouts are raised to
+    /// Until a read of the connection first returns data, shorter read timeouts are raised to
     /// this (Aqualung i300C / Pelagic OEMs ignore the first query after a fresh link).
+    /// Notifications a purge drops unread do not end it.
     static let firstReadFloor: TimeInterval = 5
     /// Waiting for `canSendWriteWithoutResponse`; the write is sent anyway afterwards
     /// (the flag can stay false after connection-parameter renegotiation).
@@ -39,6 +40,15 @@ enum BLETiming {
     /// read as the reply to the exit command. Waiting at most `closeQuietMaximum`.
     static let closeQuietPeriod: TimeInterval = 0.15
     static let closeQuietMaximum: TimeInterval = 1
+    /// Before a purge (`dc_iostream_purge`), how long the device must have sent nothing,
+    /// waiting at most `purgeQuietMaximum`; an idle link is not waited for. A late reply
+    /// spanning several notifications (Oceanic atom2 big-page models: i770R, A300CS,
+    /// ProPlus X, F11, ProPlus 3) would otherwise be cut by a retry's purge, and its tail
+    /// read as the resent command's reply (oceanic_atom2.c `oceanic_atom2_ble_read`: header
+    /// and sequence checks); atom2's read timeout is only 1 s and it sleeps 100 ms before
+    /// the purge. Same values as the close's quiet wait (i300C trace).
+    static let purgeQuietPeriod: TimeInterval = 0.15
+    static let purgeQuietMaximum: TimeInterval = 1
     /// Waiting for `didDisconnectPeripheral` after cancelling the connection.
     static let disconnectWait: TimeInterval = 2
     /// Minimum interval between two progress events.

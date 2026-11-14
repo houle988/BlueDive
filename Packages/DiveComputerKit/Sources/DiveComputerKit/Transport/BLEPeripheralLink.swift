@@ -48,7 +48,9 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
     private var characteristicsByUUID: [String: CBCharacteristic] = [:]
     private var notifying = false
     private var packets = BLEPacketQueue()
-    private var firstPacketReceived = false
+    /// Set when a read first returns data (`takeQueued`): notifications dropped unread (a
+    /// purge) do not end the first-read floor.
+    private var readReturnedData = false
     /// When the last data notification arrived.
     private var lastPacketAt = Date.distantPast
     private var timeoutMilliseconds: Int32 = -1
@@ -186,23 +188,31 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         condition.lock(); defer { condition.unlock() }
         let poll = timeoutMilliseconds == 0
         var timeout = timeoutMilliseconds < 0 ? BLETiming.defaultReadTimeout : TimeInterval(timeoutMilliseconds) / 1000
-        if !poll && !firstPacketReceived { timeout = max(timeout, BLETiming.firstReadFloor) }
+        if !poll && !readReturnedData { timeout = max(timeout, BLETiming.firstReadFloor) }
         let start = Date()
         let deadline = start.addingTimeInterval(timeout)
         while true {
             if cancelled { return .cancelled }
-            if let data = packets.take(maximum: maximum) { return .data(data) }
+            if let data = takeQueued(maximum: maximum) { return .data(data) }
             if !connected { return .failed }
             // A cancel during the close (closingAfterCancel) shortens a read already waiting.
             let limit = closingAfterCancel
                 ? min(deadline, start.addingTimeInterval(BLETiming.closeAfterCancelReadLimit)) : deadline
             if poll || !condition.wait(until: limit) {
-                if let data = packets.take(maximum: maximum) { return .data(data) }
+                if let data = takeQueued(maximum: maximum) { return .data(data) }
                 if !connected { return .failed }
                 DiveComputerLog.shared.log("[BLE READ] Timeout after \(limit.timeIntervalSince(start)) s (\(maximum) bytes requested)", level: .debug)
                 return .timeout
             }
         }
+    }
+
+    /// The next queued bytes; the first data returned ends the first-read floor. Call with
+    /// the lock held.
+    private func takeQueued(maximum: Int) -> Data? {
+        guard let data = packets.take(maximum: maximum) else { return nil }
+        readReturnedData = true
+        return data
     }
 
     func write(_ data: Data) -> LinkWrite {
@@ -267,6 +277,46 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
         while !cancelled && condition.wait(until: deadline) {}
     }
 
+    /// Drops the unread notifications, as a serial port's input purge (`tcflush` `TCIFLUSH`)
+    /// does, once the device has been quiet (`BLETiming.purgeQuietPeriod`, at most
+    /// `purgeQuietMaximum`): the backends sleep only 100 ms (Oceanic atom2, Seac) to 1 s (Mares
+    /// Icon HD, Pelagic i330R) before a retry's purge, so a reply still arriving would
+    /// otherwise be cut and its tail read as the resent command's reply (`Docs/DECISIONS.md`,
+    /// L5). An idle link is not waited for. Only the data queue is touched, never the
+    /// characteristic-read route or the write state.
+    func purge(_ direction: LinkDirection) {
+        guard direction.contains(.input) else { return }
+        let start = Date()
+        let dropped = withLock { () -> Int in
+            waitUntilQuiet(period: BLETiming.purgeQuietPeriod, maximum: BLETiming.purgeQuietMaximum, from: start)
+            return discardUnread()
+        }
+        // libdivecomputer logs every purge itself ("Purge: direction=…").
+        if dropped > 0 {
+            DiveComputerLog.shared.log("[BLE READ] Purge: \(dropped) unread bytes discarded after " +
+                                       "\(Int(Date().timeIntervalSince(start) * 1000)) ms", level: .info)
+        }
+    }
+
+    /// Waits until no notification has arrived for `period`, at most `maximum` after `start`;
+    /// returns early when the link drops or the session is cancelled. Call with the lock held.
+    private func waitUntilQuiet(period: TimeInterval, maximum: TimeInterval, from start: Date) {
+        let deadline = start.addingTimeInterval(maximum)
+        while connected && !cancelled {
+            let quietAt = lastPacketAt.addingTimeInterval(period)
+            let now = Date()
+            if quietAt <= now || now >= deadline { break }
+            _ = condition.wait(until: min(quietAt, deadline))
+        }
+    }
+
+    /// Empties the data queue and returns how many bytes it held. Call with the lock held.
+    private func discardUnread() -> Int {
+        let bytes = packets.byteCount
+        packets.removeAll()
+        return bytes
+    }
+
     // MARK: - Session control
 
     /// Makes every current and future wait return at once.
@@ -288,16 +338,9 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
             // A device cancelled mid-answer keeps sending the rest of it: wait until it has
             // been quiet, then drop everything left unread, so the exit command's reply is
             // the only thing read next.
-            let deadline = start.addingTimeInterval(BLETiming.closeQuietMaximum)
-            while connected {
-                let quietAt = lastPacketAt.addingTimeInterval(BLETiming.closeQuietPeriod)
-                let now = Date()
-                if quietAt <= now || now >= deadline { break }
-                _ = condition.wait(until: min(quietAt, deadline))
-            }
-            let bytes = packets.byteCount
-            packets.removeAll()
-            return bytes
+            // (`cancelled` was just cleared, so only a disconnect ends the wait early, as before.)
+            waitUntilQuiet(period: BLETiming.closeQuietPeriod, maximum: BLETiming.closeQuietMaximum, from: start)
+            return discardUnread()
         }
         guard let discarded else { return }
         DiveComputerLog.shared.log("[BLE CONNECT] Cancelled — letting the device close (exit command) after " +
@@ -420,7 +463,6 @@ final class BLEPeripheralLink: NSObject, CBPeripheralDelegate, SessionLink, @unc
                 DiveComputerLog.shared.log("[BLE READ] Ignored late value from \(uuid)", level: .debug)
             } else {
                 packets.append(value)
-                firstPacketReceived = true
                 lastPacketAt = Date()
             }
             condition.broadcast()

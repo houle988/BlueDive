@@ -22,6 +22,14 @@ enum LinkWrite: Equatable, Sendable {
     case cancelled
 }
 
+/// The directions of a purge (libdivecomputer's `dc_direction_t`).
+struct LinkDirection: OptionSet, Sendable {
+    let rawValue: UInt8
+    static let input = LinkDirection(rawValue: 1 << 0)
+    static let output = LinkDirection(rawValue: 1 << 1)
+    static let all: LinkDirection = [.input, .output]
+}
+
 /// The byte pipe libdivecomputer talks to through the custom iostream. All methods are
 /// called on the session thread and may block.
 protocol DiveComputerLink: AnyObject, Sendable {
@@ -38,6 +46,12 @@ protocol DiveComputerLink: AnyObject, Sendable {
     var readTimeoutMilliseconds: Int32 { get }
     /// Blocks the calling thread; returns early when the session is cancelled.
     func sleep(milliseconds: UInt32)
+    /// `dc_iostream_purge`: discards unread input when `direction` contains `.input`; an
+    /// output-only purge does nothing. Called by most backends at every `dc_device_open`
+    /// attempt (`.all`) and by some before resending a command after a timeout or protocol
+    /// error (`.input`, after a backend-specific sleep). May block briefly while the device
+    /// is still sending.
+    func purge(_ direction: LinkDirection)
 }
 
 /// A link a session can open and close (the BLE link, or a scripted link in tests).

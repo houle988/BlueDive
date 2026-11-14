@@ -4,8 +4,9 @@ import CLibDiveComputer
 /// A libdivecomputer custom iostream (`dc_custom_open`, custom.h) over a `DiveComputerLink`.
 ///
 /// Only the callbacks BLE needs are set; libdivecomputer treats the others (break,
-/// DTR/RTS, lines, available, configure, poll, flush, purge) as successful no-ops, as the
-/// former bridge did. The stream object must outlive `close()`, which owns the C side.
+/// DTR/RTS, lines, available, configure, poll, flush) as successful no-ops, as the former
+/// bridge did. `purge`, a no-op in the former bridge, discards unread input
+/// (`Docs/DECISIONS.md`, L5). The stream object must outlive `close()`, which owns the C side.
 final class DCIOStream {
     let link: DiveComputerLink
     let authorization: (any BLEAuthorizationProvider)?
@@ -28,6 +29,7 @@ final class DCIOStream {
         callbacks.write = ioWrite
         callbacks.ioctl = ioIoctl
         callbacks.sleep = ioSleep
+        callbacks.purge = ioPurge
         callbacks.close = ioClose
         var stream: OpaquePointer?
         let status = dc_custom_open(&stream, context, DC_TRANSPORT_BLE, &callbacks,
@@ -111,6 +113,17 @@ private let ioIoctl: @convention(c) (UnsafeMutableRawPointer?, UInt32, UnsafeMut
 private let ioSleep: @convention(c) (UnsafeMutableRawPointer?, UInt32) -> dc_status_t = { userdata, milliseconds in
     guard let stream = DCIOStream.from(userdata) else { return DC_STATUS_INVALIDARGS }
     stream.link.sleep(milliseconds: milliseconds)
+    return DC_STATUS_SUCCESS
+}
+
+/// SUCCESS for any direction; nothing can be withdrawn from CoreBluetooth's write queue, so
+/// the link ignores an output-only purge.
+private let ioPurge: @convention(c) (UnsafeMutableRawPointer?, dc_direction_t) -> dc_status_t = { userdata, direction in
+    guard let stream = DCIOStream.from(userdata) else { return DC_STATUS_INVALIDARGS }
+    var directions: LinkDirection = []
+    if direction.rawValue & DC_DIRECTION_INPUT.rawValue != 0 { directions.insert(.input) }
+    if direction.rawValue & DC_DIRECTION_OUTPUT.rawValue != 0 { directions.insert(.output) }
+    stream.link.purge(directions)
     return DC_STATUS_SUCCESS
 }
 

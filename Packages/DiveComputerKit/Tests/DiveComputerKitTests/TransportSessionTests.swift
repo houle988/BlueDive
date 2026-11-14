@@ -23,6 +23,10 @@ final class FakeLink: SessionLink, @unchecked Sendable {
     private(set) var closeWrites: [Data] = []
     private(set) var closed = false
     private(set) var opened = false
+    /// Writes, read timeouts, sleeps and purges in the order the session made them (reads that
+    /// return data, fail or are cancelled are not recorded).
+    enum Step: Equatable { case write, readTimeout, sleep, purge(LinkDirection) }
+    private(set) var steps: [Step] = []
 
     init(name: String, reads: [LinkRead] = []) {
         self.advertisedName = name
@@ -37,9 +41,13 @@ final class FakeLink: SessionLink, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         while true {
             if cancelled { return .cancelled }
-            if resumedForClose { return .timeout }
-            if !reads.isEmpty { return reads.removeFirst() }
-            if !blockReads { return .timeout }
+            if resumedForClose { steps.append(.readTimeout); return .timeout }
+            if !reads.isEmpty {
+                let read = reads.removeFirst()
+                if read == .timeout { steps.append(.readTimeout) }
+                return read
+            }
+            if !blockReads { steps.append(.readTimeout); return .timeout }
             lock.wait()
         }
     }
@@ -47,13 +55,15 @@ final class FakeLink: SessionLink, @unchecked Sendable {
     func write(_ data: Data) -> LinkWrite {
         lock.withLock {
             writes.append(data)
+            steps.append(.write)
             if resumedForClose { closeWrites.append(data) }
             return cancelled ? .cancelled : writeResult
         }
     }
 
     func readCharacteristic(uuid: String, timeout: TimeInterval) -> Data? { lock.withLock { characteristics[uuid] } }
-    func sleep(milliseconds: UInt32) {}
+    func sleep(milliseconds: UInt32) { lock.withLock { steps.append(.sleep) } }
+    func purge(_ direction: LinkDirection) { lock.withLock { steps.append(.purge(direction)) } }
     func open() throws(LinkOpenError) {
         if let openError { throw openError }
         lock.withLock { opened = true }
@@ -81,6 +91,19 @@ struct PacketQueueTests {
         #expect(queue.take(maximum: 10) == Data([8, 9]))
         #expect(queue.take(maximum: 10) == nil)
         #expect(queue.isEmpty)
+    }
+    /// A purge drops the rest of a partly read notification too, not only whole ones.
+    @Test func removeAllDropsPartialRest() {
+        var queue = BLEPacketQueue()
+        queue.append(Data([1, 2, 3, 4]))
+        queue.append(Data([5, 6]))
+        #expect(queue.take(maximum: 2) == Data([1, 2]))
+        #expect(queue.byteCount == 4)
+        queue.removeAll()
+        #expect(queue.isEmpty && queue.byteCount == 0)
+        #expect(queue.take(maximum: 10) == nil)
+        queue.append(Data([7]))
+        #expect(queue.take(maximum: 10) == Data([7]))
     }
 }
 
@@ -167,6 +190,16 @@ struct IOStreamTests {
             #expect(dc_iostream_set_timeout(stream, 3000) == DC_STATUS_SUCCESS)
         }
         #expect(link.readTimeoutMilliseconds == 3000)
+    }
+
+    @Test func purgeDirectionIsForwarded() {
+        let link = FakeLink(name: "x")
+        withStream(link) { stream in
+            #expect(dc_iostream_purge(stream, DC_DIRECTION_INPUT) == DC_STATUS_SUCCESS)
+            #expect(dc_iostream_purge(stream, DC_DIRECTION_OUTPUT) == DC_STATUS_SUCCESS)
+            #expect(dc_iostream_purge(stream, DC_DIRECTION_ALL) == DC_STATUS_SUCCESS)
+        }
+        #expect(link.steps == [.purge(.input), .purge(.output), .purge(.all)])
     }
 
     @Test func getNameIoctl() {
@@ -335,6 +368,33 @@ struct SessionTests {
         #expect(events.contains { if case .connected(let model) = $0 { return model?.name == "Shearwater Perdix 2" }; return false })
         #expect(!link.writes.isEmpty)
         #expect(link.closed)
+    }
+
+    /// Real Oceanic atom2 backend over a silent link: every open attempt purges before its
+    /// first write, then, after each timed-out command (2 retries), sleeps, purges unread
+    /// input and sends the command again.
+    @Test func retryPurgesBeforeResending() async {
+        let link = FakeLink(name: "FH123456")
+        let (_, error) = await run(SessionRequest(peripheralID: UUID()), link: link)
+        #expect(error as? SessionError == .deviceOpenFailed(.timeout))
+        let steps = link.steps
+        let opens = steps.indices.filter { steps[$0] == .purge(.all) }
+        #expect(opens.count == BLETiming.openAttempts)
+        #expect(!steps[..<(opens.first ?? 0)].contains(.write))
+        for index in opens {
+            // Each attempt's purge comes before its first write.
+            #expect(steps[(index + 1)...].first { $0 != .sleep } == .write)
+        }
+        let retries = steps.indices.filter { steps[$0] == .purge(.input) }
+        // 2 = upstream's MAXRETRIES in oceanic_atom2.c: update after a libdivecomputer sync
+        // that changes it.
+        #expect(retries.count == 2 * BLETiming.openAttempts)
+        for index in retries {
+            #expect(index > 1 && steps[index - 1] == .sleep && steps[index - 2] == .readTimeout)
+            // The next write follows, after any sleeps (atom2's inter-packet delay).
+            let next = steps[(index + 1)...].first { $0 != .sleep }
+            #expect(next == .write)
+        }
     }
 
     @Test func cancelDuringDownload() async {

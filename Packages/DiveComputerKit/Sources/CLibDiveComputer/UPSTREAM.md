@@ -18,7 +18,7 @@ This target is [libdivecomputer](https://github.com/libdivecomputer/libdivecompu
 | `885c1cf` | `src/mares_iconhd.c` | Detects a NAK packet and reads its error code |
 | `b33112b` | `src/mares_iconhd.c` | A dive whose data is unavailable (`0x08000020`) is returned with its header only instead of ending the download |
 | `2c40452` | `src/oceanic_atom2_parser.c` | Apeks DSX: corrected helium offset (changes parsed gas mixes of DSX dives) |
-| `14f9293` | `src/pelagic_i330r.c` | i330R / DSX: a failed flash read (protocol error or timeout) is retried up to 3 times, with a 1 s sleep and an input purge. `DCIOStream` sets no `purge` callback (`Docs/DECISIONS.md`), so queued packets are not discarded before the retry |
+| `14f9293` | `src/pelagic_i330r.c` | i330R / DSX: a failed flash read (protocol error or timeout) is retried up to 3 times, with a 1 s sleep and an input purge, which BlueDive implements (`DCIOStream` forwards it to `BLEPeripheralLink.purge`, which discards the queued notifications once the device is quiet; `Docs/DECISIONS.md`, L5) |
 
 No new backends, `DC_FAMILY_*`, descriptor rows, BLE filters, `DC_IOCTL_*`, `dc_sample_type_t` or `dc_field_type_t` members.
 
