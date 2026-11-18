@@ -204,6 +204,13 @@ Data priority (first available source wins; "Raw" = agreeing raw data, see above
                                                                sighting per critter, linked to its species
     Profile samples (time, depth, temperature, NDL, PPO₂,      Raw → XML.  PPO₂ only as the computer reports it
       per-cell PPO₂, ceiling, remaining stop time)             (BlueDive calculates it otherwise).
+    Time to surface (TTS) and remaining bottom time (RBT)     Raw only (MacDive's XML has neither), as BlueDive's
+      per sample                                               Bluetooth import stores them: TTS from the
+                                                               computer's deco report (0 = none), RBT only on
+                                                               the samples where the computer reported it
+                                                               (0 is a reading; Uwatec's leading placeholder
+                                                               99s are dropped). Not written when MacDive's
+                                                               XML samples are kept.
     CCR setpoint per sample                                    Raw only (MacDive's XML has none), as BlueDive's
                                                                Bluetooth import stores it: Shearwater, DiveSystem,
                                                                McLean and TecDiving report it in every loop sample
@@ -1008,7 +1015,7 @@ _LIBDC_EVENT_MAP = {
 # Gas switches come from DC_SAMPLE_GASMIX; SAMPLE_EVENT_GASCHANGE/GASCHANGE2 are deprecated.
 
 _DC_SAMPLE_TIME, _DC_SAMPLE_DEPTH, _DC_SAMPLE_PRESSURE, _DC_SAMPLE_TEMPERATURE = 0, 1, 2, 3
-_DC_SAMPLE_EVENT, _DC_SAMPLE_SETPOINT, _DC_SAMPLE_PPO2 = 4, 9, 10
+_DC_SAMPLE_EVENT, _DC_SAMPLE_RBT, _DC_SAMPLE_SETPOINT, _DC_SAMPLE_PPO2 = 4, 5, 9, 10
 _DC_SAMPLE_DECO, _DC_SAMPLE_GASMIX = 12, 13
 _DC_FIELD_DIVETIME, _DC_FIELD_MAXDEPTH = 0, 1
 _DC_FIELD_GASMIX_COUNT, _DC_FIELD_GASMIX, _DC_FIELD_DIVEMODE = 3, 4, 12
@@ -1024,6 +1031,10 @@ _DC_USAGE_OXYGEN, _DC_USAGE_DILUENT = 1, 2   # dc_usage_t: the computer's role f
 # backends report it only when it changes. Same list as LibDCSwift's
 # GenericParser.reportsSetpointEverySample(_:), so migrated dives match a Bluetooth download.
 _SETPOINT_EVERY_SAMPLE_FAMILIES = {(10 << 16), (10 << 16) + 1, (13 << 16), (15 << 16), (16 << 16)}
+# dc_family_t DC_FAMILY_UWATEC_SMART: libdivecomputer starts its RBT at 99 and sends it before
+# (or without) any RBT from the computer — see _drop_uwatec_default_rbt.
+_DC_FAMILY_UWATEC_SMART = (3 << 16) + 2
+_UWATEC_DEFAULT_RBT = 99
 
 
 def _http_get(url, accept=None):
@@ -1245,9 +1256,10 @@ def _merge_depthless_records(samples):
     # last gas of a group), so a switch arriving just after a sample is not lost. Each group
     # keeps its own report time and is always taken whole from one record.
     # NDL and a deco stop are one deco state in libdivecomputer: a later report of either
-    # replaces the other.
+    # replaces the other. Its time to surface (TTS) goes with it.
     # The setpoint in effect (None after a bailout) is a state as well: the later record's wins.
-    groups = {"gasmix": ("gasmix",), "deco": ("ndl_secs", "deco_depth", "deco_time"),
+    # TTS comes with the deco report, so it belongs to the same state.
+    groups = {"gasmix": ("gasmix",), "deco": ("ndl_secs", "deco_depth", "deco_time", "tts_secs"),
               "setpoint": ("setpoint",)}
     key_group = {k: g for g, keys in groups.items() for k in keys}
     def fold(target, rec):
@@ -1279,6 +1291,22 @@ def _merge_depthless_records(samples):
     for r in out:
         r.pop("_state_times", None)
     return out
+
+
+def _drop_uwatec_default_rbt(samples):
+    """
+    libdivecomputer's Uwatec Smart backend starts the dive's RBT at 99 and sends it with every
+    sample that has a tank pressure, before (or without) any RBT from the computer. Those
+    leading 99s are not readings: drop them up to the first other value (all of them when the
+    computer never reported one). A 99 after that is kept. Same rule as DiveComputerKit's
+    DiveParser.dropUwatecDefaultRBT.
+    """
+    for s in samples:
+        if "rbt" not in s:
+            continue
+        if s["rbt"] != _UWATEC_DEFAULT_RBT:
+            return
+        del s["rbt"]
 
 
 def _norm_model(s):
@@ -1462,6 +1490,12 @@ class LibDC:
                     else:
                         cur.setdefault("sensors", {})[v.ppo2.sensor] = v.ppo2.value
                 elif stype == _DC_SAMPLE_DECO:
+                    # Time to surface (seconds) comes with every deco report, whatever its
+                    # type, as the app's Bluetooth import reads it. 0 = not reported.
+                    if v.deco.tts > 0:
+                        cur["tts_secs"] = v.deco.tts
+                    else:
+                        cur.pop("tts_secs", None)
                     # NDL and a mandatory stop are one deco state: the later report replaces
                     # the other, also within one time sample.
                     if v.deco.type == _DC_DECO_NDL:
@@ -1485,6 +1519,10 @@ class LibDC:
                             elif v.gasmix not in oxygen:
                                 state["open_circuit"] = True
                                 state["current"] = None
+                elif stype == _DC_SAMPLE_RBT:
+                    # Remaining bottom time (minutes), kept only on the record where the
+                    # computer reported it (the app's reportedRBT). 0 is a real reading.
+                    cur["rbt"] = v.rbt
                 elif stype == _DC_SAMPLE_SETPOINT:
                     # Recorded while on open circuit, but applied only back on the loop.
                     state["reported"] = v.setpoint
@@ -1501,6 +1539,8 @@ class LibDC:
             if state["seen_time"]:
                 end_record()   # the last record: no further time sample ends it
             samples = _merge_depthless_records(samples)
+            if lib.dc_descriptor_get_type(desc) == _DC_FAMILY_UWATEC_SMART:
+                _drop_uwatec_default_rbt(samples)
             depths = [s["depth"] for s in samples]
             if not depths:
                 return None
@@ -2017,6 +2057,11 @@ def merge_xml_pressures(raw_samples, xml_samples, window=2.0):
     return filled, len(pairs), total
 
 
+def _secs_to_minutes(secs):
+    """Seconds as minutes: a whole number when exact, else the full fraction (never rounded)."""
+    return secs // 60 if secs % 60 == 0 else secs / 60
+
+
 def raw_profile_samples(decoded, cvt_depth, cvt_temp, cvt_press, mapping, series):
     """
     Profile samples from a decoded raw dive, in the output units (libdivecomputer reports
@@ -2041,6 +2086,10 @@ def raw_profile_samples(decoded, cvt_depth, cvt_temp, cvt_press, mapping, series
             "ndt":         (ndl // 60 if ndl % 60 == 0 else ndl / 60) if ndl is not None else None,
             # CCR setpoint in effect (bar). 0 or non-finite = no setpoint, as BlueDive stores it.
             "setpoint":    s["setpoint"] if (s.get("setpoint") or 0) > 0 and math.isfinite(s["setpoint"]) else None,
+            # Time to surface in minutes (the computer reports seconds; 0 = none) and remaining
+            # bottom time in minutes, as the app's Bluetooth import stores them.
+            "tts":         _secs_to_minutes(s["tts_secs"]) if s.get("tts_secs") else None,
+            "rbt":         s.get("rbt"),
         }
         # Mandatory deco obligation, as the app's Bluetooth import stores it: ceiling in the
         # output distance unit, remaining stop time in minutes, and a decoStop event. A
@@ -2890,6 +2939,12 @@ def profile_samples_xml_lines(samples, indent=4):
             attrs.append(f'currentGas="{s["current_gas"]}"')
         if s.get("setpoint") is not None:
             attrs.append(f'setpoint="{fmt_double(s["setpoint"])}"')
+        # Minutes, in full precision (as the app's exporter writes them): a TTS reported in
+        # seconds is not a whole number of minutes.
+        if s.get("tts") is not None:
+            attrs.append(f'tts="{s["tts"]!r}"')
+        if s.get("rbt") is not None:
+            attrs.append(f'rbt="{s["rbt"]!r}"')
         attrs.append(f'events="{",".join(s.get("events", []))}"')
         lines.append(f'{inner_pad}<sample {" ".join(attrs)}/>')
     lines.append(f'{pad}</profileSamples>')
@@ -3177,6 +3232,8 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
     _raw_reasons = _collections.Counter()
     _n_deco_dives = 0
     _n_sp_dives   = 0   # dives with CCR setpoints from raw data
+    _n_tts_dives  = 0   # dives with time to surface from raw data
+    _n_rbt_dives  = 0   # dives with remaining bottom time from raw data
     _n_raw_vals   = _collections.Counter()   # dive values taken from raw data instead of MacDive
     _n_unmatched  = _collections.Counter()   # computer tanks MacDive did not have
     _n_dup_tanks  = _collections.Counter()   # --drop-duplicate-tanks removals
@@ -3830,6 +3887,16 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
             _n_sp_dives += 1
         elif decoded is not None and _keep_xml and any(s.get("setpoint") is not None for s in raw_samples):
             _dive_log.append("  setpoints  : in raw data but not imported (MacDive XML samples kept)")
+        _n_tts = sum(1 for s in samples if s.get("tts") is not None)
+        _n_rbt = sum(1 for s in samples if s.get("rbt") is not None)
+        if _n_tts or _n_rbt:
+            _dive_log.append(f"  tts / rbt  : {_n_tts}/{len(samples)} samples with TTS, "
+                             f"{_n_rbt}/{len(samples)} with RBT (raw data)")
+            _n_tts_dives += 1 if _n_tts else 0
+            _n_rbt_dives += 1 if _n_rbt else 0
+        elif decoded is not None and _keep_xml and any(
+                s.get("tts") is not None or s.get("rbt") is not None for s in raw_samples):
+            _dive_log.append("  tts / rbt  : in raw data but not imported (MacDive XML samples kept)")
         # Mandatory decompression stops reported by the computer (Gas tab list). Depth in
         # metres, time in seconds, type 2 = DC_DECO_DECOSTOP.
         if _deco_stops:
@@ -3895,6 +3962,8 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
         f"  No profile                                       : {_n_src['none']}",
         f"  Dives with deco stops from raw data              : {_n_deco_dives}",
         f"  Dives with CCR setpoints from raw data           : {_n_sp_dives}",
+        f"  Dives with TTS from raw data                     : {_n_tts_dives}",
+        f"  Dives with RBT from raw data                     : {_n_rbt_dives}",
         "  Dive values changed by raw data (MacDive → raw): "
         + (", ".join(f"{k} {v}" for k, v in _n_raw_vals.items()) or "none"),
         "  Duplicate tanks (--drop-duplicate-tanks "

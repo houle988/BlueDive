@@ -100,7 +100,11 @@ struct MainTabView: View {
 
     /// Tracks the active tab so widget deep-links can switch to the Logbook
     /// (where `ContentView` presents the manual/Bluetooth sheets).
-    @State private var selectedTab: Int = 0
+    @State private var selectedTab: MainTab = .dives
+    /// The tabs this window shows, in order (Settings → Appearance & Language → Main Tabs). Read
+    /// when the window is created and changed only when its own Settings closes
+    /// (`applyMainTabLayout`), never by a deep link or another window.
+    @State private var layout: [MainTab] = MainTab.savedLayoutUnobserved
     @State private var gearToOpen: Gear? = nil
     @State private var certToRenew: Certification? = nil
     @State private var insuranceToRenew: DivingInsurance? = nil
@@ -112,101 +116,124 @@ struct MainTabView: View {
     @State private var pinnedTabCount = 0
     #endif
 
-    /// The placement of the tab at `positionFromEnd` (Documents 1, Marine Life 2, Equipment 3,
-    /// Map 4): pinned (an icon at the trailing end of the iPad tab bar) while `pinnedTabCount`
-    /// reaches it. Dives always keeps its name.
-    private func tabPlacement(positionFromEnd: Int) -> TabPlacement {
+    /// The placement of `tab`: pinned (an icon at the trailing end of the iPad tab bar) while
+    /// `pinnedTabCount` reaches its position from the end of the shown tabs (the last one 1).
+    /// The first tab (Dives) always keeps its name.
+    private func placement(of tab: MainTab) -> TabPlacement {
         #if os(iOS)
-        pinnedTabCount >= positionFromEnd ? .pinned : .automatic
+        guard let index = layout.firstIndex(of: tab), index > 0 else { return .automatic }
+        return pinnedTabCount >= layout.count - index ? .pinned : .automatic
         #else
         .automatic
         #endif
+    }
+
+    /// The tabs, in this window's layout. Hidden tabs are left out (macOS ignores
+    /// `.hidden(_:)`). Rebuilt (`.id`) when the layout changes: a tab bar whose tabs are moved or
+    /// hidden in place draws them wrongly (observed: iOS 27 can keep another tab's icon until
+    /// the next launch; the macOS toolbar sizes the tabs to their titles until another tab is
+    /// selected). The feeders are attached outside it, in `body`, so they keep running.
+    private var tabView: some View {
+        TabView(selection: $selectedTab) {
+            ForEach(layout) { tab in
+                Tab(value: tab) {
+                    tabContent(tab)
+                } label: {
+                    Label { Text(verbatim: tab.title) } icon: { Image(systemName: tab.icon) }
+                }
+                .tabPlacement(placement(of: tab))
+            }
+        }
+        .id(layout)
+        // The rebuilt tab bar fades in over the old one (`applyMainTabLayout`) instead of the
+        // window showing only its background for a frame.
+        .transition(.opacity)
+        .environment(\.shownMainTabs, layout)
+        // A file opened while the app runs (Files, AirDrop, Mail) is handled by ContentView,
+        // which presents its import sheet or error alert: show Dives so they are seen. An XML
+        // file for another shown tab then moves on to that tab (the `.importGearXML`… receivers
+        // in `body`). Also required by the Main Tabs rebuild (`.id`): after a rebuild started on
+        // another tab, ContentView is not mounted, so nothing else would handle the file.
+        .onChange(of: importCoordinator.pendingURL) { _, url in
+            if url != nil { selectedTab = .dives }
+        }
+    }
+
+    @ViewBuilder
+    private func tabContent(_ tab: MainTab) -> some View {
+        switch tab {
+        case .dives:
+            ContentView()
+        case .map:
+            DiveMapView()
+        case .equipment:
+            NavigationStack {
+                GearListView()
+            }
+        case .marineLife:
+            MarineLifeView()
+                // "View dives" there (and on its species pages) shows the Dives tab.
+                .environment(\.showDiveList, ShowDiveListAction { selectedTab = .dives })
+        case .documents:
+            DocumentsView()
+        }
+    }
+
+    /// Applies the layout saved in Settings → Main Tabs to this window, when its Settings sheet
+    /// closes and only if it changed: the TabView is then rebuilt once. The selection leaves a
+    /// tab the layout hides before the rebuild.
+    private func applyMainTabLayout() {
+        let shown = MainTab.savedLayoutUnobserved
+        guard shown != layout else { return }
+        if !shown.contains(selectedTab) { selectedTab = .dives }
+        withAnimation(.easeInOut(duration: 0.5)) {
+            layout = shown
+        }
+    }
+
+    /// Selects `tab` for a reminder or an XML import, unless this window hides it: a reminder's
+    /// sheet is presented here, over whatever tab is shown, and an XML file meant for a hidden
+    /// tab is refused before it is routed (`ContentView.handleExternalFileURL`).
+    private func select(_ tab: MainTab) {
+        if layout.contains(tab) { selectedTab = tab }
     }
 
     var body: some View {
         ZStack {
             Color.platformBackground.ignoresSafeArea()
             
-            TabView(selection: $selectedTab) {
-                // --- TAB 1 : LOGBOOK ---
-                Tab(value: 0) {
-                    ContentView()
-                } label: {
-                    Label { Text(verbatim: MainTabTitle.dives) } icon: { Image(systemName: "water.waves") }
-                }
-
-                // --- TAB 2 : MAP ---
-                Tab(value: 1) {
-                    DiveMapView()
-                } label: {
-                    Label { Text(verbatim: MainTabTitle.map) } icon: { Image(systemName: "map") }
-                }
-                .tabPlacement(tabPlacement(positionFromEnd: 4))
-
-                // --- TAB 3 : EQUIPMENT ---
-                Tab(value: 2) {
-                    NavigationStack {
-                        GearListView()
-                    }
-                } label: {
-                    Label {
-                        Text(verbatim: MainTabTitle.equipment)
-                    } icon: {
-                        Image(systemName: "wrench.and.screwdriver")
-                    }
-                }
-                .tabPlacement(tabPlacement(positionFromEnd: 3))
-
-                // --- TAB 4 : MARINE LIFE --- (value 4: the deep links keep values 2 and 3)
-                Tab(value: 4) {
-                    MarineLifeView()
-                        // "View dives" there (and on its species pages) shows the Dives tab.
-                        .environment(\.showDiveList, ShowDiveListAction { selectedTab = 0 })
-                } label: {
-                    Label {
-                        Text(verbatim: MainTabTitle.marineLife)
-                    } icon: {
-                        Image(systemName: "fish")
-                    }
-                }
-                .tabPlacement(tabPlacement(positionFromEnd: 2))
-
-                // --- TAB 5 : DOCUMENTS ---
-                Tab(value: 3) {
-                    DocumentsView()
-                } label: {
-                    Label { Text(verbatim: MainTabTitle.documents) } icon: { Image(systemName: "person.text.rectangle") }
-                }
-                .tabPlacement(tabPlacement(positionFromEnd: 1))
-            }
+            tabView
             .accentColor(.cyan)
             // Every tab's Settings and iCloud toolbar buttons open the sheets presented here.
             .environment(\.showSettingsSheet, ShowSheetAction { showSettings = true })
             .environment(\.showSyncStatusSheet, ShowSheetAction { showSyncStatus = true })
-            // The only @Query Dive owner: keeps DiveStore's caches current whatever tab is
-            // shown (see DiveDataFeeder).
-            .background(DiveDataFeeder())
-            // Keeps store.cachedUniqueDivers fed from gear/certifications/insurance whatever
-            // tab is selected. A background view (not @Query on MainTabView itself) so a gear
-            // or document change doesn't re-evaluate MainTabView's body and all the tabs.
-            .background(DiverSourcesFeeder())
-            // Applies other devices' edits to existing dives (iCloud) to DiveStore's caches,
-            // whatever tab is selected. See RemoteChangeFeeder.
-            .background(RemoteChangeFeeder())
-            // Image records that lost an iCloud conflict (DivePhotoBlobs.swift), a minute after the
-            // window opens (a second window sweeps again and finds nothing).
-            .task { await PhotoBlobSweeper.sweepLater(container: modelContext.container) }
         }
+        // The feeders and the sweep are attached here, beside the TabView rather than on it: a
+        // Main Tabs change rebuilds the TabView (`.id` in `tabView`), which must not restart them.
+        // The only @Query Dive owner: keeps DiveStore's caches current whatever tab is
+        // shown (see DiveDataFeeder).
+        .background(DiveDataFeeder())
+        // Keeps store.cachedUniqueDivers fed from gear/certifications/insurance whatever
+        // tab is selected. A background view (not @Query on MainTabView itself) so a gear
+        // or document change doesn't re-evaluate MainTabView's body and all the tabs.
+        .background(DiverSourcesFeeder())
+        // Applies other devices' edits to existing dives (iCloud) to DiveStore's caches,
+        // whatever tab is selected. See RemoteChangeFeeder.
+        .background(RemoteChangeFeeder())
+        // Image records that lost an iCloud conflict (DivePhotoBlobs.swift), a minute after the
+        // window opens (a second window sweeps again and finds nothing).
+        .task { await PhotoBlobSweeper.sweepLater(container: modelContext.container) }
         // Tells the tab roots when iOS draws their toolbar in a side strip (iPhone Duo).
         .detectsToolbarSideStrip()
         #if os(iOS)
-        .modifier(TabBarFitTracker(pinnedTabCount: $pinnedTabCount, languageMode: languageMode))
+        .modifier(TabBarFitTracker(pinnedTabCount: $pinnedTabCount, languageMode: languageMode,
+                                   tabs: layout))
         #endif
         .onReceive(NotificationCenter.default.publisher(for: .addDiveManual)) { _ in
-            selectedTab = 0
+            selectedTab = .dives
         }
         .onReceive(NotificationCenter.default.publisher(for: .addDiveBluetooth)) { _ in
-            selectedTab = 0
+            selectedTab = .dives
         }
         #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
@@ -218,7 +245,7 @@ struct MainTabView: View {
             Task { @MainActor in
                 UserDefaults.standard.removeObject(forKey: "pendingGearDeepLink")
                 UserDefaults.standard.removeObject(forKey: "pendingGearDeepLinkTime")
-                selectedTab = 2
+                select(.equipment)
                 if let gearId {
                     gearToOpen = fetchGear(id: gearId)
                 }
@@ -229,7 +256,7 @@ struct MainTabView: View {
             Task { @MainActor in
                 UserDefaults.standard.removeObject(forKey: "pendingCertDeepLink")
                 UserDefaults.standard.removeObject(forKey: "pendingCertDeepLinkTime")
-                selectedTab = 3
+                select(.documents)
                 if let certId {
                     certToRenew = fetchCertification(id: certId)
                 }
@@ -240,23 +267,23 @@ struct MainTabView: View {
             Task { @MainActor in
                 UserDefaults.standard.removeObject(forKey: "pendingInsuranceDeepLink")
                 UserDefaults.standard.removeObject(forKey: "pendingInsuranceDeepLinkTime")
-                selectedTab = 3
+                select(.documents)
                 if let insuranceId {
                     insuranceToRenew = fetchInsurance(id: insuranceId)
                 }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .importGearXML)) { _ in
-            selectedTab = 2
+            select(.equipment)
         }
         .onReceive(NotificationCenter.default.publisher(for: .importCertificationXML)) { _ in
-            selectedTab = 3
+            select(.documents)
         }
         .onReceive(NotificationCenter.default.publisher(for: .importInsuranceXML)) { _ in
-            selectedTab = 3
+            select(.documents)
         }
         .onReceive(NotificationCenter.default.publisher(for: .importSpeciesXML)) { _ in
-            selectedTab = 4
+            select(.marineLife)
         }
         .task {
             // If the app launched via a file open (Files, AirDrop, Mail) and restored to
@@ -265,7 +292,7 @@ struct MainTabView: View {
             // Note: pendingURL must still be set here (not yet consumed by ContentView.onAppear)
             // because ContentView hasn't mounted yet — that's exactly the scenario this fixes.
             if importCoordinator.pendingURL != nil {
-                selectedTab = 0
+                selectedTab = .dives
             }
 
             // Cold-launch fallback: NotificationCenter posts are dropped before onReceive
@@ -278,7 +305,7 @@ struct MainTabView: View {
                 UserDefaults.standard.removeObject(forKey: "pendingGearDeepLink")
                 UserDefaults.standard.removeObject(forKey: "pendingGearDeepLinkTime")
                 if now - written < 300 {
-                    selectedTab = 2
+                    select(.equipment)
                     gearToOpen = fetchGear(id: gearId)
                 }
             }
@@ -287,7 +314,7 @@ struct MainTabView: View {
                 UserDefaults.standard.removeObject(forKey: "pendingCertDeepLink")
                 UserDefaults.standard.removeObject(forKey: "pendingCertDeepLinkTime")
                 if now - written < 300 {
-                    selectedTab = 3
+                    select(.documents)
                     certToRenew = fetchCertification(id: certId)
                 }
             }
@@ -296,7 +323,7 @@ struct MainTabView: View {
                 UserDefaults.standard.removeObject(forKey: "pendingInsuranceDeepLink")
                 UserDefaults.standard.removeObject(forKey: "pendingInsuranceDeepLinkTime")
                 if now - written < 300 {
-                    selectedTab = 3
+                    select(.documents)
                     insuranceToRenew = fetchInsurance(id: insuranceId)
                 }
             }
@@ -351,7 +378,9 @@ struct MainTabView: View {
             AddInsuranceView(insuranceToEdit: insurance)
                 .standardSheetPresentation()
         }
-        .sheet(isPresented: $showSettings) {
+        // Any dismissal (Close, swipe, Escape, the language page's own dismiss) applies a new
+        // tab layout to this window.
+        .sheet(isPresented: $showSettings, onDismiss: applyMainTabLayout) {
             SettingsView()
                 .standardSheetPresentation()
         }
@@ -502,27 +531,6 @@ private struct LaunchQuestions: ViewModifier {
     }
 }
 
-/// The main tabs' titles in the app's language, shared by the tab labels and `TabBarFit`.
-/// Equipment and Marine Life have their own short keys: five tabs share an iPhone's width
-/// (e.g. nl "Uitrusting" here, "Duikuitrusting" elsewhere).
-enum MainTabTitle {
-    static var dives: String {
-        NSLocalizedString("Dives", bundle: .forAppLanguage(), value: "Dives", comment: "Tab bar label for the dive list; the same key is used elsewhere, e.g. the dive count in the stats grid")
-    }
-    static var map: String {
-        NSLocalizedString("Map", bundle: .forAppLanguage(), value: "Map", comment: "Tab bar label for the dive map")
-    }
-    static var equipment: String {
-        NSLocalizedString("Equipment (tab)", bundle: .forAppLanguage(), value: "Equipment", comment: "Tab bar label for Equipment; keep it short (five tabs share an iPhone's width)")
-    }
-    static var marineLife: String {
-        NSLocalizedString("Marine Life (tab)", bundle: .forAppLanguage(), value: "Marine Life", comment: "Tab bar label for Marine Life; keep it short (five tabs share an iPhone's width)")
-    }
-    static var documents: String {
-        NSLocalizedString("Documents", bundle: .forAppLanguage(), value: "Documents", comment: "Tab bar label for Documents; also the Documents screen's navigation title")
-    }
-}
-
 #if os(iOS)
 /// How many tabs the iPad tab bar must pin so that it fits between the main-window toolbar's
 /// leading and trailing buttons.
@@ -534,9 +542,10 @@ enum MainTabTitle {
 /// reports none of these widths, so they are calibrated (11-inch iPad, iPadOS 27): a named tab
 /// is its title in SF 17 pt medium plus 32.4 pt, a pinned tab about 54 pt; the leading buttons
 /// end 183.5 pt (243 with the calculators menu) from the window's edge and the trailing ones
-/// begin 162 pt from the other, and iOS needs about 21 pt between the tab bar and the buttons. Tabs are pinned from the end (Documents first);
-/// Dives always keeps its name. Only for a top tab bar: regular width and height, at least 700 pt, no
-/// side strip (iPhone Duo). `showsCalculatorsMenu` counts the Dives tab's extra leading button on
+/// begin 162 pt from the other, and iOS needs about 21 pt between the tab bar and the buttons.
+/// Tabs are pinned from the end of the shown tabs (Settings → Main Tabs); the first (Dives) always
+/// keeps its name. Only for a top tab bar: regular width and height, at least 700 pt, no side
+/// strip (iPhone Duo). `showsCalculatorsMenu` counts the Dives tab's extra leading button on
 /// every tab: the tab bar is shared, so its pinning does not change from tab to tab.
 enum TabBarFit {
     nonisolated struct Geometry: Equatable, Sendable {
@@ -546,8 +555,8 @@ enum TabBarFit {
 
     /// `hasTopTabBar`: regular width and height, as on an iPad; an iPhone in landscape is regular
     /// width but compact height, with its tab bar at the bottom.
-    /// `titleWidths`: `namedTabWidths(isBoldText:)`, which depends only on the language and Bold
-    /// Text, so a live resize does not measure the titles again.
+    /// `titleWidths`: `namedTabWidths(_:isBoldText:)`, which depends only on the shown tabs, the
+    /// language and Bold Text, so a live resize does not measure the titles again.
     static func pinnedTabCount(geometry: Geometry, hasTopTabBar: Bool, titleWidths: [CGFloat],
                                showsCalculatorsMenu: Bool) -> Int {
         guard hasTopTabBar, geometry.width >= 700, !geometry.isSideStrip, !titleWidths.isEmpty else { return 0 }
@@ -567,13 +576,11 @@ enum TabBarFit {
         return titleWidths.count - 1
     }
 
-    /// The width of each tab with its title, in tab bar order (pinned from the end), in the app's
-    /// language. `isBoldText`: the Bold Text setting, which draws the titles heavier.
-    static func namedTabWidths(isBoldText: Bool) -> [CGFloat] {
+    /// The width of each of `tabs` with its title, in tab bar order (pinned from the end), in the
+    /// app's language. `isBoldText`: the Bold Text setting, which draws the titles heavier.
+    static func namedTabWidths(_ tabs: [MainTab], isBoldText: Bool) -> [CGFloat] {
         let font = UIFont.systemFont(ofSize: 17, weight: isBoldText ? .bold : .medium)
-        let titles = [MainTabTitle.dives, MainTabTitle.map, MainTabTitle.equipment,
-                      MainTabTitle.marineLife, MainTabTitle.documents]
-        return titles.map { ($0 as NSString).size(withAttributes: [.font: font]).width + 32.4 }
+        return tabs.map { ($0.title as NSString).size(withAttributes: [.font: font]).width + 32.4 }
     }
 }
 
@@ -585,12 +592,15 @@ private struct TabBarFitTracker: ViewModifier {
     @Binding var pinnedTabCount: Int
     /// `MainTabView`'s language setting: the tab titles' widths change with it.
     let languageMode: String
+    /// The tabs the window shows, in order (Settings → Main Tabs).
+    let tabs: [MainTab]
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.legibilityWeight) private var legibilityWeight
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
     @State private var geometry = TabBarFit.Geometry()
-    /// `TabBarFit.namedTabWidths`, measured again only on a language or Bold Text change.
+    /// `TabBarFit.namedTabWidths`, measured again only on a change of the tabs, the language or
+    /// Bold Text.
     @State private var titleWidths: [CGFloat] = []
 
     func body(content: Content) -> some View {
@@ -608,16 +618,17 @@ private struct TabBarFitTracker: ViewModifier {
             .onChange(of: legibilityWeight) { measureTitles() }
             .onChange(of: showCalculatorsMenu) { update() }
             .onChange(of: languageMode) { measureTitles() }
+            .onChange(of: tabs) { measureTitles() }
     }
 
     private func measureTitles() {
-        titleWidths = TabBarFit.namedTabWidths(isBoldText: legibilityWeight == .bold)
+        titleWidths = TabBarFit.namedTabWidths(tabs, isBoldText: legibilityWeight == .bold)
         update()
     }
 
     private func update() {
         if titleWidths.isEmpty {
-            titleWidths = TabBarFit.namedTabWidths(isBoldText: legibilityWeight == .bold)
+            titleWidths = TabBarFit.namedTabWidths(tabs, isBoldText: legibilityWeight == .bold)
         }
         let count = TabBarFit.pinnedTabCount(
             geometry: geometry,

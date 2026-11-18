@@ -4,7 +4,6 @@ import CoreData
 import CloudKit
 import UserNotifications
 import os.log
-import LibDCSwift
 import BackgroundTasks
 #if canImport(UIKit)
 import UIKit
@@ -148,9 +147,10 @@ struct BlueDiveApp: App {
         // so we can see [BLE IOCTL] GET_NAME, [DC_IO READ/WRITE] hex dumps
         // and SLIP framing during the i300C handshake.  Remove this line
         // once the i300C connection issue is resolved.
-        // LibDCSwift.Logger.shared.enableDebugMode()
+        // DiveComputerLog.shared.enableDebugMode()
 
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
+        DeviceStorage.removeFormerLibraryKeys()
         #if os(iOS)
         BackgroundSyncTask.register()
         #endif
@@ -215,6 +215,9 @@ struct BlueDiveApp: App {
             // minimum window size keeps them from being squeezed below a usable height.
             // 600 pt still fits the smallest scaled display (13" "Larger Text", ~625 pt visible).
             .frame(minWidth: 900, minHeight: 600)
+            // A file or link opened from outside the app (Finder, Mail, the widget) goes to an
+            // open window instead of opening a new one; a new window opens only when none is.
+            .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
             #endif
             .modifier(LanguageOverrideModifier(locale: prefs.languageMode.locale))
             .environment(diveStore)

@@ -1,0 +1,1713 @@
+{
+  "families": [
+    "suuntoEonSteel",
+    "shearwaterPetrel",
+    "hwOstc3",
+    "uwatecSmart",
+    "oceanicAtom2",
+    "pelagicI330R",
+    "maresIconHD",
+    "deepsixExcursion",
+    "deepbluCosmiq",
+    "oceansS1",
+    "mcleanExtreme",
+    "divesoftFreedom",
+    "cressiGoa",
+    "diveSystem",
+    "seacScreen",
+    "halcyonSymbios"
+  ],
+  "knownServiceUUIDs": [
+    "0000fefb-0000-1000-8000-00805f9b34fb",
+    "2456e1b9-26e2-8f83-e744-f34f01e9d701",
+    "544e326b-5b72-c6b0-1c46-41c1bc448118",
+    "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
+    "98ae7120-e62e-11e3-badd-0002a5d5c51b",
+    "cb3c4555-d670-4670-bc20-b61dbc851e9a",
+    "ca7b0001-f785-4c38-b599-c7c5fbadb034",
+    "fdcdeaaa-295d-470e-bf15-04217b7aa0a0",
+    "fe25c237-0ece-443c-b0aa-e02033e7029d",
+    "1aa44039-1667-4b29-87cc-dfecaaf31d97",
+    "0000fcef-0000-1000-8000-00805f9b34fb",
+    "6e400001-b5a3-f393-e0a9-e50e24dc10b8",
+    "00000001-8c3b-4f2c-a59e-8c08224f3253",
+    "84968ffe-d26d-478a-b953-5010bcf58bca"
+  ],
+  "resolutions": [
+    {
+      "displayName": "Shearwater Perdix",
+      "name": "Perdix",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 5
+      }
+    },
+    {
+      "displayName": "Shearwater Perdix 2",
+      "name": "Perdix 2",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 11
+      }
+    },
+    {
+      "displayName": "Shearwater Perdix 3",
+      "name": "Perdix 3",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 14
+      }
+    },
+    {
+      "displayName": "Shearwater Perdix",
+      "name": "Perdix AI",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 5
+      }
+    },
+    {
+      "displayName": "Shearwater Petrel 2",
+      "name": "perdix 2",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 3
+      }
+    },
+    {
+      "displayName": "Shearwater Petrel 2",
+      "name": "PERDIX 2",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 3
+      }
+    },
+    {
+      "displayName": "Shearwater Petrel 2",
+      "name": "Petrel",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 3
+      }
+    },
+    {
+      "displayName": "Shearwater Petrel 2",
+      "name": "Petrel 2",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 3
+      }
+    },
+    {
+      "displayName": "Shearwater Petrel 3",
+      "name": "Petrel 3",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 10
+      }
+    },
+    {
+      "displayName": "Shearwater Teric",
+      "name": "Teric",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 8
+      }
+    },
+    {
+      "displayName": "Shearwater Peregrine",
+      "name": "Peregrine",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 9
+      }
+    },
+    {
+      "displayName": "Shearwater Peregrine TX",
+      "name": "Peregrine TX",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 13
+      }
+    },
+    {
+      "displayName": "NERD",
+      "name": "NERD",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 4
+      }
+    },
+    {
+      "displayName": "Shearwater NERD 2",
+      "name": "NERD 2",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 7
+      }
+    },
+    {
+      "displayName": "Shearwater Petrel 2",
+      "name": "Nerd 2",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 3
+      }
+    },
+    {
+      "displayName": "Shearwater Tern",
+      "name": "Tern",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 12
+      }
+    },
+    {
+      "displayName": "Shearwater Tern",
+      "name": "Tern TX",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 12
+      }
+    },
+    {
+      "displayName": "Shearwater Tern",
+      "name": "Tern SC",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 12
+      }
+    },
+    {
+      "displayName": "Shearwater Predator",
+      "name": "Predator",
+      "resolved": null
+    },
+    {
+      "displayName": "Shearwater Perdix 2",
+      "name": "Perdix 2 1A2B3C",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 11
+      }
+    },
+    {
+      "displayName": "Shearwater Teric",
+      "name": "Teric 4D2F",
+      "resolved": {
+        "family": "shearwaterPetrel",
+        "modelID": 8
+      }
+    },
+    {
+      "displayName": "Suunto EON Steel",
+      "name": "EON Steel",
+      "resolved": {
+        "family": "suuntoEonSteel",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Suunto EON Steel",
+      "name": "EON Steel Black",
+      "resolved": {
+        "family": "suuntoEonSteel",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Suunto EON Core",
+      "name": "EON Core",
+      "resolved": {
+        "family": "suuntoEonSteel",
+        "modelID": 1
+      }
+    },
+    {
+      "displayName": "Suunto D5",
+      "name": "Suunto D5",
+      "resolved": {
+        "family": "suuntoEonSteel",
+        "modelID": 2
+      }
+    },
+    {
+      "displayName": "Suunto EON Core",
+      "name": "EON Core 1234",
+      "resolved": {
+        "family": "suuntoEonSteel",
+        "modelID": 1
+      }
+    },
+    {
+      "displayName": "Suunto D5",
+      "name": "Suunto D5 9876",
+      "resolved": {
+        "family": "suuntoEonSteel",
+        "modelID": 2
+      }
+    },
+    {
+      "displayName": "Scubapro G2",
+      "name": "G2",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 50
+      }
+    },
+    {
+      "displayName": "Scubapro G2",
+      "name": "G2 TEK",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 50
+      }
+    },
+    {
+      "displayName": "Scubapro G2 HUD",
+      "name": "G2 HUD",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 66
+      }
+    },
+    {
+      "displayName": "Scubapro G2 HUD",
+      "name": "HUD",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 66
+      }
+    },
+    {
+      "displayName": "Scubapro G3",
+      "name": "G3",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 52
+      }
+    },
+    {
+      "displayName": "Scubapro Aladin Sport Matrix",
+      "name": "Galileo 3",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 23
+      }
+    },
+    {
+      "displayName": "Scubapro Aladin Sport Matrix",
+      "name": "Aladin",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 23
+      }
+    },
+    {
+      "displayName": "Scubapro Aladin A1",
+      "name": "Aladin A1",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 37
+      }
+    },
+    {
+      "displayName": "Scubapro Aladin A2",
+      "name": "Aladin A2",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 40
+      }
+    },
+    {
+      "displayName": "Scubapro Aladin A1",
+      "name": "A1",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 37
+      }
+    },
+    {
+      "displayName": "Scubapro Aladin A2",
+      "name": "A2",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 40
+      }
+    },
+    {
+      "displayName": "Scubapro Luna 2.0",
+      "name": "Luna 2.0",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 81
+      }
+    },
+    {
+      "displayName": "Scubapro Luna 2.0 AI",
+      "name": "Luna 2.0 AI",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 80
+      }
+    },
+    {
+      "displayName": "Scubapro Aladin Sport Matrix",
+      "name": "g2",
+      "resolved": {
+        "family": "uwatecSmart",
+        "modelID": 23
+      }
+    },
+    {
+      "displayName": "Mares Genius",
+      "name": "Mares Genius",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 28
+      }
+    },
+    {
+      "displayName": "Mares Smart",
+      "name": "Mares bluelink pro",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 16
+      }
+    },
+    {
+      "displayName": "Mares Sirius",
+      "name": "Sirius",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 47
+      }
+    },
+    {
+      "displayName": "Mares Sirius L",
+      "name": "Sirius L",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 51
+      }
+    },
+    {
+      "displayName": "Mares Quad Ci",
+      "name": "Quad Ci",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 49
+      }
+    },
+    {
+      "displayName": "Mares Quad Air",
+      "name": "Quad Air",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 35
+      }
+    },
+    {
+      "displayName": "Mares Quad 2",
+      "name": "Quad2",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 50
+      }
+    },
+    {
+      "displayName": "Quad",
+      "name": "Quad",
+      "resolved": null
+    },
+    {
+      "displayName": "Mares Puck 4",
+      "name": "Puck Pro U",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 53
+      }
+    },
+    {
+      "displayName": "Mares Puck Pro",
+      "name": "Puck Pro",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 24
+      }
+    },
+    {
+      "displayName": "Mares Puck 4",
+      "name": "Puck4",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 53
+      }
+    },
+    {
+      "displayName": "Mares Puck 4",
+      "name": "Puck Lite",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 53
+      }
+    },
+    {
+      "displayName": "Mares Puck Air 2",
+      "name": "Puck Air",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 45
+      }
+    },
+    {
+      "displayName": "Mares Puck Pro",
+      "name": "Puck",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 24
+      }
+    },
+    {
+      "displayName": "Mares Smart Air",
+      "name": "Smart Air",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 36
+      }
+    },
+    {
+      "displayName": "Mares Smart Apnea",
+      "name": "Smart Apnea",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 65552
+      }
+    },
+    {
+      "displayName": "Mares Smart",
+      "name": "Smart",
+      "resolved": {
+        "family": "maresIconHD",
+        "modelID": 16
+      }
+    },
+    {
+      "displayName": "Aqualung i300C",
+      "name": "FH020399",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17992
+      }
+    },
+    {
+      "displayName": "Aqualung i770R",
+      "name": "FQ001124",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18001
+      }
+    },
+    {
+      "displayName": "Oceanic Pro Plus X",
+      "name": "ER123456",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17746
+      }
+    },
+    {
+      "displayName": "Aqualung i750TC",
+      "name": "EZ123456",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17754
+      }
+    },
+    {
+      "displayName": "Sherwood Sage",
+      "name": "FG000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17991
+      }
+    },
+    {
+      "displayName": "Aqualung i200C",
+      "name": "FI000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17993
+      }
+    },
+    {
+      "displayName": "Aqualung i550C",
+      "name": "FR000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18002
+      }
+    },
+    {
+      "displayName": "Oceanic Geo 4.0",
+      "name": "FS000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18003
+      }
+    },
+    {
+      "displayName": "Oceanic Veo 4.0",
+      "name": "FT000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18004
+      }
+    },
+    {
+      "displayName": "Sherwood Wisdom 4",
+      "name": "FU000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18005
+      }
+    },
+    {
+      "displayName": "Oceanic Pro Plus 4",
+      "name": "FV000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18006
+      }
+    },
+    {
+      "displayName": "Apeks DSX",
+      "name": "GA000001",
+      "resolved": {
+        "family": "pelagicI330R",
+        "modelID": 18241
+      }
+    },
+    {
+      "displayName": "Sherwood Beacon",
+      "name": "GB000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18242
+      }
+    },
+    {
+      "displayName": "Aqualung i470TC",
+      "name": "GC000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18243
+      }
+    },
+    {
+      "displayName": "Aqualung i330R",
+      "name": "GD000001",
+      "resolved": {
+        "family": "pelagicI330R",
+        "modelID": 18244
+      }
+    },
+    {
+      "displayName": "Aqualung i200C (v2)",
+      "name": "GI000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18249
+      }
+    },
+    {
+      "displayName": "Oceanic Geo Air",
+      "name": "GK000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 18251
+      }
+    },
+    {
+      "displayName": "Aqualung i330R Console",
+      "name": "GM000001",
+      "resolved": {
+        "family": "pelagicI330R",
+        "modelID": 18253
+      }
+    },
+    {
+      "displayName": "Oceanic Atom 3.1",
+      "name": "DV000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17494
+      }
+    },
+    {
+      "displayName": "Sherwood Wisdom 3",
+      "name": "DX000001",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17496
+      }
+    },
+    {
+      "displayName": "Aqualung i300C",
+      "name": "FH",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17992
+      }
+    },
+    {
+      "displayName": "FH12A",
+      "name": "FH12A",
+      "resolved": null
+    },
+    {
+      "displayName": "Oceanic Pro Plus X",
+      "name": "fh020399",
+      "resolved": {
+        "family": "oceanicAtom2",
+        "modelID": 17746
+      }
+    },
+    {
+      "displayName": "ZZ123456",
+      "name": "ZZ123456",
+      "resolved": null
+    },
+    {
+      "displayName": "Cressi Cartesio",
+      "name": "1_1A2B",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 1
+      }
+    },
+    {
+      "displayName": "Cressi Goa",
+      "name": "2_1A2B",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 2
+      }
+    },
+    {
+      "displayName": "Cressi Leonardo 2.0",
+      "name": "3_ABCD",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 3
+      }
+    },
+    {
+      "displayName": "Cressi Donatello",
+      "name": "4_00FF",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 4
+      }
+    },
+    {
+      "displayName": "Cressi Michelangelo",
+      "name": "5_1234",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 5
+      }
+    },
+    {
+      "displayName": "Cressi Raffaello",
+      "name": "6_1A2B",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 6
+      }
+    },
+    {
+      "displayName": "Cressi Neon",
+      "name": "9_1234",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 9
+      }
+    },
+    {
+      "displayName": "Cressi Nepto",
+      "name": "a_1234",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 10
+      }
+    },
+    {
+      "displayName": "Cressi Nepto",
+      "name": "A_1234",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 10
+      }
+    },
+    {
+      "displayName": "10_1234",
+      "name": "10_1234",
+      "resolved": null
+    },
+    {
+      "displayName": "02_1234",
+      "name": "02_1234",
+      "resolved": null
+    },
+    {
+      "displayName": "6_XYZ",
+      "name": "6_XYZ",
+      "resolved": null
+    },
+    {
+      "displayName": "Cressi Raffaello",
+      "name": "6_",
+      "resolved": {
+        "family": "cressiGoa",
+        "modelID": 6
+      }
+    },
+    {
+      "displayName": "_1234",
+      "name": "_1234",
+      "resolved": null
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "OSTC 3",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "OSTC Plus",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 4",
+      "name": "OSTC 4-12345",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 67
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "OSTC 5",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "OSTC s#12",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "OSTC s 12",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2N",
+      "name": "OSTC 2-123",
+      "resolved": null
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "OSTC + 123",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "OSTC",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "OSTC cR",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Heinrichs Weikamp OSTC 2",
+      "name": "FROG",
+      "resolved": {
+        "family": "hwOstc3",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Ratio iX3M 2021 GPS Easy",
+      "name": "DS123",
+      "resolved": {
+        "family": "diveSystem",
+        "modelID": 97
+      }
+    },
+    {
+      "displayName": "Ratio iX3M 2021 GPS Easy",
+      "name": "DS",
+      "resolved": {
+        "family": "diveSystem",
+        "modelID": 97
+      }
+    },
+    {
+      "displayName": "Ratio iX3M 2021 GPS Easy",
+      "name": "IX5M123",
+      "resolved": {
+        "family": "diveSystem",
+        "modelID": 97
+      }
+    },
+    {
+      "displayName": "Ratio iX3M 2021 GPS Easy",
+      "name": "RATIO-1234",
+      "resolved": {
+        "family": "diveSystem",
+        "modelID": 97
+      }
+    },
+    {
+      "displayName": "Ratio iX3M 2021 GPS Easy",
+      "name": "RATIO-",
+      "resolved": {
+        "family": "diveSystem",
+        "modelID": 97
+      }
+    },
+    {
+      "displayName": "Ratio iX3M 2021 GPS Fancy",
+      "name": "ds123",
+      "resolved": {
+        "family": "diveSystem",
+        "modelID": 96
+      }
+    },
+    {
+      "displayName": "Deep Six Excursion",
+      "name": "EXCURSION",
+      "resolved": {
+        "family": "deepsixExcursion",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Deep Six Excursion",
+      "name": "Crest-CR4",
+      "resolved": {
+        "family": "deepsixExcursion",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Deep Six Excursion",
+      "name": "CENTAURI",
+      "resolved": {
+        "family": "deepsixExcursion",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Deep Six Excursion",
+      "name": "ALPHA",
+      "resolved": {
+        "family": "deepsixExcursion",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Deepblu Cosmiq+",
+      "name": "COSMIQ",
+      "resolved": {
+        "family": "deepbluCosmiq",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Oceans S1",
+      "name": "S1",
+      "resolved": {
+        "family": "oceansS1",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Oceans S1",
+      "name": "S1 123",
+      "resolved": {
+        "family": "oceansS1",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Oceans S1",
+      "name": "S1123",
+      "resolved": {
+        "family": "oceansS1",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "McLean Extreme",
+      "name": "McLean Extreme",
+      "resolved": {
+        "family": "mcleanExtreme",
+        "modelID": 0
+      }
+    },
+    {
+      "displayName": "Divesoft Freedom",
+      "name": "Freedom",
+      "resolved": {
+        "family": "divesoftFreedom",
+        "modelID": 19
+      }
+    },
+    {
+      "displayName": "Divesoft Freedom",
+      "name": "Freedom 1234",
+      "resolved": {
+        "family": "divesoftFreedom",
+        "modelID": 19
+      }
+    },
+    {
+      "displayName": "Divesoft Freedom",
+      "name": "Liberty",
+      "resolved": {
+        "family": "divesoftFreedom",
+        "modelID": 19
+      }
+    },
+    {
+      "displayName": "Divesoft Freedom",
+      "name": "Liberty 99",
+      "resolved": {
+        "family": "divesoftFreedom",
+        "modelID": 19
+      }
+    },
+    {
+      "displayName": "Halcyon Symbios HUD",
+      "name": "H01ABCD",
+      "resolved": {
+        "family": "halcyonSymbios",
+        "modelID": 1
+      }
+    },
+    {
+      "displayName": "Halcyon Symbios HUD",
+      "name": "H07ABCD",
+      "resolved": {
+        "family": "halcyonSymbios",
+        "modelID": 1
+      }
+    },
+    {
+      "displayName": "H03ABCD",
+      "name": "H03ABCD",
+      "resolved": null
+    },
+    {
+      "displayName": "Halcyon Symbios HUD",
+      "name": "1234015678",
+      "resolved": {
+        "family": "halcyonSymbios",
+        "modelID": 1
+      }
+    },
+    {
+      "displayName": "Halcyon Symbios HUD",
+      "name": "1234075678",
+      "resolved": {
+        "family": "halcyonSymbios",
+        "modelID": 1
+      }
+    },
+    {
+      "displayName": "123401",
+      "name": "123401",
+      "resolved": null
+    },
+    {
+      "displayName": "Seac Tablet",
+      "name": "Tablet",
+      "resolved": {
+        "family": "seacScreen",
+        "modelID": 16
+      }
+    },
+    {
+      "displayName": "Seac Tablet",
+      "name": "Tablet123",
+      "resolved": {
+        "family": "seacScreen",
+        "modelID": 16
+      }
+    },
+    {
+      "displayName": "Seac Tablet",
+      "name": "Tablet 123",
+      "resolved": {
+        "family": "seacScreen",
+        "modelID": 16
+      }
+    },
+    {
+      "displayName": "Tecdiving DiveComputer.eu",
+      "name": "DiveComputer",
+      "resolved": null
+    },
+    {
+      "displayName": "iPhone",
+      "name": "iPhone",
+      "resolved": null
+    },
+    {
+      "displayName": "Unknown",
+      "name": "Unknown",
+      "resolved": null
+    },
+    {
+      "displayName": "",
+      "name": "",
+      "resolved": null
+    },
+    {
+      "displayName": " ",
+      "name": " ",
+      "resolved": null
+    },
+    {
+      "displayName": "Apple Watch",
+      "name": "Apple Watch",
+      "resolved": null
+    }
+  ],
+  "source": "libdc-swift working @ fd5b0db0fd8fe19d59a453939465ebf21e0d2aba, public API",
+  "supportedModels": [
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 9,
+      "name": "Shearwater Peregrine"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 13,
+      "name": "Shearwater Peregrine TX"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 3,
+      "name": "Shearwater Petrel 2"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 10,
+      "name": "Shearwater Petrel 3"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 5,
+      "name": "Shearwater Perdix"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 6,
+      "name": "Shearwater Perdix AI"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 11,
+      "name": "Shearwater Perdix 2"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 14,
+      "name": "Shearwater Perdix 3"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 8,
+      "name": "Shearwater Teric"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 12,
+      "name": "Shearwater Tern"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 12,
+      "name": "Shearwater Tern TX"
+    },
+    {
+      "family": "shearwaterPetrel",
+      "modelID": 7,
+      "name": "Shearwater NERD 2"
+    },
+    {
+      "family": "suuntoEonSteel",
+      "modelID": 0,
+      "name": "Suunto EON Steel"
+    },
+    {
+      "family": "suuntoEonSteel",
+      "modelID": 1,
+      "name": "Suunto EON Core"
+    },
+    {
+      "family": "suuntoEonSteel",
+      "modelID": 2,
+      "name": "Suunto D5"
+    },
+    {
+      "family": "suuntoEonSteel",
+      "modelID": 3,
+      "name": "Suunto EON Steel Black"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 50,
+      "name": "Scubapro G2"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 49,
+      "name": "Scubapro G2 TEK"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 50,
+      "name": "Scubapro G2 Console"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 66,
+      "name": "Scubapro G2 HUD"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 52,
+      "name": "Scubapro G3"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 37,
+      "name": "Scubapro Aladin A1"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 40,
+      "name": "Scubapro Aladin A2"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 23,
+      "name": "Scubapro Aladin Sport Matrix"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 23,
+      "name": "Scubapro Aladin H Matrix"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 81,
+      "name": "Scubapro Luna 2.0"
+    },
+    {
+      "family": "uwatecSmart",
+      "modelID": 80,
+      "name": "Scubapro Luna 2.0 AI"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 0,
+      "name": "Heinrichs Weikamp OSTC 2"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 0,
+      "name": "Heinrichs Weikamp OSTC 2 TR"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 0,
+      "name": "Heinrichs Weikamp OSTC 3"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 67,
+      "name": "Heinrichs Weikamp OSTC 4"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 68,
+      "name": "Heinrichs Weikamp OSTC 5"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 0,
+      "name": "Heinrichs Weikamp OSTC cR"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 0,
+      "name": "Heinrichs Weikamp OSTC Nano"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 0,
+      "name": "Heinrichs Weikamp OSTC Plus"
+    },
+    {
+      "family": "hwOstc3",
+      "modelID": 0,
+      "name": "Heinrichs Weikamp OSTC Sport"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18003,
+      "name": "Oceanic Geo 4.0"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18004,
+      "name": "Oceanic Veo 4.0"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 17746,
+      "name": "Oceanic Pro Plus X"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18006,
+      "name": "Oceanic Pro Plus 4"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 17494,
+      "name": "Oceanic Atom 3.1"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18251,
+      "name": "Oceanic Geo Air"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18001,
+      "name": "Aqualung i770R"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 17754,
+      "name": "Aqualung i750TC"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18002,
+      "name": "Aqualung i550C"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18243,
+      "name": "Aqualung i470TC"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 17992,
+      "name": "Aqualung i300C"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 17993,
+      "name": "Aqualung i200C"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18249,
+      "name": "Aqualung i200C (v2)"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 17496,
+      "name": "Sherwood Wisdom 3"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18005,
+      "name": "Sherwood Wisdom 4"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 17991,
+      "name": "Sherwood Sage"
+    },
+    {
+      "family": "oceanicAtom2",
+      "modelID": 18242,
+      "name": "Sherwood Beacon"
+    },
+    {
+      "family": "pelagicI330R",
+      "modelID": 18244,
+      "name": "Aqualung i330R"
+    },
+    {
+      "family": "pelagicI330R",
+      "modelID": 18253,
+      "name": "Aqualung i330R Console"
+    },
+    {
+      "family": "pelagicI330R",
+      "modelID": 18241,
+      "name": "Apeks DSX"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 20,
+      "name": "Mares Icon HD"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 24,
+      "name": "Mares Puck Pro"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 24,
+      "name": "Mares Puck Pro +"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 16,
+      "name": "Mares Smart"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 65552,
+      "name": "Mares Smart Apnea"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 41,
+      "name": "Mares Quad"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 35,
+      "name": "Mares Quad Air"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 49,
+      "name": "Mares Quad Ci"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 50,
+      "name": "Mares Quad 2"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 36,
+      "name": "Mares Smart Air"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 47,
+      "name": "Mares Sirius"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 51,
+      "name": "Mares Sirius L"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 45,
+      "name": "Mares Puck Air 2"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 28,
+      "name": "Mares Genius"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 53,
+      "name": "Mares Puck 4"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 53,
+      "name": "Mares Puck Lite"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 53,
+      "name": "Mares Puck Pro EZ"
+    },
+    {
+      "family": "maresIconHD",
+      "modelID": 53,
+      "name": "Mares Puck Pro Ultra"
+    },
+    {
+      "family": "deepsixExcursion",
+      "modelID": 0,
+      "name": "Deep Six Excursion"
+    },
+    {
+      "family": "deepsixExcursion",
+      "modelID": 0,
+      "name": "Crest CR-4"
+    },
+    {
+      "family": "deepsixExcursion",
+      "modelID": 0,
+      "name": "Genesis Centauri"
+    },
+    {
+      "family": "deepsixExcursion",
+      "modelID": 0,
+      "name": "Scorpena Alpha"
+    },
+    {
+      "family": "deepbluCosmiq",
+      "modelID": 0,
+      "name": "Deepblu Cosmiq+"
+    },
+    {
+      "family": "oceansS1",
+      "modelID": 0,
+      "name": "Oceans S1"
+    },
+    {
+      "family": "mcleanExtreme",
+      "modelID": 0,
+      "name": "McLean Extreme"
+    },
+    {
+      "family": "divesoftFreedom",
+      "modelID": 19,
+      "name": "Divesoft Freedom"
+    },
+    {
+      "family": "divesoftFreedom",
+      "modelID": 10,
+      "name": "Divesoft Liberty"
+    },
+    {
+      "family": "cressiGoa",
+      "modelID": 2,
+      "name": "Cressi Goa"
+    },
+    {
+      "family": "cressiGoa",
+      "modelID": 1,
+      "name": "Cressi Cartesio"
+    },
+    {
+      "family": "cressiGoa",
+      "modelID": 3,
+      "name": "Cressi Leonardo 2.0"
+    },
+    {
+      "family": "cressiGoa",
+      "modelID": 4,
+      "name": "Cressi Donatello"
+    },
+    {
+      "family": "cressiGoa",
+      "modelID": 5,
+      "name": "Cressi Michelangelo"
+    },
+    {
+      "family": "cressiGoa",
+      "modelID": 6,
+      "name": "Cressi Raffaello"
+    },
+    {
+      "family": "cressiGoa",
+      "modelID": 9,
+      "name": "Cressi Neon"
+    },
+    {
+      "family": "cressiGoa",
+      "modelID": 10,
+      "name": "Cressi Nepto"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 96,
+      "name": "Ratio iX3M 2021 GPS Fancy"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 97,
+      "name": "Ratio iX3M 2021 GPS Easy"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 98,
+      "name": "Ratio iX3M 2021 GPS Pro"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 99,
+      "name": "Ratio iX3M 2021 GPS Deep"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 100,
+      "name": "Ratio iX3M 2021 GPS Tech+"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 101,
+      "name": "Ratio iX3M 2021 GPS Reb"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 128,
+      "name": "Ratio iDive 2 Free"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 129,
+      "name": "Ratio iDive 2 Fancy"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 130,
+      "name": "Ratio iDive 2 Easy"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 131,
+      "name": "Ratio iDive 2 Pro"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 132,
+      "name": "Ratio iDive 2 Deep"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 133,
+      "name": "Ratio iDive 2 Tech"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 134,
+      "name": "Ratio iDive 2 Reb"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 144,
+      "name": "Ratio iX3M 2 GPS Gauge"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 145,
+      "name": "Ratio iX3M 2 GPS Easy"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 146,
+      "name": "Ratio iX3M 2 GPS Pro"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 147,
+      "name": "Ratio iX3M 2 GPS Deep"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 148,
+      "name": "Ratio iX3M 2 GPS Tech"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 149,
+      "name": "Ratio iX3M 2 GPS Reb"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 150,
+      "name": "Ratio ATOM"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 256,
+      "name": "Ratio iX3M 2 Gauge"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 257,
+      "name": "Ratio iX3M 2 Easy"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 258,
+      "name": "Ratio iX3M 2 Pro"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 259,
+      "name": "Ratio iX3M 2 Deep"
+    },
+    {
+      "family": "diveSystem",
+      "modelID": 260,
+      "name": "Ratio iX3M 2 Tech+"
+    },
+    {
+      "family": "seacScreen",
+      "modelID": 16,
+      "name": "Seac Tablet"
+    },
+    {
+      "family": "halcyonSymbios",
+      "modelID": 1,
+      "name": "Halcyon Symbios HUD"
+    },
+    {
+      "family": "halcyonSymbios",
+      "modelID": 7,
+      "name": "Halcyon Symbios Handset"
+    }
+  ]
+}

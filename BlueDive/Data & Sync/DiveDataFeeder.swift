@@ -4,8 +4,9 @@ import SwiftData
 // MARK: - Dive Data Feeder
 
 /// The app's only `@Query Dive` (and `@Query MarineSight`) owner. Attached once with
-/// `.background(DiveDataFeeder())` to the `TabView` in `MainTabView`, next to
-/// `DiverSourcesFeeder` and `RemoteChangeFeeder`, so it stays mounted whatever tab is shown:
+/// `.background(DiveDataFeeder())` in `MainTabView`, next to `DiverSourcesFeeder` and
+/// `RemoteChangeFeeder`, on the container around the `TabView` (a Settings → Main Tabs change
+/// rebuilds the `TabView` with `.id`, which must not restart it), so it stays mounted whatever tab is shown:
 /// DiveStore's caches (`dives`, summaries, filters, badges, widget data) follow every change in
 /// dive membership — a dive added, deleted or merged here or on another device — even while
 /// the Dives tab is not shown. A background view, not queries on `MainTabView` itself, so a

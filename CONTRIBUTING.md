@@ -61,7 +61,7 @@ Look for issues tagged [`good first issue`](../../issues?q=is%3Aissue+label%3A%2
 ## Setting up for development
 
 1. Clone the repository and open `BlueDive.xcodeproj` in Xcode 26 or later (the app uses iOS 26 / macOS 26 SDK APIs)
-2. Swift Package Manager will automatically resolve the [LibDCSwift](https://github.com/houle988/libdc-swift), [Garmin FIT Swift SDK](https://github.com/garmin/fit-swift-sdk), and [swift-collections](https://github.com/apple/swift-collections) dependencies
+2. Swift Package Manager will automatically resolve the [Garmin FIT Swift SDK](https://github.com/garmin/fit-swift-sdk) and [swift-collections](https://github.com/apple/swift-collections) dependencies; the dive computer package, `Packages/DiveComputerKit`, is part of the repository (its tests run with `swift test` in that folder — see `Packages/DiveComputerKit/Docs/README.md`)
 3. Select the **BlueDive** scheme and build (⌘B) for both an iOS destination and **My Mac** — BlueDive is a native universal app, and every change must build on both platforms
 
 **iCloud & App Group:** The app's CloudKit container and App Group are tied to the project owner's private Apple Developer account. To build and run locally, you will need to:
@@ -96,13 +96,12 @@ See [`CLAUDE.md`](CLAUDE.md) in the repository root for the full conventions. Ke
 ## Third-party dependencies
 
 BlueDive builds on:
-- [libdivecomputer](https://github.com/houle988/libdivecomputer) — LGPL-2.1-or-later (BlueDive fork)
-- [libdc-swift](https://github.com/houle988/libdc-swift) — LGPL-2.1 (BlueDive fork)
+- [libdivecomputer](https://github.com/libdivecomputer/libdivecomputer) — LGPL-2.1-or-later; its source is included in `Packages/DiveComputerKit` (BlueDive's own Bluetooth and dive parsing package) and linked statically
 - [Garmin FIT Swift SDK](https://github.com/garmin/fit-swift-sdk) — Garmin FIT file decoding
 - [Open-Meteo](https://open-meteo.com) — Weather data
 - [iNaturalist](https://www.inaturalist.org) — Species taxonomy and photos
 
-Contributions to libdivecomputer, libdc-swift, or the Garmin FIT Swift SDK should be made directly to their respective repositories.
+Contributions to libdivecomputer or the Garmin FIT Swift SDK should be made directly to their respective repositories. BlueDive's copy of libdivecomputer is updated from upstream by hand (see `Packages/DiveComputerKit/Sources/CLibDiveComputer/UPSTREAM.md`); do not patch it in a pull request.
 
 ## Code of conduct
 

@@ -1168,11 +1168,8 @@ struct EditEquipmentView: View {
     }
 
     private func gearListRow(_ gear: Gear) -> some View {
-        #if os(macOS)
+        // Stacked: this list has no column header.
         GearRow(gear: gear, allowsOneLine: false)
-        #else
-        GearRow(gear: gear)
-        #endif
     }
 
     private func applyGearGroup(_ group: GearGroup) {
@@ -1209,13 +1206,27 @@ struct EditSiteDetailsView: View {
     @Bindable var dive: Dive
     @Environment(\.dismiss) private var dismiss
     @Environment(DiveStore.self) private var store
-    // store.dives is sorted by timestamp desc (same order DiveDataFeeder's @Query delivers)
-    private var allDivesByDate: [Dive] { store.dives }
-
-    @State private var selectedSite: Dive? = nil
+    /// The edited dive's id, read once: the summaries handler runs on the rebuild that may
+    /// deliver this dive's deletion on another device, when its attributes can no longer be read.
+    private let editedDiveID: UUID
+    /// The summary of the site picked in Copy from Existing Site. Resolve its dive through
+    /// `liveSelectedSite` before reading any of the dive's attributes.
+    @State private var selectedSite: DiveSummary? = nil
+    /// The site lists of Copy from Existing Site, rebuilt when the store's summaries change.
+    @State private var siteIndex = SiteIndex()
     /// Starts as Settings → Dive Profile says (off, on or the last choice) each time the sheet
-    /// opens; each change is recorded as the last choice.
+    /// opens; only the user's own flips are recorded as the last choice (see the Toggle).
     @State private var copyGPSCoordinates: Bool
+    /// The dive (`Dive.id`, stable across saves) of the Nearby pick that turned Include GPS
+    /// Coordinates off; the switch is turned back on when a site that is not a Nearby pick (or
+    /// none) is selected, unless the user flipped it meanwhile.
+    @State private var gpsTurnedOffForNearbySite: UUID? = nil
+    /// Sites dived near the coordinates in the form, closest first (`nearbySitesKey`), one more
+    /// than shown so the form's own site name can be left out.
+    @State private var nearbySites: [NearbySite] = []
+    /// Bumped on every summary change, so the nearby sites follow edits made elsewhere.
+    @State private var summariesVersion = 0
+    @Environment(\.locale) private var locale
     @State private var workingCountry: String
     @State private var workingLocation: String
     @State private var workingSiteName: String
@@ -1348,39 +1359,51 @@ struct EditSiteDetailsView: View {
         return Self.difficultyScale.first(where: { $0.label == workingDifficulty })?.level ?? 0
     }
 
-    private var uniqueSites: [Dive] {
-        var seen = Set<String>()
-        // store.dives may briefly hold a dive deleted on another device; skip it before reading.
-        return store.dives.compactMap { d -> Dive? in
-            guard !d.isDeleted, d.modelContext != nil, d.id != dive.id,
-                  !d.siteName.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-            let key = d.siteName.trimmingCharacters(in: .whitespaces).lowercased()
-            guard seen.insert(key).inserted else { return nil }
-            return d
-        }.sorted { $0.siteName.localizedCaseInsensitiveCompare($1.siteName) == .orderedAscending }
-    }
-
-    /// The 3 most recently dived sites (by date, unique by name)
     /// The chosen site's dive, or nil once it is deleted (on another device, while the sheet is
-    /// open): the selection is kept across redraws, so it is checked before it is read.
+    /// open, or pending a remote deletion): only a live dive is ever read.
     private var liveSelectedSite: Dive? {
-        guard let site = selectedSite, !site.isDeleted, site.modelContext != nil else { return nil }
-        return site
+        selectedSite.flatMap { store.liveDive(id: $0.id) }
     }
 
-    private var recentSites: [Dive] {
-        var seen = Set<String>()
-        var result: [Dive] = []
-        // store.dives may briefly hold a dive deleted on another device; skip it before reading.
-        for d in allDivesByDate {
-            guard !d.isDeleted, d.modelContext != nil, d.id != dive.id,
-                  !d.siteName.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-            let key = d.siteName.trimmingCharacters(in: .whitespaces).lowercased()
-            guard seen.insert(key).inserted else { continue }
-            result.append(d)
-            if result.count == 3 { break }
-        }
-        return result
+    /// What the nearby search depends on: the form's valid entry point (else valid exit point)
+    /// and the summaries' version. Not the site name, so typing it does not rescan every dive.
+    private struct NearbySitesKey: Hashable {
+        let latitude: Double?
+        let longitude: Double?
+        let version: Int
+    }
+
+    private var nearbySitesKey: NearbySitesKey {
+        let reference = [entryCoordinate, exitCoordinate].lazy.compactMap { $0 }
+            .first { NearbySiteFinder.isValidCoordinate($0.latitude, $0.longitude) }
+        return NearbySitesKey(latitude: reference?.latitude, longitude: reference?.longitude,
+                              version: summariesVersion)
+    }
+
+    /// The 3 closest nearby sites other than the form's own site name, whose dive is still live
+    /// (a dive deleted on another device is dropped), with the distance in the depth unit (a
+    /// computed metre value, not stored data).
+    private var nearbySuggestions: [NearbySiteSuggestion] {
+        let ownName = NearbySiteFinder.nameKey(workingSiteName)
+        return Array(nearbySites
+            .filter { NearbySiteFinder.nameKey($0.siteName) != ownName }
+            .compactMap { nearby -> NearbySiteSuggestion? in
+                guard store.liveDive(id: nearby.diveID) != nil else { return nil }
+                return NearbySiteSuggestion(
+                    site: nearby.summary,
+                    distance: UserPreferences.shared.depthUnit.formatted(nearby.distanceMeters, decimals: 0))
+            }
+            .prefix(3))
+    }
+
+    /// The 3 most recently dived sites (by date, unique by name), leaving out the nearby ones
+    /// and dives no longer live.
+    private func recentSites(excluding nearby: [NearbySiteSuggestion]) -> [DiveSummary] {
+        let nearbyNames = Set(nearby.map { NearbySiteFinder.nameKey($0.site.siteName) })
+        return Array(siteIndex.byDate.lazy
+            .filter { !nearbyNames.contains(NearbySiteFinder.nameKey($0.siteName))
+                && store.liveDive(id: $0.id) != nil }
+            .prefix(3))
     }
 
 
@@ -1394,7 +1417,7 @@ struct EditSiteDetailsView: View {
         if copyGPSCoordinates {
             prefilledLatitude      = .coordinate(source.siteLatitude)
             prefilledLongitude     = .coordinate(source.siteLongitude)
-            prefilledAltitude      = .decimals(source.siteAltitude, 0)
+            prefilledAltitude      = .decimals(altitude(of: source), 0)
             prefilledExitLatitude  = .coordinate(source.exitLatitude)
             prefilledExitLongitude = .coordinate(source.exitLongitude)
             workingLatitude      = prefilledLatitude.text
@@ -1405,8 +1428,22 @@ struct EditSiteDetailsView: View {
         }
     }
 
+    /// The source dive's site altitude in this dive's distance unit (the field shows and saves
+    /// this dive's unit): unchanged when both dives use the same unit.
+    private func altitude(of source: Dive) -> Double? {
+        guard let value = source.siteAltitude else { return nil }
+        let sourceInFeet = source.importDistanceUnit == "feet"
+        let targetInFeet = dive.importDistanceUnit == "feet"
+        switch (sourceInFeet, targetInFeet) {
+        case (false, true): return value * DepthUnit.metersToFeetFactor
+        case (true, false): return value / DepthUnit.metersToFeetFactor
+        default:            return value
+        }
+    }
+
     init(dive: Dive) {
         self.dive = dive
+        editedDiveID = dive.id
         _copyGPSCoordinates = State(initialValue: UserPreferences.shared.initialCopySiteGPSCoordinates)
         _workingCountry     = State(initialValue: dive.siteCountry ?? "")
         _workingLocation    = State(initialValue: dive.location)
@@ -1435,12 +1472,36 @@ struct EditSiteDetailsView: View {
         Group {
             iOSBody
         }
-        // A chosen site whose dive was deleted on another device is cleared once the list
-        // drops it, so the field no longer shows it as selected.
-        .onChange(of: store.dives) {
+        // The site lists and the selection are revalidated together: a chosen site whose dive
+        // was deleted on another device is cleared once the list drops it.
+        .onChange(of: store.cachedSummaries) { _, newSummaries in
+            summariesVersion += 1
+            siteIndex = SiteIndex(summaries: newSummaries, excluding: editedDiveID)
             if selectedSite != nil && liveSelectedSite == nil { selectedSite = nil }
         }
+        // A Nearby pick turned GPS copying off; another pick (or clearing the field) gets the
+        // switch back as it was.
+        .onChange(of: selectedSite?.id) { _, newID in
+            if let nearbyID = gpsTurnedOffForNearbySite, newID != nearbyID {
+                gpsTurnedOffForNearbySite = nil
+                copyGPSCoordinates = true
+            }
+        }
+        .task(id: nearbySitesKey) {
+            guard let latitude = nearbySitesKey.latitude, let longitude = nearbySitesKey.longitude else {
+                nearbySites = []
+                return
+            }
+            nearbySites = NearbySiteFinder.nearbySites(
+                to: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+                in: store.cachedSummaries,
+                excluding: editedDiveID,
+                // One more than shown: names are unique, so leaving out the form's own site
+                // name removes at most one.
+                limit: 4)
+        }
         .onAppear {
+            siteIndex = SiteIndex(summaries: store.cachedSummaries, excluding: editedDiveID)
             fieldSuggestions = DiveFieldSuggestions(
                 dives: store.dives,
                 fields: [\.siteName, \.location],
@@ -1554,11 +1615,31 @@ struct EditSiteDetailsView: View {
 
     @ViewBuilder
     private var copyFromSiteSection: some View {
-        if !uniqueSites.isEmpty {
+        if !siteIndex.all.isEmpty {
+            let nearby = nearbySuggestions
             Section {
-                SiteSearchField(selectedSite: $selectedSite, recents: recentSites, allSites: uniqueSites)
+                SiteSearchField(selection: $selectedSite,
+                                nearby: nearby,
+                                recents: recentSites(excluding: nearby),
+                                allSites: siteIndex.all,
+                                isLive: { store.liveDive(id: $0) != nil }) {
+                    // A nearby site keeps this dive's own coordinates: copying stops including
+                    // GPS (the user can turn it back on), without changing Settings' Last Used.
+                    if let site = selectedSite, copyGPSCoordinates {
+                        copyGPSCoordinates = false
+                        gpsTurnedOffForNearbySite = site.id
+                    }
+                }
 
-                Toggle(isOn: $copyGPSCoordinates) {
+                // Only the user's own flips are recorded as Settings' Last Used choice (whatever
+                // the mode), not the sheet's own change for a Nearby site.
+                Toggle(isOn: Binding(
+                    get: { copyGPSCoordinates },
+                    set: { newValue in
+                        copyGPSCoordinates = newValue
+                        gpsTurnedOffForNearbySite = nil
+                        UserPreferences.shared.copySiteGPSLastChoice = newValue
+                    })) {
                     HStack(spacing: 12) {
                         Image(systemName: "location.circle")
                             .foregroundStyle(.green)
@@ -1568,10 +1649,6 @@ struct EditSiteDetailsView: View {
                 }
                 .tint(.green)
                 .fullWidthSwitch()
-                // Recorded whatever the mode, so Settings' Last Used starts from the latest choice.
-                .onChange(of: copyGPSCoordinates) { _, newValue in
-                    UserPreferences.shared.copySiteGPSLastChoice = newValue
-                }
 
                 Button {
                     if let source = liveSelectedSite {
@@ -1584,12 +1661,28 @@ struct EditSiteDetailsView: View {
                         Image(systemName: "doc.on.doc")
                         Text("Copy Site Information")
                     }
+                    #if os(macOS)
+                    // On the label: macOS's list-row button style redraws the label in the
+                    // default text colour (and dims it while disabled).
+                    .foregroundStyle(.orange)
+                    #endif
                 }
                 .disabled(liveSelectedSite == nil)
                 .foregroundStyle(.orange)
                 .listRowButton()
             } header: {
                 MenuSectionHeader(title: "Copy from Existing Site", icon: "doc.on.doc", color: .orange)
+            } footer: {
+                // Tells the user the field has nearby suggestions before they open it.
+                if !nearby.isEmpty && liveSelectedSite == nil {
+                    let sites = nearby
+                        .map {
+                            String(format: NSLocalizedString("%@ (%@)", bundle: Bundle.forAppLanguage(), value: "%@ (%@)", comment: "One site in the Dived nearby footer: site name, then its distance from this dive, e.g. Reef (35 m)"),
+                                   $0.site.siteName.trimmingCharacters(in: .whitespaces), $0.distance)
+                        }
+                        .formatted(.list(type: .and).locale(locale))
+                    Text(verbatim: String(format: NSLocalizedString("Dived nearby: %@", bundle: Bundle.forAppLanguage(), value: "Dived nearby: %@", comment: "Footer under Copy from Existing Site: the sites dived near this dive's GPS coordinates, with their distance, e.g. Reef (35 m) and Wall (120 m)"), sites))
+                }
             }
         }
     }
@@ -2613,6 +2706,11 @@ struct EditGazView: View {
                                     Image(systemName: "doc.on.doc")
                                     Text("Copy Tank Information")
                                 }
+                                #if os(macOS)
+                                // On the label: macOS's list-row button style redraws the label
+                                // in the default text colour (and dims it while disabled).
+                                .foregroundStyle(.orange)
+                                #endif
                             }
                             .disabled(selectedTemplateName.isEmpty)
                             .foregroundStyle(.orange)
@@ -2937,7 +3035,9 @@ struct EditGazView: View {
                 sensorPPO2: point.sensorPPO2,
                 events: point.events,
                 currentGas: newCurrentGas,
-                setpoint: point.setpoint
+                setpoint: point.setpoint,
+                tts: point.tts,
+                rbt: point.rbt
             )
         }
     }

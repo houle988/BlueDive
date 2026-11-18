@@ -42,7 +42,8 @@ playground.xcworkspace
 .swiftpm/
 .swift-module-cache/
 .clang-module-cache/
-/Packages
+/Packages/*
+!/Packages/DiveComputerKit/
 .netrc
 Package.pins
 

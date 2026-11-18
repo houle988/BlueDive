@@ -503,7 +503,7 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     }
 
     /// Handles the self-closing <sample .../> attribute format used by DiveBlue exports.
-    /// Attribute names: time, depth, temperature, tankPressure, ppo2, ndl, ceilingDepth, ceilingTime, cns, events
+    /// Attribute names: time, depth, temperature, tankPressure, ppo2, ndl, ceilingDepth, ceilingTime, cns, tts, rbt, events
     /// Note: `time` is stored in minutes (fractional) in the export;
     ///       `BlueDiveSamplesData.time` expects seconds, so we convert here.
     private func parseSampleAttributes(_ attributes: [String: String]) {
@@ -547,6 +547,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         let currentGas  = attributes["currentGas"].flatMap(Int.init)
         // Stored through DiveProfilePoint's rule (0 or non-finite = no setpoint).
         let setpoint    = attributes["setpoint"].flatMap(Double.init)
+        // Minutes, absent from files exported before TTS and RBT were kept.
+        let tts         = attributes["tts"].flatMap(Double.init)
+        let rbt         = attributes["rbt"].flatMap(Double.init)
         let events: [DiveProfileEvent]
         if let eventsStr = attributes["events"], !eventsStr.isEmpty {
             events = eventsStr.split(separator: ",").compactMap { parseEvent(String($0)) }
@@ -575,7 +578,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
             cns: cns,
             events: events,
             currentGas: currentGas,
-            setpoint: setpoint
+            setpoint: setpoint,
+            tts: tts,
+            rbt: rbt
         ))
     }
 

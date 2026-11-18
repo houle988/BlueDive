@@ -1,12 +1,5 @@
 import SwiftUI
-import CoreBluetooth
-import LibDCSwift
-
-// MARK: - CBPeripheral + Identifiable
-
-extension CBPeripheral: @retroactive Identifiable {
-    public var id: UUID { identifier }
-}
+import DiveComputerKit
 
 // MARK: - Device Icon View
 
@@ -41,7 +34,7 @@ struct DiveComputerIconView: View {
         // Exact model name → per-model asset (used when model is known/resolved). Not every
         // supported model has artwork: without it, fall through to the brand-level icon below
         // (a missing asset name would draw an empty circle).
-        if DeviceConfiguration.supportedModels.contains(where: { $0.name == name }) {
+        if DeviceCatalog.supportedModels.contains(where: { $0.name == name }) {
             let modelAsset = modelLevelAssetName(name)
             if PlatformImage(named: modelAsset) != nil {
                 return modelAsset
@@ -96,10 +89,10 @@ struct DiveComputerIconView: View {
 // MARK: - Device Row
 
 struct DeviceRow: View {
-    let peripheral: CBPeripheral
+    let peripheral: DiscoveredDevice
     let isSelected: Bool
     let isConnecting: Bool
-    let modelOverride: DeviceConfiguration.ComputerModel?
+    let modelOverride: ComputerModel?
     let onTap: () -> Void
     let onChangeModel: () -> Void
 
@@ -171,17 +164,17 @@ struct DeviceRow: View {
             return override.name
         }
         if let stored = stored,
-           let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
+           let modelInfo = DeviceCatalog.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
             return modelInfo.name
         }
         guard let name = peripheral.name else {
             return "Unknown Device"
         }
-        return DeviceConfiguration.getDeviceDisplayName(from: name)
+        return DeviceCatalog.displayName(forAdvertisedName: name)
     }
 
     private var autoDetectedName: String {
-        let detected = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
+        let detected = DeviceCatalog.displayName(forAdvertisedName: peripheral.name ?? "Unknown")
         return "Detected: \(detected)"
     }
 
@@ -189,11 +182,11 @@ struct DeviceRow: View {
     private func effectiveModelName(stored: StoredDevice?) -> String? {
         if let override = modelOverride { return override.name }
         if let stored = stored,
-           let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
+           let modelInfo = DeviceCatalog.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
             return modelInfo.name
         }
         guard let name = peripheral.name else { return nil }
-        return DeviceConfiguration.getDeviceDisplayName(from: name)
+        return DeviceCatalog.displayName(forAdvertisedName: name)
     }
 }
 
@@ -219,9 +212,15 @@ struct KnownDeviceRow: View {
                         .foregroundStyle(.primary)
 
                     if let name = diverName {
-                        Label(name, systemImage: "person.fill")
-                            .font(.caption)
-                            .foregroundStyle(.teal)
+                        // Not a Label: in a List/Form row iOS gives a Label's icon a fixed-width
+                        // column, which leaves a wide gap before the name.
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.fill")
+                                .accessibilityHidden(true)
+                            Text(name)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.teal)
                     }
 
                     Text(verbatim: String(format: NSLocalizedString("Serial: %@", bundle: Bundle.forAppLanguage(), comment: "A subheading displaying the serial number of a device. The argument is the serial number of the device."), serial.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()))
@@ -267,9 +266,14 @@ struct DeviceReassociationPickerSheet: View {
                                 DiveComputerIconView(name: candidate.computerName, isSelected: false)
                                 VStack(alignment: .leading, spacing: 3) {
                                     if let name = candidate.diverName {
-                                        Label(name, systemImage: "person.fill")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.primary)
+                                        // Not a Label, for the same reason as in KnownDeviceRow.
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "person.fill")
+                                                .accessibilityHidden(true)
+                                            Text(name)
+                                        }
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.primary)
                                         Text(candidate.computerName)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -324,14 +328,14 @@ struct DeviceReassociationPickerSheet: View {
 
 struct ModelPickerSheet: View {
     let detectedName: String
-    let currentOverride: DeviceConfiguration.ComputerModel?
-    let onSelect: (DeviceConfiguration.ComputerModel?) -> Void
+    let currentOverride: ComputerModel?
+    let onSelect: (ComputerModel?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
 
-    private var groupedModels: [(brand: String, models: [DeviceConfiguration.ComputerModel])] {
-        let models = DeviceConfiguration.supportedModels.filter { model in
+    private var groupedModels: [(brand: String, models: [ComputerModel])] {
+        let models = DeviceCatalog.supportedModels.filter { model in
             searchText.isEmpty || model.name.localizedCaseInsensitiveContains(searchText)
         }
 
@@ -422,5 +426,68 @@ struct ModelPickerSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Synced Dive Row
+
+/// One dive added or updated by a Bluetooth import, on the sync results screen.
+struct SyncedDiveRow: View {
+    let dive: Dive
+    let isNew: Bool
+
+    @Environment(\.locale) private var locale
+    private let prefs = UserPreferences.shared
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if let number = dive.diveNumber {
+                        // Same form as the dive list: a dive number is an identifier, not a count.
+                        Text(verbatim: "#\(number)")
+                            .font(.headline)
+                            .foregroundStyle(.cyan)
+                    }
+                    Text(dive.timestamp, format: .dateTime.day().month().year().hour().minute().locale(locale))
+                        .font(.headline)
+                }
+
+                let site = dive.siteName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !site.isEmpty {
+                    Text(verbatim: site)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                }
+
+                Text(verbatim: dive.displayMaxDepth.localizedString(decimals: 1) + prefs.depthUnit.symbol + " · " + dive.formattedDuration)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            badge
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var badge: some View {
+        // Own keys: the badge agrees with "dive" (fr-CA "Nouvelle", "Mise à jour").
+        if isNew {
+            badgeLabel(NSLocalizedString("New (synced dive)", bundle: .forAppLanguage(), value: "New", comment: "Badge on a dive the Bluetooth sync just added to the logbook."), color: .green)
+        } else {
+            badgeLabel(NSLocalizedString("Updated (synced dive)", bundle: .forAppLanguage(), value: "Updated", comment: "Badge on an existing dive the Bluetooth sync just refreshed with the dive computer's data (Download All Dives)."), color: .blue)
+        }
+    }
+
+    private func badgeLabel(_ text: String, color: Color) -> some View {
+        Text(verbatim: text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.15), in: Capsule())
     }
 }

@@ -430,7 +430,11 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                     if didSwitch { evts.append(.gasChange) }
                     return evts
                 }(),
-                    currentGas: currentTankIndex
+                    currentGas: currentTankIndex,
+                    // Time to surface and air time remaining (the air-integrated RBT): FIT
+                    // stores seconds, the profile minutes. A record without them stays nil.
+                    tts: record.getTimeToSurface().map { Double($0) / 60.0 },
+                    rbt: record.getAirTimeRemaining().map { Double($0) / 60.0 }
                 ))
             }
 

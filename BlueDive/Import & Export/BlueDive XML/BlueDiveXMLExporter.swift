@@ -419,6 +419,10 @@ enum BlueDiveXMLExporter {
                 if let cns      = sample.cns            { attrs.append(("cns", formatDouble(cns))) }
                 if let gas      = sample.currentGas     { attrs.append(("currentGas", String(gas))) }
                 if let setpoint = sample.setpoint       { attrs.append(("setpoint", formatDouble(setpoint))) }
+                // Minutes, written in full (lossless, like <surfacePressure>): times reported in
+                // seconds are not whole minutes (37 s = 0.6166… min), and 4 decimals would alter them.
+                if let tts      = sample.tts            { attrs.append(("tts", String(tts))) }
+                if let rbt      = sample.rbt            { attrs.append(("rbt", String(rbt))) }
                 let eventsStr = sample.events.map { serializeEvent($0) }.joined(separator: ",")
                 attrs.append(("events", eventsStr))
                 let attrString = attrs.map { "\($0.0)=\"\($0.1)\"" }.joined(separator: " ")

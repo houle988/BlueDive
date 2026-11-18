@@ -569,6 +569,10 @@ enum BlueDiveUDDFExporter {
                     // NDL: profile stores minutes, UDDF needs seconds
                     lines.append("            <nodecotime>\(formatDouble(ndl * 60))</nodecotime>")
                 }
+                if let rbt = sample.rbt {
+                    // RBT: profile stores minutes, UDDF needs seconds. UDDF has no TTS element.
+                    lines.append("            <remainingbottomtime>\(formatDouble(rbt * 60))</remainingbottomtime>")
+                }
                 // Export dive-level CNS on the last waypoint (accumulated value)
                 if index == lastIndex, let cns = diveCNS, cns > 0 {
                     lines.append("            <cns>\(formatDouble(cns))</cns>")

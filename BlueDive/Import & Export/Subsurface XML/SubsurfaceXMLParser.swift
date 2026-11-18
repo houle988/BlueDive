@@ -522,6 +522,10 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
 
         // NDL: "240:00 min" → seconds → minutes (stored in ndt as minutes)
         let ndtMinutes = attrs["ndl"].flatMap { parseSubsurfaceTime($0) }.map { $0 / 60 }
+        // Time to surface and remaining bottom time: "12:30 min" → minutes. Delta-encoded
+        // like ndl, so forward-filled in resolveSampleEventsAndGas.
+        let ttsMinutes = attrs["tts"].flatMap { parseSubsurfaceTime($0) }.map { Double($0) / 60.0 }
+        let rbtMinutes = attrs["rbt"].flatMap { parseSubsurfaceTime($0) }.map { Double($0) / 60.0 }
 
         // Tank pressure: modern Subsurface writes one attribute per sensor —
         // pressure0=, pressure1=, … (the N is the sensor id) — while older/third-party
@@ -561,7 +565,9 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             ndt: ndtMinutes,
             cns: sampleCNS,
             currentGas: 0,
-            setpoint: setpoint
+            setpoint: setpoint,
+            tts: ttsMinutes,
+            rbt: rbtMinutes
         ))
         // Kept 1:1 with tempSamples (appended on the same guard-passing path).
         tempRawDeco.append((inDeco: inDeco, stopDepth: stopDepth, stopTime: stopTime))
@@ -631,6 +637,8 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
 
         var lastTemp: Double? = nil
         var lastNdt: Int? = nil
+        var lastTTS: Double? = nil
+        var lastRBT: Double? = nil
         var lastPpo2: Double? = nil
         var lastSetpoint: Double? = nil
         // Breathing mode: on the loop from the start (the setpoint is only read on rebreather
@@ -677,6 +685,11 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
             // Forward-fill the delta-encoded fields from the last sample that carried them.
             if let t = s.temperature { lastTemp = t }
             if let n = s.ndt { lastNdt = n }
+            if let t = s.tts { lastTTS = t }
+            // Subsurface has no "not reported" value: its sample RBT starts at 0 and is set only
+            // when the computer reports one, so a written 0 (e.g. a Shearwater in deco) means
+            // none from here on, never a real reading — it ends the forward-fill.
+            if let r = s.rbt { lastRBT = r > 0 ? r : nil }
             // Breathing mode at this sample (before ppo2, which depends on it).
             let wasOnLoop = onLoop
             while nextModeChange < modeChanges.count, Double(modeChanges[nextModeChange].time) <= s.time {
@@ -755,7 +768,8 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
                 // does — there is no obligation window it could leak past.
                 cns: lastCNS,
                 events: events, currentGas: gas,
-                setpoint: onLoop ? lastSetpoint : nil
+                setpoint: onLoop ? lastSetpoint : nil,
+                tts: lastTTS, rbt: lastRBT
             )
         }
 
@@ -794,7 +808,8 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
                 ceilingTime: s.ceilingTime,
                 cns: s.cns,
                 events: s.events + [ev], currentGas: s.currentGas,
-                setpoint: s.setpoint
+                setpoint: s.setpoint,
+                tts: s.tts, rbt: s.rbt
             )
         }
 

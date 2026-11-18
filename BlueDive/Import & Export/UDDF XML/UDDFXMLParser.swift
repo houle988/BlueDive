@@ -158,6 +158,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     /// The CCR setpoint in effect at the current waypoint: none while off the loop.
     private var setpointInEffect: Double? { onOpenCircuit ? nil : lastReportedSetpoint }
     private var tempWaypointNDT: Int?
+    private var tempWaypointRBT: Double?
     private var tempWaypointCNS: Double?
 
     // Context flags
@@ -751,6 +752,12 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             }
         case "cns":
             if isInWaypoint { tempWaypointCNS = Double(text) }
+        case "remainingbottomtime":
+            // UDDF remainingbottomtime is in seconds; the profile stores minutes. 0 is a real
+            // reading (no bottom time left). UDDF has no time-to-surface element.
+            if isInWaypoint, let seconds = Double(text), seconds.isFinite, seconds >= 0 {
+                tempWaypointRBT = seconds / 60
+            }
 
         case "waypoint":
             if isInWaypoint {
@@ -769,7 +776,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                         ppo2: tempWaypointPPO2,
                         ndt: tempWaypointNDT,
                         cns: tempWaypointCNS,
-                        setpoint: setpointInEffect
+                        setpoint: setpointInEffect,
+                        rbt: tempWaypointRBT
                     ))
                 }
                 // Track max CNS across all waypoints
@@ -1035,6 +1043,7 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         tempWaypointTemperature = nil
         tempWaypointPPO2 = nil
         tempWaypointNDT = nil
+        tempWaypointRBT = nil
         tempWaypointCNS = nil
     }
 

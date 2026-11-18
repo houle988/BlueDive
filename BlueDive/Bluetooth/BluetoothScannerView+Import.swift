@@ -1,53 +1,24 @@
 import SwiftUI
 import SwiftData
-import CoreBluetooth
-import LibDCSwift
+import DiveComputerKit
 import os.log
 
-/// Whether syncFingerprintFromDatabase found and restored an existing sync watermark for the
-/// connected device. `.restored` means the resulting download will be fingerprint-limited
-/// (incremental); `.notFound` means it will be a full-history download regardless of the
-/// `useFingerprint` flag, since there is nothing for the library to compare against.
+/// Whether `fingerprintFromDatabase` found a sync watermark for the device about to be
+/// downloaded. `.restored` means the download will be fingerprint-limited (incremental).
+/// `.notFound` means no watermark is known for it before connecting: the download is
+/// full-history, unless the serial the device reports has one in the table (see
+/// `fingerprintFromDatabase`).
 ///
 /// The negative case is deliberately *not* spelled `none`: a case of that name shadows
 /// `Optional.none` at every `.none` use site involving this type, so a future
 /// `FingerprintRestoreResult?` would compile with a silently different meaning.
 ///
-/// Known limitation (narrowed): `.notFound` from the "serial unresolvable" case (no DeviceStorage
-/// entry, no pending seed) can't target a UserDefaults sweep by this connection's own serial,
-/// because the (deviceType, serial) key isn't known yet — the library only learns the device's
-/// real serial mid-download. Instead, before returning, this case sweeps every UserDefaults entry
-/// whose serial has no live DeviceFingerprint record backing it at all — which reliably clears an
-/// orphan left behind by a prior delete (`deleteKnownDevice` removes the DB record, so the orphan
-/// is unbacked by definition) without touching any other live device's entry, even one cached
-/// under a deviceType key that diverges from this app's own resolution. The residual gap is that
-/// the sweep only clears *unbacked* entries: any watermark still backed by a live DeviceFingerprint
-/// record looks legitimate and survives, yet the library's own lazy lookup can still find and apply
-/// it mid-download — turning an intended full-history download incremental. This is not limited to
-/// sentinel serials like "0"/"00000000" (see `knownSentinelSerials`), where an unrelated device's
-/// entry can genuinely be the one that survives. It applies whenever a peripheral reaches this
-/// "serial unresolvable" branch while a *different*, real hardware serial's watermark for the same
-/// physical device is still live in the cache — notably `confirmReassociation`'s legacy
-/// (no-`family`) path, and "Connect as New Device" on a peripheral whose DeviceStorage entry exists
-/// but has `serial == nil` (written by `openBLEDevice` before the hardware serial is known). In
-/// those cases the real serial's watermark is correctly left alone by the sweep (a live
-/// DeviceFingerprint record still backs it), so the gap is independent of sentinel serials.
-/// Accepting it matches the caution already applied everywhere else in this file and in
-/// `deleteKnownDevice`, rather than widening the sweep in a way that could touch another device's
-/// mapping; closing it properly needs the same `fingerprintMatched` signal described below, and
-/// remains out of scope.
-///
-/// Known limitation (mirror image of the above): `.restored` only means "a non-empty fingerprint
-/// was successfully copied out of SwiftData into the cache" — it does *not* guarantee the resulting
-/// download will actually be incremental. If the stored fingerprint bytes no longer match anything
-/// currently in the device's memory (the fingerprinted dive was deleted from the computer, its log
-/// wrapped around, or the user overrode the fingerprint by hand in Settings → Bluetooth Import →
-/// Sync Fingerprints), the library finds no match and enumerates the whole history anyway — yet
-/// `effectiveCutoff` is still `nil`, because `watermarkRestored` was decided from this DB
-/// round-trip alone. An armed cutoff is therefore silently discarded on a download that is in fact
-/// full-history: the opposite failure to the case above, and the more benign one (extra dives kept
-/// rather than wanted dives dropped). The fix is the same `fingerprintMatched` signal, and remains
-/// out of scope.
+/// Known limitation: `.restored` only means a non-empty fingerprint exists in SwiftData for
+/// this serial — not that the device still holds that dive. If the fingerprinted dive was
+/// deleted from the computer, its log wrapped around, or the fingerprint was overridden by
+/// hand (Settings → Bluetooth Import → Sync Fingerprints), the whole history is downloaded
+/// anyway while an armed cutoff is not applied (extra dives kept rather than wanted dives
+/// dropped).
 enum FingerprintRestoreResult {
     case restored
     case notFound
@@ -81,6 +52,8 @@ extension BluetoothScannerView {
 
             // Resolve the diver name once for the entire batch — the same computer is used for all dives.
             let batchDiverName = resolveGearDiverName(forSerial: selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString)?.serial }, in: modelContext)
+            // Device and settings for the mapping, likewise captured once for the batch.
+            let importContext = makeImportContext()
 
             // Find the highest dive number for this diver's bucket so new dives continue their own
             // sequence independently of other divers. Stored diverName values are always trimmed,
@@ -176,7 +149,8 @@ extension BluetoothScannerView {
                 if let existingDive {
                     if downloadAllDives {
                         // Re-download mode: merge data from the computer
-                        mergeComputerData(from: diveData, into: existingDive, matchReason: "fingerprint + serial")
+                        DiveImportMapper.merge(diveData, into: existingDive, context: importContext)
+                        Self.logger.info("Dive from \(existingDive.timestamp) merged with computer data (matched by: fingerprint + serial)")
                         mergedCount += 1
                         weatherCandidates.append((existingDive, false))
                     } else {
@@ -184,7 +158,8 @@ extension BluetoothScannerView {
                         skippedCount += 1
                     }
                 } else {
-                    let dive = convertToBlueDiveDive(diveData, diveNumber: nextDiveNumber, previousDiveEndTime: previousDiveEndTime, diverName: batchDiverName)
+                    let dive = DiveImportMapper.makeDive(from: diveData, diveNumber: nextDiveNumber, previousDiveEndTime: previousDiveEndTime,
+                                                         diverName: batchDiverName, context: importContext)
                     modelContext.insert(dive)
                     nextDiveNumber += 1
                     importedCount += 1
@@ -231,10 +206,31 @@ extension BluetoothScannerView {
             downloadedDives = []
             selectedDevice = nil
             connectedDeviceName = nil
+            // After the save, so the dives have their permanent persistent IDs. Sorted once here,
+            // newest first, so the completed screen does not re-sort on every redraw.
+            syncedDives = weatherCandidates
+                .sorted { $0.dive.timestamp > $1.dive.timestamp }
+                .map { SyncedDive(id: $0.dive.persistentModelID, isNew: $0.isNew) }
             syncState = .completed(imported: importedCount, merged: mergedCount, skipped: skippedCount)
-            // After the save, so the dives have their permanent persistent IDs.
             offerWeatherFetch(for: weatherCandidates)
         }
+    }
+
+    /// The connected device and the import settings, for `DiveImportMapper`.
+    func makeImportContext() -> DiveImportContext {
+        let stored = selectedDevice.flatMap { DeviceStorage.shared.getStoredDevice(uuid: $0.identifier.uuidString) }
+        return DiveImportContext(
+            deviceFamily: stored?.family,
+            catalogComputerName: stored.flatMap { stored in
+                DeviceCatalog.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family })?.name
+            },
+            connectedDeviceName: connectedDeviceName,
+            computerSerial: stored?.serial
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .flatMap { $0.isEmpty ? nil : $0 },
+            filterUnusedTanks: filterUnusedTanks,
+            importWeightUnit: (WeightUnit(rawValue: UserDefaults.standard.string(forKey: "weightUnit") ?? "kilograms") ?? .kilograms).symbol
+        )
     }
 
     // MARK: - Weather Fetch After Import
@@ -247,7 +243,7 @@ extension BluetoothScannerView {
     /// set only from a surface temperature the computer reports
     /// (`DiveData.measuredSurfaceTemperature`), and that reading is kept. A dive downloaded
     /// again is already in the logbook and may hold weather the user entered — as
-    /// mergeComputerData preserves user-modified fields (CLAUDE.md: preserve values the user
+    /// DiveImportMapper.merge preserves user-modified fields (CLAUDE.md: preserve values the user
     /// did not change through the app).
     func offerWeatherFetch(for candidates: [(dive: Dive, isNew: Bool)]) {
         guard UserPreferences.shared.fetchWeatherOnline else {
@@ -302,15 +298,17 @@ extension BluetoothScannerView {
     /// persistent DeviceFingerprint record. Called before a sync so that family/model
     /// survive app reinstalls and UserDefaults resets. Also corrects a stale entry whose
     /// family/model disagrees with the DB (e.g. after a model override was saved).
-    func seedDeviceStorageFromDatabase(for peripheral: CBPeripheral, fingerprint device: DeviceFingerprint) {
+    func seedDeviceStorageFromDatabase(for peripheral: DiscoveredDevice, fingerprint device: DeviceFingerprint) {
         let uuid = peripheral.identifier.uuidString
         guard let family = device.family, device.modelID != 0 else { return }
 
+        // The stored name is the advertised one: Pelagic access codes are kept in the Keychain
+        // under it, and deleting the device deletes them by that name.
         if let existing = DeviceStorage.shared.getStoredDevice(uuid: uuid) {
             guard existing.family != family || existing.model != device.modelID else { return }
             DeviceStorage.shared.storeDevice(
                 uuid: uuid,
-                name: device.computerName,
+                name: existing.name,
                 family: family,
                 model: device.modelID,
                 serial: device.serial
@@ -321,7 +319,7 @@ extension BluetoothScannerView {
 
         DeviceStorage.shared.storeDevice(
             uuid: uuid,
-            name: device.computerName,
+            name: peripheral.name ?? device.computerName,
             family: family,
             model: device.modelID,
             serial: device.serial
@@ -329,170 +327,55 @@ extension BluetoothScannerView {
         Self.logger.info("Seeded DeviceStorage from DB for \(device.computerName) (serial: \(device.serial))")
     }
 
-    /// Seeds UserDefaults from the DeviceFingerprint record before downloading.
-    /// UserDefaults is a session-level cache for LibDCSwift; DeviceFingerprint is the
-    /// persistent source of truth (syncs via iCloud, survives reinstalls).
+    /// The stored watermark for the peripheral about to be downloaded, from its
+    /// DeviceFingerprint record (SwiftData is the only source; iCloud syncs it).
     ///
-    /// Returns `.restored` only when a watermark was actually written to the cache from a
-    /// DeviceFingerprint record — the single point at which the upcoming download is known to
-    /// be incremental rather than full-history. Every other outcome (no DB record, a DB record
-    /// whose fingerprint bytes are empty, or no resolvable serial for this BLE UUID) returns
-    /// `.notFound`.
+    /// The serial comes from DeviceStorage, else from the pending reassociation seed (the new
+    /// UUID is written to DeviceStorage only after a successful download). The table holds
+    /// every stored watermark and DiveComputerKit applies the one of the serial the device
+    /// reports, so a peripheral whose serial is unknown here can still download only its new
+    /// dives. With an import cutoff armed and no watermark found here, the caller passes no
+    /// table, so the download is the full-history one the cutoff is meant for.
     ///
-    /// The empty-bytes case matters because `DeviceFingerprint.fingerprintData` defaults to
-    /// `Data()`, and LibDCSwift's own `DeviceFingerprintStorage.getFingerprint` discards empty
-    /// fingerprints. Reporting such a record as `.restored` would tell the caller the download
-    /// is incremental while the library still sends the entire history — and the cutoff, armed
-    /// only for full-history downloads, would silently never apply.
-    ///
-    /// Why the UserDefaults side-effects sweep by serial instead of touching a single
-    /// `(deviceType, serial)` key: the cache is keyed by a *string* device type, and the string
-    /// this app computes for a given physical computer is not stable across sessions. It can be
-    /// the `supportedModels` display name, `getDeviceDisplayName(from: peripheral.name)`, the
-    /// useless `"Unknown"` fallback when `peripheral.name` is still nil pre-connect, or a name
-    /// left behind by an earlier user model override / hardware correction. A watermark written
-    /// under any one of those remains reachable by the library's own lazy lookup once it resolves
-    /// the serial mid-download, so clearing or overwriting just one key can leave a stale
-    /// fingerprint live — turning a download this function reported as `.notFound` (and for which
-    /// the caller therefore armed the import-date cutoff) into a silently incremental one. Both
-    /// branches below are guarded by `normalizedComputerSerial()`: a sentinel or empty serial is
-    /// not a device identity, so sweeping on it could conflate two different physical computers,
-    /// and those cases fall back to the original single-key behaviour.
-    ///
-    /// Defense-in-depth only — the "serial unresolvable" early return above still cannot clear
-    /// anything, so this does not cover that case. It covers the sessions where the serial *does*
-    /// resolve and a diverging-key entry survives from an earlier one.
-    func syncFingerprintFromDatabase(for peripheral: CBPeripheral) -> FingerprintRestoreResult {
+    /// A record with empty fingerprint bytes (`DeviceFingerprint.fingerprintData` defaults to
+    /// `Data()`) is not a watermark and counts as not found.
+    func fingerprintFromDatabase(for peripheral: DiscoveredDevice) -> (result: FingerprintRestoreResult, table: [String: Data]) {
         let uuid = peripheral.identifier.uuidString
-
-        // Resolve serial and device type. During reassociation the new UUID is not yet in DeviceStorage
-        // (written only after a successful download), so fall back to pendingDeviceStorageSeed.
         let serial: String
-        let deviceType: String
-
-        if let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: uuid),
-           let storedSerial = storedDevice.serial {
+        if let storedSerial = DeviceStorage.shared.getStoredDevice(uuid: uuid)?.serial {
             serial = storedSerial
-            if let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == storedDevice.model && $0.family == storedDevice.family }) {
-                deviceType = modelInfo.name
-            } else {
-                deviceType = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
-            }
         } else if let seed = pendingDeviceStorageSeed, seed.uuid == uuid, !seed.serial.isEmpty {
             serial = seed.serial
-            if let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.family == seed.family && $0.modelID == seed.modelID }) {
-                deviceType = modelInfo.name
-            } else {
-                deviceType = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
-            }
-            Self.logger.info("[Reassociation] syncFingerprintFromDatabase: resolving via seed for serial \(serial)")
+            Self.logger.info("[Reassociation] fingerprintFromDatabase: resolving via seed for serial \(serial)")
         } else {
-            // Serial unresolvable pre-connection — this device is either genuinely new, or a
-            // stale DeviceStorage/pendingDeviceStorageSeed entry from before a delete. The
-            // upcoming download is full-history regardless (isFullHistoryDownload at the call
-            // site), so there's no watermark to protect for THIS device. But a stale UserDefaults
-            // entry for this exact physical computer's real serial can still survive from before
-            // a delete, under some other deviceType key — and be found by the library's own lazy
-            // lookup mid-download, silently turning this into an incremental sync. Sweep every
-            // UserDefaults entry whose serial has no live record backing it, rather than wiping
-            // the whole cache: a live device's entry must survive even under a key that diverges
-            // from our own resolution, or that device loses its multi-key mirror and re-downloads
-            // its full history on every future sync — see the mirror rationale below.
-            //
-            // "Backed" means backed by EITHER a DeviceFingerprint record OR a DeviceStorage entry.
-            // A device whose (family, modelID) is absent from DeviceConfiguration.supportedModels
-            // never gets a DeviceFingerprint record written (persistFingerprintRecord returns
-            // silently when getFingerprint can't resolve the library's cached bytes under the
-            // app's resolved key), yet its watermark is real and live — backed only by
-            // DeviceStorage. Checking the DB alone would delete that device's live watermark.
-            //
-            // A failed fetch is NOT "no records": treating a thrown error as an empty set would
-            // make the sweep below wipe every device's entry, so bail out without touching
-            // UserDefaults in that case.
-            let dbFingerprintRecords: [DeviceFingerprint]
-            do {
-                dbFingerprintRecords = try modelContext.fetch(FetchDescriptor<DeviceFingerprint>())
-            } catch {
-                Self.logger.warning("Serial unresolvable for peripheral \(uuid.prefix(8))… — DeviceFingerprint fetch failed (\(error.localizedDescription)); skipping orphaned UserDefaults fingerprint sweep")
-                return .notFound
-            }
-            var backedSerials = Set(
-                dbFingerprintRecords.map { $0.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            )
-            for stored in DeviceStorage.shared.getAllStoredDevices() ?? [] {
-                if let storedSerial = stored.serial {
-                    backedSerials.insert(storedSerial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
-                }
-            }
-            var allFingerprints = DeviceFingerprintStorage.shared.loadFingerprints()
-            let countBefore = allFingerprints.count
-            allFingerprints.removeAll { !backedSerials.contains($0.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) }
-            if allFingerprints.count < countBefore {
-                DeviceFingerprintStorage.shared.saveFingerprints(allFingerprints)
-                Self.logger.debug("Serial unresolvable for peripheral \(uuid.prefix(8))… — cleared \(countBefore - allFingerprints.count) orphaned UserDefaults fingerprint entry/entries not backed by any DeviceFingerprint record or DeviceStorage entry")
-            }
-            return .notFound
+            Self.logger.debug("Serial unresolvable for peripheral \(uuid.prefix(8))… — matched by the reported serial")
+            return (.notFound, fingerprintTable())
         }
 
-        let predicate = #Predicate<DeviceFingerprint> { record in record.serial == serial }
-        var descriptor = FetchDescriptor<DeviceFingerprint>(predicate: predicate)
-        descriptor.sortBy = [SortDescriptor(\.updatedAt, order: .reverse)]
-
-        // A record with empty fingerprintData is not a usable watermark — see the note above.
-        // It is treated exactly like a missing record so the caller learns the truth.
-        let record = try? modelContext.fetch(descriptor).first
-        if let record, !record.fingerprintData.isEmpty {
-            if let normalizedSerial = serial.normalizedComputerSerial() {
-                // Mirror rather than collapse: replace the bytes under EVERY deviceType key this
-                // serial is currently cached under, plus our own `deviceType`. Collapsing to the
-                // single local `deviceType` would delete a valid, library-reachable entry under a
-                // correct key and replace it with a copy under a possibly useless one (`deviceType`
-                // is `"Unknown"` whenever `peripheral.name` is nil pre-connect). Every previously
-                // reachable lookup path therefore keeps working and now resolves to the DB's bytes.
-                var allFingerprints = DeviceFingerprintStorage.shared.loadFingerprints()
-                let removedDeviceTypes = allFingerprints
-                    .filter { $0.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedSerial }
-                    .map { $0.deviceType }
-                if !removedDeviceTypes.isEmpty {
-                    allFingerprints.removeAll { $0.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedSerial }
-                    DeviceFingerprintStorage.shared.saveFingerprints(allFingerprints)
-                }
-                // A key that was both removed and re-added collapses to one final write.
-                var keysToWrite = Set(removedDeviceTypes)
-                keysToWrite.insert(deviceType)
-                for key in keysToWrite {
-                    DeviceFingerprintStorage.shared.saveFingerprint(record.fingerprintData, deviceType: key, serial: serial)
-                }
-                Self.logger.debug("Overwriting UserDefaults fingerprint under \(keysToWrite.count) deviceType key(s) for \(deviceType) (\(serial)) — DB has \(record.fingerprintData.count) bytes")
-            } else {
-                // Sentinel or empty serial — not a device identity. Keep the single-key behaviour.
-                DeviceFingerprintStorage.shared.saveFingerprint(record.fingerprintData, deviceType: deviceType, serial: serial)
-                Self.logger.debug("Overwriting UserDefaults fingerprint for \(deviceType) (\(serial)) — DB has \(record.fingerprintData.count) bytes (sentinel serial — single key only)")
-            }
-            return .restored
-        } else {
-            // Pure removal, so no mirroring concern: drop every entry for this serial whatever
-            // deviceType key it sits under, so no stale watermark can make the upcoming
-            // full-history download silently incremental.
-            if let normalizedSerial = serial.normalizedComputerSerial() {
-                var allFingerprints = DeviceFingerprintStorage.shared.loadFingerprints()
-                let beforeCount = allFingerprints.count
-                allFingerprints.removeAll { $0.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedSerial }
-                if allFingerprints.count < beforeCount {
-                    DeviceFingerprintStorage.shared.saveFingerprints(allFingerprints)
-                    Self.logger.debug("Cleared \(beforeCount - allFingerprints.count) UserDefaults fingerprint entry/entries for serial \(serial) (serial-only sweep, any deviceType key)")
-                }
-            } else {
-                // Sentinel or empty serial — not a device identity. Keep the single-key behaviour.
-                DeviceFingerprintStorage.shared.clearFingerprint(forDeviceType: deviceType, serial: serial)
-            }
-            if record != nil {
-                Self.logger.debug("DB fingerprint record for \(deviceType) (\(serial)) has no bytes — clearing UserDefaults")
-            } else {
-                Self.logger.debug("No DB fingerprint for \(deviceType) (\(serial)) — clearing UserDefaults")
-            }
-            return .notFound
+        let key = serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let table = fingerprintTable()
+        guard let fingerprint = table[key] else {
+            Self.logger.debug("No DB fingerprint for serial \(serial) — full download")
+            return (.notFound, table)
         }
+        Self.logger.debug("Using DB fingerprint for serial \(serial) (\(fingerprint.count) bytes)")
+        return (.restored, table)
+    }
+
+    /// Every stored watermark, keyed by trimmed lowercased serial, newest record first (an
+    /// iCloud merge can leave duplicates under differently-cased serials). The session
+    /// applies the one matching the serial the device reports, so a computer whose serial
+    /// was not known before connecting (Connect as New Device, an identifier stored without
+    /// a serial) still downloads only its new dives.
+    private func fingerprintTable() -> [String: Data] {
+        let records = (try? modelContext.fetch(FetchDescriptor<DeviceFingerprint>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
+        var table: [String: Data] = [:]
+        for record in records where !record.fingerprintData.isEmpty {
+            let key = record.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !key.isEmpty, table[key] == nil { table[key] = record.fingerprintData }
+        }
+        return table
     }
 
     // MARK: - Import Date Cutoff
@@ -604,7 +487,7 @@ extension BluetoothScannerView {
     ///   from being silently overwritten by auto-detection on reconnect).
     /// - No override, record has no identity yet → seed from auto-detected DeviceStorage.
     /// The fingerprint bytes are always updated.
-    func persistFingerprintRecord(for peripheral: CBPeripheral?) {
+    func persistFingerprintRecord(for peripheral: DiscoveredDevice?) {
         guard let peripheral,
               let storedDevice = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
               let serial = storedDevice.serial else {
@@ -624,19 +507,19 @@ extension BluetoothScannerView {
             return
         }
 
-        // The fingerprint is always keyed by the library's auto-detected device type.
+        // The name recorded for a computer seen for the first time: the catalog name of its
+        // stored model, else the display name of its advertised name.
         let libraryDeviceType: String
-        if let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == storedDevice.model && $0.family == storedDevice.family }) {
+        if let modelInfo = DeviceCatalog.supportedModels.first(where: { $0.modelID == storedDevice.model && $0.family == storedDevice.family }) {
             libraryDeviceType = modelInfo.name
         } else {
-            libraryDeviceType = DeviceConfiguration.getDeviceDisplayName(from: peripheral.name ?? "Unknown")
+            libraryDeviceType = DeviceCatalog.displayName(forAdvertisedName: peripheral.name ?? "Unknown")
         }
 
-        guard let fp = DeviceFingerprintStorage.shared.getFingerprint(forDeviceType: libraryDeviceType, serial: serial)?.fingerprint else {
-            // The library writes its watermark to the UserDefaults cache as it downloads; nothing
-            // there means there are no fingerprint bytes to copy into SwiftData, so no record is
-            // created or updated and the next sync re-downloads the full history.
-            Self.logger.warning("Skipped DeviceFingerprint persist — no cached fingerprint for \(libraryDeviceType) (serial: \(serial))")
+        guard let fp = sessionWatermark, !fp.isEmpty else {
+            // The download returned no new watermark (no new dives, a partial download with
+            // "Download all dives", or no dive at all): the stored one stays as it is.
+            Self.logger.warning("Skipped DeviceFingerprint persist — no new watermark for \(libraryDeviceType) (serial: \(serial))")
             return
         }
 
@@ -663,7 +546,7 @@ extension BluetoothScannerView {
         } else {
             // Brand-new record — use override if active, otherwise auto-detected values.
             let dbName: String
-            let dbFamily: DeviceConfiguration.DeviceFamily
+            let dbFamily: DeviceFamily
             let dbModel: UInt32
             if let override = modelOverrides[peripheral.identifier.uuidString] {
                 dbName = override.name
@@ -684,41 +567,14 @@ extension BluetoothScannerView {
         Self.logger.info("Persisted DeviceFingerprint for \(serial)")
     }
 
-    /// Deletes a known device: removes the DeviceFingerprint from SwiftData,
-    /// clears the corresponding UserDefaults fingerprint cache, and removes the
-    /// StoredDevice entry from DeviceStorage.
+    /// Deletes a known device: removes the DeviceFingerprint from SwiftData and the
+    /// StoredDevice entries (with their Pelagic access codes) from DeviceStorage.
     func deleteKnownDevice(_ device: DeviceFingerprint) {
         let serial = device.serial
-        // UserDefaults watermark removal happens *only* on the non-sentinel path below, and is
-        // deliberately not done before this branch. A single-key clear keyed by
-        // (device.computerName, serial) looks harmless, but `computerName` is a shared
-        // model-display name (e.g. "Aqualung i300C"), not a per-unit nickname: two different
-        // physical computers of the same model that both report a sentinel serial (e.g. "0") share
-        // one identical (deviceType, serial) key, so clearing it while deleting one would wipe the
-        // survivor's watermark too — exactly the cross-device damage the sentinel branch below
-        // exists to avoid. On the non-sentinel path the single-key clear is kept purely for its
-        // log breadcrumb; the serial-only sweep immediately after it removes a strict superset of
-        // what it removes.
-        // That sweep is needed because a single deviceType key is never sufficient: the same serial
-        // can also be cached under a different deviceType string (libdivecomputer's raw descriptor
-        // name, a user override, or a stale pre-correction name) — see the note on
-        // syncFingerprintFromDatabase above. Sweeping by serial alone ensures no watermark survives
-        // the delete under any key — but only when the serial is a genuine device identity. A
-        // sentinel serial (e.g. "0"/"00000000", reported by hardware that doesn't expose a real
-        // one) is shared by otherwise-unrelated physical computers, so widening the sweep to "any
-        // entry with this serial" would take another device's watermark and DeviceStorage mapping
-        // with it. On a sentinel, fall back to the narrow, single-entry DeviceStorage removal this
-        // function used before the sweep existed, and leave UserDefaults untouched.
+        // A sentinel serial (e.g. "0"/"00000000", reported by hardware that doesn't expose a real
+        // one) is shared by otherwise-unrelated physical computers, so only a genuine serial is
+        // swept; a sentinel removes the single targeted entry.
         if let normalizedSerial = serial.normalizedComputerSerial() {
-            // Clear UserDefaults fingerprint cache (computerName matches the key used by DeviceFingerprintStorage)
-            DeviceFingerprintStorage.shared.clearFingerprint(forDeviceType: device.computerName, serial: serial)
-            var allFingerprints = DeviceFingerprintStorage.shared.loadFingerprints()
-            let fingerprintCountBefore = allFingerprints.count
-            allFingerprints.removeAll { $0.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedSerial }
-            if allFingerprints.count < fingerprintCountBefore {
-                DeviceFingerprintStorage.shared.saveFingerprints(allFingerprints)
-                Self.logger.info("Cleared \(fingerprintCountBefore - allFingerprints.count) UserDefaults fingerprint entry/entries for serial \(serial) (serial-only sweep, any deviceType key)")
-            }
             // Remove every StoredDevice entry for this serial from DeviceStorage. Duplicate entries
             // under different BLE UUIDs (and differently-cased serials) can exist after past
             // reassociation / deferred-seed activity, so removing only the first match would leave
@@ -729,6 +585,7 @@ extension BluetoothScannerView {
                     let matchingUUIDs = Set(matching.map { $0.uuid })
                     let remaining = allDevices.filter { !matchingUUIDs.contains($0.uuid) }
                     DeviceStorage.shared.updateStoredDevices(remaining)
+                    matching.forEach { BLEAccessCodeKeychain.delete(forAdvertisedName: $0.name) }
                     Self.logger.info("Removed \(matching.count) DeviceStorage entry/entries for \(device.computerName) (serial: \(serial))")
                 }
             }
@@ -765,7 +622,7 @@ extension BluetoothScannerView {
     /// `trimmingCharacters`/`lowercased`, so a DB-level `record.serial == serial` is case- and
     /// whitespace-sensitive and would silently leave an iCloud-merged duplicate record behind
     /// under a differently-cased serial. Same reason `persistFingerprintRecord` and
-    /// `syncFingerprintFromDatabase` sort by `updatedAt` and resolve in Swift. The table holds one
+    /// `fingerprintFromDatabase` sort by `updatedAt` and resolve in Swift. The table holds one
     /// record per physical dive computer, so an unfiltered fetch is cheap (the `knownDevices`
     /// `@Query` in BluetoothScannerView already loads it whole). When the serial is a sentinel
     /// value the serial sweep is skipped entirely and only the single targeted record is deleted.
@@ -786,179 +643,6 @@ extension BluetoothScannerView {
             modelContext.delete(device)
             Self.logger.info("Deleted DeviceFingerprint record for \(device.computerName) (sentinel serial \(serial) — single record only)")
         }
-    }
-
-    // MARK: - Merge
-
-    /// Merges dive computer data into an existing dive.
-    /// Only fields originating from the computer are updated.
-    /// User-modified fields (notes, rating, buddies, etc.) are preserved.
-    private func mergeComputerData(from diveData: DiveData, into dive: Dive, matchReason: String) {
-        // Dive statistics
-        dive.maxDepth = diveData.maxDepth
-        dive.averageDepth = diveData.avgDepth
-        Self.applyDuration(from: diveData, to: dive)
-
-        // Temperatures
-        let profileTemperatures = diveData.profile.compactMap { $0.temperature }
-        dive.waterTemperature = diveData.temperature.isFinite ? diveData.temperature : nil
-        dive.minTemperature = diveData.minTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.min() ?? (diveData.temperature.isFinite ? diveData.temperature : nil)
-        dive.maxTemperature = diveData.maxTemperature.flatMap { $0.isFinite ? $0 : nil } ?? profileTemperatures.max()
-        // Only a surface temperature the computer reports (not LibDC-Swift's first-sample
-        // fallback), and only into an empty field: it must not overwrite a value fetched from
-        // Open-Meteo or entered by the user on an earlier import or edit.
-        // LibDC-Swift sets measuredSurfaceTemperature only to a finite value.
-        if dive.airTemperature == nil, let surfaceTemp = diveData.measuredSurfaceTemperature {
-            dive.airTemperature = surfaceTemp
-        }
-
-        // Build tanks with inline gas data from LibDCSwift.
-        // Preserve user-set fields (volume, workingPressure, tankType, tankMaterial) that dive
-        // computers typically do not provide. Usage times are derived from the fresh profile by
-        // applyGasSwitchUsageTimes below and are intentionally not carried forward here.
-        // Also build gasMixToTankIndex: maps gas-mix index (currentGas) to tank array position.
-        let dcGasMixes = diveData.gasMixes ?? []
-        let existingTanks = dive.tanks
-        var mergeMixToTankIndex: [Int: Int] = [:]
-        let profileGasMixOrder = Self.orderedGasMixIndices(from: diveData)
-
-        if let dcTanks = diveData.tanks, !dcTanks.isEmpty {
-            // Same gas-to-tank assignment as the first download (Shearwater pressure inference
-            // included), so a re-download keeps each gas on its transmitter.
-            let built = Self.buildTanksFromComputerTanks(
-                dcTanks,
-                diveData: diveData,
-                deviceFamily: connectedDeviceFamily,
-                filterUnusedTanks: filterUnusedTanks
-            )
-            mergeMixToTankIndex = built.gasMixToTankIndex
-            // Preserve the identity and user-set fields of the existing tank at the same index
-            // (the transmitter slot, then the gas-only tanks in gas-mix order).
-            dive.tanks = built.tanks.enumerated().map { (index, tank) in
-                let existing = index < existingTanks.count ? existingTanks[index] : nil
-                return TankData(
-                    id: existing?.id ?? tank.id,
-                    o2: tank.o2, he: tank.he,
-                    volume: tank.volume ?? existing?.volume,
-                    startPressure: tank.startPressure,
-                    endPressure: tank.endPressure,
-                    workingPressure: tank.workingPressure ?? existing?.workingPressure,
-                    tankMaterial: existing?.tankMaterial,
-                    tankType: existing?.tankType
-                )
-            }
-        } else if !diveData.tankPressure.isEmpty {
-            // Fallback: create a TankData from tank pressure samples
-            let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0
-            let startP = diveData.tankPressure.first(where: { $0 > 0 })
-            let endP   = diveData.tankPressure.last(where:  { $0 > 0 })
-            let existing = existingTanks.first
-            dive.tanks = [TankData(o2: o2Fraction, he: 0.0,
-                                   volume: existing?.volume,
-                                   startPressure: startP, endPressure: endP,
-                                   workingPressure: existing?.workingPressure,
-                                   tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)]
-            mergeMixToTankIndex[0] = 0
-        } else if !dcGasMixes.isEmpty {
-            // No tank data but we have gas mixes — store them as tanks with gas only
-            let needsFilter = filterUnusedTanks && (connectedDeviceFamily.map { Self.familiesNeedingSwiftTankFilter.contains($0) } ?? true)
-            let usedMixes = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
-            // existingIdx walks existingTanks in lockstep with the filtered output.
-            // If filterUnusedTanks was toggled between imports, the shapes may differ and
-            // user-set fields (volume, tankMaterial, etc.) could land on the wrong tank.
-            var existingIdx = 0
-            var tankIdx = 0
-            dive.tanks = dcGasMixes.enumerated().compactMap { (index, mix) in
-                if let used = usedMixes {
-                    guard used.contains(index) else { return nil }
-                }
-                let existing = existingIdx < existingTanks.count ? existingTanks[existingIdx] : nil
-                existingIdx += 1
-                mergeMixToTankIndex[index] = tankIdx
-                tankIdx += 1
-                return TankData(o2: mix.oxygen, he: mix.helium,
-                                volume: existing?.volume, workingPressure: existing?.workingPressure,
-                                tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)
-            }
-        } else if let gasMix = diveData.gasMix, gasMix != 21 {
-            // Single non-Air gas from dive computer
-            let existing = existingTanks.first
-            dive.tanks = [TankData(o2: Double(gasMix) / 100.0, he: 0.0,
-                                   volume: existing?.volume, workingPressure: existing?.workingPressure,
-                                   tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)]
-            mergeMixToTankIndex[0] = 0
-        }
-
-        // Decompression
-        if let decoModel = diveData.decoModel {
-            dive.decompressionAlgorithm = decoModel.description
-        }
-        dive.cnsPercentage = diveData.cns ?? diveData.profile.last(where: { $0.cns != nil })?.cns
-        // DC_DECO_DECOSTOP = 2: only mandatory decompression stops count
-        let hadDecoObligation = (diveData.decoStop?.type == 2)
-            || diveData.profile.contains { $0.decoStop != nil }
-            || diveData.profile.contains { $0.events.contains(.decoStop) }
-        dive.isDecompressionDive = hadDecoObligation
-
-        // Dive profile (always update with fresh data, merge event-only points)
-        // currentGas is remapped from gas-mix index to tank-array index before storage.
-        dive.profileSamples = Self.remapProfileCurrentGas(
-            Self.consolidateProfilePoints(diveData.profile),
-            using: mergeMixToTankIndex)
-        let mergeInitialGasMixIndex = profileGasMixOrder.first
-        dive.tanks = Self.applyGasSwitchUsageTimes(
-            to: dive.tanks,
-            gasMixToTankIndex: mergeMixToTankIndex,
-            initialGasMixIndex: mergeInitialGasMixIndex,
-            profileSamples: dive.profileSamples
-        )
-
-        // Computer name — prefer full brand+model name from supportedModels lookup
-        if let peripheral = selectedDevice,
-           let stored = DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString),
-           let modelInfo = DeviceConfiguration.supportedModels.first(where: { $0.modelID == stored.model && $0.family == stored.family }) {
-            dive.computerName = modelInfo.name
-        } else if let name = connectedDeviceName {
-            dive.computerName = name
-        }
-
-        // Raw dive computer data
-        dive.rawDiveComputerData = diveData.rawData
-        dive.fingerprintData = diveData.fingerprint
-
-        // Water type from salinity (g/cm³): ~1.0 = Fresh, ~1.025 = Salt
-        if let sal = diveData.salinity {
-            dive.siteWaterType = waterType(forSalinity: sal)
-        }
-
-        // Surface pressure, only when the computer reports one: a value from an earlier import
-        // is kept when this computer records none.
-        if let pressure = Dive.validatedSurfacePressure(diveData.atmospheric) {
-            dive.surfacePressure = pressure
-        }
-
-        // Decompression stops
-        dive.decoStops = Self.extractDecoStops(from: diveData)
-
-        if let entryLoc = diveData.location,
-           (-90...90).contains(entryLoc.latitude),
-           (-180...180).contains(entryLoc.longitude),
-           !(entryLoc.latitude == 0 && entryLoc.longitude == 0) {
-            dive.siteLatitude = entryLoc.latitude
-            dive.siteLongitude = entryLoc.longitude
-        }
-        if let exitLoc = diveData.exitLocation,
-           (-90...90).contains(exitLoc.latitude),
-           (-180...180).contains(exitLoc.longitude),
-           !(exitLoc.latitude == 0 && exitLoc.longitude == 0) {
-            dive.exitLatitude = exitLoc.latitude
-            dive.exitLongitude = exitLoc.longitude
-        }
-
-        // Override source import to reflect the Bluetooth re-download
-        dive.sourceImport = "Bluetooth"
-
-        Self.logger.info("Dive from \(dive.timestamp) merged with computer data (matched by: \(matchReason))")
     }
 
     // MARK: - Diver Name

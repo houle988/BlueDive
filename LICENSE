@@ -17,12 +17,13 @@ Permission NOT granted without prior written consent of Steve Houle
 
 Third-party dependencies
 
-This project incorporates third-party libraries that are licensed independently of this license and are not subject to the restrictions above. Specifically:
+This project incorporates third-party software that is licensed independently of this license and is not subject to the restrictions above. Specifically:
 
-* libdivecomputer (https://github.com/libdivecomputer/libdivecomputer), BlueDive fork: https://github.com/houle988/libdivecomputer) — licensed under the GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later)
-* libdc-swift (https://github.com/deepsealabs/libdc-swift, BlueDive fork: https://github.com/houle988/libdc-swift) — licensed under the GNU Lesser General Public License v2.1 (LGPL-2.1)
+* libdivecomputer (https://github.com/libdivecomputer/libdivecomputer) — licensed under the GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later). Its complete source code, as used by BlueDive, is included in this repository at Packages/DiveComputerKit/Sources/CLibDiveComputer, together with its license text (COPYING) and a record of the upstream version it was taken from (UPSTREAM.md).
 
-Any modifications made to these libraries by the authors of this project are published separately under their respective LGPL licenses. The permissions and restrictions of this license (BDSAL) apply solely to the original code authored under this project and do not extend to, limit, or supersede the rights granted by the LGPL for those libraries.
+libdivecomputer is linked statically into the BlueDive application. As provided by section 6 of the LGPL-2.1, the complete source code of BlueDive is available in this repository, so that anyone may modify libdivecomputer and relink it with BlueDive to produce a modified application: replace or change the files in Packages/DiveComputerKit/Sources/CLibDiveComputer and build the project with Xcode as described in CONTRIBUTING.md. The restrictions of this license (BDSAL) do not limit this right to modify the library and relink it for one's own use, nor any other right the LGPL grants for libdivecomputer.
+
+Any modifications made to libdivecomputer by the authors of this project are published in this repository under the LGPL. The permissions and restrictions of this license (BDSAL) apply solely to the original code authored under this project — including the DiveComputerKit package, except its copy of libdivecomputer — and do not extend to, limit, or supersede the rights granted by the LGPL for that library.
 
 Continuity clause
 

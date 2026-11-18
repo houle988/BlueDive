@@ -73,95 +73,95 @@ extension DiveDetailView {
                 Spacer()
             }
 
-            #if os(macOS)
-            // The Mac window is wide enough for two columns: the air conditions (air
-            // temperature, weather, wind, surface pressure) on the left, the water conditions on
-            // the right. A Grid keeps each pair of rows aligned, while each column draws its own
-            // dividers and a vertical line separates them.
-            Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
-                GridRow {
-                    conditionsAirTempRow.detailGridCell(column: 0, row: 0)
-                    conditionsMinTempRow.detailGridCell(column: 1, row: 0)
+            if usesTwoColumnCards {
+                // A wide window (`usesTwoColumnCards`) is wide enough for two columns: the air
+                // conditions (air temperature, weather, wind, surface pressure) on the left, the
+                // water conditions on the right. A Grid keeps each pair of rows aligned, while each
+                // column draws its own dividers and a vertical line separates them.
+                Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
+                    GridRow {
+                        conditionsAirTempRow.detailGridCell(column: 0, row: 0)
+                        conditionsMinTempRow.detailGridCell(column: 1, row: 0)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        conditionsWeatherRow.detailGridCell(column: 0, row: 1)
+                        conditionsMaxTempRow.detailGridCell(column: 1, row: 1)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        conditionsWindRow.detailGridCell(column: 0, row: 2)
+                        conditionsSurfaceRow.detailGridCell(column: 1, row: 2)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        conditionsWindDirectionRow.detailGridCell(column: 0, row: 3)
+                        conditionsCurrentRow.detailGridCell(column: 1, row: 3)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        conditionsSurfacePressureRow.detailGridCell(column: 0, row: 4)
+                        conditionsVisibilityRow.detailGridCell(column: 1, row: 4)
+                    }
                 }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
+                .overlay {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.2))
+                        .frame(width: 1)
                 }
-                GridRow {
-                    conditionsWeatherRow.detailGridCell(column: 0, row: 1)
-                    conditionsMaxTempRow.detailGridCell(column: 1, row: 1)
-                }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
-                }
-                GridRow {
-                    conditionsWindRow.detailGridCell(column: 0, row: 2)
-                    conditionsSurfaceRow.detailGridCell(column: 1, row: 2)
-                }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
-                }
-                GridRow {
-                    conditionsWindDirectionRow.detailGridCell(column: 0, row: 3)
-                    conditionsCurrentRow.detailGridCell(column: 1, row: 3)
-                }
-                GridRow {
-                    detailColumnDivider
-                    detailColumnDivider
-                }
-                GridRow {
-                    conditionsSurfacePressureRow.detailGridCell(column: 0, row: 4)
-                    conditionsVisibilityRow.detailGridCell(column: 1, row: 4)
-                }
+                .accessibilityElement(children: .contain)
+            } else {
+                // Same order as the two-column layout: air conditions, then water conditions.
+                conditionsAirTempRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsWeatherRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsWindRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsWindDirectionRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsSurfacePressureRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsMinTempRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsMaxTempRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsSurfaceRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsCurrentRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsVisibilityRow
             }
-            .overlay {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1)
-            }
-            .accessibilityElement(children: .contain)
-            #else
-            // Same order as the macOS columns: air conditions, then water conditions.
-            conditionsAirTempRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsWeatherRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsWindRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsWindDirectionRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsSurfacePressureRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsMinTempRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsMaxTempRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsSurfaceRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsCurrentRow
-
-            Divider().background(.primary.opacity(0.2))
-
-            conditionsVisibilityRow
-            #endif
         }
         .padding()
         .detailCardBackground()

@@ -468,10 +468,37 @@ class UserPreferences {
     }
     /// When true, the dive detail view shows the Samples tab (raw dive computer data).
     /// Off by default: the tab is a diagnostic view and a long table is slow to render.
+    /// Set by the Samples switch in Settings → Dive Profile → Dive Detail Tabs
+    /// (`setDiveTab(.samples, shown:)`) and reset by its Restore Default Layout, which both
+    /// assume it defaults to off.
     /// No App Group write: the widget does not show dive detail tabs.
     var showSamplesTab: Bool {
         didSet { UserDefaults.standard.set(showSamplesTab, forKey: "showSamplesTab") }
     }
+    /// The user's order of the dive detail tabs (`DiveTab` raw values), set in Settings →
+    /// Dive Profile → Dive Detail Tabs; empty for the default order. Read through `orderedDiveTabs`, which keeps
+    /// Overview first. No App Group write: the widget does not show dive detail tabs.
+    var diveTabOrder: [String] {
+        didSet { UserDefaults.standard.set(diveTabOrder, forKey: "diveTabOrder") }
+    }
+    /// The dive detail tabs the user hid (`DiveTab` raw values); Overview is never hidden and
+    /// the Samples tab is shown by `showSamplesTab` instead.
+    var hiddenDiveTabs: [String] {
+        didSet { UserDefaults.standard.set(hiddenDiveTabs, forKey: "hiddenDiveTabs") }
+    }
+    /// The user's order of the main window's tabs (`MainTab` raw values), set in Settings →
+    /// Appearance & Language → Main Tabs; empty for the default order. Read through
+    /// `orderedMainTabs`, which keeps Dives first. Applied by each window when it is created or
+    /// its Settings closes. No App Group write: the widget shows no tabs.
+    var mainTabOrder: [String] {
+        didSet { UserDefaults.standard.set(mainTabOrder, forKey: Self.mainTabOrderKey) }
+    }
+    static let mainTabOrderKey = "mainTabOrder"
+    /// The main tabs the user hid (`MainTab` raw values); Dives is never hidden.
+    var hiddenMainTabs: [String] {
+        didSet { UserDefaults.standard.set(hiddenMainTabs, forKey: Self.hiddenMainTabsKey) }
+    }
+    static let hiddenMainTabsKey = "hiddenMainTabs"
     /// When true, Edit Conditions offers a Fetch Weather button, and the Bluetooth sync results
     /// offer to fetch the weather for downloaded dives with GPS coordinates; both send the
     /// dive's GPS coordinates and date to Open-Meteo, only when the user chooses Fetch Weather.
@@ -516,6 +543,19 @@ class UserPreferences {
     /// costs nothing more. No App Group write: the widget does not search.
     var searchDiveNotes: Bool {
         didSet { UserDefaults.standard.set(searchDiveNotes, forKey: "searchDiveNotes") }
+    }
+    /// Trips (`TripBuilder`): a dive more than this many days after the previous one starts a
+    /// new trip. `defaultTripGapDays` by default, `tripGapDaysRange` in Settings.
+    /// No App Group write: the widget does not show trips.
+    var tripGapDays: Int {
+        didSet { UserDefaults.standard.set(tripGapDays, forKey: "tripGapDays") }
+    }
+    static let tripGapDaysRange = 1...30
+    static let defaultTripGapDays = 3
+    /// When true, a dive whose country differs from the previous dive's starts a new trip (dives
+    /// without a country never split one). Off by default, so trips stay grouped by date only.
+    var splitTripsOnCountryChange: Bool {
+        didSet { UserDefaults.standard.set(splitTripsOnCountryChange, forKey: "splitTripsOnCountryChange") }
     }
     /// When true, the dive page (`MarkdownText`) and the PDF logbook (`PDFNotesText`) show notes
     /// formatted as Markdown. Display only: notes are stored, searched and exported as typed. Off
@@ -580,15 +620,20 @@ class UserPreferences {
     var initialReplaceExistingWeather: Bool {
         replaceWeatherMode.initialValue(lastChoice: replaceWeatherLastChoice)
     }
-    #if os(macOS)
     /// When true, the main dive list shows the profile chart of the selected dive above the
-    /// list; a click selects a dive and a double-click (or Return) opens it. When false, the
-    /// list has no chart and a click opens the dive. On by default.
+    /// list; a click (macOS) or a tap (iPad) selects a dive, a double-click or Return (macOS) or
+    /// a second tap (iPad) opens it. When false, the list has no chart and a click or tap opens
+    /// the dive. On iPad it applies only in a wide window, and iPhone never shows the preview.
+    /// On by default on macOS and iPad (see `defaultShowsDiveListProfilePreview`).
     /// No App Group write: the widget does not show the dive list.
     var showDiveListProfilePreview: Bool {
         didSet { UserDefaults.standard.set(showDiveListProfilePreview, forKey: "showDiveListProfilePreview") }
     }
-    #endif
+    /// The preview is on until turned off, on macOS and iPad (the devices that can show it;
+    /// iPhone never reads the setting).
+    static var defaultShowsDiveListProfilePreview: Bool {
+        WideWindowLayout.isSupportedOnDevice
+    }
 
     init() {
         self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "meters") ?? .meters
@@ -602,7 +647,14 @@ class UserPreferences {
         // OFF default — no registerDefaults entry needed.
         self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
+        self.diveTabOrder = UserDefaults.standard.stringArray(forKey: "diveTabOrder") ?? []
+        self.hiddenDiveTabs = UserDefaults.standard.stringArray(forKey: "hiddenDiveTabs") ?? []
+        self.mainTabOrder = UserDefaults.standard.stringArray(forKey: Self.mainTabOrderKey) ?? []
+        self.hiddenMainTabs = UserDefaults.standard.stringArray(forKey: Self.hiddenMainTabsKey) ?? []
         self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
+        let storedTripGap = UserDefaults.standard.object(forKey: "tripGapDays") as? Int ?? Self.defaultTripGapDays
+        self.tripGapDays = min(max(storedTripGap, Self.tripGapDaysRange.lowerBound), Self.tripGapDaysRange.upperBound)
+        self.splitTripsOnCountryChange = UserDefaults.standard.bool(forKey: "splitTripsOnCountryChange")
         self.formatNotesAsMarkdown = UserDefaults.standard.bool(forKey: "formatNotesAsMarkdown")
         self.copySiteGPSMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "copySiteGPSMode") ?? "lastUsed") ?? .lastUsed
         self.copySiteGPSLastChoice = UserDefaults.standard.object(forKey: "copySiteGPSLastChoice") as? Bool
@@ -616,10 +668,9 @@ class UserPreferences {
         self.taxonomyNameLanguage = UserDefaults.standard.string(forKey: "taxonomyNameLanguage") ?? ""
         self.useINaturalistCommonNames = UserDefaults.standard.object(forKey: "useINaturalistCommonNames") as? Bool ?? true
         self.useAlternativeINaturalistPhoto = UserDefaults.standard.object(forKey: "useAlternativeINaturalistPhoto") as? Bool ?? true
-        #if os(macOS)
-        // On by default: an absent key reads as true.
-        self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool ?? true
-        #endif
+        // An absent key reads as the platform default (on for macOS and iPad).
+        self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool
+            ?? Self.defaultShowsDiveListProfilePreview
         // Seed shared container after self is fully initialised (required by @Observable)
         let shared = UserDefaults(suiteName: "group.app.bluedive.universal")
         shared?.set(self.appearanceMode.rawValue, forKey: "appearanceMode")
@@ -637,7 +688,13 @@ class UserPreferences {
         languageMode    = .system
         hideClearedDecoStops = false
         showSamplesTab = false
+        diveTabOrder = []
+        hiddenDiveTabs = []
+        mainTabOrder = []
+        hiddenMainTabs = []
         searchDiveNotes = false
+        tripGapDays = Self.defaultTripGapDays
+        splitTripsOnCountryChange = false
         formatNotesAsMarkdown = false
         wideSpeciesImages = true
         showPhotosOnProfile = true
@@ -650,9 +707,7 @@ class UserPreferences {
         taxonomyNameLanguage = ""
         useINaturalistCommonNames = true
         useAlternativeINaturalistPhoto = true
-        #if os(macOS)
-        showDiveListProfilePreview = true
-        #endif
+        showDiveListProfilePreview = Self.defaultShowsDiveListProfilePreview
         SharedChartLineVisibility.shared.value = ChartLineVisibility()
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
@@ -822,10 +877,22 @@ struct SettingsView: View {
 // MARK: - Settings List Row
 
 struct SettingsListRow: View {
-    let title: LocalizedStringKey
+    let title: Text
     let icon: String
     let color: Color
     var detail: String? = nil
+
+    init(title: LocalizedStringKey, icon: String, color: Color, detail: String? = nil) {
+        self.init(title: Text(title), icon: icon, color: color, detail: detail)
+    }
+
+    /// For a title already in the app's language (e.g. a main tab's `MainTab.title`).
+    init(title: Text, icon: String, color: Color, detail: String? = nil) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+        self.detail = detail
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -839,7 +906,7 @@ struct SettingsListRow: View {
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                title
                     .foregroundStyle(.primary)
                 if let detail {
                     Text(detail)
@@ -848,6 +915,59 @@ struct SettingsListRow: View {
                 }
             }
         }
+    }
+}
+
+/// A card on a Settings topic page that opens another page: an icon and title with a chevron,
+/// and a caption below, in the pages' card style (Dive Profile → Dive Detail Tabs, Appearance &
+/// Language → Main Tabs).
+struct SettingsLinkCard<Destination: View>: View {
+    let title: LocalizedStringKey
+    let icon: String
+    let color: Color
+    let caption: LocalizedStringKey
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
+        VStack(spacing: 12) {
+            NavigationLink {
+                destination()
+            } label: {
+                HStack {
+                    Label {
+                        Text(title)
+                    } icon: {
+                        Image(systemName: icon)
+                            .foregroundStyle(color)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .padding()
+                .contentShape(Rectangle())
+            }
+            .borderlessButton()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
     }
 }
 

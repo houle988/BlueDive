@@ -54,8 +54,7 @@ BlueDive welcomes contributions from developers and divers alike. See [CONTRIBUT
 
 ## Built on
 
-- [libdivecomputer](https://github.com/houle988/libdivecomputer) — LGPL-2.1-or-later (BlueDive fork)
-- [libdc-swift](https://github.com/houle988/libdc-swift) — LGPL-2.1 (BlueDive fork)
+- [libdivecomputer](https://github.com/libdivecomputer/libdivecomputer) — LGPL-2.1-or-later; its source is included in `Packages/DiveComputerKit` (BlueDive's own Bluetooth and dive parsing package) and linked statically
 - [Garmin FIT Swift SDK](https://github.com/garmin/fit-swift-sdk) — Garmin FIT file decoding
 - [Open-Meteo](https://open-meteo.com) — Weather data
 - [iNaturalist](https://www.inaturalist.org) — Species taxonomy and photos

@@ -1,0 +1,260 @@
+import Foundation
+import DiveComputerKit
+import Testing
+@testable import BlueDive
+
+/// `DiveImportMapper` paths the parity fixtures (DiveImportMapperParityTests) do not reach:
+/// the computer-name fallbacks, the "Filter unused tanks" setting, and a merge into a dive
+/// the user has edited.
+@MainActor
+struct DiveImportMapperTests {
+
+    private func context(family: DeviceFamily? = .oceanicAtom2, catalogName: String? = nil,
+                         connectedName: String? = nil, filterUnusedTanks: Bool = false,
+                         weightUnit: String = "lb") -> DiveImportContext {
+        DiveImportContext(deviceFamily: family, catalogComputerName: catalogName, connectedDeviceName: connectedName,
+                          computerSerial: "00001234", filterUnusedTanks: filterUnusedTanks, importWeightUnit: weightUnit)
+    }
+
+    /// An i300C-style dive: three configured gas mixes, only the first breathed, no tank data.
+    private func threeMixDive() -> DiveData {
+        var data = DiveData(number: 1, datetime: Date(timeIntervalSince1970: 1_800_000_000),
+                            maxDepth: 18, avgDepth: 11, divetime: 2400, reportedDivetime: 2400, temperature: 12)
+        data.gasMixes = [GasMix(helium: 0, oxygen: 0.32, nitrogen: 0.68, usage: .none),
+                         GasMix(helium: 0, oxygen: 0.21, nitrogen: 0.79, usage: .none),
+                         GasMix(helium: 0, oxygen: 0.50, nitrogen: 0.50, usage: .none)]
+        data.gasMix = 0
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 600, depth: 18),
+                        ProfileSample(time: 2400, depth: 0)]
+        return data
+    }
+
+    private func merged(_ data: DiveData, firstFilter: Bool = false, mergeFilter: Bool = false) -> (before: [UUID], after: [UUID]) {
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(filterUnusedTanks: firstFilter))
+        let before = dive.tanks.map(\.id)
+        DiveImportMapper.merge(data, into: dive, context: context(filterUnusedTanks: mergeFilter))
+        return (before, dive.tanks.map(\.id))
+    }
+
+    // MARK: Computer name and import settings
+
+    @Test func newDiveTakesTheCatalogNameThenTheConnectedNameThenTheDefault() {
+        let data = threeMixDive()
+        let catalog = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                                context: context(catalogName: "Aqualung i300C", connectedName: "FH021857"))
+        #expect(catalog.computerName == "Aqualung i300C")
+        let connected = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                                  context: context(connectedName: "FH021857"))
+        #expect(connected.computerName == "FH021857")
+        let unknown = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                                context: context())
+        #expect(unknown.computerName == NSLocalizedString("Dive Computer", bundle: Bundle.forAppLanguage(), value: "Dive Computer",
+                                                          comment: "Fallback name for an unknown Bluetooth dive computer"))
+        // A translated name, never a raw catalog key.
+        #expect(!unknown.computerName.isEmpty && !unknown.computerName.contains("."))
+    }
+
+    @Test func newDiveStoresTheSerialAndTheWeightUnitFromTheContext() {
+        let dive = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 7, previousDiveEndTime: nil, diverName: "Test Diver",
+                                             context: context(weightUnit: "kg"))
+        #expect(dive.computerSerialNumber == "00001234")
+        #expect(dive.importWeightUnit == "kg")
+        #expect(dive.diveNumber == 7 && dive.diverName == "Test Diver")
+        #expect(dive.sourceImport == "Bluetooth")
+    }
+
+    @Test func mergeKeepsTheExistingNameWhenNoneIsKnown() {
+        let dive = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(catalogName: "Aqualung i300C"))
+        dive.computerName = "My i300C"
+        DiveImportMapper.merge(threeMixDive(), into: dive, context: context())
+        #expect(dive.computerName == "My i300C")
+        DiveImportMapper.merge(threeMixDive(), into: dive, context: context(connectedName: "FH021857"))
+        #expect(dive.computerName == "FH021857")
+        DiveImportMapper.merge(threeMixDive(), into: dive, context: context(catalogName: "Aqualung i300C", connectedName: "FH021857"))
+        #expect(dive.computerName == "Aqualung i300C")
+    }
+
+    // MARK: Filter unused tanks
+
+    @Test func unusedGasMixesAreDroppedOnlyWhenTheSettingIsOn() {
+        let all = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                            context: context(filterUnusedTanks: false))
+        #expect(all.tanks.map(\.o2) == [0.32, 0.21, 0.50])
+        let used = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(filterUnusedTanks: true))
+        #expect(used.tanks.map(\.o2) == [0.32])
+    }
+
+    @Test func theFilterAppliesOnlyToFamiliesWhoseParserKeepsUnusedMixes() {
+        // Shearwater's parser already reports only the gases in use: nothing is dropped.
+        let shearwater = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                                   context: context(family: .shearwaterPetrel, filterUnusedTanks: true))
+        #expect(shearwater.tanks.count == 3)
+        // An unknown family is filtered, as before.
+        let unknown = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                                context: context(family: nil, filterUnusedTanks: true))
+        #expect(unknown.tanks.count == 1)
+    }
+
+    @Test func mergeAppliesTheFilterToo() {
+        let dive = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(filterUnusedTanks: false))
+        #expect(dive.tanks.count == 3)
+        DiveImportMapper.merge(threeMixDive(), into: dive, context: context(filterUnusedTanks: true))
+        #expect(dive.tanks.map(\.o2) == [0.32])
+    }
+
+    // MARK: Merge into an edited dive
+
+    @Test func mergeKeepsWhatTheUserEnteredAndTheComputerDoesNotProvide() {
+        let dive = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        dive.tanks = dive.tanks.map {
+            TankData(o2: $0.o2, he: $0.he, volume: 11.1, workingPressure: 207, tankMaterial: "Aluminum", tankType: "Single")
+        }
+        let ids = dive.tanks.map(\.id)
+        dive.airTemperature = 25
+        dive.surfacePressure = 0.98
+        dive.notes = "Great visibility"
+        dive.rating = 4
+
+        var redownload = threeMixDive()
+        redownload.measuredSurfaceTemperature = 18      // must not replace the user's air temperature
+        redownload.atmospheric = nil                    // no reading: the stored one is kept
+        DiveImportMapper.merge(redownload, into: dive, context: context())
+
+        #expect(dive.tanks.count == 3)
+        #expect(dive.tanks.allSatisfy {
+            $0.volume == 11.1 && $0.workingPressure == 207 && $0.tankMaterial == "Aluminum" && $0.tankType == "Single"
+        })
+        #expect(dive.tanks.map(\.id) == ids)
+        #expect(dive.airTemperature == 25)
+        #expect(dive.surfacePressure == 0.98)
+        #expect(dive.notes == "Great visibility" && dive.rating == 4)
+    }
+
+    // MARK: Tank identity on a re-download
+
+    @Test func mergeKeepsTankIDsForComputerTanks() {
+        var data = threeMixDive()
+        data.tanks = [DiveData.Tank(volume: 11.1, workingPressure: 207, beginPressure: 200, endPressure: 60,
+                                    gasMix: 0, usage: .none)]
+        let ids = merged(data)
+        #expect(!ids.before.isEmpty && ids.after == ids.before)
+    }
+
+    @Test func mergeKeepsTheTankIDForTankPressureOnly() {
+        var data = threeMixDive()
+        data.gasMixes = nil
+        data.tankPressure = [200, 180, 120]
+        let ids = merged(data)
+        #expect(ids.before.count == 1 && ids.after == ids.before)
+    }
+
+    @Test func mergeKeepsTankIDsForGasMixesOnly() {
+        let ids = merged(threeMixDive())
+        #expect(ids.before.count == 3 && ids.after == ids.before)
+    }
+
+    @Test func mergeKeepsTheTankIDForASingleNonAirGas() {
+        var data = threeMixDive()
+        data.gasMixes = nil
+        data.gasMix = 32
+        let ids = merged(data)
+        #expect(ids.before.count == 1 && ids.after == ids.before)
+    }
+
+    /// The id follows the tank at the same position, like the user's tank details: switching
+    /// "Filter unused tanks" between downloads keeps the first tank's id and gives any added
+    /// tank a new one.
+    @Test func mergeKeepsIDsByPositionWhenTheTankCountChanges() {
+        let fewer = merged(threeMixDive(), firstFilter: false, mergeFilter: true)
+        #expect(fewer.before.count == 3 && fewer.after == [fewer.before[0]])
+        let more = merged(threeMixDive(), firstFilter: true, mergeFilter: false)
+        #expect(more.before.count == 1 && more.after.count == 3 && more.after[0] == more.before[0])
+        #expect(Set(more.after).count == 3)
+    }
+
+    // MARK: Gas mixes that could not be read
+
+    /// Mix 1 of three could not be read: `gasMixes` holds field mixes 0 and 2. A sample on
+    /// field mix 2 must reach the 50 % mix, never another one.
+    @Test func gasReferencesSkipAMixThatCouldNotBeRead() {
+        var data = threeMixDive()
+        data.gasMixes = [GasMix(helium: 0, oxygen: 0.32, nitrogen: 0.68, usage: .none),
+                         GasMix(helium: 0, oxygen: 0.50, nitrogen: 0.50, usage: .none)]
+        data.gasMixFieldIndices = [0, 2]
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 600, depth: 18, currentGas: 2),
+                        ProfileSample(time: 1200, depth: 10, currentGas: 1),   // the unreadable mix
+                        ProfileSample(time: 2400, depth: 0)]
+        data.gasMix = 2
+        let byPosition = DiveImportMapper.gasMixReferencesByPosition(data)
+        #expect(byPosition.profile.map(\.currentGas) == [0, 1, nil, nil])
+        #expect(byPosition.gasMix == 1)
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.tanks.map(\.o2) == [0.32, 0.50])
+        // The stored profile follows the translation: field mix 2 is tank 1, the unreadable
+        // mix is no tank (without it, field mix 1 would land on the 50 % tank).
+        #expect(dive.profileSamples.map(\.currentGas) == [0, 1, nil, nil])
+        // A re-download merges through the same translation.
+        DiveImportMapper.merge(data, into: dive, context: context())
+        #expect(dive.tanks.map(\.o2) == [0.32, 0.50])
+        #expect(dive.profileSamples.map(\.currentGas) == [0, 1, nil, nil])
+    }
+
+    /// A tank on the unreadable mix gets the no-gas-data default, never another mix's gas.
+    @Test func aTankOnAnUnreadableMixBorrowsNoOtherGas() {
+        var data = threeMixDive()
+        data.gasMixes = [GasMix(helium: 0, oxygen: 0.32, nitrogen: 0.68, usage: .none),
+                         GasMix(helium: 0, oxygen: 0.50, nitrogen: 0.50, usage: .none)]
+        data.gasMixFieldIndices = [0, 2]
+        data.tanks = (0..<3).map {
+            DiveData.Tank(volume: 11.1, workingPressure: 207, beginPressure: 200, endPressure: 60, gasMix: $0, usage: .none)
+        }
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.tanks.map(\.o2) == [0.32, 0.21, 0.50])
+    }
+
+    /// A switch to the unreadable mix ends the previous tank's usage window (its RMV/SAC
+    /// would otherwise be spread over time it was not breathed).
+    @Test func aSwitchToAnUnreadableMixEndsTheUsageWindow() {
+        var data = threeMixDive()
+        data.gasMixes = [GasMix(helium: 0, oxygen: 0.32, nitrogen: 0.68, usage: .none),
+                         GasMix(helium: 0, oxygen: 0.50, nitrogen: 0.50, usage: .none)]
+        data.gasMixFieldIndices = [0, 2]
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 600, depth: 18, events: [.gasChange], currentGas: 2),
+                        ProfileSample(time: 1200, depth: 10, events: [.gasChange], currentGas: 1),
+                        ProfileSample(time: 2400, depth: 0)]
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.tanks.count == 2)
+        #expect(dive.tanks[0].usageStartTime == 0 && dive.tanks[0].usageEndTime == 600)
+        #expect(dive.tanks[1].usageStartTime == 600 && dive.tanks[1].usageEndTime == 1200)
+    }
+
+    /// Every mix read: a gas change without a gas is ignored, as before (the window of the
+    /// starting tank still covers the whole dive).
+    @Test func aSwitchWithoutAGasChangesNothingWhenEveryMixWasRead() {
+        var data = threeMixDive()
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 1200, depth: 10, events: [.gasChange]),
+                        ProfileSample(time: 2400, depth: 0)]
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.tanks[0].usageStartTime == 0 && dive.tanks[0].usageEndTime == 2400)
+    }
+
+    @Test func gasReferencesAreUnchangedWhenEveryMixWasRead() {
+        let data = threeMixDive()
+        let same = DiveImportMapper.gasMixReferencesByPosition(data)
+        #expect(same.profile.map(\.currentGas) == data.profile.map(\.currentGas))
+        #expect(same.gasMix == data.gasMix)
+    }
+}

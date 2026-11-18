@@ -33,6 +33,10 @@ struct ChartInterpolatedPoint {
     /// CCR setpoint held from the nearest earlier real sample — never interpolated, and nil
     /// where that sample reported none (e.g. on open-circuit bailout).
     let setpoint: Double?
+    /// Time to surface and remaining bottom time (minutes) held from the nearest earlier
+    /// real sample — never interpolated; nil where that sample reported none.
+    let tts: Double?
+    let rbt: Double?
     let ascentSpeed: Double?
     /// GF99 and Surface GF calculated by BlueDive's ZHL-16C tissue model at the cursor time
     /// (`BuhlmannProfile`); nil when the dive's gases do not allow the calculation.
@@ -85,7 +89,7 @@ struct ChartLineVisibility {
 }
 
 /// The chart's line selection, shared by every dive chart (dive detail, its Samples tab and,
-/// on macOS, the dive list's profile preview): a chip toggled in one chart updates the others
+/// on macOS and iPad, the dive list's profile preview): a chip toggled in one chart updates the others
 /// at once. Loaded once from UserDefaults; each change is persisted with `save()`.
 @Observable
 final class SharedChartLineVisibility {
@@ -262,7 +266,7 @@ fileprivate func ppo2Dash(forSensorAtPosition position: Int) -> [CGFloat] {
 /// a ceiling greater than zero. The two signals are unioned, not intersected, because the
 /// importers disagree about which one they populate: `GarminFITParser` appends `.decoStop`
 /// with a nil ceiling when the watch stops reporting `nextStopDepth`, while
-/// `BluetoothScannerView+ProfileProcessing` sets both together. Unioning yields the
+/// `DiveImportMapper` (Bluetooth) sets both together. Unioning yields the
 /// *latest* possible cutoff, which makes every caller as conservative as possible — a
 /// diamond wrongly hidden is far worse than one wrongly kept.
 ///
@@ -559,16 +563,15 @@ private struct StaticChartLayer: View, Equatable {
     let tissueProfile: BuhlmannProfile?
     /// Changes each time `tissueProfile` is rebuilt, so the Equatable check redraws the lines.
     let tissueProfileVersion: Int
-    #if os(macOS)
-    /// How the plot height follows the window: the dive detail view's rule by default, a
-    /// lower one for the dive list's profile preview.
+    /// How the plot height is set: the dive detail view's rule (`.detail` by default, or
+    /// `.wideDetail` in a wide window), or the dive list's profile preview filling its pane.
     var heightRule: ChartHeightRule = .detail
-    #endif
+    /// Told the plot's height when it fills its pane (`heightRule.fills`), so the dive list's
+    /// preview can keep room for the chips and legend around it. Not compared by `==`.
+    var onPlotHeightChange: ((CGFloat) -> Void)? = nil
 
     static func == (lhs: StaticChartLayer, rhs: StaticChartLayer) -> Bool {
-        #if os(macOS)
         guard lhs.heightRule == rhs.heightRule else { return false }
-        #endif
         return lhs.dive.id == rhs.dive.id &&
         lhs.profileID == rhs.profileID &&
         lhs.tissueProfileVersion == rhs.tissueProfileVersion &&
@@ -724,13 +727,10 @@ private struct StaticChartLayer: View, Equatable {
 
     /// Most depth intervals the chart shows, so its gridlines (and the right-axis labels
     /// on them) stay readable: 10 on the dive detail chart (about 28 pt apart at its
-    /// 300 pt minimum height), 5 on the shorter macOS dive-list preview.
+    /// 300 pt minimum height), 5 on the dive-list preview (macOS, wide iPad) (its plot can be as low as
+    /// 120 pt).
     private var maxDepthIntervals: Double {
-        #if os(macOS)
-        return heightRule == .listPreview ? 5 : 10
-        #else
-        return 10
-        #endif
+        heightRule == .listPreview ? 5 : 10
     }
 
     /// Depth below the surface line that the plot shows on a grid `step` apart (display
@@ -1045,11 +1045,7 @@ private struct StaticChartLayer: View, Equatable {
                 }
             }
         }
-        #if os(macOS)
-        .macChartHeight(heightRule)
-        #else
-        .frame(height: 300)
-        #endif
+        .chartHeight(heightRule, onPlotHeightChange: onPlotHeightChange)
     }
 
     // MARK: - Gas change markers
@@ -1958,22 +1954,33 @@ struct MetricLegendRow: View {
     }
 }
 
-#if os(macOS)
-// MARK: - Chart Height (macOS)
+// MARK: - Chart Height
 
-/// Mac windows are tall and resizable: the plot grows with the visible height of its container
-/// (the enclosing scroll view, or the window), as a fraction of it clamped to a range.
+/// How the plot height is set: fixed (`detail`, 300 pt: iPhone, narrow iPad window), growing
+/// with the visible height of the enclosing scroll view as a fraction clamped to a range
+/// (`wideDetail`: the dive page in a wide window, macOS and iPad), or filling its pane
+/// (`listPreview`: the dive list's profile preview, sized by its divider).
 struct ChartHeightRule: Equatable {
     let fraction: CGFloat
     let minHeight: CGFloat
     let maxHeight: CGFloat
+    /// The plot takes all the height its parent leaves it (at least `minHeight`)
+    /// instead of a fraction of its container.
+    var fills = false
+    /// The plot takes `fraction` of the visible height of its scroll view (between `minHeight`
+    /// and `maxHeight`) and follows the window as it is resized; otherwise it is `minHeight`.
+    var growsWithWindow = false
 
-    /// Dive detail view: 45 % of the visible height, never below the iOS height (300 pt)
-    /// or above 600 pt.
-    static let detail = ChartHeightRule(fraction: 0.45, minHeight: 300, maxHeight: 600)
-    /// Profile preview above the dive list: lower, because the panel shares the window with
-    /// the list and cannot scroll out of its way.
-    static let listPreview = ChartHeightRule(fraction: 0.30, minHeight: 160, maxHeight: 400)
+    /// Dive detail view on iPhone and in a narrow iPad window: a fixed 300 pt.
+    static let detail = ChartHeightRule(fraction: 1, minHeight: 300, maxHeight: 300)
+    /// Dive detail view in a wide window (macOS; iPad, see `DiveDetailView.usesTwoColumnCards`):
+    /// 45 % of the visible height, never below the narrow height (300 pt) or above 600 pt.
+    static let wideDetail = ChartHeightRule(fraction: 0.45, minHeight: 300, maxHeight: 600,
+                                            growsWithWindow: true)
+    /// Profile preview above the dive list, whose height the user sets with the divider below
+    /// it: the plot fills what the chips and legend leave of the pane, so the gap above the
+    /// divider stays the same wherever it is.
+    static let listPreview = ChartHeightRule(fraction: 1, minHeight: 120, maxHeight: .infinity, fills: true)
 
     func height(for containerHeight: CGFloat) -> CGFloat {
         min(max(containerHeight * fraction, minHeight), maxHeight)
@@ -1981,13 +1988,21 @@ struct ChartHeightRule: Equatable {
 }
 
 private extension View {
-    func macChartHeight(_ rule: ChartHeightRule) -> some View {
-        containerRelativeFrame(.vertical) { height, _ in
-            rule.height(for: height)
+    @ViewBuilder
+    func chartHeight(_ rule: ChartHeightRule, onPlotHeightChange: ((CGFloat) -> Void)? = nil) -> some View {
+        if rule.fills {
+            frame(minHeight: rule.minHeight, maxHeight: .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onPlotHeightChange?($0) }
+        } else if rule.growsWithWindow {
+            containerRelativeFrame(.vertical) { height, _ in
+                rule.height(for: height)
+            }
+        } else {
+            // A fixed plot height (the rule's minimum, 300 pt for the dive detail chart).
+            frame(height: rule.minHeight)
         }
     }
 }
-#endif
 
 // MARK: - Profile Photo Marker
 
@@ -2007,10 +2022,13 @@ private struct ProfilePhotoMarker: Identifiable {
 /// Graphique unifié interactif pour le profil de plongée - VERSION OPTIMISÉE
 struct UnifiedDiveChartOptimized: View {
     let dive: Dive
-    #if os(macOS)
-    /// How the plot height follows the window (`.listPreview` in the dive list's preview).
+    /// How the plot height is set: the dive detail chart's (`.detail`, or `.wideDetail` in a
+    /// wide window), or the pane above the dive list (`.listPreview`, sized by its divider).
     var chartHeightRule: ChartHeightRule = .detail
-    #endif
+    /// Told the plot's height when it fills its pane (see `StaticChartLayer.onPlotHeightChange`).
+    var onPlotHeightChange: ((CGFloat) -> Void)? = nil
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    private var wideWindow = WideWindowLayout()
     @State private var sharedVisibility = SharedChartLineVisibility.shared
     /// The shared line selection (see `SharedChartLineVisibility`), so every chart on screen
     /// shows the same chips and lines.
@@ -2028,6 +2046,8 @@ struct UnifiedDiveChartOptimized: View {
     @State private var plotOriginX: CGFloat = 0     // leading edge of the plot area
     @State private var plotWidth: CGFloat = 1       // width of the plot area only
     @State private var lastTooltipUpdate: Date = .distantPast
+    /// Widest tooltip columns of the current drag, so the card never narrows while scrubbing.
+    @State private var tooltipWidthMemory = TooltipWidthMemory()
     @State private var cachedInterpolatedPoint: ChartInterpolatedPoint? = nil
     /// Pre-built per-sample PPO₂ map (UUID → value). Rebuilt once on toggle or dive change.
     @State private var cachedPPO2BySampleID: [UUID: Double] = [:]
@@ -2125,6 +2145,9 @@ struct UnifiedDiveChartOptimized: View {
         VStack(spacing: 16) {
             toggleControls
             chartView
+                // Above the legend, so a tooltip taller than a short plot covers it instead of
+                // being drawn under it.
+                .zIndex(1)
 
             if !dive.profileSamples.isEmpty {
                 legendView
@@ -2477,48 +2500,30 @@ struct UnifiedDiveChartOptimized: View {
 
     private var toggleControls: some View {
         VStack(spacing: 12) {
-            #if os(macOS)
-            // The Mac window is usually wide enough for all the chips on one row;
-            // fall back to the two iOS rows when it is not. ViewThatFits measures
-            // the chips at their full-label width, so the single row is only used
-            // when no chip would have to switch to its short label.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    primaryToggleChips()
-                    secondaryToggleChips
-                    photosChip(showsLabel: true)
-                }
-                VStack(spacing: 12) {
-                    HStack(spacing: 12) { primaryToggleChips() }
+            if usesWideChartLayout {
+                // A wide window (macOS, iPad at regular width) is usually wide enough for all
+                // the chips on one row; else two rows with their full labels; the compact rows
+                // (short labels) are the last resort. ViewThatFits measures the chips at their
+                // full-label width, so the single row is only used when no chip would have to
+                // switch to its short label.
+                ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) {
+                        primaryToggleChips()
                         secondaryToggleChips
                         photosChip(showsLabel: true)
                     }
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) { primaryToggleChips() }
+                        HStack(spacing: 12) {
+                            secondaryToggleChips
+                            photosChip(showsLabel: true)
+                        }
+                    }
+                    compactToggleRows
                 }
+            } else {
+                compactToggleRows
             }
-            #else
-            // Full labels when the row has room; else Temperature by its short label with GF
-            // still labelled; GF icon only where even that does not fit (a small iPhone,
-            // a long language, large text).
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { primaryToggleChips() }
-                HStack(spacing: 12) { primaryToggleChips(shortLabels: true) }
-                HStack(spacing: 12) { primaryToggleChips(shortLabels: true, gfShowsLabel: false) }
-            }
-
-            // Labelled like the other chips when the row has room; icon only where a fourth
-            // labelled chip would not fit (a small iPhone).
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    secondaryToggleChips
-                    photosChip(showsLabel: true)
-                }
-                HStack(spacing: 12) {
-                    secondaryToggleChips
-                    photosChip(showsLabel: false)
-                }
-            }
-            #endif
             // Preceded by a swatch of the depth line (same colour and width as `depthMarks`),
             // drawn like the legend's line swatches; decorative, the text already says it.
             HStack(spacing: 6) {
@@ -2537,6 +2542,31 @@ struct UnifiedDiveChartOptimized: View {
         .padding(.horizontal)
     }
 
+    /// The chips in two rows (iPhone, iPad in a narrow window): full labels when the row has
+    /// room; else Temperature by its short label with GF still labelled; GF icon only where even
+    /// that does not fit (a small iPhone, a long language, large text). The second row's chips are
+    /// labelled like the others when it has room, icon only where a fourth labelled chip would
+    /// not fit.
+    private var compactToggleRows: some View {
+        VStack(spacing: 12) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { primaryToggleChips() }
+                HStack(spacing: 12) { primaryToggleChips(shortLabels: true) }
+                HStack(spacing: 12) { primaryToggleChips(shortLabels: true, gfShowsLabel: false) }
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    secondaryToggleChips
+                    photosChip(showsLabel: true)
+                }
+                HStack(spacing: 12) {
+                    secondaryToggleChips
+                    photosChip(showsLabel: false)
+                }
+            }
+        }
+    }
+
     // MARK: - Chart View
 
     private var chartView: some View {
@@ -2550,11 +2580,7 @@ struct UnifiedDiveChartOptimized: View {
         let deepestSampleDepth = dive.displayProfileDepth(dive.profileSamples.lazy.map(\.depth).max() ?? 0)
         let depthBase = max(dive.displayMaxDepth, deepestSampleDepth)
 
-        #if os(macOS)
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, tissueProfile: tissueProfile, tissueProfileVersion: gfCache.version, heightRule: chartHeightRule)
-        #else
-        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, tissueProfile: tissueProfile, tissueProfileVersion: gfCache.version)
-        #endif
+        let layer = StaticChartLayer(dive: dive, visibility: visibility, xMax: xMax, depthBase: depthBase, prefs: prefs, tanksO2Hash: tanksO2Hash, unitsHash: unitsHash, hideClearedDecoStops: prefs.hideClearedDecoStops, profileID: profileCacheID, tissueProfile: tissueProfile, tissueProfileVersion: gfCache.version, heightRule: chartHeightRule, onPlotHeightChange: onPlotHeightChange)
         return layer
             .equatable()
             // chartOverlay gives us a ChartProxy so we can read the exact plot-area
@@ -2588,6 +2614,9 @@ struct UnifiedDiveChartOptimized: View {
                             .gesture(
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { value in
+                                        // A new drag starts with the tooltip at its own width,
+                                        // also after a cancelled drag (no `onEnded`).
+                                        tooltipWidthMemory.track(dragStartingAt: value.startLocation)
                                         // Clamp within the plot area, convert to data time.
                                         let localX = (value.location.x - origin)
                                             .clamped(to: 0...width)
@@ -2629,36 +2658,28 @@ struct UnifiedDiveChartOptimized: View {
                         .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
 
                         // ── Tooltip — last, so it is drawn over the photo markers while scrubbing.
+                        // Centred on the cursor, kept 8 pt inside the plot's edges.
                         if cursorX != nil, let point = cachedInterpolatedPoint {
-                            ChartTooltipView(
-                                point: point,
-                                visibility: visibility,
-                                dive: dive,
-                                decoStopEntries: cachedDecoStopEntries
-                            )
-                            .offset(x: tooltipOffsetX(
-                                screenX: cursorScreenX,
-                                plotOriginX: origin,
-                                plotWidth: width
-                            ))
+                            TooltipPlacementLayout(centerX: cursorScreenX,
+                                                   minX: origin + 8, maxX: origin + width - 8) {
+                                ChartTooltipView(
+                                    point: point,
+                                    visibility: visibility,
+                                    dive: dive,
+                                    decoStopEntries: cachedDecoStopEntries,
+                                    // The plot's size, less the 8 pt margin on each side.
+                                    maxHeight: height - 16,
+                                    maxWidth: width - 16,
+                                    widthMemory: tooltipWidthMemory
+                                )
+                            }
+                            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
                             .offset(y: 8)
                             .allowsHitTesting(false)
                         }
                     }
                 }
             }
-    }
-
-    // MARK: - Tooltip Helpers
-
-    /// Keeps the tooltip card within the plot area horizontally.
-    private func tooltipOffsetX(screenX: CGFloat, plotOriginX: CGFloat, plotWidth: CGFloat) -> CGFloat {
-        let tooltipWidth: CGFloat = 200
-        let padding: CGFloat = 8
-        let x = screenX - tooltipWidth / 2
-        let minX = plotOriginX + padding
-        let maxX = plotOriginX + plotWidth - tooltipWidth - padding
-        return x.clamped(to: minX...maxX)
     }
 
     // MARK: - Pressure Cache
@@ -2866,6 +2887,8 @@ struct UnifiedDiveChartOptimized: View {
             currentGas: gasSource.currentGas,
             // Step-hold from the earlier real sample, like the ceiling.
             setpoint: prev.setpoint,
+            tts: prev.tts,
+            rbt: prev.rbt,
             ascentSpeed: ascentSpeed,
             gradientFactors: tissueProfile?.values(atMinutes: cursorTime)
         )
@@ -2886,6 +2909,8 @@ struct UnifiedDiveChartOptimized: View {
             events: sample.events,
             currentGas: sample.currentGas,
             setpoint: sample.setpoint,
+            tts: sample.tts,
+            rbt: sample.rbt,
             ascentSpeed: ascentSpeed,
             gradientFactors: tissueProfile?.values(atMinutes: cursorTime)
         )
@@ -2924,34 +2949,42 @@ struct UnifiedDiveChartOptimized: View {
 
     // MARK: - Legend View
 
+    /// Whether the chips and the legend use the wide-window layout (one row or line, with
+    /// fallbacks): on macOS, and on iPad in a wide window (regular width). iPhone, and iPad in a
+    /// narrow window, keep the two chip rows and the stacked legend.
+    private var usesWideChartLayout: Bool {
+        wideWindow.isActive
+    }
+
     @ViewBuilder
     private var legendView: some View {
-        #if os(macOS)
-        // The Mac window is usually wide enough for the whole legend on one line.
-        // When it is not (narrow window, or many tank-pressure / PPO₂-sensor entries),
-        // split the shown groups evenly over two lines; the stacked iOS layout is the
-        // last resort for very narrow windows.
-        let groups = shownLegendGroups
-        let firstLineCount = (groups.count + 1) / 2
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                legendTitle
-                legendLine(groups)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                legendTitle
-                VStack(alignment: .leading, spacing: 6) {
-                    legendLine(Array(groups.prefix(firstLineCount)))
-                    legendLine(Array(groups.dropFirst(firstLineCount)))
+        if usesWideChartLayout {
+            // A wide window is usually wide enough for the whole legend on one line.
+            // When it is not (narrower window, or many tank-pressure / PPO₂-sensor entries),
+            // split the shown groups evenly over two lines; the stacked layout is the
+            // last resort for very narrow windows.
+            let groups = shownLegendGroups
+            let firstLineCount = (groups.count + 1) / 2
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    legendTitle
+                    legendLine(groups)
                 }
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    legendTitle
+                    // The shorter line centred under the longer one, as the stacked legend's.
+                    VStack(alignment: .center, spacing: 6) {
+                        legendLine(Array(groups.prefix(firstLineCount)))
+                        legendLine(Array(groups.dropFirst(firstLineCount)))
+                    }
+                }
+                stackedLegend
             }
-            stackedLegend
-        }
-        .padding(.horizontal)
-        #else
-        stackedLegend
             .padding(.horizontal)
-        #endif
+        } else {
+            stackedLegend
+                .padding(.horizontal)
+        }
     }
 
     private var legendTitle: some View {
@@ -2961,12 +2994,20 @@ struct UnifiedDiveChartOptimized: View {
             .foregroundStyle(.secondary)
     }
 
+    /// Whether the stacked legend's lines are each centred, like the legend's other layouts
+    /// (macOS, iPad), rather than spanning the full width from the leading edge (iPhone).
+    private var centersStackedLegend: Bool {
+        WideWindowLayout.isSupportedOnDevice
+    }
+
     /// Title above the legend groups, one group per line.
     private var stackedLegend: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Each line centred on macOS and iPad, at the leading edge on iPhone.
+        let alignment: HorizontalAlignment = centersStackedLegend ? .center : .leading
+        return VStack(alignment: alignment, spacing: 8) {
             legendTitle
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: alignment, spacing: 6) {
                 if showsDepthLegend { depthLegendGroup }
                 if showsTemperatureLegend { temperatureLegendGroup }
                 if showsPressureLegend { pressureLegendGroup(wrapping: true) }
@@ -2980,9 +3021,8 @@ struct UnifiedDiveChartOptimized: View {
         }
     }
 
-    #if os(macOS)
     /// Indices (0 = depth … 7 = gas switch, 8 = setpoint, the stacked legend's order) of the legend
-    /// groups currently shown (macOS only).
+    /// groups currently shown (the wide legend's lines).
     private var shownLegendGroups: [Int] {
         let shown = [showsDepthLegend, showsTemperatureLegend, showsPressureLegend,
                      showsNDLLegend, showsGFLegend, showsPPO2Legend, showsDecoLegend, hasGasChangeData,
@@ -2990,7 +3030,7 @@ struct UnifiedDiveChartOptimized: View {
         return shown.indices.filter { shown[$0] }
     }
 
-    /// The given legend groups side by side, separated by a vertical line (macOS only).
+    /// The given legend groups side by side, separated by a vertical line (wide legend).
     private func legendLine(_ groups: [Int]) -> some View {
         HStack(spacing: 8) {
             ForEach(Array(groups.enumerated()), id: \.element) { position, group in
@@ -3023,7 +3063,6 @@ struct UnifiedDiveChartOptimized: View {
             .frame(width: 1.5, height: 14)
             .padding(.horizontal, 4)
     }
-    #endif
 
     // MARK: Legend Groups
 
@@ -3042,8 +3081,8 @@ struct UnifiedDiveChartOptimized: View {
     }
 
     /// False for a CCR dive with setpoints but no PPO₂: it draws no PPO₂ trace (only the
-    /// setpoint line, in its own legend entry), so the PPO₂ group has no row — and, on macOS,
-    /// no separator.
+    /// setpoint line, in its own legend entry), so the PPO₂ group has no row — and, in the wide
+    /// legend (macOS, iPad in a wide window), no separator.
     private var ppo2LegendHasRow: Bool {
         !hasSetpointData || hasSensorPPO2Data || ppo2LegendRange != nil
     }
@@ -3069,7 +3108,7 @@ struct UnifiedDiveChartOptimized: View {
         let tankIndices = chartTankIndicesForLegend
         if tankIndices.count > 1 {
             if wrapping {
-                WrappingChipLayout(spacing: 8) { tankPressureLegendRows(tankIndices) }
+                WrappingChipLayout(spacing: 8, fillsProposedWidth: !centersStackedLegend, centersLines: centersStackedLegend) { tankPressureLegendRows(tankIndices) }
             } else {
                 tankPressureLegendRows(tankIndices)
             }
@@ -3094,7 +3133,7 @@ struct UnifiedDiveChartOptimized: View {
     @ViewBuilder
     private func gfLegendGroup(wrapping: Bool) -> some View {
         if wrapping {
-            WrappingChipLayout(spacing: 8) { gfLegendEntries }
+            WrappingChipLayout(spacing: 8, fillsProposedWidth: !centersStackedLegend, centersLines: centersStackedLegend) { gfLegendEntries }
         } else {
             HStack(spacing: 8) { gfLegendEntries }
         }
@@ -3157,7 +3196,7 @@ struct UnifiedDiveChartOptimized: View {
             // The group is shown only when it has a row (`ppo2LegendHasRow`).
             MetricLegendRow(color: .indigo, label: "PPO₂", range: ppo2RangeText(ppo2LegendRange))
         } else if wrapping {
-            WrappingChipLayout(spacing: 8) { sensorPPO2LegendRows(sensorIndices) }
+            WrappingChipLayout(spacing: 8, fillsProposedWidth: !centersStackedLegend, centersLines: centersStackedLegend) { sensorPPO2LegendRows(sensorIndices) }
         } else {
             sensorPPO2LegendRows(sensorIndices)
         }
@@ -3216,7 +3255,7 @@ struct UnifiedDiveChartOptimized: View {
     @ViewBuilder
     private func setpointLegendGroup(wrapping: Bool) -> some View {
         if wrapping {
-            WrappingChipLayout(spacing: 8) { setpointLegendEntries }
+            WrappingChipLayout(spacing: 8, fillsProposedWidth: !centersStackedLegend, centersLines: centersStackedLegend) { setpointLegendEntries }
         } else {
             HStack(spacing: 8) { setpointLegendEntries }
         }
@@ -3385,6 +3424,19 @@ struct ChartTooltipView: View {
     let visibility: ChartLineVisibility
     let dive: Dive
     let decoStopEntries: [(stop: DecoStop, entryTime: Double)]
+    /// Height the card may take (the plot's, less its margins); the rows are laid out in more
+    /// columns when one column would be taller.
+    var maxHeight: CGFloat = .infinity
+    /// Width the card may take (the plot's, less its margins); no column is added beyond it.
+    var maxWidth: CGFloat = .infinity
+    /// Widest columns of the current drag (see `TooltipWidthMemory`); nil, each column is as
+    /// wide as its rows.
+    var widthMemory: TooltipWidthMemory? = nil
+
+    /// The card's vertical padding (top and bottom).
+    private static let verticalPadding: CGFloat = 8
+    /// The card's horizontal padding (leading and trailing).
+    private static let horizontalPadding: CGFloat = 10
 
     @State private var prefs = UserPreferences.shared
 
@@ -3507,14 +3559,18 @@ struct ChartTooltipView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        TooltipColumnsLayout(maxHeight: maxHeight - 2 * Self.verticalPadding,
+                             maxWidth: maxWidth - 2 * Self.horizontalPadding,
+                             widthMemory: widthMemory) {
             // Time header
             Text(timeLabel)
                 .font(.system(.caption2, design: .monospaced))
                 .fontWeight(.bold)
                 .foregroundStyle(.white.opacity(0.6))
+                .layoutValue(key: TooltipSpansColumns.self, value: true)
 
             Divider().background(Color.white.opacity(0.25))
+                .layoutValue(key: TooltipSpansColumns.self, value: true)
 
             // Depth — always shown
             TooltipRow(icon: "arrow.down.to.line", color: .cyan, label: depthLabel)
@@ -3602,10 +3658,18 @@ struct ChartTooltipView: View {
             if let setpoint = point.setpoint {
                 TooltipRow(icon: "scope", color: Color.ccrSetpoint, label: String(format: NSLocalizedString("Setpoint %@", bundle: .forAppLanguage(), value: "Setpoint %@", comment: "Dive chart tooltip row: CCR setpoint in effect; %@ is the value with unit, e.g. '1.30 bar'"), setpoint.localizedString(decimals: 2, minDecimals: 2) + " bar"))
             }
+
+            // Time to surface — always shown when the dive computer reported it (no chart chip).
+            // Remaining bottom time is computed from the gas consumption and the tank pressure
+            // (air integration), so it goes with the pressure: shown only when Pressure is on.
+            // In their own view to keep this body's type small.
+            let rbt = visibility.showPressure ? point.rbt : nil
+            if point.tts != nil || rbt != nil {
+                TooltipTimeRows(tts: point.tts, rbt: rbt)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(width: 200, alignment: .leading)
+        .padding(.horizontal, Self.horizontalPadding)
+        .padding(.vertical, Self.verticalPadding)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.black.opacity(0.75))
@@ -3619,10 +3683,190 @@ struct ChartTooltipView: View {
 
 }
 
+/// Marks a view of `TooltipColumnsLayout` that spans all its columns (the time header and its
+/// divider) instead of being one of its rows.
+private nonisolated struct TooltipSpansColumns: LayoutValueKey {
+    static let defaultValue = false
+}
+
+/// The rows of `ChartTooltipView` below its header, in one column when they fit `maxHeight`,
+/// else in more columns, each filled top to bottom in reading order, so the card stays within
+/// a short plot (e.g. the profile preview above the dive list). A column holds at least
+/// `minimumRowsPerColumn` rows, and no column is added that would make the card wider than
+/// `maxWidth` (large text sizes, long translations): the columns then take more rows instead.
+/// In both cases the card can run past the plot's bottom edge (over the legend). The header
+/// and divider (`TooltipSpansColumns`) span every column.
+private struct TooltipColumnsLayout: Layout {
+    let maxHeight: CGFloat
+    let maxWidth: CGFloat
+    let widthMemory: TooltipWidthMemory?
+    private let spacing: CGFloat = 5
+    private let columnSpacing: CGFloat = 14
+    /// Rows a column holds even when the plot is shorter (the shortest profile preview fits
+    /// about three), so a busy tooltip does not spread over many narrow columns; the card then
+    /// runs past the plot's bottom edge, over the legend.
+    private let minimumRowsPerColumn = 4
+    /// Width of a lone column: the card's former fixed width (200 pt) less its padding, so the
+    /// one-column card (iPhone, the dive page) looks as it did. More columns use their rows' width.
+    private let singleColumnMinimumWidth: CGFloat = 180
+
+    private struct Arrangement {
+        /// Heights of the spanning views, in order.
+        var headerHeights: [CGFloat] = []
+        /// Indices of the rows (into the subviews) in each column.
+        var columns: [[Int]] = []
+        var columnWidths: [CGFloat] = []
+        var size: CGSize = .zero
+    }
+
+    private func arrange(_ subviews: Subviews) -> Arrangement {
+        var result = Arrangement()
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rows = subviews.indices.filter { !subviews[$0][TooltipSpansColumns.self] }
+        let headers = subviews.indices.filter { subviews[$0][TooltipSpansColumns.self] }
+        result.headerHeights = headers.map { sizes[$0].height }
+        let headerHeight = result.headerHeights.reduce(0, +) + CGFloat(headers.count) * spacing
+
+        func columnHeight(_ column: ArraySlice<Int>) -> CGFloat {
+            column.reduce(0) { $0 + sizes[$1].height } + CGFloat(max(column.count - 1, 0)) * spacing
+        }
+        // Each column takes as many rows as fit (at least `minimumRows`) before the next one
+        // starts, so a row appearing or leaving while the cursor moves only shifts the rows
+        // after it, and the number of columns changes only when the rows no longer fit.
+        let available = maxHeight - headerHeight
+        func columns(minimumRows: Int) -> [[Int]] {
+            var columns: [[Int]] = []
+            var column: [Int] = []
+            var height: CGFloat = 0
+            for row in rows {
+                let added = (column.isEmpty ? 0 : spacing) + sizes[row].height
+                if column.count >= minimumRows && height + added > available {
+                    columns.append(column)
+                    column = []
+                    height = 0
+                }
+                height += (column.isEmpty ? 0 : spacing) + sizes[row].height
+                column.append(row)
+            }
+            if !column.isEmpty { columns.append(column) }
+            return columns
+        }
+        // Each column as wide as its widest row, or as the widest it was earlier in the drag.
+        func widths(of columns: [[Int]]) -> [CGFloat] {
+            let minimumWidth = columns.count == 1 ? singleColumnMinimumWidth : 0
+            return columns.enumerated().map { index, column in
+                max(column.map { sizes[$0].width }.max() ?? 0, minimumWidth,
+                    widthMemory?.width(ofColumn: index) ?? 0)
+            }
+        }
+        func totalWidth(_ widths: [CGFloat]) -> CGFloat {
+            widths.reduce(0, +) + CGFloat(max(widths.count - 1, 0)) * columnSpacing
+        }
+        // Columns that would not fit side by side take more rows each, down to one column.
+        var minimumRows = minimumRowsPerColumn
+        result.columns = columns(minimumRows: minimumRows)
+        while result.columns.count > 1 && totalWidth(widths(of: result.columns)) > maxWidth {
+            minimumRows += 1
+            result.columns = columns(minimumRows: minimumRows)
+        }
+        result.columnWidths = widths(of: result.columns)
+        for (index, width) in result.columnWidths.enumerated() {
+            widthMemory?.record(width, ofColumn: index)
+        }
+
+        let rowsWidth = totalWidth(result.columnWidths)
+        let headerWidth = headers.map { sizes[$0].width }.max() ?? 0
+        let rowsHeight = result.columns.map { columnHeight($0[...]) }.max() ?? 0
+        result.size = CGSize(width: max(rowsWidth, headerWidth),
+                             height: headerHeight + rowsHeight - (rows.isEmpty ? spacing : 0))
+        return result
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let arrangement = arrange(subviews)
+        var y = bounds.minY
+        var headerIndex = 0
+        for index in subviews.indices where subviews[index][TooltipSpansColumns.self] {
+            let height = arrangement.headerHeights[headerIndex]
+            subviews[index].place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading,
+                                  proposal: ProposedViewSize(width: bounds.width, height: height))
+            y += height + spacing
+            headerIndex += 1
+        }
+        var x = bounds.minX
+        for (column, rows) in arrangement.columns.enumerated() {
+            var rowY = y
+            for index in rows {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: rowY), anchor: .topLeading,
+                                      proposal: ProposedViewSize(size))
+                rowY += size.height + spacing
+            }
+            x += arrangement.columnWidths[column] + columnSpacing
+        }
+    }
+}
+
+/// The widest each tooltip column has been during the current drag. A value gaining a digit
+/// ("9,5 m" → "11 m", "990 psi" → "1 000 psi") widens its column once; losing it does not
+/// narrow it again, so the card does not jitter while scrubbing. Reset when a new drag starts.
+/// A plain reference read and updated by `TooltipColumnsLayout` during layout: changing it
+/// triggers no view update, so the card is never a frame behind its content.
+nonisolated final class TooltipWidthMemory: @unchecked Sendable {
+    private var columnWidths: [CGFloat] = []
+    private var dragStart: CGPoint?
+
+    /// Records that column `index` is `width` wide, if that is wider than before this drag.
+    func record(_ width: CGFloat, ofColumn index: Int) {
+        while columnWidths.count <= index { columnWidths.append(0) }
+        columnWidths[index] = max(columnWidths[index], width)
+    }
+
+    /// The widest column `index` has been this drag, without recording anything.
+    func width(ofColumn index: Int) -> CGFloat {
+        index < columnWidths.count ? columnWidths[index] : 0
+    }
+
+    /// Forgets the widths when a drag starting elsewhere begins: a new drag, whether the last
+    /// one ended or was cancelled.
+    func track(dragStartingAt start: CGPoint) {
+        guard start != dragStart else { return }
+        dragStart = start
+        columnWidths.removeAll()
+    }
+}
+
+/// Places the chart tooltip centred on the cursor and inside `minX...maxX` (a card wider than
+/// that starts at `minX`), from the card's size in the same layout pass, so the card never
+/// sits for a frame where its previous width would have put it.
+private struct TooltipPlacementLayout: Layout {
+    let centerX: CGFloat
+    let minX: CGFloat
+    let maxX: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let x = (centerX - size.width / 2).clamped(to: minX...max(maxX - size.width, minX))
+            subview.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY), anchor: .topLeading,
+                          proposal: ProposedViewSize(size))
+        }
+    }
+}
+
 /// A labelled icon row inside `ChartTooltipView`. Used to be a plain function inlining
 /// its HStack/Image/Text tree at every call site; `ChartTooltipView.body` calls it up to
 /// 13 times statically (depth, ascent rate, temperature, per-tank/voted pressure, NDL,
-/// PPO₂ (voted + per-sensor), deco event + detail, deco ceiling, gas switch) — see the
+/// PPO₂ (voted + per-sensor), deco event + detail, deco ceiling, gas switch), plus the GF,
+/// setpoint and `TooltipTimeRows` (TTS, RBT) rows — see the
 /// `LegendDot` doc comment above for why that risks the same stack-overflow crash class
 /// this app has already hit once. Packaging it as a nominal struct bounds the complexity
 /// at its own `body`.
@@ -3641,6 +3885,23 @@ struct TooltipRow: View {
                 .font(.system(.caption, design: .monospaced))
                 .fontWeight(.medium)
                 .foregroundStyle(.white)
+        }
+    }
+}
+
+/// The time to surface and remaining bottom time rows of `ChartTooltipView`, as reported by
+/// the dive computer (minutes). A nominal view of its own, like `TooltipRow`, so the tooltip
+/// body gains one call rather than two (see the `LegendDot` doc comment).
+struct TooltipTimeRows: View {
+    let tts: Double?
+    let rbt: Double?
+
+    var body: some View {
+        if let tts {
+            TooltipRow(icon: "clock.arrow.circlepath", color: .pink, label: String(format: NSLocalizedString("TTS %@ min", bundle: .forAppLanguage(), value: "TTS %@ min", comment: "Dive chart tooltip row: time to surface reported by the dive computer; %@ is the number of minutes"), DiveProfilePoint.displayedMinutes(tts).localizedString(decimals: 0)))
+        }
+        if let rbt {
+            TooltipRow(icon: "hourglass.bottomhalf.filled", color: .green, label: String(format: NSLocalizedString("RBT %@ min", bundle: .forAppLanguage(), value: "RBT %@ min", comment: "Dive chart tooltip row: remaining bottom time reported by the dive computer; %@ is the number of minutes"), DiveProfilePoint.displayedMinutes(rbt).localizedString(decimals: 0)))
         }
     }
 }

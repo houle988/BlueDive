@@ -152,6 +152,32 @@ struct DiveDetailView: View {
     // appears once dragOffset is already non-zero, and its sign gives the side.
     @State private var pendingEntersFromTrailing: Bool = false
     @State var viewWidth: CGFloat = 400
+    /// Wide-window layouts (macOS; iPad at regular width): see `WideWindowLayout`.
+    var wideWindow = WideWindowLayout()
+
+    /// Whether the detail cards use their two-column layouts (Dive Information, Site Details,
+    /// Conditions, the tank and pressure cards side by side, the deco stops column): on macOS,
+    /// whose window is never narrower than 900 pt; on iPad in a wide window
+    /// (`WideWindowLayout`) when the dive page is at least as wide. Narrower, they keep the
+    /// single iOS column, so long values never wrap in two cramped columns.
+    var usesTwoColumnCards: Bool {
+        #if os(macOS)
+        true
+        #else
+        wideWindow.isActive && viewWidth >= Self.twoColumnCardsMinWidth
+        #endif
+    }
+
+    /// Narrowest dive page that shows the two-column detail cards on iPad: the Mac window's
+    /// minimum width.
+    static let twoColumnCardsMinWidth: CGFloat = 900
+
+    /// Height rule of the dive's profile charts (Overview and Samples tabs): on the same wide
+    /// page as the two-column cards, the chart follows the window's height (`wideDetail`);
+    /// otherwise it keeps the iOS height (`detail`, 300 pt).
+    var detailChartHeightRule: ChartHeightRule {
+        usesTwoColumnCards ? .wideDetail : .detail
+    }
     @State private var scrollLocked: Bool = false
     @State private var unlockToken: UUID = UUID()
     @State private var isNavigating: Bool = false
@@ -191,7 +217,9 @@ struct DiveDetailView: View {
         self._dive = State(initialValue: dive)
         self.sortedDives = sortedDives
         self.isSlidePreview = isSlidePreview
-        self._selectedTab = State(initialValue: initialTab)
+        // A tab hidden in Settings → Dive Profile → Dive Detail Tabs (e.g. Marine Life opening
+        // a dive on its sightings) opens on the Overview instead.
+        self._selectedTab = State(initialValue: UserPreferences.shared.isDiveTabShown(initialTab) ? initialTab : .menu)
         self._cachedDiveNumber = State(initialValue: diveNumber)
     }
 
@@ -321,9 +349,11 @@ struct DiveDetailView: View {
                             showAllSamples = false
                             proxy.scrollTo("diveTop", anchor: .top)
                         }
-                        // Leave the Samples tab if it is hidden in Settings while it is shown.
-                        .onChange(of: prefs.showSamplesTab) { _, isShown in
-                            if !isShown && selectedTab == .samples { selectedTab = .menu }
+                        // Leave a tab hidden in Settings → Dive Profile → Dive Detail Tabs
+                        // while it is shown, once its edit sheet (chosen by the selected tab)
+                        // is closed, so an editor open in this window is never swapped.
+                        .onChange(of: !prefs.isDiveTabShown(selectedTab) && !showEditSheet) { _, mustLeave in
+                            if mustLeave { selectedTab = .menu }
                         }
                         // Leave photo and marine life edit mode with their tab.
                         .onChange(of: selectedTab) { _, _ in
@@ -741,7 +771,7 @@ struct DiveDetailView: View {
 
     private var diveTabBar: some View {
         // Scrollable tab bar, the selected tab marked in its colour.
-        let tabs = DiveTab.visibleCases.filter { $0 != .samples || prefs.showSamplesTab }
+        let tabs = prefs.shownDiveTabs
         return ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
