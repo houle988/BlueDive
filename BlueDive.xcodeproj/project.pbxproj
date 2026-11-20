@@ -804,7 +804,7 @@
 			repositoryURL = "https://github.com/garmin/fit-swift-sdk";
 			requirement = {
 				kind = exactVersion;
-				version = 21.214.0;
+				version = 21.222.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

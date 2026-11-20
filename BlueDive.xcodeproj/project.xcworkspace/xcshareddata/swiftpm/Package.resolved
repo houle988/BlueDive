@@ -1,13 +1,13 @@
 {
-  "originHash" : "abc6dad0a4e485c1e2075a3d859585311821ac9af3e1024168040de3cbdb3080",
+  "originHash" : "377acfbc5095825310d0289b7346dba3bdaad48804e5b3edd8e65f360e5703de",
   "pins" : [
     {
       "identity" : "fit-swift-sdk",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/garmin/fit-swift-sdk",
       "state" : {
-        "revision" : "6c03d7fca6d35e1505adafc391895b6c9a89e4f9",
-        "version" : "21.214.0"
+        "revision" : "0cf6330bdc3bbda1fcb478529a85156361c880cc",
+        "version" : "21.222.0"
       }
     },
     {
