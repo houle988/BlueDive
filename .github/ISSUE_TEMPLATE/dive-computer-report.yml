@@ -1,0 +1,73 @@
+name: Dive computer report
+description: Tell us whether BlueDive downloaded dives from your dive computer over Bluetooth.
+title: "[Dive computer] "
+labels: ["dive computer"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping other divers. Your result updates the status of your model on [bluedive.app/computers](https://bluedive.app/computers), where only the model, the BlueDive version and the result are shown.
+
+        This report is public. Please leave out your name, the computer's serial number, dive sites and GPS positions. A Bluetooth diagnostic log can contain the computer's serial number: to keep it private, email the log to support@bluedive.app instead of attaching it here.
+  - type: input
+    id: model
+    attributes:
+      label: Dive computer model
+      description: As shown in BlueDive's list of dive computers.
+      placeholder: e.g. Shearwater Perdix 2
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Worked
+        - Worked with issues
+        - Failed
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options:
+        - Built-in Bluetooth
+        - Through a Bluetooth adapter (e.g. Mares Bluelink Pro)
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: BlueDive version
+      placeholder: e.g. 2.2.1 (170)
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Downloaded on
+      multiple: true
+      options:
+        - iPhone
+        - iPad
+        - Mac
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: iOS, iPadOS or macOS version
+      placeholder: e.g. iOS 27.1
+  - type: input
+    id: dives
+    attributes:
+      label: Number of dives downloaded
+      placeholder: e.g. 12
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened?
+      description: |
+        Anything worth knowing: pairing, a slow download, missing values (tank pressure, temperature, gas mixes…), an error message.
+        For a failed download, a Bluetooth diagnostic log lets us fix it quickly: turn on Settings → Bluetooth Import → BLE Diagnostic Logging, try the download again, then choose Save Diagnostic Log and email the file to support@bluedive.app (it can contain your computer's serial number, so don't attach it here).
