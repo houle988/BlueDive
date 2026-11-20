@@ -11,6 +11,8 @@
 > | `FakePeripheral`, `ScriptedLink`, `CutoffTests`, `ClockSyncTests` | `FakeLink` with `SessionTests`, `IOStreamTests`, `DownloadDecisionTests` (cutoff and clock-sync rules included) in `TransportSessionTests.swift` |
 > | `TraceReplayTests`, `DCK_TRACE_DIR` | **Not implemented**: no trace replay; the BLE layer was verified on the owner's devices (Perdix 2/3, Peregrine, i300C) |
 > | `SessionLink.resumeForClose()` | `prepareForClose()`, called before every close |
+>
+> **As built (2026-11-19).** Sections that describe the code as it is now, added for a reader with no prior context: §2 "As built: file tree", §3 "As built: public API", the as-built notes in §4.2 (`BLETiming` names), §4.3 (authorization provider), §4.4 (cutoff and outcome), §4.5 (parser context), §4.6 (models), §6 (cutoff decided by the app) and §10 (sync procedure → `UPSTREAM.md`). The app-side mapping is documented in `MAPPER.md`, tests and diagnostics in `TESTING.md`; start with `START_HERE.md`. Everything else in this file is the 2026-11-02 plan, kept as the migration record.
 
 Inputs used (clean-room respected): the behavioural spec (all 484 lines), libdivecomputer headers/sources under `/tmp/libdc-analysis/src/libdivecomputer`, BlueDive's own code, `CLAUDE.md`, `project.pbxproj`. Nothing under `/tmp/libdc-analysis/src/Sources` or any libdc-swift checkout was read.
 
@@ -48,6 +50,51 @@ Inputs used (clean-room respected): the behavioural spec (all 484 lines), libdiv
 ---
 
 ## 2. Module / file layout
+
+### As built: file tree (2026-11-19)
+
+```
+Packages/DiveComputerKit/
+  Package.swift                     tools 6.2; targets CLibDiveComputer (C), DiveComputerKit (Swift 6 language mode), DiveComputerKitTests
+  .gitignore                        .build/, .swiftpm/, private fixtures (DECISIONS.md, Q3)
+  Docs/                             README, START_HERE, DECISIONS, ARCHITECTURE, MAPPER, TESTING,
+                                    ADDING_A_DIVE_COMPUTER, GOLDEN_FORMAT, LIBDIVECOMPUTER_REFERENCE,
+                                    BEHAVIOURAL_SPEC + CONSUMER_ANALYSIS (historical)
+  Sources/CLibDiveComputer/
+    src/  include/libdivecomputer/   upstream libdivecomputer, unchanged (UPSTREAM.md)
+    COPYING NEWS README configure.ac Makefile.am libdivecomputer.pc.in   upstream, excluded from the build
+    include/dc_shim.h  include/CLibDiveComputer.h  include/module.modulemap  shim/dc_shim.c   BlueDive's
+    UPSTREAM.md                     snapshot, verification, sync checklist
+  Sources/DiveComputerKit/
+    DiveComputerKit.swift           DiveComputerKitInfo.libdivecomputerVersion, threading contract comment
+    Catalog/      DeviceFamily, ComputerModel, DeviceCatalog, BLEServiceCatalog, BLENameResolver, DescriptorLookup
+    Transport/    BLECentral (also BluetoothState, DiscoveredDevice), BLEPeripheralLink, BLECharacteristicSelector,
+                  BLEPacketQueue, BLETiming
+    IOStream/     DCIOStream (dc_custom_cbs_t trampolines), DCIOControl (ioctls), DiveComputerLink (DiveComputerLink /
+                  SessionLink protocols the session talks to; BLEPeripheralLink and the tests' FakeLink implement it),
+                  BLEAuthorizationProvider (also AuthorizationRequest)
+    Session/      DeviceSession (context, open + retries, DEVINFO, foreach, clock sync, teardown on its own thread),
+                  DownloadDecision (outcome rules; also ClockSync), SessionTypes (request, events, outcome, errors)
+    Parsing/      DiveParser (also ParseError), SampleAccumulator, FieldReader, AverageDepth
+    Models/       DiveData (with nested Tank, DecoStop, Location, DiveMode, DecoModel; top-level GasMix,
+                  GasUsage, PPO2Reading), ProfileSample (also SampleEvent), DCStatus
+    Diagnostics/  DiveComputerLog (also LogLevel, LogEvent, PacketDirection, PacketEvent)
+    Manager/      DiveComputerManager (also DeviceSessionHandle)
+  Tests/DiveComputerKitTests/       Swift Testing, one folder (inventory: TESTING.md)
+    CatalogTests.swift  ParserTests.swift  TransportSessionTests.swift  LibraryBuildTests.swift
+    Golden/  GoldenParityTests.swift  GoldenEncoding.swift  Canonical.swift
+    Fixtures/  ble-name-samples.json  legacy-catalog.json   (committed, no personal data; bundled with .copy("Fixtures"))
+
+BlueDive/Bluetooth/ (app)
+  BluetoothScannerView.swift, +BLE (session start and event loop), +Import (fingerprint table, import, merge,
+  persist/delete), +Views, BluetoothScannerComponents, BluetoothSyncState, DiveImportMapper (MAPPER.md),
+  KnownDeviceStore (DeviceStorage / StoredDevice), BLEPairingProvider (BLEAccessCodeKeychain, BLEPairingPrompt),
+  BLEDiagnosticSession, FingerprintDebugView, ShearwaterPNFGPS
+```
+
+Planned below but **never built**: the package `README.md` (its content is in `Docs/`), `ShearwaterFormat.swift` (`DiveParser.isShearwaterPNF` / `reportsSetpointEverySample`), `ClockSync.swift` (an enum in `DownloadDecision.swift`), `BLEError.swift` (transport failures are `SessionError` / `DCStatus`), `LibDCThread`, `DCContext`, `DeviceOpener`, `DiveEnumerator`, `SessionRequest/SessionEvent/DownloadOutcome/SessionError.swift` (all in `SessionTypes.swift`), separate model files (`SampleEvent`, `GasMix`, `Tank`, … `DeviceIdentity`, `DiscoveredDevice`, `BluetoothState`, `LogEvent`, `PacketEvent`, `HexDump`), `DeviceSessionHandle.swift`, the `Tests/…/Catalog|Parsing|Transport|IOStream|Session/` subfolders and their files (`FakePeripheral`, `ScriptedLink`, `TraceReplayTests`, `CutoffTests`, `ClockSyncTests`, …), `Fixtures/golden/` and `Fixtures/traces/`, and the app's `BluetoothSyncController.swift`. `Package.swift` sets `.swiftLanguageMode(.v6)` but **not** `.defaultIsolation(nil)`: a package target is nonisolated by default anyway.
+
+### Plan (2026-11-02, superseded by the tree above)
 
 ```
 Packages/DiveComputerKit/
@@ -134,6 +181,144 @@ BlueDive/Bluetooth/ (app)
 ---
 
 ## 3. Public API and consumer mapping
+
+### As built: public API (2026-11-19)
+
+Every `public` declaration of `Sources/DiveComputerKit`, read from the code (doc comments and initializers with default arguments abridged). The planned listing that follows differed in many details; where they disagree, this one is right.
+
+```swift
+// DiveComputerKit.swift
+public enum DiveComputerKitInfo { public static var libdivecomputerVersion: String }      // dc_version(), "0.10.0"
+
+// Catalog/
+public enum DeviceFamily: String, Codable, CaseIterable, Sendable {                        // raw values persisted, never change
+  case suuntoEonSteel, shearwaterPetrel, hwOstc3, uwatecSmart, oceanicAtom2, pelagicI330R, maresIconHD, deepsixExcursion,
+       deepbluCosmiq, oceansS1, mcleanExtreme, divesoftFreedom, cressiGoa, diveSystem, seacScreen, halcyonSymbios }
+public struct ComputerModel: Hashable, Identifiable, Sendable {
+  public let name: String; public let family: DeviceFamily; public let modelID: UInt32
+  public var id: String { name }                                                            // names are unique, model IDs are not
+  public init(name:family:modelID:)                                                         // == and hash use (family, modelID) only
+}
+public enum DeviceCatalog {
+  public static let supportedModels: [ComputerModel]                                        // BLE models only (DECISIONS.md Q4)
+  public static func model(family: DeviceFamily, modelID: UInt32) -> ComputerModel?          // first match
+  public static func model(named name: String) -> ComputerModel?
+  public static func resolve(advertisedName: String) -> (family: DeviceFamily, modelID: UInt32)?
+  public static func displayName(forAdvertisedName name: String) -> String
+}
+public enum BLEServiceCatalog {
+  public static let knownServiceUUIDStrings: [String]; public static let excludedServiceUUIDStrings: [String]
+  public static let nordicUARTServiceUUIDString: String; public static var knownServiceUUIDs: [CBUUID]
+  public static func isKnown(_ uuid: String) -> Bool; public static func isExcluded(_:) -> Bool; public static func isNordicUART(_:) -> Bool
+}                                                                                            // short forms ("FEFB") match too
+
+// Transport/BLECentral.swift
+public enum BluetoothState: Sendable, Equatable { case unknown, resetting, unsupported, unauthorized, poweredOff, poweredOn }
+public struct DiscoveredDevice: Identifiable, Hashable, Sendable { public let id: UUID; public let name: String?; public let lastSeen: Date }
+
+// Manager/DiveComputerManager.swift
+public final class DeviceSessionHandle: Sendable {
+  public let peripheralID: UUID
+  public let events: AsyncThrowingStream<SessionEvent, any Error>                           // ends after .finished or throws SessionError
+  public func cancel() async                                                                 // waits for teardown; idempotent
+  public func waitUntilFinished() async
+}
+@MainActor @Observable public final class DiveComputerManager {
+  public static let shared: DiveComputerManager
+  public private(set) var bluetoothState: BluetoothState
+  public private(set) var isScanning: Bool
+  public private(set) var discoveredDevices: [DiscoveredDevice]                             // filtered, sorted by name
+  public private(set) var activeSession: DeviceSessionHandle?
+  public func setDiscoveryFilter(_ filter: @escaping @Sendable (_ id: UUID, _ name: String) -> Bool)  // called on the BLE queue
+  public func startScanning(onlyKnownServices: Bool = false)
+  public func stopScanning()
+  public func clearDiscoveredDevices()
+  public func knownPeripheral(id: UUID) -> DiscoveredDevice?
+  public func startSession(_ request: SessionRequest) -> DeviceSessionHandle               // stream throws .busy / .bluetoothUnavailable / .peripheralNotFound at once
+}
+
+// Session/SessionTypes.swift
+public enum ModelSelection: Sendable, Equatable { case forced(DeviceFamily, UInt32), stored(DeviceFamily, UInt32), autoDetect }
+public struct SessionRequest: Sendable {
+  public var peripheralID: UUID; public var advertisedName: String?; public var modelSelection: ModelSelection   // default .autoDetect
+  public var useFingerprint: Bool                  // false = "Download all dives": none applied, none returned (default true)
+  public var fingerprintsBySerial: [String: Data]  // lowercased %08x serial → DeviceFingerprint.fingerprintData
+  public var stopBefore: Date?                     // stop at the first dive older than this (always applied when set)
+  public var syncClock: Bool                       // default false
+  public var authorization: (any BLEAuthorizationProvider)?
+}
+public struct DeviceIdentity: Sendable, Equatable {
+  public let family: DeviceFamily; public let descriptorModel: UInt32 /* opened descriptor */; public let hardwareModel: UInt32 /* reported */
+  public let firmware: UInt32; public let serial: String /* lowercase %08x */; public let libraryName: String /* "Vendor Product" */
+}
+public enum ConnectStep: Sendable, Equatable { case connecting, openingDevice(attempt: Int) }
+public enum ClockSyncResult: Sendable, Equatable { case synced, unsupported, failed(DCStatus) }
+public enum SessionEvent: Sendable {
+  case connecting(ConnectStep)
+  case connected(ComputerModel?)                                   // link and dc_device open; the model opened with, when in the catalog
+  case deviceIdentified(DeviceIdentity, fingerprintApplied: Bool)  // DEVINFO; true = stored fingerprint accepted by libdivecomputer
+  case progress(current: UInt32, maximum: UInt32)                  // bytes, ≥ BLETiming.progressInterval apart (plus the last)
+  case dive(DiveData)                                              // newest first, rawData and fingerprint attached
+  case diveSkipped(ParseError)
+  case clockSync(ClockSyncResult)
+  case finished(DownloadOutcome)                                   // last event of a successful session
+}
+public struct DownloadOutcome: Sendable, Equatable {
+  public enum Kind: Sendable, Equatable { case completed, noNewDives, partial }   // no stoppedAtCutoff kind: see the Bool
+  public let kind: Kind; public let status: DCStatus; public let diveCount: Int
+  public let stoppedAtCutoff: Bool; public let fingerprintMatched: Bool; public let identity: DeviceIdentity?
+  public let newestFingerprint: Data?              // the watermark to store, nil when it must not move
+}
+public enum SessionError: Error, Sendable, Equatable {
+  case bluetoothUnavailable(BluetoothState), peripheralNotFound, connectionTimeout, connectionFailed(String?),
+       pairingRemoved /* CBError.peerRemovedPairingInformation */, serviceDiscoveryFailed, notificationEnableFailed,
+       disconnected, unsupportedDevice(String), deviceOpenFailed(DCStatus), downloadFailed(DCStatus), cancelled, busy
+}
+
+// IOStream/BLEAuthorizationProvider.swift
+public struct AuthorizationRequest: Sendable, Hashable { public let peripheralID: UUID; public let advertisedName: String }
+public protocol BLEAuthorizationProvider: Sendable {      // called on the session thread, which blocks for the answer
+  func pinCode(for request: AuthorizationRequest) -> String?          // 6 digits, nil = cancelled
+  func accessCode(for request: AuthorizationRequest) -> Data?         // 16 bytes stored after a previous pairing
+  func storeAccessCode(_ code: Data, for request: AuthorizationRequest)
+}
+
+// Models/
+public struct DCStatus: RawRepresentable, Hashable, Sendable, CustomStringConvertible {   // a struct, so unknown codes survive
+  public let rawValue: Int32; public init(rawValue: Int32); public var name: String; public var description: String
+  public static let success, done, unsupported, invalidArgs, noMemory, noDevice, noAccess, io, timeout, protocolError, dataFormat, cancelled  // 0, 1, -1 … -10
+}
+public struct DiveData: Identifiable, Sendable { … }      // see §4.6, as built
+public struct ProfileSample: Sendable, Hashable { … }    // see §4.6, as built
+public enum SampleEvent: Sendable, Hashable { case ascent, violation, decoStop, gasChange, bookmark, safetyStop(mandatory: Bool), ceiling, po2, deepStop }
+public struct GasMix: Sendable, Hashable { helium, oxygen, nitrogen: Double; usage: GasUsage }   // fractions 0…1
+public enum GasUsage: Sendable, Hashable { case none, oxygen, diluent, sidemount }
+public struct PPO2Reading: Sendable, Hashable { sensor: UInt32; value: Double }
+
+// Parsing/DiveParser.swift
+public enum ParseError: Error, Sendable, Equatable { case parserCreationFailed(DCStatus), datetimeRetrievalFailed(DCStatus), sampleProcessingFailed(DCStatus), invalidDate }
+public enum DiveParser {
+  public static let validAtmosphericRange: ClosedRange<Double>      // 0.4...1.2 bar (the app's Dive.validSurfacePressure matches it)
+  public static func parse(family: DeviceFamily, modelID: UInt32, data: Data, diveNumber: Int) throws(ParseError) -> DiveData
+}
+
+// Diagnostics/DiveComputerLog.swift
+public enum LogLevel: Int, Sendable, Comparable { case debug, info, warning, error; public var prefix: String }  // "🔍 DEBUG", "ℹ️ INFO", "⚠️ WARN", "❌ ERROR"
+public struct LogEvent: Sendable { level: LogLevel; message: String; category: String /* source file name, or "libdivecomputer" */; function: String; timestamp: Date }
+public enum PacketDirection: String, Sendable { case inbound, outbound }
+public struct PacketEvent: Sendable { direction; data: Data; characteristicUUID: String; timestamp: Date; public var hexDump: String }
+public final class DiveComputerLog: @unchecked Sendable {
+  public static let shared: DiveComputerLog
+  public var onLog: (@Sendable (LogEvent) -> Void)?; public var onPacket: (@Sendable (PacketEvent) -> Void)?
+  public var minimumLevel: LogLevel; public var isDebugMode: Bool { get }
+  public func enableDebugMode(); public func disableDebugMode()
+  public func log(_ message: @autoclosure () -> String, level: LogLevel = .info, file: String = #fileID, function: String = #function)
+}
+```
+
+Not public (internal, used by the tests through `@testable`): `BLETiming`, `DownloadDecision`, `ClockSync`, `SampleAccumulator`, `FieldReader`, `BLENameResolver`, `DescriptorLookup`, `BLECentral`, `BLEPeripheralLink`, `BLEPacketQueue`, `BLECharacteristicSelector`, `DiveComputerLink` / `SessionLink`, `DCIOStream`, `DCIOControl`, `DeviceSession`, `DiveComputerLog.libdcLevel`.
+
+### Plan (2026-11-02, superseded by the listing above)
 
 ```swift
 // Catalog
@@ -265,7 +450,7 @@ All tables are **Swift data** (static arrays), unit-tested against libdivecomput
 - *Close / disconnect* (§3.10, re-sequenced for the new ownership — see §4.4 teardown): `markClosing()` (fails all future waits), clear queues, null characteristics, `cancelPeripheralConnection`, wait up to **2 s** for `didDisconnect` (so a subsequent connect does not hit the 5 s "not disconnected" wait), release. The `isDisconnecting` 0.5 s reset and the re-entrancy guard disappear with auto-reconnect; `firstPacketReceived` is simply never reset before the device close (spec §3.10 step 8 rationale preserved: the exit-command read uses the backend's short timeout). *As built 2026-11-13 (`DECISIONS.md`, L5): when no read has returned data yet (everything received was purged), the exit-command read gets the 5 s first-read floor instead.*
 - *Cancellation*: `link.cancel()` sets a flag and broadcasts; every wait returns `.cancelled`/IO at once (including the 3 s open-retry sleeps, implemented as condition waits).
 
-**`BLETiming`** (single source of constants): `disconnectedStatePoll = 0.1`, `disconnectedStateWait = 5`, `connectWait = 30`, `discoveryWait = 5`, `notifyEnableWait = 30`, `defaultReadTimeout = 3`, `firstReadFloor = 5`, `writeWithoutResponseBackpressure = 0.5`, `writeConfirmPerCallback = 5`, `ioctlReadDefault = 5`, `openRetries = 5`, `openRetryDelay = 3`, `closeFlush = 0.5`, `disconnectWait = 2`, `progressCoalesce = 0.1`. *As built: also `closeAfterCancelReadLimit = 1`, `closeQuietPeriod = 0.15` / `closeQuietMaximum = 1` (quiet wait before the close after a cancel) and, since 2026-11-13, `purgeQuietPeriod = 0.15` / `purgeQuietMaximum = 1` (quiet wait before a purge, `DECISIONS.md` L5); `BLETiming.swift` is the reference.*
+**`BLETiming`** (single source of constants): `disconnectedStatePoll = 0.1`, `disconnectedStateWait = 5`, `connectWait = 30`, `discoveryWait = 5`, `notifyEnableWait = 30`, `defaultReadTimeout = 3`, `firstReadFloor = 5`, `writeWithoutResponseBackpressure = 0.5`, `writeConfirmPerCallback = 5`, `ioctlReadDefault = 5`, `openRetries = 5`, `openRetryDelay = 3`, `closeFlush = 0.5`, `disconnectWait = 2`, `progressCoalesce = 0.1`. *As built (2026-11-19) — the names in `Transport/BLETiming.swift`, which is the reference (plan name → code name where they differ): `disconnectedStateWait = 5`, `disconnectedStatePoll = 0.1`, `connectWait = 30`, `discoveryWait = 5`, `notifyEnableWait = 30`, `defaultReadTimeout = 3`, `firstReadFloor = 5`, `writeWithoutResponseBackpressure = 0.5`, `writeConfirmPerCallback` → `writeConfirmation = 5`, `ioctlReadDefault` → `characteristicReadDefault = 5`, `openRetries` → `openAttempts = 5`, `openRetryDelay = 3`, `closeFlush = 0.5`, `closeAfterCancelReadLimit = 1`, `closeQuietPeriod = 0.15` / `closeQuietMaximum = 1` (quiet wait before the close after a cancel), `purgeQuietPeriod = 0.15` / `purgeQuietMaximum = 1` (quiet wait before a purge, since 2026-11-13, `DECISIONS.md` L5), `disconnectWait = 2`, `progressCoalesce` → `progressInterval = 0.1`. Every value works around a device behaviour: change one only with a device test and a BLE trace (CLAUDE.md).*
 
 ### 4.3 Custom iostream (`DCIOStream`)
 
@@ -285,7 +470,7 @@ Created with `dc_custom_open(&iostream, ctx, DC_TRANSPORT_BLE, &cbs, userdata)` 
 
 Logging parity: read non-success always logs an error line; hex dumps (≤64 bytes + "… (N more)") at debug; write errors always logged (spec §3.2). Note libdivecomputer itself also HEXDUMPs reads at INFO level through the context (iostream.c `dc_iostream_read`), which `DCContext` routes to `onLog`.
 
-**`DCIOControl`**: `CHARACTERISTIC_READ`: `size >= 16` and data non-NULL else INVALIDARGS; UUID via `dc_ble_uuid2str` (ble.h:84) else INVALIDARGS; `want = size-16`; `link.readCharacteristic(uuid, timeout: timeoutMs>0 ? ms/1000 : 5.0)`; nil or shorter than `want` → IO; copy exactly `want`; SUCCESS (cressi_goa.c:499). `GET_NAME`: data/size>0 required; empty name → UNSUPPORTED (oceanic_atom2.c:816-823 tolerates and warns); needs `strlen+1 <= size` else NOMEMORY; copy NUL-terminated. `GET_PINCODE` / `GET_ACCESSCODE` / `SET_ACCESSCODE`: forwarded to `SessionRequest.authorization` if present — `pinCode(for identity) -> String?` (blocking on the libdc thread; the app implementation hops to MainActor to present a prompt and returns via a continuation; nil → UNSUPPORTED), `accessCode(for:) -> Data?` (16 bytes; nil → UNSUPPORTED), `store(accessCode:for:)`. With `authorization == nil` all three return UNSUPPORTED, which pelagic_i330r.c:389-441 tolerates for GET/SET_ACCESSCODE and fails on GET_PINCODE exactly as today (parity). This is the hook for i330R/DSX support later (Phase 6 optional; needs new UI strings).
+**`DCIOControl`**: `CHARACTERISTIC_READ`: `size >= 16` and data non-NULL else INVALIDARGS; UUID via `dc_ble_uuid2str` (ble.h:84) else INVALIDARGS; `want = size-16`; `link.readCharacteristic(uuid, timeout: timeoutMs>0 ? ms/1000 : 5.0)`; nil or shorter than `want` → IO; copy exactly `want`; SUCCESS (cressi_goa.c:499). `GET_NAME`: data/size>0 required; empty name → UNSUPPORTED (oceanic_atom2.c:816-823 tolerates and warns); needs `strlen+1 <= size` else NOMEMORY; copy NUL-terminated. `GET_PINCODE` / `GET_ACCESSCODE` / `SET_ACCESSCODE`: forwarded to `SessionRequest.authorization` if present — `pinCode(for identity) -> String?` (blocking on the libdc thread; the app implementation hops to MainActor to present a prompt and returns via a continuation; nil → UNSUPPORTED), `accessCode(for:) -> Data?` (16 bytes; nil → UNSUPPORTED), `store(accessCode:for:)`. *As built: the three methods take an `AuthorizationRequest` (peripheral ID + advertised name, because Pelagic devices ask before their serial is known) and the setter is `storeAccessCode(_:for:)`; the app's implementation is `BLEPairingProvider` (`BlueDive/Bluetooth/BLEPairingProvider.swift`: a semaphore the main-actor prompt signals, Keychain storage in `BLEAccessCodeKeychain`). See §3, as built.* With `authorization == nil` all three return UNSUPPORTED, which pelagic_i330r.c:389-441 tolerates for GET/SET_ACCESSCODE and fails on GET_PINCODE exactly as today (parity). This is the hook for i330R/DSX support later (Phase 6 optional; needs new UI strings).
 
 ### 4.4 Device session (`DeviceSession`, on `LibDCThread`)
 
@@ -311,15 +496,17 @@ Phases, in order, each emitting events; any failure → `SessionError` thrown on
 | other | — | **throw** `.downloadFailed(status)` | — |
 
    `newestFingerprint` is returned only when `shouldAdvanceWatermark`.
+
+   > **As built (2026-11-19).** The event is `.deviceIdentified(identity, fingerprintApplied:)` (step 5). `Session/DownloadDecision.swift` implements the table with these differences: `Kind` has only `completed`, `noNewDives` and `partial` — a cutoff stop is `stoppedAtCutoff: Bool` on the outcome with the kind `completed` (or `noNewDives`); `newestFingerprint` is also nil when no `DeviceIdentity` was reported (no serial to store it under); `kind` is `noNewDives` when no watermark is returned and (`fingerprintMatched`, or a stored fingerprint and no new dive). There is no `Cutoff` / `onlyWhenNoWatermark`: `SessionRequest.stopBefore` is applied whenever it is set (step 6: the first dive older than it stops the enumeration, and its fingerprint becomes the watermark when it is the newest dive). Whether a cutoff is set at all is the app's decision (§6, as built).
 8. **Clock sync** (`ClockSync`) when `syncClock` and (SUCCESS, or PROTOCOL with `fingerprintMatched || cutoffReached`): `dc_datetime_t` from `Calendar(identifier: .gregorian)` + `TimeZone.current` components, `timezone = secondsFromGMT(for: now)` **in seconds**; `dc_device_timesync`; SUCCESS → `.synced`, UNSUPPORTED → `.unsupported` (silent), else `.failed(status)`.
-9. **Teardown** (always, also on error/cancel; this ordering is the Shearwater "Sending Dive" fix): (a) `dc_device_close` (sends the protocol exit, e.g. Shearwater `2E 90 20 00`, shearwater_petrel.c:116-129; its read uses the backend's timeout because `firstPacketReceived` is still true — unless no read has returned data yet, see L5); (b) **flush ≤0.5 s**: if a `.withoutResponse` write is outstanding, wait for `peripheralIsReady` or 0.5 s; for `.withResponse` wait for the pending callback or 0.5 s (bounded identically to the spec's blind sleep, but returns early when the radio confirms); (c) `dc_iostream_close`; release the `Unmanaged` link reference; (d) `dc_descriptor_free`, `dc_context_free`; (e) `link.close()` → `cancelPeripheralConnection`, wait ≤2 s for `didDisconnect`; (f) finish the stream (`.finished(outcome)` then `finish()`, or `finish(throwing:)`). The thread exits; `cancel()` awaits the join, so by the time the app sees the stream end **no C pointer is alive** — the sheet-dismiss blocking during `.connecting/.downloading` (BSV:155-162) becomes unnecessary.
+9. **Teardown** (always, also on error/cancel; this ordering is the Shearwater "Sending Dive" fix): (a) `dc_device_close` (sends the protocol exit, e.g. Shearwater `2E 90 20 00`, shearwater_petrel.c:116-129; its read uses the backend's timeout because `firstPacketReceived` is still true — unless no read has returned data yet, see L5); (b) **flush ≤0.5 s**: if a `.withoutResponse` write is outstanding, wait for `peripheralIsReady` or 0.5 s; for `.withResponse` wait for the pending callback or 0.5 s (bounded identically to the spec's blind sleep, but returns early when the radio confirms); (c) `dc_iostream_close`; release the `Unmanaged` link reference; (d) `dc_descriptor_free`, `dc_context_free`; (e) `link.close()` → `cancelPeripheralConnection`, wait ≤2 s for `didDisconnect`; (f) finish the stream (`.finished(outcome)` then `finish()`, or `finish(throwing:)`). The thread exits; `cancel()` awaits the join, so by the time the app sees the stream end **no C pointer is alive** — the sheet-dismiss blocking during `.connecting/.downloading` (BSV:155-162) becomes unnecessary. *As built: the close flush (b) is a fixed `Thread.sleep(forTimeInterval: BLETiming.closeFlush)` (0.5 s) right after `dc_device_close` (`Session/DeviceSession.swift`, teardown `defer`); it does not return early when the radio confirms.*
 10. **Cancellation**: `handle.cancel()` sets the flag, `link.cancel()` wakes every wait; `dc_device_set_cancel` makes retrying backends abort between transactions (device.c `device_is_cancelled` is polled by oceanic_atom2, mares_iconhd, suunto_eonsteel, hw_ostc3; Shearwater/Pelagic/Cressi are stopped by the dive callback returning 0 and by the link failing their next read). Outcome `.cancelled`.
 
 Threading guarantee (documented in README): libdivecomputer objects are touched only on `LibDCThread`; `BLEPeripheralLink` methods may be called from the libdc thread and `bleQueue` only; `DiveComputerManager` only on `MainActor`.
 
 ### 4.5 Parser (`DiveParser` + `SampleAccumulator`)
 
-`parse(family:modelID:data:diveNumber:)`: descriptor by (family, modelID); `dc_parser_new2(&parser, ctx, descriptor, bytes, count)` (parser.h:297 — copies data) with a parser-only `dc_context` whose log function routes to `DiveComputerLog` (improvement over the old NULL context; no output change); failure → `parserCreationFailed`. `dc_parser_get_datetime` failure → `datetimeRetrievalFailed`. Setpoint mode `ShearwaterFormat.reportsSetpointEverySample(family)` true for SHEARWATER_PREDATOR/PETREL, DIVESYSTEM_IDIVE, MCLEAN_EXTREME, TECDIVING; for change-only families pre-read `GASMIX_COUNT`/`GASMIX[i]` and collect `diluent`/`oxygen` index sets, stored only if ≥1 diluent. `dc_parser_samples_foreach` with the accumulator; failure → `sampleProcessingFailed`; **post-loop flush**. Fields exactly as spec §6 step 5 (GASMIX, TANK, DECOMODEL with GF only for Bühlmann else non-nil 0, DIVEMODE default `.openCircuit`, SALINITY `density>0 ? density/1000 : (salt ? 1.025 : 1.000)`, ATMOSPHERIC finite and in `0.4...1.2` else nil, TEMPERATURE_MIN/MAX override, TEMPERATURE_SURFACE sets both surface values, DIVETIME `>0 && <= 48*3600`, PNF test `family == shearwaterPetrel && size >= 2 && !(b0 == 0xFF && b1 == 0xFF)`, AVGDEPTH finite>0 else trapezoidal average cut at `reportedDivetime` only for PNF with interpolation and only if strictly inside the profile, MAXDEPTH accepted when `(family != shearwater || isPNF) && finite && > 0` else deepest sample). Date: Gregorian components in `TimeZone.current`, `dc_datetime_t.timezone` ignored; nil → `invalidDate`.
+`parse(family:modelID:data:diveNumber:)`: descriptor by (family, modelID); `dc_parser_new2(&parser, ctx, descriptor, bytes, count)` (parser.h:297 — copies data) with a parser-only `dc_context` whose log function routes to `DiveComputerLog` (improvement over the old NULL context; no output change); failure → `parserCreationFailed`. `dc_parser_get_datetime` failure → `datetimeRetrievalFailed`. Setpoint mode `ShearwaterFormat.reportsSetpointEverySample(family)` true for SHEARWATER_PREDATOR/PETREL, DIVESYSTEM_IDIVE, MCLEAN_EXTREME, TECDIVING; for change-only families pre-read `GASMIX_COUNT`/`GASMIX[i]` and collect `diluent`/`oxygen` index sets, stored only if ≥1 diluent. `dc_parser_samples_foreach` with the accumulator; failure → `sampleProcessingFailed`; **post-loop flush**. *As built: `DiveParser.parse` calls `dc_parser_new2` with a NULL context (`Parsing/DiveParser.swift`), as the former library did — the planned parser-only context with log routing was not built, so libdivecomputer's parser messages do not reach `DiveComputerLog` or the BLE diagnostic file (only the device session's context logs; §11 item 9 did not happen).* Fields exactly as spec §6 step 5 (GASMIX, TANK, DECOMODEL with GF only for Bühlmann else non-nil 0, DIVEMODE default `.openCircuit`, SALINITY `density>0 ? density/1000 : (salt ? 1.025 : 1.000)`, ATMOSPHERIC finite and in `0.4...1.2` else nil, TEMPERATURE_MIN/MAX override, TEMPERATURE_SURFACE sets both surface values, DIVETIME `>0 && <= 48*3600`, PNF test `family == shearwaterPetrel && size >= 2 && !(b0 == 0xFF && b1 == 0xFF)`, AVGDEPTH finite>0 else trapezoidal average cut at `reportedDivetime` only for PNF with interpolation and only if strictly inside the profile, MAXDEPTH accepted when `(family != shearwater || isPNF) && finite && > 0` else deepest sample). Date: Gregorian components in `TimeZone.current`, `dc_datetime_t.timezone` ignored; nil → `invalidDate`.
 
 **`SampleAccumulator`** — pure Swift state machine (testable without C via a `SampleInput` enum mirrored from `dc_sample_type_t`/`dc_sample_value_t`, parser.h:35-51, 251-287):
 
@@ -346,6 +533,8 @@ Flush: build `ProfileSample(time, depth, temperature, pressure = last cumulative
 ### 4.6 Models
 
 Kept identical in names, units and optionality to spec §7 so the mapper's logic (PP:656-921, IMP:796-955) ports by find/replace: `DiveData { number: Int (var), datetime: Date, maxDepth, avgDepth: Double (m), divetime: TimeInterval (s, last sample), reportedDivetime: TimeInterval? (s), temperature: Double (°C, min, may be +∞ — kept in V1 for byte-identical goldens; see §11), profile: [ProfileSample], tankPressure: [Double] (bar), gasMix: Int?, gasMixCount: Int?, gasMixes: [GasMix]?, salinity: Double? (g/cm³), atmospheric: Double? (bar), surfaceTemperature: Double?, measuredSurfaceTemperature: Double?, minTemperature, maxTemperature: Double?, tankCount: Int?, tanks: [Tank]?, diveMode: DiveMode?, decoModel: DecoModel?, location, exitLocation: Location?, rbt, heartbeat, bearing: UInt32?, setpoint: Double?, ppo2Readings: [PPO2Reading] (sensor: UInt32, value: Double), cns: Double?, decoStop: DecoStop?, rawData: Data?, fingerprint: Data? }` — `Sendable`, `Codable` (for goldens), memberwise `public init` with defaults for every optional (so `DiveDurationTests.swift:272-279` shrinks to the five fields it cares about). `ProfileSample` = spec's `DiveProfilePoint` fields. `SampleEvent` = the 9 cases (no `color/icon/description`: the app has `DiveProfileEvent` at Dive.swift:7-37). `GasMix { helium, oxygen, nitrogen: Double; usage: GasUsage }`, `Tank { volume, workingPressure, beginPressure, endPressure: Double; gasMix: Int; usage: GasUsage }`, `GasUsage { none, oxygen, diluent, sidemount }`, `DecoStop { depth: Double; time: TimeInterval; type: Int (raw dc_deco_type_t: 0 NDL, 1 safety, 2 deco, 3 deep) }` (the mapper tests `type == 2`, PP:745, 913-919), `Location { latitude, longitude: Double; altitude: Double? }`, `DiveMode` 5 cases, `DecoModel { type: DecoType; conservatism: Int; gfLow, gfHigh: UInt32?; description }` with the same description strings ("Bühlmann GF L/H", "Bühlmann", "None", "<Type> (<conservatism>)"/"<Type>") — persisted in `Dive.decompressionAlgorithm` (PP:736, IMP:894), so byte-identical. Dropped as unused by the app: `TankInfo`, top-level `DecoModel`/`Location` duplicates, `SampleData` public type, `DiveDataViewModel`, `DownloadProgress`, `StoredDevice` (moves to the app), `DeviceFingerprint` struct, `Notification.Name.deviceForgotten`.
+
+> **As built (2026-11-19).** `DiveData` is `Identifiable, Sendable` (`public var id = UUID()`), **not `Codable`**: the golden tests render it with their own canonical encoder (`Tests/DiveComputerKitTests/Golden/GoldenEncoding.swift`, `Canonical.swift`; `GOLDEN_FORMAT.md`), which lists every encoded field explicitly. Its fields are those planned above, plus `gasMixFieldIndices: [Int]?` (`DECISIONS.md` L4): set only when a `DC_FIELD_GASMIX` could not be read, it gives the field index of each element of `gasMixes`; gas references (`ProfileSample.currentGas`, `Tank.gasMix`, `gasMix`) stay field indices, and `DiveImportMapper.gasMixReferencesByPosition` turns them into positions (`MAPPER.md`). `Tank`, `DecoStop`, `Location`, `DiveMode` and `DecoModel` are nested in `DiveData` (`DiveData.Tank` …); `GasMix`, `GasUsage` and `PPO2Reading` are top-level. `DiveMode` and `DecoModel` are `CustomStringConvertible` (`DecoModel.description` is the persisted `Dive.decompressionAlgorithm`, "Bühlmann GF 0/0" included, L3). `ProfileSample` (`Models/ProfileSample.swift`, `Sendable, Hashable`) has `time` (s), `depth` (m), `temperature?`, `pressure?` (last pressure of any tank, carried), `pressures: [Int: Double]` (this interval), `po2?` (voted), `sensorPPO2: [Int: Double]`, `pn2?`, `phe?` (always nil), `events: [SampleEvent]`, `ndl?` (s), `decoStop?` (m), `decoTime?` (s), `tts?` (s, 0 when the computer reports none), `currentGas?` (field index), `cns?` (%), `rbt?` (min, carried forward, parity), `reportedRBT?` (min, this interval only; §4.5 note), `heartbeat?`, `bearing?`, `setpoint?`. `DiveData.temperature` is still a non-optional `Double` that may be `+∞`.
 
 ### 4.7 Diagnostics
 
@@ -383,6 +572,16 @@ Per file:
 | `BluetoothSettingsView.swift`, `FingerprintDebugView.swift`, Fingerprint XML | No change (they do not import LibDCSwift). |
 | `LICENSE`, `README.md:57-58`, `CONTRIBUTING.md:64,99-105` | Replace libdc-swift references with DiveComputerKit (BDSAL) + libdivecomputer (LGPL, vendored at `Packages/DiveComputerKit/Sources/CLibDiveComputer`). |
 
+> **As built (2026-11-19): who decides full history, incremental and the cutoff.** The planned `sync.start(request)`, `Cutoff.stopBefore(date, onlyWhenNoWatermark: true)` and `outcome.cutoffReached` were not built, and the pre-connect decision did **not** disappear: the app still makes it, in `connectToDevice` (`BlueDive/Bluetooth/BluetoothScannerView+BLE.swift`, the block after the model selection):
+>
+> 1. `fingerprintFromDatabase(for:)` (`+Import.swift`) builds the table of every stored watermark (`DeviceFingerprint`, newest record first, keyed by trimmed lowercased serial, empty fingerprints skipped) and reports `.restored` only when the peripheral's serial is known before connecting (from `DeviceStorage`, or a pending reassociation seed) **and** has a watermark.
+> 2. `watermarkRestored = result == .restored` (false with "Download all dives", which also passes `useFingerprint: false` and an empty table).
+> 3. When no watermark was restored and the import cutoff is on, the table is **cleared** (`fingerprints = [:]`): otherwise the session could still apply the reported serial's watermark, and a cutoff on what is then an incremental download would drop new dives older than the cutoff and move the watermark past them. Without a cutoff the full table is passed, so a computer whose serial is unknown before connecting (Connect as New Device, an entry without a serial) still downloads only its new dives.
+> 4. `isFullHistoryDownload = downloadAllDives || !watermarkRestored`; `stopBefore` = start of the cutoff day only when the download is full-history and the cutoff is on, else nil. The session applies `stopBefore` unconditionally.
+> 5. On `.finished`, `finishDownload` stores `outcome.newestFingerprint` as the session watermark, sets `cutoffStopDate` from `outcome.stoppedAtCutoff`, and still filters the downloaded dives by the cutoff (a safety net for an older-dated dive delivered before the stop, e.g. after a clock reset). When nothing is kept but dives were downloaded or a cutoff was set, the watermark is persisted at once (`persistFingerprintRecord`), else after the import's save.
+>
+> The event loop is `runSession` in the same file: `.connected` → `recordOpenedDevice` (stores a forced model, or an auto-detected one for a new peripheral); `.deviceIdentified` → serial check for a guessed unit (another unit of the same model cancels the session before any dive) and `recordIdentity` (serial, and the reported hardware model only when it is a catalog model of the same family); `.progress` → progress bar; `.dive` → collected; `.finished` → `finishDownload`; a thrown `SessionError` → `failDownload` (localized messages). `persistFingerprintRecord` (`+Import.swift`) writes `sessionWatermark` to SwiftData's `DeviceFingerprint`; nothing is read from or written to UserDefaults for fingerprints.
+
 **Combine removal:** the two Combine uses (`onReceive(bleManager.$discoveredPeripherals)`, `viewModel.$progress.sink`) are replaced by `@Observable` + the event stream; `import Combine` is removed from `BluetoothScannerView.swift` and `+BLE.swift`.
 
 **Localisation impact** (all via the xcstrings workflow — build, `Scripts/xcstrings.py missing`, `set-json`, `check`; never edit the catalog by hand): new user-facing strings: `"Cancel download"` (button), `"Download cancelled"` (state), and a `switch SessionError` with one `NSLocalizedString(..., value:)` per case replacing the library's hard-coded English (`"Device took too long to respond. Try again"`, `"Connection lost. Please ensure: …"`, `"Device communication error. Try turning device off and on"`, `"This operation is not supported by your device"`, `"Received invalid data from device"`, `"Access to device was denied"`, `"Device not found or disconnected"`, `"Unknown error occurred (Code: %lld)"`), plus `"Pairing code"` prompt strings only if the Pelagic authorization UI ships. Existing keys (`"Unable to connect to %@"`, `"Download failed: %@"`, `"Failed to download dives"`, `"Connection established but device not ready"`) are kept or retired as the flow dictates. Translations in fr-CA, de, nl, nb, es in the same commit.
@@ -396,8 +595,8 @@ Per file:
 **Golden-file parity harness (Phase 0, before any new code):**
 1. Export raw dives from the owner's logbook: a throwaway `Scripts/golden_export.py` (read-only, run with `python3 -I` against a *copy* of `default.store` taken from a Format-2 backup zip, CLAUDE.md "Database Backup Format") selects `ZDIVE` rows with non-null `ZRAWDIVECOMPUTERDATA`, resolves external-storage references under `.default_SUPPORT/_EXTERNAL_DATA/`, and writes `golden-input.json`: `[{computerName, computerSerialNumber, timestamp, rawData(b64), fingerprint(b64)}]`. `computerName` → `(family, modelID)` through the catalog (names sharing a model ID share a parser, so the ambiguity is harmless).
 2. Throwaway package **outside the repo** (`~/Xcode/libdc-golden-harness`, macOS executable) depending on the OLD remote `libdc-swift` (branch `working`); for each input calls the old `GenericParser.parseDiveData` and writes `golden/<serial>-<unix ts>.json` in canonical form: keys sorted, `Double` as `%.17g`, non-finite as `"inf"/"-inf"/"nan"`, `Date` as `timeIntervalSince1970` string, `Data` base64, `[Int: Double]` as sorted `[[k, v]]`, tuples as objects. The harness is a black-box consumer of the old library (permitted under the clean-room rule). Run with `TZ` pinned (e.g. `TZ=America/Toronto`) because datetime conversion uses the local zone; the new tests set the same `TZ`.
-3. `GoldenParityTests` (new package): parse each input with `DiveParser`, encode `DiveData` with the same canonical encoder, compare **byte-equal, zero tolerance**. Goldens are the owner's personal data: store under `Tests/Fixtures/golden/` only with owner approval (Q3), otherwise read from `DCK_GOLDEN_DIR`.
-4. Also a Dive-level golden: a DEBUG-only app test maps each `DiveData` golden through `DiveImportMapper.makeDive` and compares a canonical dump of the resulting `Dive` fields before and after the extraction (guards the mapper refactor).
+3. `GoldenParityTests` (new package): parse each input with `DiveParser`, encode `DiveData` with the same canonical encoder, compare **byte-equal, zero tolerance**. Goldens are the owner's personal data: store under `Tests/Fixtures/golden/` only with owner approval (Q3), otherwise read from `DCK_GOLDEN_DIR`. *As built: never committed; read only from `DCK_GOLDEN_DIR` (Q3); procedure and commands in `GOLDEN_FORMAT.md` and `TESTING.md`.*
+4. Also a Dive-level golden (*as built: `BlueDiveTests/DiveImportMapperParityTests`, comparing BlueDive XML exports instead of a `Dive` dump; `TESTING.md`*): a DEBUG-only app test maps each `DiveData` golden through `DiveImportMapper.makeDive` and compares a canonical dump of the resulting `Dive` fields before and after the extraction (guards the mapper refactor).
 
 **Unit tests (Swift Testing, package):** `SampleAccumulatorTests` (scripted `SampleInput` sequences: deferred flush, post-loop flush, event synthetic points, gas-change dedup, bailout/diluent restore, voted vs sensor PPO2, first/last location, infinity sentinels, pressure carry-forward); `FieldValidationTests` (atmospheric range, divetime bounds, PNF detection, avg-depth cut interpolation, salinity density); `CatalogConsistencyTests` (§4.1); `NameResolutionTests` (table of names → expected (family, modelID) including "FH12345"→i300C, "6_1A2B"→Raffaello, "Mares bluelink pro"→Smart, "Tablet123"→Seac, "Perdix 2"→Perdix 2, "Peregrine"→Peregrine not TX, "G2 HUD"→0x42, "DS123"→Ratio); `OutcomeDecisionTests` (every row of §4.4 table); `CutoffTests`; `ClockSyncTests` (timezone in seconds, DST).
 
@@ -445,14 +644,7 @@ Open questions for the owner: **Q1** static vs dynamic linking of the LGPL targe
 
 ## 10. libdivecomputer manual-sync procedure
 
-`Scripts/sync_libdivecomputer.sh <upstream-sha>` (to be written; steps are also the manual checklist):
-1. `git clone --depth 50 https://github.com/libdivecomputer/libdivecomputer /tmp/ldc && git -C /tmp/ldc checkout <sha>`.
-2. `rsync -a --delete --exclude 'Makefile.am' --exclude 'serial_win32.c' --exclude 'libdivecomputer.symbols' --exclude 'libdivecomputer.rc' /tmp/ldc/src/ Packages/DiveComputerKit/Sources/CLibDiveComputer/src/` and likewise `include/libdivecomputer/` (keeping our `version.h`, excluding `version.h.in`, `Makefile.am`).
-3. Regenerate `version.h`: read `AC_INIT([libdivecomputer],[X.Y.Z…])` from `configure.ac`, fill the `version.h.in` template (`@DC_VERSION@`, `@DC_VERSION_MAJOR@`…).
-4. Update `UPSTREAM.md` (SHA, date, version) and `COPYING` if changed.
-5. `git diff --stat` the C tree; grep new `dc_filter_*` / descriptor rows / `DC_IOCTL_*` / `dc_sample_type_t` / `dc_field_type_t` members (new enum members = parser work).
-6. `swift build` (iOS + macOS via xcodebuild) and `swift test`: `CatalogConsistencyTests` lists missing catalog rows → add to `DeviceCatalog`, `BLEServiceCatalog` (new service UUID from the vendor filter), `BLENameResolver` prefix table, and a device icon per `DIVE_COMPUTER_ICONS.md`; re-run golden parity (parser changes upstream are expected to change goldens — review and re-bless deliberately).
-7. Device smoke test on at least one unit; commit with `chore: sync libdivecomputer to <sha>`.
+**As built (2026-11-19): follow `Sources/CLibDiveComputer/UPSTREAM.md`, "Sync procedure" — the single authoritative checklist.** The sync is manual. The plan that stood here (a `Scripts/sync_libdivecomputer.sh` script, an `rsync --delete` of `src/` and `include/libdivecomputer/`, and `version.h` from `AC_INIT`) was never built and was wrong in two points: an `rsync --delete` of `include/` would delete BlueDive's own `include/dc_shim.h`, `CLibDiveComputer.h` and `module.modulemap`, and the version numbers come from `configure.ac`'s `m4_define([dc_version_major|minor|micro], …)` (`AC_INIT` only receives the `dc_version` macro). The plan's text remains in this file's git history. The first sync (`9e6c3c8` → `14f9293`, commit `eff1017`, 2026-11-13) followed `UPSTREAM.md`.
 
 ---
 
@@ -494,7 +686,7 @@ Open questions for the owner: **Q1** static vs dynamic linking of the LGPL targe
 | §8 Logger prefixes, `onLog/onPacket`, hexDump format, `[libdc LEVEL] file:line (function): message` | `DiveComputerLog` | Keep (renamed type) |
 | §10 items 1–42 (BlueDive customizations) | each maps to the rows above: 1,2,4,6,11,12,15,24,31 → parser/models; 3 → accumulator setpoint; 5,10,33 → enumerator/outcome; 7,13,19,20,32 → catalog; 8,14,18,22,25-30,35,36,38,41,42 → transport/session; 9,16 → C vendoring; 17,39,40 → diagnostics; 21 → ClockSync; 23 → fingerprint table; 34 → `rawData`; 37 → progress events | Kept unless listed as changed above |
 
-**Behaviours recommended to change (summary with justification):** (1) auto-reconnect dropped — eliminates the double-free/stale-connection class and the Shearwater BLE-mode hang; explicit sessions + Retry; (2) CoreBluetooth off the main queue — removes every "must not run on main" constraint and the deadlock class; (3) `didFailToConnect` fails fast — deterministic errors instead of a 30 s wait; (4) fingerprint source = SwiftData table passed to the session — removes the fragile UserDefaults mirror and the `"Unknown"` key problem, and makes the cutoff decision correct by construction (`onlyWhenNoWatermark`); (5) hardware-model overwrite guarded by catalog membership; (6) polling loops → condition waits (same timeouts, lower latency, no 1 ms busy-sleeps); (7) library emits no user-facing text — the app localises; (8) cancel during download becomes possible (Q2); (9) parser context non-NULL so libdivecomputer parser logs reach the diagnostic file. Everything else, including every timeout constant, selection rule, status mapping, table, validation range and model field, is kept.
+**Behaviours recommended to change (summary with justification):** (1) auto-reconnect dropped — eliminates the double-free/stale-connection class and the Shearwater BLE-mode hang; explicit sessions + Retry; (2) CoreBluetooth off the main queue — removes every "must not run on main" constraint and the deadlock class; (3) `didFailToConnect` fails fast — deterministic errors instead of a 30 s wait; (4) fingerprint source = SwiftData table passed to the session — removes the fragile UserDefaults mirror and the `"Unknown"` key problem, and makes the cutoff decision correct by construction (`onlyWhenNoWatermark`) — *as built, the cutoff decision stayed in the app (§6, as built)*; (5) hardware-model overwrite guarded by catalog membership; (6) polling loops → condition waits (same timeouts, lower latency, no 1 ms busy-sleeps); (7) library emits no user-facing text — the app localises; (8) cancel during download becomes possible (Q2); (9) parser context non-NULL so libdivecomputer parser logs reach the diagnostic file — *as built: not done — the parser has no log context; see §4.5.* Everything else, including every timeout constant, selection rule, status mapping, table, validation range and model field, is kept.
 
 ### Critical Files for Implementation
 - BlueDive/Bluetooth/BluetoothScannerView+BLE.swift (session lifecycle, seeds, reassociation — the main cutover surface)

@@ -6,7 +6,7 @@ Golden files record what the **old** LibDCSwift parser produced for real dives, 
 
 The generator is a throwaway command-line tool **outside** the repository: `~/Xcode/libdc-golden-harness` (Swift package, macOS). It links libdc-swift at the exact revision BlueDive ships (`fd5b0db0fd8fe19d59a453939465ebf21e0d2aba`) and calls only its public parser, `GenericParser.parseDiveData`, as a black box.
 
-1. With the **current** app (before the cutover), export the dives as BlueDive XML (raw dive computer data and fingerprints are included automatically). Optionally also export the known devices as Fingerprint XML (Settings → Bluetooth → Sync Fingerprints), which gives the stored family and model per serial.
+1. With the **current** app (before the cutover), export the dives as BlueDive XML (raw dive computer data and fingerprints are included automatically). Optionally also export the known devices as Fingerprint XML (Settings → Bluetooth Import → Sync Fingerprints), which gives the stored family and model per serial.
 2. Run:
    ```
    cd ~/Xcode/libdc-golden-harness
@@ -84,16 +84,31 @@ Fixed names:
 
 ## Parity results
 
+**Fixture sets (2026-11-19).** Eight golden sets, each its own folder under `~/BlueDive-Fixtures` (outside the repository) with its own `manifest.json`, run one at a time through `DCK_GOLDEN_DIR` (`TESTING.md`). Described generically here; the folder names are the owner's and are not repeated in the repository:
+
+| Set | Content | Cases |
+|---|---|---|
+| main | Owner's logbook: Shearwater Perdix 2 + Perdix 3 (row 2026-11-02) | 87 |
+| CCR | A beta tester's Petrel 3 CCR dive (2026-11-03) | 1 |
+| i300C | The owner's Aqualung i300C test unit (2026-11-06) | 78 |
+| Perdix 3, second set | A second set of the owner's Perdix 3 dives | 30 |
+| Peregrine (export) | The owner's Peregrine: 16 dives from a BlueDive 2.1 (163) XML export (2026-11-06) | 16 |
+| Peregrine (Bluetooth) | The same Peregrine: 52 dives downloaded over Bluetooth with the old version (2026-11-06) | 52 |
+| Petrel | One CCR decompression dive with a trimix diluent from a beta tester's Petrel 2 (2026-11-03) | 1 |
+| MacDive logbook | A beta tester's logbook imported from MacDive (2026-11-03) | 801 |
+
+The Perdix 3 second set has no dated row of its own below; the `eff1017` commit (2026-11-13) reports golden parity unchanged on 8 fixture sets, so it existed and passed by then.
+
 | Date | Golden set | Result |
 |---|---|---|
 | 2026-11-02 | Owner's logbook: 68 Shearwater Perdix 2 + 19 Perdix 3 dives (43 115 profile points); 60 Peregrine and 8 Oceanic+ dives had no raw data | **87 / 87 byte-identical** after two fixes: a tank's unknown gas index is `4294967295` (`DC_GASMIX_UNKNOWN` unsigned, not -1), and `tanks` is an empty array (not nil) when the computer reports no tanks |
-
-| 2026-11-03 | A user's logbook (BlueDive XML of dives imported from MacDive, 2 134 dives, 1 042 with raw data): 87 Suunto EON Steel, 1 Scubapro G2, and 713 Shearwater blobs in MacDive's own format (not libdivecomputer's) that both parsers reject | **801 / 801 identical** (88 parsed dives byte-identical; 713 rejected with the same error and status), with the accepted deviation below |
-| 2026-11-03 | A user's CCR dive: Shearwater Petrel 3, closed circuit, Bühlmann GF 50/70, setpoints 0.7 → 1.3 bar, diluent + oxygen mixes (253 profile points) | **1 / 1 byte-identical**: covers CCR dive mode, per-sample setpoints, voted PPO₂, diluent usage, CNS and the persisted deco-model text |
-| 2026-11-03 | A user's CCR deco dive: Shearwater Petrel 2 (advertised "Petrel", logged as "Shearwater Petrel" by BlueDive 1.10; model 3 given through a Fingerprint XML), 51.7 m, Bühlmann GF 40/85, trimix diluent 22/32, setpoints 0.7 → 1.3 bar, 352 deco-stop points (462 profile points) | **1 / 1 byte-identical**: adds decompression stops and a trimix diluent |
-| 2026-11-06 | 16 dives from a Shearwater Peregrine (BlueDive 2.1 (163) export) | **16 / 16 byte-identical** |
-| 2026-11-06 | The owner's Aqualung i300C test unit: 78 dives (2019–2026) downloaded over Bluetooth with the old version | **78 / 78 byte-identical**: first non-Shearwater family (Oceanic Atom 2 backend) |
-| 2026-11-06 | The owner's Shearwater Peregrine: 52 dives downloaded over Bluetooth with the old version | **52 / 52 byte-identical** |
+| 2026-11-03 | A beta tester's logbook (BlueDive XML of dives imported from MacDive, 2 134 dives, 1 042 with raw data): 87 Suunto EON Steel, 1 Scubapro G2, and 713 Shearwater blobs in MacDive's own format (not libdivecomputer's) that both parsers reject | **801 / 801 identical** (88 parsed dives byte-identical; 713 rejected with the same error and status), with the accepted deviation below |
+| 2026-11-03 | One closed-circuit (CCR) dive from a beta tester's Shearwater Petrel 3, with a setpoint change and diluent + oxygen mixes | **1 / 1 byte-identical**: covers CCR dive mode, per-sample setpoints, voted PPO₂, diluent usage, CNS and the persisted deco-model text |
+| 2026-11-03 | One CCR decompression dive with a trimix diluent from a beta tester's Shearwater Petrel 2 (advertised "Petrel", logged as "Shearwater Petrel" by BlueDive 1.10; model 3 given through a Fingerprint XML) | **1 / 1 byte-identical**: adds decompression stops and a trimix diluent |
+| 2026-11-06 | Peregrine (export): 16 dives from the owner's Shearwater Peregrine (BlueDive 2.1 (163) XML export) | **16 / 16 byte-identical** |
+| 2026-11-06 | The owner's Aqualung i300C test unit: 78 dives covering several years, downloaded over Bluetooth with the old version | **78 / 78 byte-identical**: first non-Shearwater family (Oceanic Atom 2 backend) |
+| 2026-11-06 | Peregrine (Bluetooth): 52 dives from the same Peregrine, downloaded over Bluetooth with the old version | **52 / 52 byte-identical** |
+| 2026-11-19 | All eight sets, re-run after the libdivecomputer `14f9293` sync (`eff1017`) and the purge change (`d09f8a3`), measured in the owner's session | **All pass**: main 87, CCR 1, i300C 78, Perdix 3 second set 30, Peregrine (export) 16, Peregrine (Bluetooth) 52, Petrel 1, MacDive logbook 801 (1 066 cases). No new accepted deviation. The only parser change in the range is the Apeks DSX helium offset (`2c40452`), and no set contains a DSX dive; the other changes are in the download code (Mares, i330R/DSX), which golden parity does not exercise |
 
 ## Accepted deviations
 
@@ -102,5 +117,9 @@ The comparison is byte-identical except for these documented, owner-approved dif
 | Field | Old library | DiveComputerKit | Why accepted |
 |---|---|---|---|
 | `gasMixCount`, `tankCount` | `0` when the computer does not report the count (e.g. EON Steel dives without gas data) | `nil` ("not reported") | Neither value is read by the app (the mapper counts the `gasMixes` / `tanks` arrays) nor stored; the Gas tab is unchanged. Owner decision 2026-11-03 |
+
+## After a libdivecomputer sync
+
+The goldens record the **old** library's output and are produced only by the external harness above. They are never regenerated with DiveComputerKit — that would compare the new code with itself. When an upstream parser change makes a golden differ, explain the difference from the upstream commit, then either fix the code or, with the owner's approval, add a row to "Accepted deviations" (and its rule to the golden comparison); the golden files themselves are never edited. Sync checklist: `Sources/CLibDiveComputer/UPSTREAM.md`.
 
 Not yet covered by a golden (no dive in the sets exercises it): other families (Mares, OSTC, Suunto beyond the EON Steel, …), `tanks` when `DC_FIELD_TANK_COUNT` is unsupported (currently an empty array), Bühlmann with GF 0/0, VPM conservatism text, `gasMixes` when the count is 0, CCR bailout to open circuit, per-sensor PPO₂ readings, change-only setpoint computers (OSTC, Divesoft), GPS entry/exit, and sub-second sample times. Add users' exports from other families to close these.
