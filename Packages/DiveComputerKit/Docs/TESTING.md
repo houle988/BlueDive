@@ -91,7 +91,7 @@ Not implemented: trace replay (`DCK_TRACE_DIR`) and an authentication replay for
 
 | Model | Family | How verified | Date | Result | Notes |
 |---|---|---|---|---|---|
-| Shearwater Perdix 2 | shearwaterPetrel | Owner's unit, device; golden | 2026-11-06 cutover; 2026-11-13/14 | OK | Downloads after the purge change, protocol V1; nothing dropped by purges |
+| Shearwater Perdix 2 | shearwaterPetrel | Owner's unit, device; golden | 2026-11-06 cutover; 2026-11-13/14; 2026-11-20 | OK | Downloads after the purge change, protocol V1; nothing dropped by purges. libdivecomputer `0194f09` (2026-11-20): incremental sync identical to the 2.2 build (same command sequence, no new dives); Download All Dives read 3 manifest pages and 105 dives, all merged, no deleted record in the manifest (the fixed case is not exercised by this unit) |
 | Shearwater Perdix 3 | shearwaterPetrel | Owner's unit, device; golden | 2026-11-06; 2026-11-13/14 | OK | Downloads after the purge change, protocol V2; cancel tested at cutover |
 | Shearwater Peregrine | shearwaterPetrel | Owner's unit, device at cutover; golden (two sets from that unit: one from an export, one downloaded over Bluetooth) | 2026-11-06 | OK | |
 | Aqualung i300C | oceanicAtom2 | Owner's test unit, device; golden | 2026-11-06; 2026-11-13/14 | OK | Open, first-read floor and retry purges; cancel mid-answer led to the close quiet wait |

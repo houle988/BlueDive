@@ -6,12 +6,14 @@ This target is [libdivecomputer](https://github.com/libdivecomputer/libdivecompu
 
 | Field | Value |
 |---|---|
-| Upstream commit | `14f92934c0aedbba7a5aafe8915e8a96d944335c` (2026-11-12, "Retry a corrupt flash read on the Aqualung i330R and Apeks DSX") |
+| Upstream commit | `0194f09d91c850b18480e73a9fa7b276c926043c` (2026-11-16, "Shearwater: keep the manifest records behind a deleted dive") |
 | Version (`version.h`) | 0.10.0 (upstream `0.10.0-devel`; the suffix is not used, see below) |
-| Previous snapshot | `9e6c3c8` (2026-09-11), taken from libdc-swift `working` @ `fd5b0db` (`Docs/DECISIONS.md`, O5) |
-| Synced on | 2026-11-13 |
+| Previous snapshot | `14f9293` (2026-11-12), synced on 2026-11-13; before it `9e6c3c8` (2026-09-11), taken from libdc-swift `working` @ `fd5b0db` (`Docs/DECISIONS.md`, O5) |
+| Synced on | 2026-11-20 |
 
 ### Changes since the previous snapshot
+
+Cumulative since the libdc-swift snapshot `9e6c3c8`; `0194f09` is the only change since `14f9293`.
 
 | Upstream commit | File | Change |
 |---|---|---|
@@ -19,12 +21,13 @@ This target is [libdivecomputer](https://github.com/libdivecomputer/libdivecompu
 | `b33112b` | `src/mares_iconhd.c` | A dive whose data is unavailable (`0x08000020`) is returned with its header only instead of ending the download |
 | `2c40452` | `src/oceanic_atom2_parser.c` | Apeks DSX: corrected helium offset (changes parsed gas mixes of DSX dives) |
 | `14f9293` | `src/pelagic_i330r.c` | i330R / DSX: a failed flash read (protocol error or timeout) is retried up to 3 times, with a 1 s sleep and an input purge, which BlueDive implements (`DCIOStream` forwards it to `BLEPeripheralLink.purge`, which discards the queued notifications once the device is quiet; `Docs/DECISIONS.md`, L5) |
+| `0194f09` | `src/shearwater_petrel.c` | Shearwater: a deleted dive record in a manifest page no longer drops the last valid records of that page (their dives were never downloaded); deleted records are left out of the progress maximum. No transport change. Dives skipped before this fix are older than the stored fingerprint, so an incremental download does not recover them; a download with the fingerprint ignored does |
 
 No new backends, `DC_FAMILY_*`, descriptor rows, BLE filters, `DC_IOCTL_*`, `dc_sample_type_t` or `dc_field_type_t` members.
 
-### Verification against upstream (2026-11-13)
+### Verification against upstream (2026-11-20)
 
-`diff -r` of this tree against a clone of upstream at `14f9293`:
+`diff -r` of this tree against a clone of upstream at `0194f09`:
 
 | Path | Result |
 |---|---|
