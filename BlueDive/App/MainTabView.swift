@@ -110,6 +110,10 @@ struct MainTabView: View {
     @State private var insuranceToRenew: DivingInsurance? = nil
     /// App-wide sheets opened from every tab's toolbar (`MainWindowToolbar`).
     @State private var showSettings = false
+    #if os(macOS)
+    /// About BlueDive and Help → BlueDive Help (menu bar), for this window only.
+    @State private var showAbout = false
+    #endif
     @State private var showSyncStatus = false
     #if os(iOS)
     /// How many tabs, from the end, the iPad tab bar shows as pinned icons (`TabBarFit`).
@@ -236,9 +240,7 @@ struct MainTabView: View {
             selectedTab = .dives
         }
         #if os(macOS)
-        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
-            showSettings = true
-        }
+        .modifier(MainWindowMenuSheets(showAbout: $showAbout, showSettings: $showSettings))
         #endif
         .onReceive(NotificationCenter.default.publisher(for: .openEquipmentForService)) { note in
             let gearId = note.object as? String
@@ -636,6 +638,56 @@ private struct TabBarFitTracker: ViewModifier {
             titleWidths: titleWidths,
             showsCalculatorsMenu: showCalculatorsMenu)
         if count != pinnedTabCount { pinnedTabCount = count }
+    }
+}
+#endif
+
+#if os(macOS)
+/// The sheets a main window presents from the menu bar (About BlueDive, Help → BlueDive Help,
+/// Settings…). Each window publishes its own with `focusedSceneValue`, so a command opens the
+/// sheet in the window in front only, not in every open window.
+///
+/// Equal only for the same window (`windowID`): SwiftUI compares the published value to decide
+/// whether the menu commands must update, so two windows' actions must never compare equal.
+/// `ShowSheetAction` is not used here for that reason: its `==` is always true (it keeps
+/// environment readers from redrawing), which left the commands calling the first window's
+/// actions after another window came to the front.
+struct MainWindowActions: Equatable {
+    let windowID: UUID
+    let showAbout: () -> Void
+    let showSettings: () -> Void
+
+    static func == (lhs: MainWindowActions, rhs: MainWindowActions) -> Bool {
+        lhs.windowID == rhs.windowID
+    }
+}
+
+extension FocusedValues {
+    @Entry var mainWindowActions: MainWindowActions?
+}
+
+/// Publishes this window's `MainWindowActions` for the menu bar's About, Help and Settings
+/// commands, which act on the window in front only (`MainWindowCommand` in `BlueDiveApp`
+/// reads them through `@FocusedValue`), and presents this window's About sheet. Settings is
+/// presented by `MainTabView` itself, like its toolbar button. A modifier keeps
+/// `MainTabView.body` small enough to type-check.
+private struct MainWindowMenuSheets: ViewModifier {
+    @Binding var showAbout: Bool
+    @Binding var showSettings: Bool
+    /// Identifies this window's actions (see `MainWindowActions`).
+    @State private var windowID = UUID()
+
+    func body(content: Content) -> some View {
+        content
+            .focusedSceneValue(\.mainWindowActions, MainWindowActions(
+                windowID: windowID,
+                showAbout: { showAbout = true },
+                showSettings: { showSettings = true }
+            ))
+            .sheet(isPresented: $showAbout) {
+                AboutView()
+                    .standardSheetPresentation()
+            }
     }
 }
 #endif

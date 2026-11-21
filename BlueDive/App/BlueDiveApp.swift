@@ -177,9 +177,6 @@ struct BlueDiveApp: App {
     @State private var syncMonitor = CloudKitSyncMonitor()
     @State private var importCoordinator = FileImportCoordinator()
     @State private var diveStore = DiveStore()
-    #if os(macOS)
-    @State private var showingAbout = false
-    #endif
     
     /// The main window group. On macOS it has a stable id; SwiftUI then gives the window a
     /// stable frame autosave name ("main-AppWindow-1" — observed, not documented by Apple), so
@@ -252,12 +249,6 @@ struct BlueDiveApp: App {
                     importCoordinator.pendingURL = url
                 }
             }
-            #if os(macOS)
-            .sheet(isPresented: $showingAbout) {
-                AboutView()
-                    .standardSheetPresentation()
-            }
-            #endif
         }
         .modelContainer(Self.sharedModelContainer)
         #if os(macOS)
@@ -286,26 +277,23 @@ struct BlueDiveApp: App {
         }
         .commands {
             CommandGroup(replacing: .appInfo) {
-                Button("About BlueDive") {
-                    showingAbout = true
-                }
+                MainWindowCommand(title: "About BlueDive", action: \.showAbout)
             }
             // Settings is the same sheet as on iOS (presented by MainTabView),
             // not a separate Settings scene; ⌘, opens it from the app menu.
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
-                    // Settings is itself a sheet: ignore ⌘, while another sheet is already
-                    // shown (the key window is then that sheet, or has one attached), so the
-                    // request is not left pending until that sheet closes.
-                    if let window = NSApp.keyWindow, window.sheetParent != nil || window.attachedSheet != nil {
-                        return
-                    }
-                    NotificationCenter.default.post(name: .openSettings, object: nil)
-                }
-                .keyboardShortcut(",", modifiers: .command)
+                MainWindowCommand(title: "Settings…", action: \.showSettings,
+                                  shortcut: KeyboardShortcut(",", modifiers: .command))
             }
             CommandGroup(after: .sidebar) {
                 ProfilePreviewCommand()
+            }
+            // Replaces the default Help item, which looks for an Apple Help Book the app
+            // does not ship ("No help available for BlueDive"), with the About sheet,
+            // which links to the documentation.
+            CommandGroup(replacing: .help) {
+                MainWindowCommand(title: "BlueDive Help", action: \.showAbout,
+                                  shortcut: KeyboardShortcut("?", modifiers: .command))
             }
         }
         #endif
@@ -618,6 +606,35 @@ struct BlueDiveApp: App {
 
 
 #if os(macOS)
+/// A menu command that presents a sheet in the main window in front (About BlueDive,
+/// BlueDive Help, Settings…), through the actions that window publishes with
+/// `focusedSceneValue` (`MainWindowActions`), so other open windows are left alone. Disabled
+/// when no main window is in front.
+private struct MainWindowCommand: View {
+    let title: LocalizedStringKey
+    let action: KeyPath<MainWindowActions, () -> Void>
+    var shortcut: KeyboardShortcut? = nil
+
+    @FocusedValue(\.mainWindowActions) private var actions
+
+    var body: some View {
+        Button(title) {
+            // Ignored while a sheet is already shown, so the request is not left pending
+            // until that sheet closes.
+            guard !Self.isSheetShown else { return }
+            actions?[keyPath: action]()
+        }
+        .keyboardShortcut(shortcut)
+        .disabled(actions == nil)
+    }
+
+    /// Whether a sheet is already shown: the key window is then that sheet, or has one attached.
+    private static var isSheetShown: Bool {
+        guard let window = NSApp.keyWindow else { return false }
+        return window.sheetParent != nil || window.attachedSheet != nil
+    }
+}
+
 /// View → Show Profile Preview (⇧⌘P): shows or hides the profile chart above the main dive
 /// list — the same preference as Settings → Dive Profile. A view, so the menu's checkmark
 /// follows the preference when it is changed in Settings.

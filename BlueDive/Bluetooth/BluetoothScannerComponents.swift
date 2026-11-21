@@ -244,6 +244,22 @@ struct KnownDeviceRow: View {
     }
 }
 
+// MARK: - Dive Computer Report Footer
+
+/// The last section of the Known Devices and Search screens: a footer-only section inviting
+/// the user to report whether their dive computer works, linking to the website's supported
+/// computers page (the list, and its "report" section) and the wiki table it reads. Each
+/// translation links to the website page in its own language (/fr/computers, /de/computers…),
+/// so the page matches the in-app language rather than the browser's.
+struct DiveComputerReportFooter: View {
+    var body: some View {
+        Section {
+        } footer: {
+            Text("Does your dive computer work with BlueDive — or not? See the [supported dive computers](https://www.bluedive.app/en/computers) and [report your result](https://www.bluedive.app/en/computers#report) to help other divers. The list is also on the [wiki](https://github.com/houle988/BlueDive/wiki/Supported-Dive-Computers).")
+        }
+    }
+}
+
 // MARK: - Device Reassociation Picker Sheet
 
 struct DeviceReassociationPickerSheet: View {

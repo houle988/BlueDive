@@ -24,21 +24,33 @@ let droppedNonBLEModels: Set<String> = ["Oceanic Atom 3.1", "Sherwood Wisdom 3",
 
 struct CatalogConsistencyTests {
 
-    @Test func familyRawValuesUnchanged() {
-        #expect(DeviceFamily.allCases.map(\.rawValue) == LegacyCatalog.shared.families)
+    /// Family raw values are persisted (`DeviceFingerprint.familyID`, Fingerprint XML,
+    /// `com.libdc.storedDevices`). The old library's families stay first, unchanged and in
+    /// order; new families may only be appended (Docs/ADDING_A_DIVE_COMPUTER.md, case C).
+    /// Each libdivecomputer family maps to one case: `init?(dcFamily:)` silently takes the first.
+    @Test func legacyFamiliesAreKept() {
+        let problems = LegacyCatalogCheck.familyProblems(legacy: LegacyCatalog.shared.families,
+                                                         current: DeviceFamily.allCases.map(\.rawValue))
+        #expect(problems.isEmpty, "\(problems.joined(separator: "\n"))")
+        let dcFamilies = DeviceFamily.allCases.map { String($0.dcFamily.rawValue) }
+        let shared = LegacyCatalogCheck.duplicates(dcFamilies)
+        #expect(shared.isEmpty, "libdivecomputer families mapped by more than one case: \(shared.joined(separator: ", "))")
     }
 
-    /// Names, families and model numbers are persisted: identical to the old catalog,
-    /// minus the dropped non-BLE entries, in the same order.
-    @Test func modelsMatchLegacyCatalog() {
-        let legacy = LegacyCatalog.shared.supportedModels.filter { !droppedNonBLEModels.contains($0.name) }
+    /// Names, families and model numbers are persisted (`Dive.computerName`,
+    /// `DeviceFingerprint`, `com.libdc.storedDevices`, icons). Every model of the old
+    /// catalog, minus the dropped non-BLE entries, is still listed with the same name,
+    /// family and model number, in the same relative order, and each (family, model)
+    /// still resolves to the same first name. New models may be added anywhere that keeps
+    /// this (Docs/ADDING_A_DIVE_COMPUTER.md).
+    @Test func legacyModelsAreKept() {
+        let legacy = LegacyCatalog.shared.supportedModels
+            .filter { !droppedNonBLEModels.contains($0.name) }
+            .map { LegacyCatalogCheck.Entry(name: $0.name, family: $0.family, modelID: $0.modelID) }
         let current = DeviceCatalog.supportedModels
-        #expect(current.count == legacy.count)
-        for (new, old) in zip(current, legacy) {
-            #expect(new.name == old.name)
-            #expect(new.family.rawValue == old.family, "\(new.name)")
-            #expect(new.modelID == old.modelID, "\(new.name)")
-        }
+            .map { LegacyCatalogCheck.Entry(name: $0.name, family: $0.family.rawValue, modelID: $0.modelID) }
+        let problems = LegacyCatalogCheck.modelProblems(legacy: legacy, current: current)
+        #expect(problems.isEmpty, "\(problems.joined(separator: "\n"))")
     }
 
     @Test func namesAreUnique() {
@@ -65,9 +77,216 @@ struct CatalogConsistencyTests {
         }
     }
 
-    @Test func serviceUUIDsUnchanged() {
-        #expect(BLEServiceCatalog.knownServiceUUIDStrings == LegacyCatalog.shared.knownServiceUUIDs)
-        #expect(BLEServiceCatalog.knownServiceUUIDs.count == 14)
+    /// The old library's 14 service UUIDs are all still known (scan filter and service
+    /// selection), compared case-insensitively; new UUIDs may be added; every entry is
+    /// lowercased (`BLEServiceCatalog.isKnown` compares lowercased forms) and none is listed twice.
+    @Test func legacyServiceUUIDsAreKept() {
+        let legacy = LegacyCatalog.shared.knownServiceUUIDs
+        #expect(legacy.count == 14)
+        let current = BLEServiceCatalog.knownServiceUUIDStrings
+        let notLowercased = current.filter { $0 != $0.lowercased() }
+        #expect(notLowercased.isEmpty, "Not lowercased (BLEServiceCatalog.isKnown compares lowercased UUIDs): \(notLowercased.joined(separator: ", "))")
+        let missing = LegacyCatalogCheck.missingUUIDs(legacy: legacy, current: current)
+        #expect(missing.isEmpty, "Service UUIDs of the old catalog missing: \(missing.joined(separator: ", "))")
+        let duplicates = LegacyCatalogCheck.duplicates(current.map { $0.lowercased() })
+        #expect(duplicates.isEmpty, "Service UUIDs listed twice: \(duplicates.joined(separator: ", "))")
+    }
+}
+
+/// The checks behind `legacyFamiliesAreKept`, `legacyModelsAreKept` and `legacyServiceUUIDsAreKept`, kept pure so
+/// `LegacyCatalogCheckTests` can prove them with made-up catalogs.
+enum LegacyCatalogCheck {
+
+    struct Entry: Equatable, Sendable {
+        let name: String
+        let family: String
+        let modelID: UInt32
+    }
+
+    /// One line per problem; empty when `legacy` is a subsequence of `current` (matched by
+    /// name, with the same family and model) and every legacy (family, model) still resolves
+    /// to the same first name (`DeviceCatalog.model(family:modelID:)` takes the first match).
+    static func modelProblems(legacy: [Entry], current: [Entry]) -> [String] {
+        var problems: [String] = []
+        var positionByName: [String: Int] = [:]
+        for (position, entry) in current.enumerated() where positionByName[entry.name] == nil {
+            positionByName[entry.name] = position
+        }
+        var previous: (name: String, position: Int)?
+        for old in legacy {
+            guard let position = positionByName[old.name] else {
+                problems.append("\"\(old.name)\" (\(old.family), 0x\(String(old.modelID, radix: 16))) is missing: removed or renamed")
+                continue
+            }
+            let new = current[position]
+            if new.family != old.family || new.modelID != old.modelID {
+                problems.append("\"\(old.name)\" changed from (\(old.family), 0x\(String(old.modelID, radix: 16))) to (\(new.family), 0x\(String(new.modelID, radix: 16)))")
+            }
+            if let previous, position < previous.position {
+                problems.append("\"\(old.name)\" moved before \"\(previous.name)\"; legacy models keep their relative order")
+            } else {
+                previous = (old.name, position)
+            }
+        }
+        var checkedPairs = Set<String>()
+        for old in legacy {
+            let key = "\(old.family)/\(old.modelID)"
+            guard checkedPairs.insert(key).inserted else { continue }
+            if let first = current.first(where: { $0.family == old.family && $0.modelID == old.modelID }),
+               first.name != old.name {
+                problems.append("(\(old.family), 0x\(String(old.modelID, radix: 16))) now resolves to \"\(first.name)\" instead of \"\(old.name)\"; list a new sibling after it")
+            }
+        }
+        return problems
+    }
+
+    /// One line per problem; empty when `legacy` is a prefix of `current` (the same raw
+    /// values in the same order, new families appended after them) and no raw value is
+    /// listed twice.
+    static func familyProblems(legacy: [String], current: [String]) -> [String] {
+        var problems: [String] = []
+        for (position, old) in legacy.enumerated() {
+            guard position < current.count else {
+                problems.append("\"\(old)\" (position \(position)) is missing: removed")
+                continue
+            }
+            let new = current[position]
+            if new != old {
+                problems.append("Position \(position) is \"\(new)\" instead of \"\(old)\"; legacy families keep their raw value and order, new ones are appended")
+            }
+        }
+        for repeated in duplicates(current) {
+            problems.append("\"\(repeated)\" is listed more than once")
+        }
+        return problems
+    }
+
+    /// The legacy UUIDs absent from `current`, case-insensitively.
+    static func missingUUIDs(legacy: [String], current: [String]) -> [String] {
+        let known = Set(current.map { $0.lowercased() })
+        return legacy.filter { !known.contains($0.lowercased()) }
+    }
+
+    /// The values that appear more than once, in first-appearance order.
+    static func duplicates(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var repeated: [String] = []
+        for value in values where !seen.insert(value).inserted && !repeated.contains(value) {
+            repeated.append(value)
+        }
+        return repeated
+    }
+}
+
+/// `LegacyCatalogCheck` with made-up catalogs: additions pass; removals, renames,
+/// changes, reorders, shadowed model numbers, removed UUIDs and families not appended fail.
+struct LegacyCatalogCheckTests {
+
+    typealias Entry = LegacyCatalogCheck.Entry
+    static let legacy: [Entry] = [
+        Entry(name: "Vendor A One", family: "familyA", modelID: 1),
+        Entry(name: "Vendor A Two", family: "familyA", modelID: 2),
+        Entry(name: "Vendor A Two Plus", family: "familyA", modelID: 2),
+        Entry(name: "Vendor B One", family: "familyB", modelID: 1)
+    ]
+
+    @Test func unchangedCatalogPasses() {
+        #expect(LegacyCatalogCheck.modelProblems(legacy: Self.legacy, current: Self.legacy).isEmpty)
+    }
+
+    @Test func additionsAnywherePass() {
+        var current = Self.legacy
+        current.insert(Entry(name: "Vendor C One", family: "familyC", modelID: 1), at: 0)
+        current.insert(Entry(name: "Vendor A Three", family: "familyA", modelID: 3), at: 3)
+        current.append(Entry(name: "Vendor A Two Lite", family: "familyA", modelID: 2))
+        #expect(LegacyCatalogCheck.modelProblems(legacy: Self.legacy, current: current).isEmpty)
+    }
+
+    @Test func removedModelFails() {
+        let current = Self.legacy.filter { $0.name != "Vendor A Two Plus" }
+        let problems = LegacyCatalogCheck.modelProblems(legacy: Self.legacy, current: current)
+        #expect(problems.count == 1)
+        #expect(problems.first?.contains("\"Vendor A Two Plus\"") == true)
+    }
+
+    @Test func renamedModelFails() {
+        var current = Self.legacy
+        current[3] = Entry(name: "Vendor B 1", family: "familyB", modelID: 1)
+        let problems = LegacyCatalogCheck.modelProblems(legacy: Self.legacy, current: current)
+        #expect(problems.contains { $0.contains("\"Vendor B One\"") && $0.contains("missing") })
+    }
+
+    @Test func changedFamilyOrModelFails() {
+        var current = Self.legacy
+        current[0] = Entry(name: "Vendor A One", family: "familyB", modelID: 1)
+        current[3] = Entry(name: "Vendor B One", family: "familyB", modelID: 9)
+        let problems = LegacyCatalogCheck.modelProblems(legacy: Self.legacy, current: current)
+        #expect(problems.contains { $0.contains("\"Vendor A One\" changed") })
+        #expect(problems.contains { $0.contains("\"Vendor B One\" changed") })
+    }
+
+    @Test func reorderedModelsFail() {
+        var current = Self.legacy
+        current.swapAt(0, 3)
+        let problems = LegacyCatalogCheck.modelProblems(legacy: Self.legacy, current: current)
+        #expect(problems.contains { $0.contains("moved") })
+    }
+
+    @Test func newSiblingBeforeSharedModelNumberFails() {
+        var current = Self.legacy
+        current.insert(Entry(name: "Vendor A Two Lite", family: "familyA", modelID: 2), at: 1)
+        let problems = LegacyCatalogCheck.modelProblems(legacy: Self.legacy, current: current)
+        #expect(problems == ["(familyA, 0x2) now resolves to \"Vendor A Two Lite\" instead of \"Vendor A Two\"; list a new sibling after it"])
+    }
+
+    static let legacyFamilies = ["familyA", "familyB", "familyC"]
+
+    @Test func unchangedFamiliesPass() {
+        #expect(LegacyCatalogCheck.familyProblems(legacy: Self.legacyFamilies, current: Self.legacyFamilies).isEmpty)
+    }
+
+    @Test func appendedFamiliesPass() {
+        let current = Self.legacyFamilies + ["familyD", "familyE"]
+        #expect(LegacyCatalogCheck.familyProblems(legacy: Self.legacyFamilies, current: current).isEmpty)
+    }
+
+    @Test func removedFamilyFails() {
+        let current = ["familyA", "familyB"]
+        let problems = LegacyCatalogCheck.familyProblems(legacy: Self.legacyFamilies, current: current)
+        #expect(problems == ["\"familyC\" (position 2) is missing: removed"])
+    }
+
+    @Test func renamedFamilyFails() {
+        let current = ["familyA", "familyB2", "familyC"]
+        let problems = LegacyCatalogCheck.familyProblems(legacy: Self.legacyFamilies, current: current)
+        #expect(problems.count == 1)
+        #expect(problems.first?.contains("\"familyB2\" instead of \"familyB\"") == true)
+    }
+
+    @Test func reorderedFamiliesFail() {
+        let current = ["familyB", "familyA", "familyC"]
+        #expect(LegacyCatalogCheck.familyProblems(legacy: Self.legacyFamilies, current: current).count == 2)
+    }
+
+    @Test func familyInsertedInTheMiddleFails() {
+        let current = ["familyA", "familyD", "familyB", "familyC"]
+        #expect(!LegacyCatalogCheck.familyProblems(legacy: Self.legacyFamilies, current: current).isEmpty)
+    }
+
+    @Test func duplicateFamilyFails() {
+        let current = Self.legacyFamilies + ["familyA"]
+        let problems = LegacyCatalogCheck.familyProblems(legacy: Self.legacyFamilies, current: current)
+        #expect(problems == ["\"familyA\" is listed more than once"])
+    }
+
+    @Test func serviceUUIDChecks() {
+        let legacy = ["0000aaaa-0000-1000-8000-00805f9b34fb", "1234abcd-0000-0000-0000-000000000001"]
+        #expect(LegacyCatalogCheck.missingUUIDs(legacy: legacy, current: legacy).isEmpty)
+        #expect(LegacyCatalogCheck.missingUUIDs(legacy: legacy, current: legacy.map { $0.uppercased() }).isEmpty)
+        #expect(LegacyCatalogCheck.missingUUIDs(legacy: legacy, current: legacy + ["5678ef00-0000-0000-0000-000000000002"]).isEmpty)
+        #expect(LegacyCatalogCheck.missingUUIDs(legacy: legacy, current: [legacy[1]]) == [legacy[0]])
+        #expect(LegacyCatalogCheck.duplicates(legacy + [legacy[0], legacy[0]]) == [legacy[0]])
+        #expect(LegacyCatalogCheck.duplicates(legacy).isEmpty)
     }
 }
 

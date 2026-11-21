@@ -231,6 +231,8 @@ extension BluetoothScannerView {
                     Text("Search for new or previously unpaired dive computers.")
                 }
             }
+
+            DiveComputerReportFooter()
         }
         .formStyle(.grouped)
         .onAppear {
@@ -380,6 +382,8 @@ extension BluetoothScannerView {
             } footer: {
                 Text("Automatically set the dive computer's clock to your device's current time and time zone after each sync.")
             }
+
+            DiveComputerReportFooter()
         }
         .formStyle(.grouped)
         .onAppear {

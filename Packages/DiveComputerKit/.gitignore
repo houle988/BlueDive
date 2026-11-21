@@ -1,5 +1,17 @@
 .build/
 .swiftpm/
-# Golden files and BLE traces are private dive data (Docs/DECISIONS.md, Q3).
-Tests/Fixtures/golden/
-Tests/Fixtures/traces/
+# Golden files, BLE traces and dive exports are private dive data (Docs/DECISIONS.md, Q3).
+# They belong outside the repository (~/BlueDive-Fixtures, passed by DCK_GOLDEN_DIR /
+# BLUEDIVE_PARITY_DIR). These rules only catch copies dropped into the bundled fixtures
+# folder by mistake; the committed synthetic fixtures (*.json there) stay tracked.
+Tests/DiveComputerKitTests/Fixtures/golden*/
+Tests/DiveComputerKitTests/Fixtures/traces/
+Tests/DiveComputerKitTests/Fixtures/mapper-parity/
+Tests/DiveComputerKitTests/Fixtures/exports/
+Tests/DiveComputerKitTests/Fixtures/**/*.log
+Tests/DiveComputerKitTests/Fixtures/**/*.bluedive
+Tests/DiveComputerKitTests/Fixtures/**/*.xml
+# Loose private files dropped directly in the fixtures folder: a golden set's manifest and
+# per-dive golden files (<8-hex serial>_<16-hex sha>.json).
+Tests/DiveComputerKitTests/Fixtures/manifest.json
+Tests/DiveComputerKitTests/Fixtures/????????_????????????????.json

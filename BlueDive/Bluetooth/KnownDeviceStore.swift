@@ -23,18 +23,59 @@ struct StoredDevice: Codable, Equatable {
 }
 
 /// The app-owned store of `StoredDevice` entries (formerly provided by LibDCSwift).
+///
+/// Entries this build cannot decode (e.g. a `DeviceFamily` added by a newer build, read here
+/// after a downgrade or by another build sharing the defaults) are kept: a read returns the
+/// readable entries in order instead of failing as a whole, and every write puts the
+/// unreadable ones back after the readable ones, so a newer build's devices survive an older
+/// build's saves. An explicit write for the same `uuid` replaces an unreadable entry, and
+/// `removeDevice(uuid:)` removes it. Only a JSON object with a string `uuid` is kept; other
+/// malformed elements are dropped on the next write. Kept entries are preserved by value
+/// (re-serialized), not byte for byte. Only whole entries survive: a field a newer build adds to
+/// `StoredDevice` must be optional, and an older build's save drops it. Limitation: kept
+/// entries' serials are not visible here, so the serial sweeps (`removingOtherIdentifiers`)
+/// and the known-device list never see them. A blob whose top level is not a JSON array still
+/// reads as nil, as before.
 final class DeviceStorage {
     static let shared = DeviceStorage()
 
     static let storageKey = "com.libdc.storedDevices"
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    /// The unreadable-entry count last logged, so a read logs only when it changes.
+    private var loggedUnreadableCount = 0
 
-    private init() {}
+    private convenience init() {
+        self.init(defaults: .standard)
+    }
+
+    /// For tests: a store over another defaults suite.
+    init(defaults: UserDefaults) {
+        self.defaults = defaults
+    }
 
     /// Every stored device, or nil when none were ever stored (or they cannot be read).
+    /// Entries that do not decode are skipped (see the type's comment).
     func getAllStoredDevices() -> [StoredDevice]? {
         guard let data = defaults.data(forKey: Self.storageKey) else { return nil }
-        return try? JSONDecoder().decode([StoredDevice].self, from: data)
+        if let devices = try? JSONDecoder().decode([StoredDevice].self, from: data) {
+            loggedUnreadableCount = 0
+            return devices
+        }
+        guard let elements = Self.jsonElements(of: data) else { return nil }
+        var devices: [StoredDevice] = []
+        var unreadable = 0
+        for element in elements {
+            if let device = Self.decodeDevice(element) {
+                devices.append(device)
+            } else {
+                unreadable += 1
+            }
+        }
+        if unreadable != loggedUnreadableCount {
+            loggedUnreadableCount = unreadable
+            DiveComputerLog.shared.log("[DeviceStorage] Kept \(unreadable) unreadable entry/entries (written by another build)", level: .warning)
+        }
+        return devices
     }
 
     func getStoredDevice(uuid: String) -> StoredDevice? {
@@ -86,14 +127,19 @@ final class DeviceStorage {
         serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
+    /// Removes the entry for `uuid`, readable or not (an unreadable entry's access code,
+    /// whose name is not read, is left in the Keychain).
     func removeDevice(uuid: String) {
         guard var devices = getAllStoredDevices() else { return }
         if let removed = devices.first(where: { $0.uuid == uuid }) {
             BLEAccessCodeKeychain.delete(forAdvertisedName: removed.name)
         }
+        let readableCount = devices.count
         devices.removeAll { $0.uuid == uuid }
+        let hasUnreadable = unreadableElements().contains { Self.uuid(of: $0) == uuid }
+        guard devices.count < readableCount || hasUnreadable else { return }
         DiveComputerLog.shared.log("[DeviceStorage] Removed \(uuid)", level: .info)
-        updateStoredDevices(devices)
+        write(devices, droppingUnreadable: Set(devices.map(\.uuid)).union([uuid]))
     }
 
     /// Version of the former-library key cleanup already done, so it runs only once.
@@ -112,9 +158,61 @@ final class DeviceStorage {
         defaults.set(1, forKey: formerLibraryKeysCleanupVersionKey)
     }
 
+    /// Replaces the stored list with `devices`, keeping the stored entries this build cannot
+    /// read (after them) unless `devices` has an entry with the same `uuid`.
     func updateStoredDevices(_ devices: [StoredDevice]) {
+        write(devices, droppingUnreadable: Set(devices.map(\.uuid)))
+    }
+
+    private func write(_ devices: [StoredDevice], droppingUnreadable uuids: Set<String>) {
         guard let data = try? JSONEncoder().encode(devices) else { return }
-        defaults.set(data, forKey: Self.storageKey)
+        let kept = unreadableElements().filter { element in
+            Self.uuid(of: element).map { !uuids.contains($0) } ?? true
+        }
+        guard !kept.isEmpty else {
+            defaults.set(data, forKey: Self.storageKey)
+            return
+        }
+        guard let merged = Self.appending(kept, to: data) else { return }
+        defaults.set(merged, forKey: Self.storageKey)
+    }
+
+    /// The stored array's elements that do not decode as `StoredDevice` but are JSON objects
+    /// with a string `uuid` (other malformed elements are not kept); empty when the whole list
+    /// decodes, nothing is stored or the top level is not an array.
+    private func unreadableElements() -> [Any] {
+        guard let data = defaults.data(forKey: Self.storageKey),
+              (try? JSONDecoder().decode([StoredDevice].self, from: data)) == nil,
+              let elements = Self.jsonElements(of: data) else { return [] }
+        return elements.filter { Self.uuid(of: $0) != nil && Self.decodeDevice($0) == nil }
+    }
+
+    /// The top-level array's elements, or nil when `data` is not a JSON array.
+    private static func jsonElements(of data: Data) -> [Any]? {
+        (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])) as? [Any]
+    }
+
+    private static func decodeDevice(_ element: Any) -> StoredDevice? {
+        guard JSONSerialization.isValidJSONObject(element),
+              let data = try? JSONSerialization.data(withJSONObject: element) else { return nil }
+        return try? JSONDecoder().decode(StoredDevice.self, from: data)
+    }
+
+    private static func uuid(of element: Any) -> String? {
+        (element as? [String: Any])?["uuid"] as? String
+    }
+
+    /// `encoded` (a JSON array from `JSONEncoder`) followed by `elements`, as one array. The
+    /// readable entries keep the encoder's exact bytes.
+    private static func appending(_ elements: [Any], to encoded: Data) -> Data? {
+        guard let extra = try? JSONSerialization.data(withJSONObject: elements),
+              encoded.first == UInt8(ascii: "["), encoded.last == UInt8(ascii: "]"),
+              extra.first == UInt8(ascii: "["), extra.last == UInt8(ascii: "]") else { return nil }
+        guard encoded.count > 2 else { return extra }
+        var merged = Data(encoded.dropLast())
+        merged.append(UInt8(ascii: ","))
+        merged.append(contentsOf: extra.dropFirst())
+        return merged
     }
 }
 

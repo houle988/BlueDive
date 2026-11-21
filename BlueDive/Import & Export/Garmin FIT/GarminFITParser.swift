@@ -25,7 +25,10 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
 
     private var fileSerial: UInt32?
     private var deviceSerial: UInt32?
-    private var deviceName: String?
+    /// What the creator DeviceInfo messages and the FileId say about the device; see
+    /// `computerName`.
+    private var creatorNaming = DeviceNaming()
+    private var fileIdNaming = DeviceNaming()
     private var userName: String?
 
     /// All DiveGasMesg keyed by FIT messageIndex (the gas slot number used by gas-switch events).
@@ -69,6 +72,7 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
         case Profile.MesgNum.fileId:
             let m = FileIdMesg(mesg: mesg)
             fileSerial = m.getSerialNumber()
+            fileIdNaming.fill(productName: m.getProductName(), garminProduct: try? m.getGarminProduct())
 
         case Profile.MesgNum.userProfile:
             let m = UserProfileMesg(mesg: mesg)
@@ -76,10 +80,13 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
 
         case Profile.MesgNum.deviceInfo:
             let m = DeviceInfoMesg(mesg: mesg)
+            // Serial and name come from the creator DeviceInfo (the watch itself), never from a
+            // paired sensor such as a tank transmitter. A message without a valid device index
+            // is taken as the creator. Each is taken from the first creator message that has it,
+            // so an incomplete creator message does not hide a later complete one.
+            guard m.getDeviceIndex().map({ $0 == DeviceIndexValues.creator }) ?? true else { break }
             if deviceSerial == nil { deviceSerial = m.getSerialNumber() }
-            if deviceName == nil {
-                deviceName = m.getProductName() ?? garminProductDisplayName(try? m.getGarminProduct())
-            }
+            creatorNaming.fill(productName: m.getProductName(), garminProduct: try? m.getGarminProduct())
 
         case Profile.MesgNum.diveGas:
             let m = DiveGasMesg(mesg: mesg)
@@ -133,9 +140,19 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
         // NOT its position in the sessions array. Using array position is wrong for
         // multi-session files where referenceIndex values may not be 0-based sequential.
         var summaryBySessionMsgIdx: [UInt16: DiveSummaryMesg] = [:]
+        // Descent files also carry a DiveSummaryMesg per lap (referenceMesg = lap) with the same
+        // referenceIndex 0 and fewer fields (no dive number), so only summaries referencing a
+        // session are kept. One without referenceMesg is used only when no session summary
+        // has that index.
         for summary in diveSummaries {
-            if let refIdx = summary.getReferenceIndex() {
+            guard let refIdx = summary.getReferenceIndex() else { continue }
+            switch summary.getReferenceMesg() {
+            case .session:
                 summaryBySessionMsgIdx[refIdx] = summary
+            case nil:
+                if summaryBySessionMsgIdx[refIdx] == nil { summaryBySessionMsgIdx[refIdx] = summary }
+            default:
+                continue
             }
         }
 
@@ -579,7 +596,7 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 rating: nil,
                 repetitiveDive: nil,
                 diver: userName,
-                computer: deviceName,
+                computer: computerName,
                 serial: serial.map { String($0) },
                 maxDepth: maxDepth,
                 averageDepth: avgDepth,
@@ -750,17 +767,52 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
 
     // MARK: - Device Name
 
-    private func garminProductDisplayName(_ product: GarminProduct?) -> String {
-        guard let product else { return "Garmin Descent" }
+    /// What one message (the FileId or a creator DeviceInfo) says about the device. Each value
+    /// is kept from the first message that has it, so an incomplete message does not hide a
+    /// later complete one.
+    private struct DeviceNaming {
+        /// The message's own product name.
+        var productName: String?
+        /// A known Descent model from the message's Garmin product ID.
+        var descentModel: String?
+        /// The message has a Garmin product ID, known to the SDK or not. The SDK gives one only
+        /// when the message's manufacturer uses Garmin product IDs.
+        var hasGarminProduct = false
+
+        mutating func fill(productName: String?, garminProduct: GarminProduct?) {
+            if self.productName == nil, let productName, !productName.isEmpty {
+                self.productName = productName
+            }
+            if descentModel == nil { descentModel = garminProduct.flatMap(GarminFITParser.descentModelName) }
+            if garminProduct != nil { hasGarminProduct = true }
+        }
+    }
+
+    /// The dive computer's name, most specific first: a product name the watch or the FileId
+    /// gives, else a known Descent model from either product ID, else "Garmin" for any other
+    /// Garmin product (a non-Descent watch, or an ID the SDK does not know yet), else none —
+    /// another brand without a product name, or no product at all.
+    private var computerName: String? {
+        creatorNaming.productName
+            ?? fileIdNaming.productName
+            ?? creatorNaming.descentModel
+            ?? fileIdNaming.descentModel
+            ?? (creatorNaming.hasGarminProduct || fileIdNaming.hasGarminProduct ? "Garmin" : nil)
+    }
+
+    /// Name of a known Descent model from its Garmin product ID; nil for any other product.
+    nonisolated private static func descentModelName(_ product: GarminProduct) -> String? {
         switch product {
         case .descent:         return "Garmin Descent"
-        case .descentT1:       return "Garmin Descent T1"
-        case .descentMk2:      return "Garmin Descent Mk2"
-        case .descentMk2s:     return "Garmin Descent Mk2s"
-        case .descentG1:       return "Garmin Descent G1"
+        // The Asia variants are the same watches sold under a regional product ID.
+        case .descentMk2, .descentMk2Asia:   return "Garmin Descent Mk2"
+        case .descentMk2s, .descentMk2sAsia: return "Garmin Descent Mk2s"
+        case .descentG1, .descentG1Asia:     return "Garmin Descent G1"
+        case .descentG2:       return "Garmin Descent G2"
         case .descentMk3:      return "Garmin Descent Mk3"
         case .descentMk3i:     return "Garmin Descent Mk3i"
-        default:               return "Garmin Descent"
+        case .descentX10:      return "Garmin Descent X10"
+        default:               return nil
         }
     }
 }
