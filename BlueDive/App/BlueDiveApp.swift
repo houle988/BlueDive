@@ -287,6 +287,7 @@ struct BlueDiveApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About BlueDive") {
+                    guard !Self.isSheetShown else { return }
                     showingAbout = true
                 }
             }
@@ -295,11 +296,8 @@ struct BlueDiveApp: App {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
                     // Settings is itself a sheet: ignore ⌘, while another sheet is already
-                    // shown (the key window is then that sheet, or has one attached), so the
-                    // request is not left pending until that sheet closes.
-                    if let window = NSApp.keyWindow, window.sheetParent != nil || window.attachedSheet != nil {
-                        return
-                    }
+                    // shown, so the request is not left pending until that sheet closes.
+                    guard !Self.isSheetShown else { return }
                     NotificationCenter.default.post(name: .openSettings, object: nil)
                 }
                 .keyboardShortcut(",", modifiers: .command)
@@ -307,9 +305,29 @@ struct BlueDiveApp: App {
             CommandGroup(after: .sidebar) {
                 ProfilePreviewCommand()
             }
+            // Replaces the default Help item, which looks for an Apple Help Book the app
+            // does not ship ("No help available for BlueDive"), with the About sheet,
+            // which links to the documentation.
+            CommandGroup(replacing: .help) {
+                Button("BlueDive Help") {
+                    guard !Self.isSheetShown else { return }
+                    showingAbout = true
+                }
+                .keyboardShortcut("?", modifiers: .command)
+            }
         }
         #endif
     }
+
+    #if os(macOS)
+    /// Whether a sheet is already shown (the key window is then that sheet, or has one
+    /// attached). The menu commands that present a sheet (About, Help, Settings) do nothing
+    /// then, so the request is not left pending until that sheet closes.
+    private static var isSheetShown: Bool {
+        guard let window = NSApp.keyWindow else { return false }
+        return window.sheetParent != nil || window.attachedSheet != nil
+    }
+    #endif
     
     // MARK: - Schema
     
