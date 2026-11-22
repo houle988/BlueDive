@@ -672,8 +672,6 @@ struct GearAttachmentEditor: View {
         _date = State(initialValue: attachment.date)
     }
 
-    private var isNew: Bool { newFile != nil }
-
     var body: some View {
         NavigationStack {
             Form {
@@ -725,6 +723,11 @@ struct GearAttachmentEditor: View {
                     TextEditor(text: $note)
                         .font(.body)
                         .scrollContentBackground(.hidden)
+                        #if os(iOS)
+                        // The text view's 5 pt line padding: the note's text lines up with the
+                        // title's, as in the other rows of the form.
+                        .padding(.leading, -5)
+                        #endif
                         .frame(minHeight: 100)
                         .accessibilityLabel(Text("Note"))
                         .overlay(alignment: .topTrailing) {
@@ -755,7 +758,9 @@ struct GearAttachmentEditor: View {
                 }
             }
             .groupedFormStyleOnMac()
-            .navigationTitle(isNew ? Text("Add Attachment") : Text("Edit Attachment"))
+            // One short title for adding and editing: "Add Attachment" was cut between Cancel
+            // and Save in some languages (e.g. "Ajouter une pièce j…").
+            .navigationTitle(Text("Attachment"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
