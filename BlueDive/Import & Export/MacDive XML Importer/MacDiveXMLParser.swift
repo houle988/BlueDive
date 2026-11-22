@@ -65,6 +65,11 @@ struct BlueDiveGlobalData: Sendable {
     // `var` with a nil default so the memberwise init lets parsers without a wind field omit them.
     var wind: String? = nil
     var windDirection: String? = nil
+    /// BlueDive XML only (`<tideHeight>`, above chart datum in the file's distance unit;
+    /// `<tideState>`): no other format records a tide. `var` with a nil default so the other
+    /// parsers can omit them.
+    var tideHeight: Double? = nil
+    var tideState: String? = nil
     let entryType: String?
 
     // MARK: Operator

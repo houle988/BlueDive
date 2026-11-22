@@ -14,8 +14,10 @@ enum WeatherBatchFetchStatus: Equatable {
     /// Stopped at the first network failure (e.g. no connection on the boat). `filled`: dives
     /// already updated and saved before stopping.
     case stoppedOffline(filled: Int)
-    /// Stopped because Open-Meteo answered with an error (e.g. rate limit).
+    /// Stopped because Open-Meteo answered with an error (e.g. server error).
     case stoppedUnavailable(filled: Int)
+    /// Stopped because Open-Meteo's free request limit was reached (HTTP 429).
+    case stoppedRateLimited(filled: Int)
     /// Stopped because saving the fetched values failed (they were discarded).
     case saveFailed(filled: Int)
     /// Stopped because the app went to the background (iOS would suspend it mid-request) or
@@ -66,7 +68,7 @@ enum WeatherBatchFetcher {
         var stillEmpty = 0      // dives left with an empty field Open-Meteo had no value for
         var unsaved = 0         // changed dives not saved yet
         var saveFailed = false
-        enum Stop { case offline, unavailable, cancelled }
+        enum Stop { case offline, unavailable, rateLimited, cancelled }
         var stop: Stop?
         var done = 0            // dives processed, for the debug log of an early stop
 
@@ -126,6 +128,8 @@ enum WeatherBatchFetcher {
                     logger.info("Dive from \(current.timestamp) weather: no data from Open-Meteo")
                 } catch OpenMeteoWeatherError.serviceUnavailable {
                     stop = .unavailable; break loop
+                } catch OpenMeteoWeatherError.rateLimited {
+                    stop = .rateLimited; break loop
                 } catch {
                     stop = Task.isCancelled ? .cancelled : .offline; break loop
                 }
@@ -153,6 +157,9 @@ enum WeatherBatchFetcher {
         case .unavailable:
             logger.info("Weather fetch stopped after \(done) of \(ids.count) dives: service unavailable (saved \(filled))")
             return .stoppedUnavailable(filled: filled)
+        case .rateLimited:
+            logger.info("Weather fetch stopped after \(done) of \(ids.count) dives: Open-Meteo request limit reached (saved \(filled))")
+            return .stoppedRateLimited(filled: filled)
         case .cancelled:
             logger.info("Weather fetch stopped after \(done) of \(ids.count) dives: cancelled (saved \(filled))")
             return .interrupted(filled: filled)

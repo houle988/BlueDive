@@ -1755,7 +1755,7 @@ struct EditSiteDetailsView: View {
                             formTextField("Latitude", text: $workingLatitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                            gpsSignToggleButton(for: $workingLatitude, prefilled: $prefilledLatitude)
+                            signToggleButton(for: $workingLatitude, prefilled: $prefilledLatitude, color: .green)
                             if !workingLatitude.isEmpty {
                                 Button {
                                     workingLatitude = ""
@@ -1774,7 +1774,7 @@ struct EditSiteDetailsView: View {
                             formTextField("Longitude", text: $workingLongitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                            gpsSignToggleButton(for: $workingLongitude, prefilled: $prefilledLongitude)
+                            signToggleButton(for: $workingLongitude, prefilled: $prefilledLongitude, color: .green)
                             if !workingLongitude.isEmpty {
                                 Button {
                                     workingLongitude = ""
@@ -1847,7 +1847,7 @@ struct EditSiteDetailsView: View {
                             formTextField("Latitude", text: $workingExitLatitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                            gpsSignToggleButton(for: $workingExitLatitude, prefilled: $prefilledExitLatitude)
+                            signToggleButton(for: $workingExitLatitude, prefilled: $prefilledExitLatitude, color: .green)
                             if !workingExitLatitude.isEmpty {
                                 Button {
                                     workingExitLatitude = ""
@@ -1866,7 +1866,7 @@ struct EditSiteDetailsView: View {
                             formTextField("Longitude", text: $workingExitLongitude)
                                 .platformKeyboardType(.decimalPad)
                                 .foregroundStyle(.primary)
-                            gpsSignToggleButton(for: $workingExitLongitude, prefilled: $prefilledExitLongitude)
+                            signToggleButton(for: $workingExitLongitude, prefilled: $prefilledExitLongitude, color: .green)
                             if !workingExitLongitude.isEmpty {
                                 Button {
                                     workingExitLongitude = ""
@@ -1924,34 +1924,6 @@ struct EditSiteDetailsView: View {
         Text("Latitude must be between −90 and 90, and longitude between −180 and 180.")
             .font(.caption)
             .foregroundStyle(.red)
-    }
-
-    /// A "+/−" button that toggles the sign of a GPS coordinate string, keeping the decimal pad usable.
-    /// It also negates the exact value behind the text, so flipping an untouched coordinate keeps
-    /// its full precision instead of saving the 6-decimal text.
-    @ViewBuilder
-    private func gpsSignToggleButton(for value: Binding<String>, prefilled: Binding<PrefilledDouble>) -> some View {
-        #if os(iOS)
-        Button {
-            let trimmed = value.wrappedValue.trimmingCharacters(in: .whitespaces)
-            let exact = prefilled.wrappedValue.resolve(trimmed)
-            let newText: String
-            if trimmed.hasPrefix("-") {
-                newText = String(trimmed.dropFirst())
-            } else if !trimmed.isEmpty {
-                newText = "-" + trimmed
-            } else {
-                newText = "-"
-            }
-            prefilled.wrappedValue = PrefilledDouble(value: exact.map { -$0 }, text: newText)
-            value.wrappedValue = newText
-        } label: {
-            Text("+/−")
-                .font(.system(.body, design: .rounded, weight: .medium))
-                .foregroundStyle(.green)
-        }
-        .buttonStyle(.plain)
-        #endif
     }
 
     /// A full-width tappable row for GPS actions (Pick on Map, Use Current Location, Same as Entry)
@@ -2050,6 +2022,11 @@ struct EditConditionsView: View {
     @State private var workingWind: String
     @State private var workingWindDirection: String
     @State private var workingVisibility: String
+    /// Tide height text, edited in the dive's stored distance unit (m or ft, like the site
+    /// altitude), so editing never converts it.
+    @State private var workingTideHeight: String
+    @State private var prefilledTideHeight: PrefilledDouble
+    @State private var workingTideState: String
     @State private var prefs = UserPreferences.shared
     @State private var isFetchingWeather = false
     /// Outcome of the last Fetch Weather, shown under the button. Kept as a case, not as
@@ -2087,6 +2064,25 @@ struct EditConditionsView: View {
         _workingWind       = State(initialValue: dive.wind ?? "")
         _workingWindDirection = State(initialValue: dive.windDirection ?? "")
         _workingVisibility = State(initialValue: dive.visibility ?? "")
+        let tideHeight = PrefilledDouble.decimals(dive.tideHeight, 2)
+        _prefilledTideHeight = State(initialValue: tideHeight)
+        _workingTideHeight = State(initialValue: tideHeight.text)
+        _workingTideState  = State(initialValue: dive.tideState ?? "")
+    }
+
+    /// The tide height to save: the stored value while the field is untouched, else the typed
+    /// value when it is a plausible tide height. Nil when empty or invalid.
+    private var resolvedTideHeight: Double? {
+        Dive.validatedTideHeight(prefilledTideHeight.resolve(workingTideHeight), inFeet: tideHeightInFeet)
+    }
+
+    /// Whether the dive stores distances, and so the tide height, in feet.
+    private var tideHeightInFeet: Bool { dive.importDistanceUnit == "feet" }
+
+    /// Text in the tide field that is not a valid tide height (Save is disabled meanwhile, so
+    /// a typo is never silently dropped).
+    private var tideHeightIsInvalid: Bool {
+        !workingTideHeight.trimmingCharacters(in: .whitespaces).isEmpty && resolvedTideHeight == nil
     }
 
     var body: some View {
@@ -2189,6 +2185,31 @@ struct EditConditionsView: View {
                     }
 
                     Section {
+                        ConditionsTemperatureField(label: "Tide Height", text: $workingTideHeight, icon: "water.waves.and.arrow.up", unit: (tideHeightInFeet ? DepthUnit.feet : DepthUnit.meters).symbol, signPrefilled: $prefilledTideHeight, iconColor: .teal)
+                        ConditionsPickerRow(label: "Tide State", selection: $workingTideState, options: DiveConditionOptions.tideState, icon: "arrow.up.arrow.down", optionLabel: { DiveConditionOptions.localizedTideState($0) })
+                    } header: {
+                        ConditionsSectionHeader(title: "Tide", icon: "water.waves.and.arrow.up", color: .teal)
+                    } footer: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if tideHeightIsInvalid {
+                                Group {
+                                    if tideHeightInFeet {
+                                        Text("Enter a tide height between −15 and +65 ft.")
+                                    } else {
+                                        Text("Enter a tide height between −5 and +20 m.")
+                                    }
+                                }
+                                .foregroundStyle(.red)
+                            }
+                            // Same sentence as the Temperatures footer: the tide is stored and
+                            // edited in the dive's distance unit.
+                            Text("Unit (\((tideHeightInFeet ? DepthUnit.feet : DepthUnit.meters).symbol)) matches the original import format and cannot be changed.")
+                            Text("Height from your local tide table, above its chart datum. Not for navigation.")
+                        }
+                        .font(.caption2)
+                    }
+
+                    Section {
                         AutocompleteMenuTextField(label: "Visibility", text: $workingVisibility, icon: "eye", color: .green, suggestions: fieldSuggestions[\Dive.visibility])
                     } header: {
                         ConditionsSectionHeader(title: "Visibility", icon: "eye", color: .green)
@@ -2213,6 +2234,8 @@ struct EditConditionsView: View {
                 switch failure {
                 case .serviceUnavailable:
                     Text("Open-Meteo could not provide the weather right now. Try again later.")
+                case .rateLimited:
+                    Text("Open-Meteo's request limit was reached. Try again later.")
                 case .unreachable:
                     Text("Open-Meteo could not be reached. Check your internet connection or try again later.")
                 }
@@ -2228,7 +2251,7 @@ struct EditConditionsView: View {
                     Button("Save") { save() }
                         .bold()
                         // Saving mid-fetch would close the sheet and drop the fetched values.
-                        .disabled(isFetchingWeather)
+                        .disabled(isFetchingWeather || tideHeightIsInvalid)
                 }
             }
         }
@@ -2258,19 +2281,26 @@ struct EditConditionsView: View {
         @Binding var text: String
         let icon: String
         let unit: String
+        /// For a value that can be negative (the tide height): the stored value behind the text,
+        /// flipped with it by the "+/−" button shown on iOS (the decimal pad has no minus key).
+        let signPrefilled: Binding<PrefilledDouble>?
+        /// Icon colour: orange for temperatures, the section's colour otherwise (teal for tide).
+        let iconColor: Color
 
-        init(label: LocalizedStringKey, text: Binding<String>, icon: String, unit: String) {
+        init(label: LocalizedStringKey, text: Binding<String>, icon: String, unit: String, signPrefilled: Binding<PrefilledDouble>? = nil, iconColor: Color = .orange) {
             self.label = label
             self._text = text
             self.icon = icon
             self.unit = unit
+            self.signPrefilled = signPrefilled
+            self.iconColor = iconColor
         }
 
 
         var body: some View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(iconColor)
                     .frame(width: 24)
                 Text(label)
                     .foregroundStyle(.primary)
@@ -2283,6 +2313,9 @@ struct EditConditionsView: View {
                 Text(unit)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let signPrefilled {
+                    signToggleButton(for: $text, prefilled: signPrefilled, color: .teal)
+                }
                 if !text.isEmpty {
                     Button {
                         text = ""
@@ -2327,7 +2360,7 @@ struct EditConditionsView: View {
     }
 
     private enum WeatherFetchFailure {
-        case unreachable, serviceUnavailable
+        case unreachable, serviceUnavailable, rateLimited
     }
 
     /// Literal keys, resolved through the sheet's locale when drawn.
@@ -2355,6 +2388,8 @@ struct EditConditionsView: View {
                 weatherFetchResult = .noData
             } catch OpenMeteoWeatherError.serviceUnavailable {
                 weatherFetchFailure = .serviceUnavailable
+            } catch OpenMeteoWeatherError.rateLimited {
+                weatherFetchFailure = .rateLimited
             } catch {
                 weatherFetchFailure = .unreachable
             }
@@ -2420,6 +2455,9 @@ struct EditConditionsView: View {
         dive.windDirection     = workingWindDirection.isEmpty ? nil : workingWindDirection
         let trimmedVisibility  = workingVisibility.trimmingCharacters(in: .whitespaces)
         dive.visibility        = trimmedVisibility.isEmpty ? nil : trimmedVisibility
+        // Untouched: the stored value at full precision; Save is disabled while it is invalid.
+        dive.tideHeight        = resolvedTideHeight
+        dive.tideState         = workingTideState.isEmpty ? nil : workingTideState
         // Conditions fields do not affect sort order, list grouping, or widget fingerprint.
         // @Observable handles row display updates automatically.
         store.commit(dive, affects: .rowFields)
@@ -3113,4 +3151,35 @@ struct EditGazView: View {
         store.commit(dive, affects: .rowFields)
         dismiss()
     }
+}
+
+/// A "+/−" button that toggles the sign of a number typed with the decimal pad, which has no
+/// minus key (GPS coordinates, tide height). It also negates the exact value behind the text,
+/// so flipping an untouched value keeps its full precision instead of saving its rounded text.
+/// iOS only: a Mac keyboard has a minus key.
+@ViewBuilder
+func signToggleButton(for value: Binding<String>, prefilled: Binding<PrefilledDouble>, color: Color) -> some View {
+    #if os(iOS)
+    Button {
+        let trimmed = value.wrappedValue.trimmingCharacters(in: .whitespaces)
+        let exact = prefilled.wrappedValue.resolve(trimmed)
+        let newText: String
+        // Pre-filled text may start with U+2212 MINUS SIGN (e.g. Norwegian number format).
+        if trimmed.hasPrefix("-") || trimmed.hasPrefix("\u{2212}") {
+            newText = String(trimmed.dropFirst())
+        } else if !trimmed.isEmpty {
+            newText = "-" + trimmed
+        } else {
+            newText = "-"
+        }
+        prefilled.wrappedValue = PrefilledDouble(value: exact.map { -$0 }, text: newText)
+        value.wrappedValue = newText
+    } label: {
+        Text("+/−")
+            .font(.system(.body, design: .rounded, weight: .medium))
+            .foregroundStyle(color)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text("Change Sign"))
+    #endif
 }

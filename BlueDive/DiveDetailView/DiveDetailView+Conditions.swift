@@ -74,9 +74,10 @@ extension DiveDetailView {
             }
 
             if usesTwoColumnCards {
-                // A wide window (`usesTwoColumnCards`) is wide enough for two columns: the air
-                // conditions (air temperature, weather, wind, surface pressure) on the left, the
-                // water conditions on the right. A Grid keeps each pair of rows aligned, while each
+                // A wide window (`usesTwoColumnCards`) is wide enough for two columns of six rows:
+                // the air and sea-surface conditions (air temperature, weather, wind, surface,
+                // surface pressure) on the left, the water conditions (temperatures, current, tide,
+                // visibility) on the right. A Grid keeps each pair of rows aligned, while each
                 // column draws its own dividers and a vertical line separates them.
                 Grid(alignment: .leading, horizontalSpacing: 48, verticalSpacing: 16) {
                     GridRow {
@@ -97,7 +98,7 @@ extension DiveDetailView {
                     }
                     GridRow {
                         conditionsWindRow.detailGridCell(column: 0, row: 2)
-                        conditionsSurfaceRow.detailGridCell(column: 1, row: 2)
+                        conditionsCurrentRow.detailGridCell(column: 1, row: 2)
                     }
                     GridRow {
                         detailColumnDivider
@@ -105,15 +106,23 @@ extension DiveDetailView {
                     }
                     GridRow {
                         conditionsWindDirectionRow.detailGridCell(column: 0, row: 3)
-                        conditionsCurrentRow.detailGridCell(column: 1, row: 3)
+                        conditionsTideHeightRow.detailGridCell(column: 1, row: 3)
                     }
                     GridRow {
                         detailColumnDivider
                         detailColumnDivider
                     }
                     GridRow {
-                        conditionsSurfacePressureRow.detailGridCell(column: 0, row: 4)
-                        conditionsVisibilityRow.detailGridCell(column: 1, row: 4)
+                        conditionsSurfaceRow.detailGridCell(column: 0, row: 4)
+                        conditionsTideStateRow.detailGridCell(column: 1, row: 4)
+                    }
+                    GridRow {
+                        detailColumnDivider
+                        detailColumnDivider
+                    }
+                    GridRow {
+                        conditionsSurfacePressureRow.detailGridCell(column: 0, row: 5)
+                        conditionsVisibilityRow.detailGridCell(column: 1, row: 5)
                     }
                 }
                 .overlay {
@@ -123,7 +132,7 @@ extension DiveDetailView {
                 }
                 .accessibilityElement(children: .contain)
             } else {
-                // Same order as the two-column layout: air conditions, then water conditions.
+                // Same order as the two-column layout: the left column, then the right one.
                 conditionsAirTempRow
 
                 Divider().background(.primary.opacity(0.2))
@@ -140,6 +149,10 @@ extension DiveDetailView {
 
                 Divider().background(.primary.opacity(0.2))
 
+                conditionsSurfaceRow
+
+                Divider().background(.primary.opacity(0.2))
+
                 conditionsSurfacePressureRow
 
                 Divider().background(.primary.opacity(0.2))
@@ -152,11 +165,15 @@ extension DiveDetailView {
 
                 Divider().background(.primary.opacity(0.2))
 
-                conditionsSurfaceRow
+                conditionsCurrentRow
 
                 Divider().background(.primary.opacity(0.2))
 
-                conditionsCurrentRow
+                conditionsTideHeightRow
+
+                Divider().background(.primary.opacity(0.2))
+
+                conditionsTideStateRow
 
                 Divider().background(.primary.opacity(0.2))
 
@@ -221,6 +238,18 @@ extension DiveDetailView {
     private var conditionsSurfacePressureRow: some View {
         ConditionRow(icon: "barometer", color: .brown, label: "Surface Pressure",
                     value: dive.formattedSurfacePressure ?? "—")
+    }
+
+    // Tide height entered from a tide table (above chart datum), in the depth unit
+    private var conditionsTideHeightRow: some View {
+        ConditionRow(icon: "water.waves.and.arrow.up", color: .teal, label: "Tide Height",
+                    value: dive.formattedTideHeight ?? "—")
+    }
+
+    // Tide state at the dive start (low, rising, high or falling)
+    private var conditionsTideStateRow: some View {
+        ConditionRow(icon: "arrow.up.arrow.down", color: .teal, label: "Tide State",
+                    value: dive.tideState.map { DiveConditionOptions.localizedTideState($0) } ?? "—")
     }
 
     // Surface conditions

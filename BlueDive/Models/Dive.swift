@@ -427,7 +427,18 @@ final class Dive {
     /// `PPO2Setup` uses only in its calculation when this is nil. Stored through
     /// `validatedSurfacePressure(_:)`; shown with `formattedSurfacePressure`.
     var surfacePressure: Double?
-    
+
+    // MARK: Tide
+
+    /// The tide height at the dive start as the user entered it from a local tide table: above
+    /// that table's chart datum, in the dive's `importDistanceUnit` (metres or feet, like depth
+    /// and altitude). Nil when none is known; never fetched, calculated or estimated. Stored
+    /// through `validatedTideHeight(_:inFeet:)`; shown with `formattedTideHeight`.
+    var tideHeight: Double?
+    /// The tide's phase at the dive start: low, rising, high or falling
+    /// (`DiveConditionOptions.tideState` values), as picked by the user.
+    var tideState: String?
+
     // MARK: Gas & Cylinder — stored in TankData array
     
     // MARK: Advanced Gas & Decompression
@@ -1450,6 +1461,8 @@ final class Dive {
         siteLatitude: Double? = nil,
         siteLongitude: Double? = nil,
         surfacePressure: Double? = nil,
+        tideHeight: Double? = nil,
+        tideState: String? = nil,
         profileSamples: [DiveProfilePoint] = [],
         decoStops: [DecoStop] = []
     ) {
@@ -1505,6 +1518,8 @@ final class Dive {
         self.siteLatitude = siteLatitude
         self.siteLongitude = siteLongitude
         self.surfacePressure = Self.validatedSurfacePressure(surfacePressure)
+        self.tideHeight = Self.validatedTideHeight(tideHeight, inFeet: importDistanceUnit == "feet")
+        self.tideState = tideState
         self.photosData = []
         self.seenFish = []
         self.usedGear = []
@@ -1546,6 +1561,35 @@ extension Dive {
     /// format (e.g. "1.013 bar"), or nil when none was recorded.
     var formattedSurfacePressure: String? {
         surfacePressure.map { $0.localizedString(decimals: 3, minDecimals: 3) + " bar" }
+    }
+
+    /// Accepted tide heights above chart datum, per stored unit. Tide tables are referenced to
+    /// a low-water datum, so values are rarely below zero (a little at very low spring tides);
+    /// the largest tidal ranges on Earth (Bay of Fundy) reach about 16 m above it. −5…20 m
+    /// (−15…65 ft) leaves a margin. A value outside it (or not finite) is not a reading.
+    static let validTideHeightMeters: ClosedRange<Double> = -5...20
+    static let validTideHeightFeet: ClosedRange<Double> = -15...65
+
+    /// `value` when it is a plausible tide height in metres or feet (finite, within
+    /// `validTideHeightMeters` / `validTideHeightFeet`), else nil. Used by every path that
+    /// stores `tideHeight` (the editor, file import through `init`), with the dive's unit.
+    static func validatedTideHeight(_ value: Double?, inFeet: Bool) -> Double? {
+        guard let value, value.isFinite,
+              (inFeet ? validTideHeightFeet : validTideHeightMeters).contains(value) else { return nil }
+        return value
+    }
+
+    /// The tide height for display in the user's depth unit (converted from the dive's stored
+    /// unit by `displayDepth`) with two decimals in the OS region's format, as a tide table
+    /// shows it (e.g. "2.10 m", "−0.30 m"), or nil when none is known.
+    var formattedTideHeight: String? {
+        guard let tideHeight else { return nil }
+        let unit = UserPreferences.shared.depthUnit
+        let value = displayDepth(tideHeight)
+        let magnitude = abs(value).localizedString(decimals: 2, minDecimals: 2)
+        // A value that rounds to zero shows no sign.
+        let negative = value < 0 && magnitude != 0.0.localizedString(decimals: 2, minDecimals: 2)
+        return (negative ? "−" : "") + magnitude + " " + unit.symbol
     }
 
     /// Accepted dive times in seconds: below the value that would round to 3600 minutes

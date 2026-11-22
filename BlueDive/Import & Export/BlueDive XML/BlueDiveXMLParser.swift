@@ -57,6 +57,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     private var currentSurfaceConditions: String?
     private var currentWind: String?
     private var currentWindDirection: String?
+    private var currentTideHeight: Double?      // <tideHeight>: above chart datum, in <distanceFormat>
+    private var currentTideState: String?
     private var currentEntryType: String?
     private var currentDiveMaster: String?
     private var currentDiveOperator: String?
@@ -672,6 +674,9 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         case "surfaceConditions": currentSurfaceConditions = text.nilIfEmpty
         case "wind":             currentWind = text.nilIfEmpty
         case "windDirection":    currentWindDirection = text.nilIfEmpty
+        // In the file's <distanceFormat>; validated by `Dive.init`, which knows that unit.
+        case "tideHeight":       currentTideHeight = Double(text)
+        case "tideState":        currentTideState = text.nilIfEmpty
         case "entryType":        currentEntryType = text.nilIfEmpty
         case "diveMaster":       currentDiveMaster = text.nilIfEmpty
         case "diveOperator":     currentDiveOperator = text.nilIfEmpty
@@ -729,6 +734,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
                 surfaceConditions: currentSurfaceConditions,
                 wind: currentWind,
                 windDirection: currentWindDirection,
+                tideHeight: currentTideHeight,
+                tideState: currentTideState,
                 entryType: currentEntryType,
                 diveMaster: currentDiveMaster,
                 diveOperator: currentDiveOperator,
@@ -786,6 +793,8 @@ final class BlueDiveXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         currentSurfaceConditions = nil
         currentWind = nil
         currentWindDirection = nil
+        currentTideHeight = nil
+        currentTideState = nil
         currentEntryType = nil
         currentDiveMaster = nil
         currentDiveOperator = nil

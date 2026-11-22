@@ -19,7 +19,29 @@ enum DiveConditionOptions {
 
     static let surface = ["Calm", "Slightly choppy", "Choppy", "Heavy swell"]
 
-    static let current = ["None", "Weak", "Moderate", "Strong", "Very strong"]
+    /// Six levels, matching UDDF's current keywords (no-current … very-hard-current).
+    /// `nonisolated` (constant strings) so the UDDF parser, which runs off the main actor, can read it.
+    nonisolated static let current = ["None", "Very weak", "Weak", "Moderate", "Strong", "Very strong"]
+
+    /// UDDF's `<current>` keywords, one per `current` option in the same order. Only the
+    /// vocabulary differs: the meaning is the same, so the value is not altered.
+    nonisolated static let uddfCurrentKeywords = ["no-current", "very-mild-current", "mild-current",
+                                                  "moderate-current", "hard-current", "very-hard-current"]
+
+    /// The `current` option for a UDDF keyword; any other text is kept as written.
+    nonisolated static func current(fromUDDF keyword: String) -> String {
+        uddfCurrentKeywords.firstIndex(of: keyword).map { current[$0] } ?? keyword
+    }
+
+    /// The UDDF keyword for a `current` option; nil for a value outside the options (UDDF
+    /// accepts only its keywords).
+    nonisolated static func uddfCurrentKeyword(for option: String) -> String? {
+        current.firstIndex(of: option).map { uddfCurrentKeywords[$0] }
+    }
+
+    /// The tide's phase at the dive start, in cycle order: the standard high/low water events
+    /// (which tide services report) and the flood/ebb between them.
+    static let tideState = ["Low", "Rising", "High", "Falling"]
 
     static func localizedWeather(_ raw: String) -> String {
         switch raw {
@@ -51,6 +73,7 @@ enum DiveConditionOptions {
     static func localizedCurrent(_ raw: String) -> String {
         switch raw {
         case "None":        return NSLocalizedString("None", bundle: .forAppLanguage(), value: "None", comment: "")
+        case "Very weak":   return NSLocalizedString("Very weak", bundle: .forAppLanguage(), value: "Very weak", comment: "Current strength option in Edit Conditions, between None and Weak")
         case "Weak":        return NSLocalizedString("Weak", bundle: .forAppLanguage(), value: "Weak", comment: "")
         case "Moderate":    return NSLocalizedString("Moderate", bundle: .forAppLanguage(), value: "Moderate", comment: "")
         case "Strong":      return NSLocalizedString("Strong", bundle: .forAppLanguage(), value: "Strong", comment: "")
@@ -68,6 +91,16 @@ enum DiveConditionOptions {
         case "Strong":   return NSLocalizedString("Wind: Strong", bundle: .forAppLanguage(), value: "Strong", comment: "Wind strength, Beaufort 6–7")
         case "Gale":     return NSLocalizedString("Wind: Gale", bundle: .forAppLanguage(), value: "Gale", comment: "Wind strength, Beaufort 8 and above")
         default:         return raw
+        }
+    }
+
+    static func localizedTideState(_ raw: String) -> String {
+        switch raw {
+        case "Low":     return NSLocalizedString("Tide: Low", bundle: .forAppLanguage(), value: "Low", comment: "Tide state at the dive start: around low water (low tide)")
+        case "Rising":  return NSLocalizedString("Tide: Rising", bundle: .forAppLanguage(), value: "Rising", comment: "Tide state at the dive start: the sea level is going up (flood tide)")
+        case "High":    return NSLocalizedString("Tide: High", bundle: .forAppLanguage(), value: "High", comment: "Tide state at the dive start: around high water (high tide)")
+        case "Falling": return NSLocalizedString("Tide: Falling", bundle: .forAppLanguage(), value: "Falling", comment: "Tide state at the dive start: the sea level is going down (ebb tide)")
+        default:        return raw
         }
     }
 

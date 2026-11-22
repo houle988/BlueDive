@@ -975,8 +975,11 @@ extension ContentView {
 
     // MARK: - MacDive XML Import
     
+    /// The `Dive` an imported file's dive becomes, with its dive time, before `insertParsedDive`
+    /// adds the exit GPS, deco stops, raw computer data, tanks, gear and sightings and inserts
+    /// it. Depends only on the parsed data, so tests can check what a file round-trip stores.
     @MainActor
-    func insertParsedDive(_ diveData: BlueDiveGlobalData, assignedDiveNumber: Int? = nil, overrideDiverName: String? = nil, fileName: String, speciesResolver: SpeciesImportResolver, snapshotByID: inout [UUID: GearSnapshot], snapshotByMatchKey: inout [String: GearSnapshot], resolvedGearByID: inout [UUID: Gear]) {
+    static func makeDive(from diveData: BlueDiveGlobalData, assignedDiveNumber: Int? = nil, overrideDiverName: String? = nil) -> Dive {
         // Convert MacDive samples to DiveProfilePoints
         let profilePoints = diveData.samples.map { sample in
             DiveProfilePoint(
@@ -1085,6 +1088,8 @@ extension ContentView {
             siteLatitude: diveData.site?.latitude,
             siteLongitude: diveData.site?.longitude,
             surfacePressure: diveData.surfacePressure,
+            tideHeight: diveData.tideHeight,
+            tideState: diveData.tideState,
             profileSamples: profilePoints
         )
 
@@ -1093,6 +1098,12 @@ extension ContentView {
         newDive.setImportedDuration(fileSeconds: diveData.duration,
                                     exportedSeconds: diveData.exportedDurationSeconds,
                                     isBlueDiveXML: diveData.isBlueDiveXMLImport)
+        return newDive
+    }
+
+    @MainActor
+    func insertParsedDive(_ diveData: BlueDiveGlobalData, assignedDiveNumber: Int? = nil, overrideDiverName: String? = nil, fileName: String, speciesResolver: SpeciesImportResolver, snapshotByID: inout [UUID: GearSnapshot], snapshotByMatchKey: inout [String: GearSnapshot], resolvedGearByID: inout [UUID: Gear]) {
+        let newDive = Self.makeDive(from: diveData, assignedDiveNumber: assignedDiveNumber, overrideDiverName: overrideDiverName)
 
         // Exit GPS (BlueDive XML round-trip)
         newDive.exitLatitude  = diveData.site?.exitLatitude
@@ -1469,6 +1480,9 @@ extension ContentView {
         if earlier.surfacePressure == nil {
             earlier.surfacePressure = later.surfacePressure
         }
+        // The tide is kept from the earlier dive only, never taken from the later one: it
+        // changes by up to about half a metre an hour, so the later dive's value describes
+        // another moment than the merged dive's start.
         if earlier.decompressionAlgorithm == nil {
             earlier.decompressionAlgorithm = later.decompressionAlgorithm
         }

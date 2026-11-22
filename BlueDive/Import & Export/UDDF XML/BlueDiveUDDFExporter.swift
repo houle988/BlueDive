@@ -598,6 +598,12 @@ enum BlueDiveUDDFExporter {
             lines.append("          <visibility>\(formatDouble(visVal))</visibility>")
         }
 
+        // BlueDive's option ("Weak") → UDDF keyword ("mild-current"); a value outside the
+        // options has no keyword and is not written.
+        if let current = dive.current, let keyword = DiveConditionOptions.uddfCurrentKeyword(for: current) {
+            lines.append("          <current>\(keyword)</current>")
+        }
+
         if dive.rating > 0 {
             lines.append("          <rating><ratingvalue>\(dive.rating)</ratingvalue></rating>")
         }

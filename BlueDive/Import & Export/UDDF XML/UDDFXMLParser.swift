@@ -659,7 +659,8 @@ final class UDDFXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                 }
             }
         case "current":
-            if isInInformationAfterDive { currentCurrent = text.nilIfEmpty }
+            // UDDF keyword (e.g. "mild-current") → BlueDive's option ("Weak").
+            if isInInformationAfterDive { currentCurrent = text.nilIfEmpty.map(DiveConditionOptions.current(fromUDDF:)) }
         case "leadquantity":
             if isInEquipmentUsed {
                 currentWeight = Double(text)

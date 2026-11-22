@@ -62,9 +62,12 @@ extension Dive {
 enum OpenMeteoWeatherError: Error {
     /// The request could not be made or completed (no connection, timeout, no HTTP response).
     case requestFailed
-    /// Open-Meteo answered with an error (e.g. rate limit, server error) or a response that
-    /// could not be read.
+    /// Open-Meteo answered with an error (e.g. server error) or a response that could not be
+    /// read.
     case serviceUnavailable
+    /// Open-Meteo refused the request because its free request limit (per minute, hour, day
+    /// or month) was reached (HTTP 429).
+    case rateLimited
     /// Open-Meteo has no data for the dive's date and hour (e.g. a future date).
     case noData
 }
@@ -269,8 +272,9 @@ enum OpenMeteoWeatherService {
     }
 
     /// Returns nil on HTTP 400 (e.g. a date outside the range this API covers), so the caller
-    /// can try the next API. Throws `.serviceUnavailable` on any other non-200 status or an
-    /// unreadable response, and `.requestFailed` (or CancellationError) on a network failure.
+    /// can try the next API. Throws `.rateLimited` on HTTP 429, `.serviceUnavailable` on any
+    /// other non-200 status or an unreadable response, and `.requestFailed` (or
+    /// CancellationError) on a network failure.
     private static func requestHourly(endpoint: String, latitude: Double, longitude: Double,
                                       startDate: String, endDate: String,
                                       fahrenheit: Bool) async throws -> Response? {
@@ -301,6 +305,7 @@ enum OpenMeteoWeatherService {
         guard let http = response as? HTTPURLResponse else { throw OpenMeteoWeatherError.requestFailed }
         // 400 = parameter out of range (date not covered by this API); let the caller move on.
         if http.statusCode == 400 { return nil }
+        if http.statusCode == 429 { throw OpenMeteoWeatherError.rateLimited }
         guard http.statusCode == 200 else { throw OpenMeteoWeatherError.serviceUnavailable }
         do {
             return try JSONDecoder().decode(Response.self, from: data)

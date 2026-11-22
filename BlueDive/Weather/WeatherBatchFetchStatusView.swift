@@ -38,6 +38,11 @@ struct WeatherBatchFetchStatusView: View {
                     .foregroundStyle(.orange)
                 laterHint
                 addedBeforeStopping(filled)
+            case .stoppedRateLimited(let filled):
+                Text("Open-Meteo's request limit was reached. Try again later.")
+                    .foregroundStyle(.orange)
+                laterHint
+                addedBeforeStopping(filled)
             case .interrupted(let filled):
                 Text("Weather fetch stopped when BlueDive was moved to the background.", comment: "Result of a weather fetch over several dives when the app went to the background mid-run.")
                     .foregroundStyle(.orange)

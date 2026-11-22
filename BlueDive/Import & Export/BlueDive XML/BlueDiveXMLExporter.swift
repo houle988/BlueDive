@@ -263,6 +263,14 @@ enum BlueDiveXMLExporter {
         lines.append(xmlTag("surfaceConditions", dive.surfaceConditions ?? "",   indent: 4))
         lines.append(xmlTag("wind",              dive.wind ?? "",                indent: 4))
         lines.append(xmlTag("windDirection",     dive.windDirection ?? "",       indent: 4))
+        // Tide height above chart datum (from a tide table) in <distanceFormat>, only when set, written in full
+        // (`String(Double)`, like <surfacePressure>) so a re-import keeps it exactly.
+        if let tideHeight = dive.tideHeight {
+            lines.append(xmlTag("tideHeight",    String(tideHeight),             indent: 4))
+        }
+        if let tideState = dive.tideState {
+            lines.append(xmlTag("tideState",     tideState,                      indent: 4))
+        }
         lines.append(xmlTag("entryType",         dive.entryType ?? "",           indent: 4))
 
         // Operator

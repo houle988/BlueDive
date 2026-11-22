@@ -504,6 +504,9 @@ func parseFlexibleDouble(_ text: String) -> Double? {
         .replacingOccurrences(of: "\u{202F}", with: "")
         .replacingOccurrences(of: "\u{00A0}", with: "")
         .replacingOccurrences(of: ",", with: ".")
+        // Some locales' formatters (e.g. Norwegian) write negatives with U+2212 MINUS SIGN,
+        // which Double(String) rejects; a pre-filled negative value must parse once edited.
+        .replacingOccurrences(of: "\u{2212}", with: "-")
     // Double(String) also accepts "inf", "nan" and overflowing input such as "1e400". No field
     // takes those, and a non-finite value cannot be JSON-encoded (tanks would be lost) or shown.
     guard let value = Double(normalized), value.isFinite else { return nil }

@@ -242,7 +242,7 @@ struct PDFDiveLogbook {
         let siteDetailWidth = contentWidth - infoWidth - infoGap
         let siteDetailX = margin + infoWidth + infoGap
         let topSectionMinH = max(fieldGridHeight(fieldCount: 8, columns: 2),
-                                 fieldGridHeight(fieldCount: 16, columns: 3))
+                                 fieldGridHeight(fieldCount: 18, columns: 3))
         let infoY = drawDiveInfo(ctx: ctx, dive: dive, allDives: allDives, x: margin, y: y, width: infoWidth, tempUnit: tempUnit, minHeight: topSectionMinH)
         let siteDetailY = drawSiteDetails(ctx: ctx, dive: dive, x: siteDetailX, y: y, width: siteDetailWidth, minHeight: topSectionMinH)
         y = min(infoY, siteDetailY)
@@ -545,6 +545,10 @@ struct PDFDiveLogbook {
             (NSLocalizedString("Current", bundle: loc, comment: ""),       localizedCondition(dive.current, { DiveConditionOptions.localizedCurrent($0) }), accentTeal),
             (NSLocalizedString("Wind", bundle: loc, value: "Wind", comment: ""),          localizedCondition(dive.wind, { DiveConditionOptions.localizedWind($0) }), accentTeal),
             (NSLocalizedString("Wind Direction", bundle: loc, value: "Wind Direction", comment: ""), localizedCondition(dive.windDirection, { DiveConditionOptions.localizedWindDirection($0) }), accentBlue),
+            // Entered from a tide table (above chart datum), stored in the dive's distance unit
+            // and shown in the depth unit.
+            (NSLocalizedString("Tide Height", bundle: loc, value: "Tide Height", comment: "Logbook PDF field: the tide height at the dive start, from a local tide table (above chart datum)"), dive.formattedTideHeight ?? "—", accentTeal),
+            (NSLocalizedString("Tide State", bundle: loc, value: "Tide State", comment: "Logbook PDF field: the tide's phase at the dive start (low, rising, high or falling)"), localizedCondition(dive.tideState, { DiveConditionOptions.localizedTideState($0) }), accentBlue),
             (NSLocalizedString("Environment", bundle: loc, comment: ""),   localizedWaterType(dive.siteWaterType),     accentCyan),
             (NSLocalizedString("Body of Water", bundle: loc, comment: ""), dive.siteBodyOfWater ?? "—",                accentBlue),
             (NSLocalizedString("Difficulty", bundle: loc, comment: ""),     localizedDifficulty(dive.siteDifficulty),   accentPurple),
