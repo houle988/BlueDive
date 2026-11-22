@@ -317,6 +317,9 @@ struct BlueDiveApp: App {
         DivePhotoOriginal.self,
         Species.self,
         SpeciesImage.self,
+        GearAttachment.self,
+        GearAttachmentFile.self,
+        GearAttachmentThumbnail.self,
     ]
 
     /// Single source of truth for the SwiftData schema.

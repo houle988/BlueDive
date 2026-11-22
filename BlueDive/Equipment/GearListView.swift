@@ -278,7 +278,13 @@ struct GearListView: View {
                 gearToDelete = nil
             }
         } message: { gear in
-            Text(verbatim: String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), value: "Are you sure you want to delete \"%@\"? This action cannot be undone.", comment: "Delete confirmation alert message."), gear.isDeleted || gear.modelContext == nil ? "" : gear.name))
+            let isLive = !gear.isDeleted && gear.modelContext != nil
+            let message = String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This action cannot be undone.", bundle: Bundle.forAppLanguage(), value: "Are you sure you want to delete \"%@\"? This action cannot be undone.", comment: "Delete confirmation alert message."), isLive ? gear.name : "")
+            // Its attachments are deleted with it (cascade): say so, they are the user's files.
+            let attachmentsNote = isLive && !(gear.attachments ?? []).isEmpty
+                ? "\n\n" + NSLocalizedString("Its attachments (photos and documents) are deleted too.", bundle: Bundle.forAppLanguage(), value: "Its attachments (photos and documents) are deleted too.", comment: "Added to the delete equipment confirmation when the equipment has attachments")
+                : ""
+            Text(verbatim: message + attachmentsNote)
         }
         .sheet(isPresented: $showTankTemplates) {
             TankTemplateListView()
@@ -785,6 +791,7 @@ struct GearListView: View {
             for index in offsets {
                 let itemToDelete = items[index]
                 NotificationManager.shared.cancelGearReminder(id: itemToDelete.id)
+                itemToDelete.removeAttachmentQuickLookCopies()
                 modelContext.delete(itemToDelete)
             }
             try? modelContext.save()

@@ -33,6 +33,11 @@ final class Gear {
     @Relationship(inverse: \GearGroup.gear)
     var gearGroups: [GearGroup]? = []
 
+    /// Photos and documents attached to this gear (receipts, warranties, reports), deleted
+    /// with it.
+    @Relationship(deleteRule: .cascade, inverse: \GearAttachment.gear)
+    var attachments: [GearAttachment]? = []
+
     // MARK: - Computed Properties
     
     /// Nombre total de plongées effectuées avec cet équipement

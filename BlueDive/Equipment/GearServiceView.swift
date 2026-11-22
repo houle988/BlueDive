@@ -131,6 +131,8 @@ struct GearServiceView: View {
                     
                     serviceHistorySection
                     #endif
+
+                    GearAttachmentsSection(gear: gear)
                 }
                 .padding(.vertical, 20)
                 .padding(.bottom, 20) // Espace supplémentaire en bas pour éviter le débordement

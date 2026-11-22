@@ -50,9 +50,10 @@ final class SpeciesImage {
 
 // MARK: - Orphan Sweep
 
-/// Deletes image records that lost an iCloud conflict: two devices gave the same photo (or
-/// species) a new image record before syncing; the owner keeps one, and the other — still
-/// carrying its image bytes, in the store and in iCloud — is linked to nothing. A record is
+/// Deletes image records that lost an iCloud conflict: two devices gave the same photo,
+/// species or gear attachment a new image or file record before syncing; the owner keeps
+/// one, and the other — still carrying its image bytes, in the store and in iCloud — is
+/// linked to nothing. A record is
 /// deleted only when its owner (found by the mirror id) exists and links another record — not
 /// when the owner links none — so a record still waiting for its owner, or its link, to arrive
 /// from iCloud is never touched. A deleted owner takes its records with it (cascade), so no
@@ -77,6 +78,8 @@ enum PhotoBlobSweeper {
         let thumbnails = (try? listing.fetchIdentifiers(FetchDescriptor<DivePhotoThumbnail>(predicate: #Predicate { $0.photo == nil }))) ?? []
         let originals = (try? listing.fetchIdentifiers(FetchDescriptor<DivePhotoOriginal>(predicate: #Predicate { $0.photo == nil }))) ?? []
         let images = (try? listing.fetchIdentifiers(FetchDescriptor<SpeciesImage>(predicate: #Predicate { $0.species == nil }))) ?? []
+        let attachmentFiles = (try? listing.fetchIdentifiers(FetchDescriptor<GearAttachmentFile>(predicate: #Predicate { $0.attachment == nil }))) ?? []
+        let attachmentThumbnails = (try? listing.fetchIdentifiers(FetchDescriptor<GearAttachmentThumbnail>(predicate: #Predicate { $0.attachment == nil }))) ?? []
 
         await sweep(thumbnails, container: container, ownerID: { (record: DivePhotoThumbnail) in record.photoID }) { ids, context in
             let owners = (try? context.fetch(FetchDescriptor<DivePhoto>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
@@ -89,6 +92,14 @@ enum PhotoBlobSweeper {
         await sweep(images, container: container, ownerID: { (record: SpeciesImage) in record.speciesID }) { ids, context in
             let owners = (try? context.fetch(FetchDescriptor<Species>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
             return Dictionary(grouping: owners, by: \.id).mapValues { $0.map { $0.image?.persistentModelID } }
+        }
+        await sweep(attachmentFiles, container: container, ownerID: { (record: GearAttachmentFile) in record.attachmentID }) { ids, context in
+            let owners = (try? context.fetch(FetchDescriptor<GearAttachment>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
+            return Dictionary(grouping: owners, by: \.id).mapValues { $0.map { $0.file?.persistentModelID } }
+        }
+        await sweep(attachmentThumbnails, container: container, ownerID: { (record: GearAttachmentThumbnail) in record.attachmentID }) { ids, context in
+            let owners = (try? context.fetch(FetchDescriptor<GearAttachment>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
+            return Dictionary(grouping: owners, by: \.id).mapValues { $0.map { $0.thumbnail?.persistentModelID } }
         }
     }
 

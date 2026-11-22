@@ -170,7 +170,7 @@ struct DataManagementSettingsView: View {
                                 if isTemporaryFilesOperationRunning || temporaryFilesSize == nil {
                                     ProgressView().scaleEffect(0.8)
                                 } else if let temporaryFilesSize {
-                                    Text(verbatim: temporaryFilesSizeText(temporaryFilesSize))
+                                    Text(verbatim: temporaryFilesSize.localizedFileSize)
                                         .font(.caption)
                                         .monospacedDigit()
                                         .foregroundStyle(.secondary)
@@ -410,7 +410,8 @@ struct DataManagementSettingsView: View {
 
     // MARK: - Temporary Files
 
-    /// The app's temporary folder: Quick Look, Share and Save As copies of photos, backup
+    /// The app's temporary folder: Quick Look, Share and Save As copies of photos, Quick Look
+    /// copies of gear attachments, backup
     /// staging folders (left if the app was stopped during a backup), and files the system
     /// passes through it. Nothing in it is part of the logbook.
     private nonisolated static var temporaryFolder: URL { FileManager.default.temporaryDirectory }
@@ -426,23 +427,6 @@ struct DataManagementSettingsView: View {
         temporaryFilesSize = size
     }
 
-    /// The size shown on the button in kilobytes, megabytes or gigabytes (decimal units, as Files
-    /// and Finder show them), one decimal, with the region's number format. The unit is chosen
-    /// after rounding, so 999.96 MB shows as 1 GB, not 1,000 MB.
-    private func temporaryFilesSizeText(_ bytes: Int64) -> String {
-        // Rounded once here and shown as rounded, so the unit and the number always agree.
-        let megabytes = (Double(bytes) / 100_000).rounded() / 10
-        if megabytes >= 1_000 {
-            let gigabytes = (Double(bytes) / 100_000_000).rounded() / 10
-            return String(format: NSLocalizedString("%@ GB", bundle: .forAppLanguage(), value: "%@ GB", comment: "Size of the app's temporary files in gigabytes (locale-formatted number)"), gigabytes.localizedString(decimals: 1))
-        }
-        if megabytes >= 1 {
-            return String(format: NSLocalizedString("%@ MB", bundle: .forAppLanguage(), value: "%@ MB", comment: "Size of the app's temporary files in megabytes (locale-formatted number)"), megabytes.localizedString(decimals: 1))
-        }
-        let kilobytes = (Double(bytes) / 1_000).rounded()
-        return String(format: NSLocalizedString("%@ KB", bundle: .forAppLanguage(), value: "%@ KB", comment: "Size of the app's temporary files in kilobytes (locale-formatted number)"), kilobytes.localizedString(decimals: 0))
-    }
-
     /// Deletes everything in the temporary folder. It is a data operation of its own (in
     /// `DataOperationActivity`, so it keeps excluding a backup when the screen is closed and
     /// reopened): a backup builds its archive there.
@@ -450,8 +434,8 @@ struct DataManagementSettingsView: View {
         guard !isDataOperationRunning else { return }
         let activity = activity
         activity.isDeletingTemporaryFiles = true
-        // The Quick Look copies go with the rest; a reopened photo finds its copy missing and
-        // writes a new one (`QuickLookCopies.copy(for:byteCount:)`).
+        // The Quick Look copies go with the rest; a reopened photo or gear attachment finds its
+        // copy missing and writes a new one (`QuickLookCopies.copy(for:byteCount:)`).
         Task {
             await Task.detached(priority: .utility) {
                 Self.removeTemporaryFiles()
@@ -561,7 +545,8 @@ struct DataManagementSettingsView: View {
             case .failure(.snapshotFailed):
                 backupError = NSLocalizedString("Backup failed: could not take a snapshot of the database.", bundle: .forAppLanguage(), value: "Backup failed: could not take a snapshot of the database.", comment: "Database backup error")
             case .failure(.insufficientSpace(let needed)):
-                let size = ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)
+                // In the app language (ByteCountFormatter follows the system language).
+                let size = needed.localizedFileSize
                 backupError = String(format: NSLocalizedString("Backup failed: not enough free space. About %@ is needed.", bundle: .forAppLanguage(), value: "Backup failed: not enough free space. About %@ is needed.", comment: "Database backup error; %@ is a size such as 2.1 GB"), size)
             case .failure(.copyFailed):
                 backupError = NSLocalizedString("Backup failed: could not copy database files.", bundle: .forAppLanguage(), comment: "")
@@ -701,6 +686,8 @@ struct DataManagementSettingsView: View {
             && ((try? context.fetchCount(FetchDescriptor<DivePhotoOriginal>())) ?? 1) == 0
             && ((try? context.fetchCount(FetchDescriptor<DivePhotoThumbnail>())) ?? 1) == 0
             && ((try? context.fetchCount(FetchDescriptor<SpeciesImage>())) ?? 1) == 0
+            && ((try? context.fetchCount(FetchDescriptor<GearAttachmentFile>())) ?? 1) == 0
+            && ((try? context.fetchCount(FetchDescriptor<GearAttachmentThumbnail>())) ?? 1) == 0
     }
 
     /// Deletes the external-storage files left by the erase. Only files last modified before the
@@ -758,6 +745,18 @@ struct DataManagementSettingsView: View {
                     do { try modelContext.fetch(FetchDescriptor<SpeciesImage>()).forEach { modelContext.delete($0) }
                     } catch let e { errors.append("SpeciesImage: \(e.localizedDescription)") }
                 }
+                do { try modelContext.delete(model: GearAttachment.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<GearAttachment>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("GearAttachment: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: GearAttachmentFile.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<GearAttachmentFile>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("GearAttachmentFile: \(e.localizedDescription)") }
+                }
+                do { try modelContext.delete(model: GearAttachmentThumbnail.self) } catch {
+                    do { try modelContext.fetch(FetchDescriptor<GearAttachmentThumbnail>()).forEach { modelContext.delete($0) }
+                    } catch let e { errors.append("GearAttachmentThumbnail: \(e.localizedDescription)") }
+                }
                 do { try modelContext.delete(model: Gear.self) } catch {
                     do { try modelContext.fetch(FetchDescriptor<Gear>()).forEach { modelContext.delete($0) }
                     } catch let e { errors.append("Gear: \(e.localizedDescription)") }
@@ -802,7 +801,7 @@ struct DataManagementSettingsView: View {
                     Self.removeExternalFiles(in: externalDataFolder, olderThan: eraseStarted)
                 }.value
             }
-            // The temporary copies photos were opened from in Quick Look.
+            // The temporary copies dive photos and gear attachments were opened from in Quick Look.
             QuickLookCopies.removeAll()
 
             NotificationManager.shared.cancelAllNotifications()

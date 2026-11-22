@@ -463,6 +463,28 @@ extension Double {
     }
 }
 
+// MARK: - File Size Formatting
+
+extension Int64 {
+    /// A file or storage size in the app language, with the number in the OS region's format:
+    /// whole KB, MB and GB with up to one decimal (decimal units, as Files and Finder show
+    /// them). Each unit is chosen from the size rounded in the unit below, so the unit and the
+    /// number always agree: 955 000 bytes is "955 KB", 999 600 bytes "1 MB" (not "1,000 KB").
+    /// A non-empty size below 500 bytes shows as "1 KB", never "0 KB".
+    var localizedFileSize: String {
+        let kilobytes = self > 0 ? Swift.max(1, (Double(self) / 1_000).rounded()) : 0
+        if kilobytes < 1_000 {
+            return String(format: NSLocalizedString("%@ KB", bundle: .forAppLanguage(), value: "%@ KB", comment: "File or storage size in kilobytes (locale-formatted number)"), kilobytes.localizedString(decimals: 0))
+        }
+        let megabytes = (Double(self) / 100_000).rounded() / 10
+        if megabytes < 1_000 {
+            return String(format: NSLocalizedString("%@ MB", bundle: .forAppLanguage(), value: "%@ MB", comment: "File or storage size in megabytes (locale-formatted number)"), megabytes.localizedString(decimals: 1))
+        }
+        let gigabytes = (Double(self) / 100_000_000).rounded() / 10
+        return String(format: NSLocalizedString("%@ GB", bundle: .forAppLanguage(), value: "%@ GB", comment: "File or storage size in gigabytes (locale-formatted number)"), gigabytes.localizedString(decimals: 1))
+    }
+}
+
 // MARK: - Duration Formatting
 
 /// A duration in minutes as hours and minutes, abbreviated in the app language

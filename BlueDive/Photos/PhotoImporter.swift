@@ -182,6 +182,15 @@ nonisolated enum PhotoMetadataReader {
     /// at default priority or above.
     static func thumbnailJPEG(of source: CGImageSource, maxPixelSize: Int, quality: Double,
                               usingEmbeddedPreview: Bool = false) -> Data? {
+        guard let thumbnail = thumbnailImage(of: source, maxPixelSize: maxPixelSize,
+                                             usingEmbeddedPreview: usingEmbeddedPreview) else { return nil }
+        return encode(thumbnail, as: .jpeg, quality: quality)
+    }
+
+    /// The thumbnail image `thumbnailJPEG` encodes, for a caller that encodes it otherwise
+    /// (a gear attachment keeps a transparent image's thumbnail as PNG). Same queue rule.
+    static func thumbnailImage(of source: CGImageSource, maxPixelSize: Int,
+                               usingEmbeddedPreview: Bool = false) -> CGImage? {
         let fromImageKey = usingEmbeddedPreview ? kCGImageSourceCreateThumbnailFromImageIfAbsent
                                                 : kCGImageSourceCreateThumbnailFromImageAlways
         let options: [CFString: Any] = [
@@ -190,8 +199,7 @@ nonisolated enum PhotoMetadataReader {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: false
         ]
-        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return jpegData(from: thumbnail, quality: quality)
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
     /// Wall-clock components of an EXIF date string ("yyyy:MM:dd HH:mm:ss") or an XMP one
@@ -271,10 +279,12 @@ nonisolated enum PhotoMetadataReader {
         return xmpArray(metadata, path)?.first
     }
 
-    private static func jpegData(from image: CGImage, quality: Double) -> Data? {
+    /// `image` encoded as `type`; `quality` applies to lossy types (JPEG) only.
+    static func encode(_ image: CGImage, as type: UTType, quality: Double) -> Data? {
         let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+        guard let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil) else { return nil }
+        let properties: [CFString: Any] = type == .png ? [:] : [kCGImageDestinationLossyCompressionQuality: quality]
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return output as Data
     }
