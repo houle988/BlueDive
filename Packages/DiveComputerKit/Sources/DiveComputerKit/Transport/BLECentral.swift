@@ -38,7 +38,7 @@ final class BLECentral: NSObject, CBCentralManagerDelegate, @unchecked Sendable 
     // State below is only touched on `queue`.
     private var state: CBManagerState = .unknown
     private var wantsScan: Bool?                 // pending scan (onlyKnownServices) until powered on
-    private var discovered: [UUID: (peripheral: CBPeripheral, device: DiscoveredDevice)] = [:]
+    private var discovered = DiscoveryTable<CBPeripheral>()
     private var links: [UUID: BLEPeripheralLink] = [:]
 
     /// Decides which named peripherals are listed (set by the manager; called on `queue`).
@@ -87,6 +87,25 @@ final class BLECentral: NSObject, CBCentralManagerDelegate, @unchecked Sendable 
         central.scanForPeripherals(withServices: onlyKnownServices ? BLEServiceCatalog.knownServiceUUIDs : nil,
                                    options: nil)
         onScanningChange?(true)
+        listConnectedPeripherals()
+    }
+
+    /// Lists the dive computers already connected to this phone or Mac, by another app or by
+    /// the system (e.g. a bonded watch). A connected peripheral does not advertise, so the scan
+    /// alone never sees it. Once per scan: a device connected later appears after a rescan.
+    /// Only matches peripherals whose services the system has already discovered.
+    private func listConnectedPeripherals() {
+        let connected = central.retrieveConnectedPeripherals(withServices: BLEServiceCatalog.knownServiceUUIDs)
+        var added = false
+        for peripheral in connected {
+            // No advertisement here: the name is the peripheral's GAP name.
+            guard discovered.register(id: peripheral.identifier, name: peripheral.name, entry: peripheral,
+                                      accepts: discoveryFilter) else { continue }
+            added = true
+            DiveComputerLog.shared.log("[BLE SCAN] Already connected to the system: \(peripheral.name ?? "no name") " +
+                                       "\(peripheral.identifier.uuidString), state \(Self.describe(peripheral.state))", level: .info)
+        }
+        if added { onDiscoveredChange?(discovered.sortedDevices) }
     }
 
     // MARK: - Peripherals
@@ -95,9 +114,9 @@ final class BLECentral: NSObject, CBCentralManagerDelegate, @unchecked Sendable 
     /// before), as a snapshot.
     func knownDevice(id: UUID) -> DiscoveredDevice? {
         queue.sync {
-            if let entry = discovered[id] {
+            if let device = discovered.device(for: id) {
                 DiveComputerLog.shared.log("[BLE CONNECT] \(id.uuidString) found in this scan", level: .info)
-                return entry.device
+                return device
             }
             guard let peripheral = central.retrievePeripherals(withIdentifiers: [id]).first else {
                 DiveComputerLog.shared.log("[BLE CONNECT] \(id.uuidString) not known to the system", level: .info)
@@ -112,9 +131,9 @@ final class BLECentral: NSObject, CBCentralManagerDelegate, @unchecked Sendable 
     /// A new link for this peripheral, registered for connection callbacks.
     func makeLink(id: UUID, advertisedName: String?) -> BLEPeripheralLink? {
         queue.sync {
-            guard let peripheral = discovered[id]?.peripheral
+            guard let peripheral = discovered.entry(for: id)
                     ?? central.retrievePeripherals(withIdentifiers: [id]).first else { return nil }
-            let name = advertisedName ?? discovered[id]?.device.name ?? peripheral.name ?? ""
+            let name = advertisedName ?? discovered.device(for: id)?.name ?? peripheral.name ?? ""
             let link = BLEPeripheralLink(central: self, peripheral: peripheral, advertisedName: name)
             links[id] = link
             return link
@@ -158,13 +177,9 @@ final class BLECentral: NSObject, CBCentralManagerDelegate, @unchecked Sendable 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let advertised = advertisementData[CBAdvertisementDataLocalNameKey] as? String
-        guard let name = peripheral.name ?? advertised, !name.isEmpty else { return }
-        let id = peripheral.identifier
-        let isNew = discovered[id] == nil
-        guard isNew ? discoveryFilter(id, name) : true else { return }
-        discovered[id] = (peripheral, DiscoveredDevice(id: id, name: name, lastSeen: Date()))
-        if isNew {
-            onDiscoveredChange?(discovered.values.map(\.device).sorted { ($0.name ?? "") < ($1.name ?? "") })
+        if discovered.register(id: peripheral.identifier, name: peripheral.name ?? advertised, entry: peripheral,
+                               accepts: discoveryFilter) {
+            onDiscoveredChange?(discovered.sortedDevices)
         }
     }
 

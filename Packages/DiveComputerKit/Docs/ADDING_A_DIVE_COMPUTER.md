@@ -1,6 +1,6 @@
 # DiveComputerKit — adding a dive computer
 
-As of 2026-11-20. Linked from `START_HERE.md`. A checklist for a session with no prior context; the code is the truth where this drifts. Paths are relative to `Packages/DiveComputerKit/` unless they start with `BlueDive/`, `BlueDiveTests/` or name a repository-root file.
+As of 2026-11-22. Linked from `START_HERE.md`. A checklist for a session with no prior context; the code is the truth where this drifts. Paths are relative to `Packages/DiveComputerKit/` unless they start with `BlueDive/`, `BlueDiveTests/` or name a repository-root file.
 
 Three cases, from the most common:
 

@@ -69,7 +69,7 @@ Packages/DiveComputerKit/
     DiveComputerKit.swift           DiveComputerKitInfo.libdivecomputerVersion, threading contract comment
     Catalog/      DeviceFamily, ComputerModel, DeviceCatalog, BLEServiceCatalog, BLENameResolver, DescriptorLookup
     Transport/    BLECentral (also BluetoothState, DiscoveredDevice), BLEPeripheralLink, BLECharacteristicSelector,
-                  BLEPacketQueue, BLETiming
+                  BLEPacketQueue, BLETiming, DiscoveryTable (the scan list's rule, DECISIONS.md L9)
     IOStream/     DCIOStream (dc_custom_cbs_t trampolines), DCIOControl (ioctls), DiveComputerLink (DiveComputerLink /
                   SessionLink protocols the session talks to; BLEPeripheralLink and the tests' FakeLink implement it),
                   BLEAuthorizationProvider (also AuthorizationRequest)
@@ -81,7 +81,7 @@ Packages/DiveComputerKit/
     Diagnostics/  DiveComputerLog (also LogLevel, LogEvent, PacketDirection, PacketEvent)
     Manager/      DiveComputerManager (also DeviceSessionHandle)
   Tests/DiveComputerKitTests/       Swift Testing, one folder (inventory: TESTING.md)
-    CatalogTests.swift  ParserTests.swift  TransportSessionTests.swift  LibraryBuildTests.swift
+    CatalogTests.swift  ParserTests.swift  TransportSessionTests.swift  LibraryBuildTests.swift  DiscoveryTableTests.swift
     Golden/  GoldenParityTests.swift  GoldenEncoding.swift  Canonical.swift
     Fixtures/  ble-name-samples.json  legacy-catalog.json   (committed, no personal data; bundled with .copy("Fixtures"))
 
