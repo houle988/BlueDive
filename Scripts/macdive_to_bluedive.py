@@ -146,14 +146,19 @@ Profile-to-dive matching:
     span_mismatch, outscored) are printed at the end.
 
 Raw dive computer data (ZRAWDATA, decoded with libdivecomputer):
-    On the first dive with raw data, the script checks the libdivecomputer folder of the
-    BlueDive LibDCSwift fork (https://github.com/houle988/libdc-swift/tree/main/libdivecomputer).
-    When there is no cached copy, or the folder has a newer commit, it downloads the folder
-    and compiles it with the Xcode command-line tools (xcode-select --install) into
-    ~/Library/Caches/BlueDive/macdive_to_bluedive/.  Offline, the cached copy is used;
-    without one, raw data is not decoded.  libdivecomputer runs in a separate worker
-    process: a dive on which it crashes or takes more than 60 s is logged as not decodable,
-    and after two such failures on one computer model that model is skipped.
+    On the first dive with raw data, the script uses the libdivecomputer copy vendored in
+    BlueDive's DiveComputerKit package (Packages/DiveComputerKit/Sources/CLibDiveComputer),
+    the same library as the app's Bluetooth import.  Run from a BlueDive git checkout, it
+    compiles that checkout's copy (uncommitted changes included) when its sources differ
+    from the cached build, without network access.  Run on its own, it checks the folder on
+    GitHub (https://github.com/houle988/BlueDive, main branch) and, when there is no cached
+    copy or the folder has a different last commit, downloads it.  Either copy is compiled
+    with the Xcode command-line tools (xcode-select --install) into
+    ~/Library/Caches/BlueDive/macdive_to_bluedive/.  When the build or the online check
+    fails (e.g. offline), the cached copy is used; without one, raw data is not decoded.
+    A cached build of the older LibDCSwift copy is not used.  libdivecomputer runs in a
+    separate worker process: a dive on which it crashes or takes more than 60 s is logged as
+    not decodable, and after two such failures on one computer model that model is skipped.
 
     Raw data is used for a dive only when it agrees with MacDive: max depth within 0.5 m of
     MacDive's XML profile (or of the dive record when there is none) and a profile not more
@@ -301,7 +306,7 @@ COREDATA_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
 # BlueDive version and build the exported files are written for, in the same
 # "version (build)" form as the app's own exports (<metadata><version>).
 # ---------------------------------------------------------------------------
-BLUEDIVE_VERSION = "2.1 (156)"
+BLUEDIVE_VERSION = "2.3 (172)"
 
 
 def coredata_to_str(ts):
@@ -987,20 +992,21 @@ def attach_events_to_samples(samples, events):
 # libdivecomputer — decodes MacDive's ZRAWDATA (raw dive computer download)
 # ---------------------------------------------------------------------------
 #
-# The library is the copy vendored in the BlueDive LibDCSwift fork, so migrated dives are
-# decoded by the same parser as the app's Bluetooth import. It is downloaded from GitHub and
-# compiled with the Xcode command-line tools (cc) into a per-user cache on each run when the
-# fork's libdivecomputer folder has a newer commit than the cached build.
+# The library is the copy vendored in BlueDive's DiveComputerKit package, so migrated dives
+# are decoded by the same parser as the app's Bluetooth import. When the script runs from a
+# BlueDive git checkout, that checkout's copy is compiled; otherwise the copy on GitHub's main
+# branch is downloaded. Either is compiled with the Xcode command-line tools (cc) into a
+# per-user cache, rebuilt only when the sources differ from the cached build.
 
-LIBDC_REPO     = "houle988/libdc-swift"
+LIBDC_REPO     = "houle988/BlueDive"
 LIBDC_BRANCH   = "main"
-LIBDC_FOLDER   = "libdivecomputer"
+LIBDC_FOLDER   = "Packages/DiveComputerKit/Sources/CLibDiveComputer"
 LIBDC_CACHE    = Path.home() / "Library" / "Caches" / "BlueDive" / "macdive_to_bluedive"
 _HTTP_TIMEOUT  = 10
 _LIBDC_DECODE_TIMEOUT = 60   # seconds per dive before the decoding worker is stopped
 
 # libdivecomputer SAMPLE_EVENT_* → BlueDive sample event, the same mapping as the app's
-# Bluetooth import (LibDCSwift GenericParser + BluetoothScannerView.convertDiveEvent).
+# Bluetooth import (DiveComputerKit DiveParser + DiveImportMapper.convertDiveEvent).
 _LIBDC_EVENT_MAP = {
     1:  "decoStop",      # SAMPLE_EVENT_DECOSTOP
     3:  "ascent",        # SAMPLE_EVENT_ASCENT
@@ -1028,13 +1034,24 @@ _DC_USAGE_OXYGEN, _DC_USAGE_DILUENT = 1, 2   # dc_usage_t: the computer's role f
 # dc_family_t of the backends that report DC_SAMPLE_SETPOINT in every sample while a setpoint
 # is in effect and omit it otherwise (e.g. Shearwater on open-circuit bailout): Shearwater
 # Predator / Petrel, DiveSystem iDive, TecDiving DiveComputer.eu, McLean Extreme. Other
-# backends report it only when it changes. Same list as LibDCSwift's
-# GenericParser.reportsSetpointEverySample(_:), so migrated dives match a Bluetooth download.
+# backends report it only when it changes. Same list as DiveComputerKit's behavioural spec
+# (Docs/BEHAVIOURAL_SPEC.md §6, step 3), so migrated dives match a Bluetooth download.
+# DiveParser.reportsSetpointEverySample(_:) lists only the families the app can download
+# (Shearwater Petrel, DiveSystem, McLean); Predator and TecDiving are kept here for MacDive's
+# USB downloads.
 _SETPOINT_EVERY_SAMPLE_FAMILIES = {(10 << 16), (10 << 16) + 1, (13 << 16), (15 << 16), (16 << 16)}
 # dc_family_t DC_FAMILY_UWATEC_SMART: libdivecomputer starts its RBT at 99 and sends it before
 # (or without) any RBT from the computer — see _drop_uwatec_default_rbt.
 _DC_FAMILY_UWATEC_SMART = (3 << 16) + 2
 _UWATEC_DEFAULT_RBT = 99
+
+
+# Same defines as DiveComputerKit's Package.swift (CLibDiveComputer target, macOS). Part of the
+# cache key (_libdc_build_config, beside the architecture): changing them rebuilds the library.
+_LIBDC_CFLAGS = ["-O2", "-w",
+                 "-DENABLE_LOGGING", "-DHAVE_PTHREAD_H", "-DHAVE_CLOCK_GETTIME",
+                 "-DHAVE_LOCALTIME_R", "-DHAVE_GMTIME_R", "-DHAVE_TIMEGM",
+                 "-DHAVE_STRUCT_TM_TM_GMTOFF", "-DHAVE_STRERROR_R", "-DHAVE_IOKIT_SERIAL_IOSS_H"]
 
 
 def _http_get(url, accept=None):
@@ -1046,7 +1063,7 @@ def _http_get(url, accept=None):
 
 
 def _libdc_latest_commit():
-    """Return (sha, iso_date) of the newest fork commit that touched the libdivecomputer folder."""
+    """Return (sha, iso_date) of the newest BlueDive commit that touched the vendored folder."""
     url = (f"https://api.github.com/repos/{LIBDC_REPO}/commits"
            f"?sha={LIBDC_BRANCH}&path={LIBDC_FOLDER}&per_page=1")
     data = json.loads(_http_get(url, accept="application/vnd.github+json"))
@@ -1056,7 +1073,7 @@ def _libdc_latest_commit():
 
 
 class _LibDCBuildError(RuntimeError):
-    """The downloaded sources did not compile (remembered so the same commit is not rebuilt)."""
+    """The sources did not compile (a GitHub commit that fails is remembered and not rebuilt)."""
 
 
 def _host_arch():
@@ -1064,41 +1081,100 @@ def _host_arch():
     return "arm64" if platform.machine() in ("arm64", "aarch64") else "x86_64"
 
 
-def _libdc_download_and_build(sha, log):
-    """Download the fork at `sha`, keep its libdivecomputer folder, and compile it."""
-    import io, shutil, subprocess, tempfile, zipfile
-    url = f"https://codeload.github.com/{LIBDC_REPO}/zip/{sha}"
-    log(f"  Downloading {LIBDC_REPO}@{sha[:10]} ({LIBDC_FOLDER}/) …")
-    archive = zipfile.ZipFile(io.BytesIO(_http_get(url)))
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp = Path(tmp)
-        prefix = None
-        for name in archive.namelist():
-            parts = name.split("/", 2)
-            if len(parts) >= 2 and parts[1] == LIBDC_FOLDER:
-                prefix = parts[0] + "/" + LIBDC_FOLDER + "/"
-                break
-        if prefix is None:
-            raise RuntimeError(f"{LIBDC_FOLDER}/ not found in the downloaded archive")
-        src_root = tmp / LIBDC_FOLDER
-        for name in archive.namelist():
-            if name.startswith(prefix) and not name.endswith("/"):
-                dest = src_root / name[len(prefix):]
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(archive.read(name))
-        if not (src_root / "include" / "libdivecomputer" / "version.h").exists():
-            raise RuntimeError("include/libdivecomputer/version.h missing from the fork")
+def _libdc_build_config():
+    """Short hash of the compile flags, stored with the cached build (its arch is stored apart)."""
+    import hashlib
+    return hashlib.sha256(json.dumps(_LIBDC_CFLAGS).encode()).hexdigest()[:16]
 
-        cc = shutil.which("cc")
-        if cc is None:
-            raise RuntimeError("no C compiler found — install the Xcode command-line tools "
-                               "with: xcode-select --install")
-        sources = sorted(str(p) for p in (src_root / "src").glob("*.c")
-                         if not p.name.endswith("_win32.c"))
-        dylib_tmp = tmp / "libdivecomputer.dylib"
-        # Same defines as the fork's Package.swift; built for the running Python's architecture.
-        cmd = [cc, "-O2", "-w", "-dynamiclib", "-arch", _host_arch(),
-               "-DHAVE_PTHREAD_H", "-DENABLE_LOGGING",
+
+def _git(repo, *args):
+    """Run git in `repo` and return its stripped output, or None when git fails or is missing."""
+    import subprocess
+    try:
+        # --no-optional-locks: `git status` must not take .git/index.lock (Xcode may hold it).
+        proc = subprocess.run(["git", "--no-optional-locks", "-C", str(repo), *args],
+                              capture_output=True, text=True,
+                              timeout=_HTTP_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def _libdc_local_checkout():
+    """
+    Return (folder, description) of the vendored libdivecomputer when this script runs from a
+    BlueDive git checkout (Scripts/ next to Packages/), else None. The description names the
+    last commit that touched the folder and whether the compiled files (the ones
+    _libdc_source_hash covers) have uncommitted changes.
+    """
+    repo = Path(__file__).resolve().parent.parent
+    folder = repo / LIBDC_FOLDER
+    if not (folder / "src").is_dir() or _git(repo, "rev-parse", "--show-toplevel") is None:
+        return None
+    commit = _git(repo, "log", "-1", "--format=%h  (%cI)", "--", LIBDC_FOLDER) or "uncommitted"
+    status = _git(repo, "status", "--porcelain", "--",
+                  f"{LIBDC_FOLDER}/src/*.c", f"{LIBDC_FOLDER}/src/*.h",
+                  f"{LIBDC_FOLDER}/include/libdivecomputer/*.h",
+                  f":(exclude){LIBDC_FOLDER}/src/*_win32.c")
+    if status is None:
+        return folder, commit + "  (git status unknown)"
+    return folder, commit + ("  + uncommitted changes" if status else "")
+
+
+def _libdc_sources(src_root):
+    """The C files _libdc_build compiles: upstream src/ only, without the Windows backend."""
+    return sorted(p for p in (src_root / "src").glob("*.c") if not p.name.endswith("_win32.c"))
+
+
+def _libdc_source_hash(src_root):
+    """
+    SHA-256 of the files compiled into the library (the src/*.c _libdc_build compiles, src/*.h
+    and include/libdivecomputer/*.h), names included. Other files (Makefile.am, BlueDive's
+    shim, a Finder .DS_Store) do not change it.
+    """
+    import hashlib
+    digest = hashlib.sha256()
+    files = (_libdc_sources(src_root) + sorted((src_root / "src").glob("*.h"))
+             + sorted((src_root / "include" / "libdivecomputer").glob("*.h")))
+    for path in files:
+        digest.update(str(path.relative_to(src_root)).encode() + b"\0")
+        digest.update(path.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
+def _libdc_download(sha, dest):
+    """Download BlueDive at `sha` and extract its vendored libdivecomputer folder into `dest`."""
+    import io, zipfile
+    url = f"https://codeload.github.com/{LIBDC_REPO}/zip/{sha}"
+    archive = zipfile.ZipFile(io.BytesIO(_http_get(url)))
+    found = False
+    for name in archive.namelist():
+        # Entries are <top>/<path> (top = BlueDive-<sha>), in whatever order the archive has.
+        parts = name.split("/", 1)
+        if len(parts) == 2 and parts[1].startswith(LIBDC_FOLDER + "/") and not name.endswith("/"):
+            target = dest / parts[1][len(LIBDC_FOLDER) + 1:]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(archive.read(name))
+            found = True
+    if not found:
+        raise RuntimeError(f"{LIBDC_FOLDER}/ not found in the downloaded archive")
+
+
+def _libdc_build(src_root, log):
+    """Compile libdivecomputer from `src_root` and install it, with its sources, in the cache."""
+    import shutil, subprocess, tempfile
+    if not (src_root / "include" / "libdivecomputer" / "version.h").exists():
+        raise RuntimeError(f"include/libdivecomputer/version.h missing from {LIBDC_FOLDER}")
+    cc = shutil.which("cc")
+    if cc is None:
+        raise RuntimeError("no C compiler found — install the Xcode command-line tools "
+                           "with: xcode-select --install")
+    # Upstream sources only: BlueDive's shim/ (Bluetooth glue) is not needed by the parser API.
+    sources = [str(p) for p in _libdc_sources(src_root)]
+    with tempfile.TemporaryDirectory() as tmp:
+        dylib_tmp = Path(tmp) / "libdivecomputer.dylib"
+        # Built for the running Python's architecture.
+        cmd = [cc, *_LIBDC_CFLAGS, "-dynamiclib", "-arch", _host_arch(),
                "-I", str(src_root / "include"), "-I", str(src_root / "include" / "libdivecomputer"),
                "-I", str(src_root / "src"), *sources,
                "-install_name", "@rpath/libdivecomputer.dylib", "-o", str(dylib_tmp)]
@@ -1108,7 +1184,8 @@ def _libdc_download_and_build(sha, log):
             raise _LibDCBuildError("compilation failed:\n" + (proc.stderr or proc.stdout)[-2000:])
 
         LIBDC_CACHE.mkdir(parents=True, exist_ok=True)
-        cached_src = LIBDC_CACHE / LIBDC_FOLDER
+        # The whole folder, so the LGPL licence (COPYING) stays with the cached library.
+        cached_src = LIBDC_CACHE / "libdivecomputer"
         if cached_src.exists():
             shutil.rmtree(cached_src)
         shutil.copytree(src_root, cached_src)
@@ -1119,12 +1196,92 @@ def _libdc_download_and_build(sha, log):
         os.replace(staged, LIBDC_CACHE / "libdivecomputer.dylib")
 
 
+def _libdc_update_local(local, cached, arch, meta_path, log):
+    """
+    Build the checkout's copy when its sources or the compile flags differ from the cached
+    build (local or GitHub: both store the source hash); return the notes.
+    """
+    folder, description = local
+    sources = _libdc_source_hash(folder)
+    config = _libdc_build_config()
+    log(f"  Local checkout: {description}  in {folder}")
+    if cached and cached.get("sources") == sources:
+        if cached.get("config") == config:
+            log("  Cached copy is up to date." if cached["source"] == "local" else
+                "  Cached copy has the same sources — up to date.")
+            return cached
+        log("  Compile flags differ from the cached copy — compiling.")
+    else:
+        log("  Local sources differ from the cached copy — compiling." if cached else "  Compiling.")
+    _libdc_build(folder, log)
+    notes = {"source": "local", "version": sources, "sources": sources, "date": description,
+             "arch": arch, "config": config, "built": datetime.now().astimezone().isoformat()}
+    meta_path.write_text(json.dumps(notes))
+    log(f"  Built {LIBDC_CACHE / 'libdivecomputer.dylib'}")
+    return notes
+
+
+def _libdc_update_github(cached, arch, meta_path, failed_path, log):
+    """Download and build GitHub's copy when its last commit differs from the cached build."""
+    import tempfile
+    sha, date = _libdc_latest_commit()
+    config = _libdc_build_config()
+    log(f"  Online version: {sha[:10]}  ({date})")
+    same_commit = cached and cached["source"] == "github" and cached["version"] == sha
+    if same_commit and cached.get("config") == config:
+        log("  Cached copy is up to date.")
+        return cached
+    failed = None
+    if failed_path.exists():
+        try:
+            failed = json.loads(failed_path.read_text())
+        except Exception:
+            failed = None
+    if (isinstance(failed, dict) and failed.get("sha") == sha and failed.get("arch") == arch
+            and failed.get("config") == config):
+        raise RuntimeError(f"commit {sha[:10]} failed to compile on a previous run "
+                           f"(delete {failed_path} to retry)")
+    if same_commit:
+        log("  Compile flags differ from the cached copy.")
+    elif cached and cached["source"] == "local":
+        log("  Cached copy was built from a local checkout.")
+    elif cached:
+        log("  Online version differs from the cached copy.")
+    log(f"  Downloading {LIBDC_REPO}@{sha[:10]} ({LIBDC_FOLDER}/) …")
+    with tempfile.TemporaryDirectory() as tmp:
+        src_root = Path(tmp) / "libdivecomputer"
+        _libdc_download(sha, src_root)
+        sources = _libdc_source_hash(src_root)
+        try:
+            _libdc_build(src_root, log)
+        except _LibDCBuildError:
+            LIBDC_CACHE.mkdir(parents=True, exist_ok=True)
+            failed_path.write_text(json.dumps({"sha": sha, "arch": arch, "config": config}))
+            raise
+    notes = {"source": "github", "version": sha, "sources": sources, "date": date, "arch": arch,
+             "config": config, "built": datetime.now().astimezone().isoformat()}
+    meta_path.write_text(json.dumps(notes))
+    if failed_path.exists():
+        failed_path.unlink()
+    log(f"  Built {LIBDC_CACHE / 'libdivecomputer.dylib'}")
+    return notes
+
+
+def _libdc_describe(notes):
+    if notes["source"] == "local":
+        return f"local checkout {notes['date']}  (sources {notes['version'][:10]})"
+    return f"GitHub {notes['version'][:10]}  ({notes['date']})"
+
+
 def setup_libdivecomputer(log):
     """
     Return a LibDCWorker decoder, or None when the library cannot be obtained (raw data is
-    then not decoded and the export behaves as without it). Downloads and builds the fork's
-    libdivecomputer folder when there is no cached build for this architecture or the fork
-    has a newer commit. A commit whose sources failed to compile is not retried.
+    then not decoded and the export behaves as without it). From a BlueDive git checkout, the
+    checkout's vendored libdivecomputer is compiled when its sources differ from the cached
+    build (no network). Otherwise the copy on GitHub's main branch is downloaded and compiled
+    when its last commit differs from the cached build; a commit whose sources failed to
+    compile is not retried. Either is also rebuilt when the compile flags (_LIBDC_CFLAGS)
+    differ from the cached build's. When either fails, the cached build is used if there is one.
     """
     meta_path   = LIBDC_CACHE / "libdivecomputer.json"
     failed_path = LIBDC_CACHE / "libdivecomputer-failed.json"
@@ -1136,52 +1293,33 @@ def setup_libdivecomputer(log):
             cached = json.loads(meta_path.read_text())
         except Exception:
             cached = None
-    if not (isinstance(cached, dict) and isinstance(cached.get("sha"), str)
-            and isinstance(cached.get("date"), str)):
-        cached = None   # missing or malformed notes: treated as no cached copy
+    if not (isinstance(cached, dict) and cached.get("source") in ("local", "github")
+            and isinstance(cached.get("version"), str) and isinstance(cached.get("date"), str)):
+        cached = None   # missing or malformed notes, or a LibDCSwift build of an older script
     if cached and cached.get("arch") != arch:
-        cached = None   # built for another architecture (or by an older script version)
-    log(f"libdivecomputer (raw dive computer data decoder) — source: "
-        f"https://github.com/{LIBDC_REPO}/tree/{LIBDC_BRANCH}/{LIBDC_FOLDER}")
+        cached = None   # built for another architecture
+    local = _libdc_local_checkout()
+    if local:
+        log("libdivecomputer (raw dive computer data decoder) — source: this BlueDive checkout, "
+            f"{LIBDC_FOLDER}")
+    else:
+        log(f"libdivecomputer (raw dive computer data decoder) — source: "
+            f"https://github.com/{LIBDC_REPO}/tree/{LIBDC_BRANCH}/{LIBDC_FOLDER}")
     if cached:
-        log(f"  Cached copy   : {cached['sha'][:10]}  ({cached['date']}, {arch})  in {LIBDC_CACHE}")
+        log(f"  Cached copy   : {_libdc_describe(cached)}, {arch}  in {LIBDC_CACHE}")
     else:
         log(f"  Cached copy   : none for {arch}")
 
     try:
-        sha, date = _libdc_latest_commit()
-        log(f"  Online version: {sha[:10]}  ({date})")
-        failed = None
-        if failed_path.exists():
-            try:
-                failed = json.loads(failed_path.read_text())
-            except Exception:
-                failed = None
-            if not isinstance(failed, dict):
-                failed = None
-        if cached and cached["sha"] == sha:
-            log("  Cached copy is up to date.")
-        elif failed and failed.get("sha") == sha and failed.get("arch") == arch:
-            raise RuntimeError(f"commit {sha[:10]} failed to compile on a previous run "
-                               f"(delete {failed_path} to retry)")
+        if local:
+            cached = _libdc_update_local(local, cached, arch, meta_path, log)
         else:
-            log("  Online version is newer — downloading." if cached else "  Downloading.")
-            try:
-                _libdc_download_and_build(sha, log)
-            except _LibDCBuildError:
-                LIBDC_CACHE.mkdir(parents=True, exist_ok=True)
-                failed_path.write_text(json.dumps({"sha": sha, "arch": arch}))
-                raise
-            meta_path.write_text(json.dumps({"sha": sha, "date": date, "arch": arch,
-                                             "built": datetime.now().astimezone().isoformat()}))
-            if failed_path.exists():
-                failed_path.unlink()
-            cached = {"sha": sha, "date": date}
-            log(f"  Built {dylib}")
+            cached = _libdc_update_github(cached, arch, meta_path, failed_path, log)
     except Exception as exc:
+        what = "build the local copy" if local else "check or update the online version"
         if cached:
-            log(f"  Warning: could not check or update the online version ({exc}) — "
-                f"using the cached copy {cached['sha'][:10]}.")
+            log(f"  Warning: could not {what} ({exc}) — using the cached copy "
+                f"({_libdc_describe(cached)}).")
         else:
             log(f"  Warning: libdivecomputer unavailable ({exc}) — raw dive computer data "
                 f"will not be decoded; profiles come from the MacDive XML only.")
@@ -1199,8 +1337,9 @@ def setup_libdivecomputer(log):
 
 class LazyLibDC:
     """
-    Sets libdivecomputer up (online check, download/build, worker start) only when the first
-    dive with raw data is decoded, so a logbook without raw data never touches the network.
+    Sets libdivecomputer up (local build or online check, download/build, worker start) only
+    when the first dive with raw data is decoded, so a logbook without raw data never builds
+    the library or touches the network.
     """
 
     def __init__(self, log):
@@ -1428,7 +1567,7 @@ class LibDC:
             return None
         try:
             samples, cur = [], {}
-            # CCR setpoint in effect, as LibDCSwift's GenericParser tracks it (see
+            # CCR setpoint in effect, as DiveComputerKit's SampleAccumulator tracks it (see
             # _SETPOINT_EVERY_SAMPLE_FAMILIES): "reported" is the last DC_SAMPLE_SETPOINT,
             # "current" the setpoint in effect, written on each time record when it ends.
             per_sample = lib.dc_descriptor_get_type(desc) in _SETPOINT_EVERY_SAMPLE_FAMILIES
@@ -1447,11 +1586,11 @@ class LibDC:
                         elif gm.usage == _DC_USAGE_OXYGEN:
                             oxygen.add(i)
                 if not diluents:
-                    oxygen = set()   # no diluent flagged: the setpoint is held, as in LibDCSwift
+                    oxygen = set()   # no diluent flagged: the setpoint is held, as in DiveComputerKit
             state = {"reported": None, "current": None, "open_circuit": False, "seen_time": False}
 
             def end_record():
-                # The record's setpoint is the one in effect when it ends (LibDCSwift writes a
+                # The record's setpoint is the one in effect when it ends (DiveComputerKit writes a
                 # profile point at the next DC_SAMPLE_TIME). Per-sample backends: only what
                 # the computer reported in that record, never a value held from an earlier one.
                 cur["setpoint"] = state["current"]
@@ -1463,7 +1602,7 @@ class LibDC:
                 nonlocal cur
                 if stype == _DC_SAMPLE_TIME:
                     # Data before the first time sample belongs to the first record (as in
-                    # LibDCSwift, which writes no point for it), so it is not ended here.
+                    # DiveComputerKit, which writes no point for it), so it is not ended here.
                     if state["seen_time"]:
                         end_record()
                     state["seen_time"] = True
