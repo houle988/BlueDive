@@ -242,11 +242,6 @@ enum INaturalistService {
     /// Ephemeral session: nothing written to the on-disk URL cache.
     private static let session = URLSession(configuration: .ephemeral)
 
-    private static let userAgent: String = {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1"
-        return "BlueDive/\(version) (https://github.com/houle988/BlueDive)"
-    }()
-
     private static func get<T: Decodable>(path: String, query: [URLQueryItem]) async throws -> T {
         guard var components = URLComponents(string: "https://api.inaturalist.org/v2/\(path)") else {
             throw INaturalistError.requestFailed
@@ -254,7 +249,7 @@ enum INaturalistService {
         components.queryItems = query
         guard let url = components.url else { throw INaturalistError.requestFailed }
         var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(AppUserAgent.value, forHTTPHeaderField: "User-Agent")
         let data: Data
         let response: URLResponse
         do {

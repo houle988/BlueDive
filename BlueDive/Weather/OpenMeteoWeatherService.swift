@@ -293,7 +293,8 @@ enum OpenMeteoWeatherService {
         guard let url = components.url else { throw OpenMeteoWeatherError.requestFailed }
 
         // Short timeout: the sheet's weather fields and Save stay locked while a fetch runs.
-        let request = URLRequest(url: url, timeoutInterval: 15)
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.setValue(AppUserAgent.value, forHTTPHeaderField: "User-Agent")
         let data: Data
         let response: URLResponse
         do {
