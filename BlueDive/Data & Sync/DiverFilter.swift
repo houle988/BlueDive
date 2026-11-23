@@ -528,41 +528,66 @@ struct CloudSyncToolbarButton: View {
             .accessibilityValue(accessibilityValue)
     }
 
-    private var accessibilityValue: Text {
+    /// The state the button shows, computed once so the symbol, its colour and the
+    /// VoiceOver value always describe the same state.
+    private enum SyncDisplayState {
+        case off, syncing, error, recentlySynced, idle
+    }
+
+    private var state: SyncDisplayState {
         if !iCloudSyncEnabled {
-            return Text("iCloud sync is turned off")
+            return .off
         } else if syncMonitor.isSyncing {
-            return Text("Syncing")
+            return .syncing
         } else if syncMonitor.hasError {
-            return Text("Sync error")
+            return .error
         } else if let d = syncMonitor.lastSyncDate, Date().timeIntervalSince(d) < 300 {
-            return Text("Recently synced")
+            return .recentlySynced
         } else {
-            return Text("Idle")
+            return .idle
         }
     }
 
-    @ViewBuilder
+    private var accessibilityValue: Text {
+        switch state {
+        case .off:            return Text("iCloud sync is turned off")
+        case .syncing:        return Text("Syncing")
+        case .error:          return Text("Sync error")
+        case .recentlySynced: return Text("Recently synced")
+        case .idle:           return Text("Idle")
+        }
+    }
+
+    // One Image whose symbol changes, not one Image per state: with an if/else chain each state
+    // is a separate view, and a state change removes one and inserts the other. When that
+    // happens while the toolbar itself animates (a tab switch, the bar resizing on scroll), the
+    // removed pulsing image can stay frozen beside the capsule, showing two clouds at once.
+    // An animated symbol, not a ProgressView: macOS only shares a toolbar glass capsule
+    // between items whose labels are plain images/text, so a ProgressView label would
+    // split this button from the Settings/diver-filter group while syncing.
     private var icon: some View {
-        if !iCloudSyncEnabled {
-            Image(systemName: "icloud.slash")
-                .foregroundStyle(.secondary)
-        } else if syncMonitor.isSyncing {
-            // An animated symbol, not a ProgressView: macOS only shares a toolbar glass capsule
-            // between items whose labels are plain images/text, so a ProgressView label would
-            // split this button from the Settings/diver-filter group while syncing.
-            Image(systemName: "arrow.clockwise.icloud")
-                .foregroundStyle(.cyan)
-                .symbolEffect(.pulse)
-        } else if syncMonitor.hasError {
-            Image(systemName: "exclamationmark.icloud")
-                .foregroundStyle(.orange)
-        } else if let d = syncMonitor.lastSyncDate, Date().timeIntervalSince(d) < 300 {
-            Image(systemName: "checkmark.icloud")
-                .foregroundStyle(.cyan)
-        } else {
-            Image(systemName: "icloud")
-                .foregroundStyle(.secondary)
+        let state = state
+        return Image(systemName: symbolName(for: state))
+            .foregroundStyle(symbolStyle(for: state))
+            .contentTransition(.symbolEffect(.replace))
+            .symbolEffect(.pulse, isActive: state == .syncing)
+    }
+
+    private func symbolName(for state: SyncDisplayState) -> String {
+        switch state {
+        case .off:            return "icloud.slash"
+        case .syncing:        return "arrow.clockwise.icloud"
+        case .error:          return "exclamationmark.icloud"
+        case .recentlySynced: return "checkmark.icloud"
+        case .idle:           return "icloud"
+        }
+    }
+
+    private func symbolStyle(for state: SyncDisplayState) -> AnyShapeStyle {
+        switch state {
+        case .off, .idle:               return AnyShapeStyle(.secondary)
+        case .syncing, .recentlySynced: return AnyShapeStyle(.cyan)
+        case .error:                    return AnyShapeStyle(.orange)
         }
     }
 }
