@@ -370,6 +370,13 @@ struct GearAttachmentsSection: View {
                 }
                 .padding(.vertical, 8)
             }
+            // As the dive Photos card's footer: attachments are for the few files that matter.
+            Text(verbatim: String(format: NSLocalizedString("BlueDive is not a document manager — attach only the files that matter for this equipment, up to %@ each. Large files may slow down iCloud sync.", bundle: Bundle.forAppLanguage(), value: "BlueDive is not a document manager — attach only the files that matter for this equipment, up to %@ each. Large files may slow down iCloud sync.", comment: "Footer of a gear's Attachments card; the argument is the file size limit, such as 25 MB"),
+                                  Int64(GearAttachmentLoader.maxFileBytes).localizedFileSize))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 8)
         }
         .padding()
         .background(

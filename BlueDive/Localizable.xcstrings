@@ -11470,6 +11470,41 @@
         }
       }
     },
+    "BlueDive is not a document manager — attach only the files that matter for this equipment, up to %@ each. Large files may slow down iCloud sync." : {
+      "comment" : "Footer of a gear's Attachments card; the argument is the file size limit, such as 25 MB",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive ist keine Dokumentenverwaltung – hänge nur die Dateien an, die für diese Ausrüstung wichtig sind, bis zu %@ pro Datei. Große Dateien können die iCloud-Synchronisierung verlangsamen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive no es un gestor de documentos: adjunta solo los archivos importantes para este equipo, hasta %@ cada uno. Los archivos grandes pueden ralentizar la sincronización con iCloud."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BlueDive n’est pas un gestionnaire de documents — joignez seulement les fichiers utiles pour cet équipement, jusqu’à %@ chacun. Les fichiers volumineux peuvent ralentir la synchronisation iCloud."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive er ikke en dokumentbehandler – legg bare ved filene som er viktige for dette utstyret, opptil %@ per fil. Store filer kan gjøre iCloud-synkroniseringen tregere."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "BlueDive is geen documentbeheer — voeg alleen de bestanden toe die belangrijk zijn voor deze uitrusting, tot %@ per bestand. Grote bestanden kunnen de iCloud-synchronisatie vertragen."
+          }
+        }
+      }
+    },
     "BlueDive is not a photo album — keep photos to the most relevant shots. Large collections may slow down iCloud sync." : {
       "localizations" : {
         "de" : {
