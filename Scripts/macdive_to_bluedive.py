@@ -4,8 +4,27 @@ macdive_to_bluedive.py
 Convert a MacDive SQLite database to BlueDive XML files.
 
 Usage:
+    python3 macdive_to_bluedive.py
     python3 macdive_to_bluedive.py <input.sqlite> <output.xml> --export <type> [options]
     python3 macdive_to_bluedive.py <input.sqlite> --schema
+
+Wizard (no arguments, run in Terminal; from another program the usage is printed as before):
+    Asks for everything step by step: finds MacDive's database (~/Library/Application
+    Support/MacDive) and the newest MacDive XML exports (Desktop, Documents, Downloads),
+    asks what to convert and the options below (with the command line's defaults: the
+    tank options stay off unless turned on), shows the equivalent command lines, then
+    writes Gear, Certifications, Species and Dives .bluedive files (plus Dives.log) to a
+    new folder ("BlueDive Migration <date>" on the Desktop by default) and lists the order
+    in which to import them.  It asks to quit MacDive first, so its latest changes are in
+    the database file.  The files are the same as those of the printed commands.
+
+The MacDive database is always opened read-only: the database and its -wal file are never
+written (SQLite may create the -shm index file beside them, as MacDive itself does when
+it opens the database).  When SQLite cannot open it read-only (a WAL database whose -wal
+file is missing, e.g. a database copied without the files beside it, or whose -shm file is
+missing in a folder that is not writable), its files are copied once to a temporary folder, read from there and deleted at the end (also when
+Terminal is closed or the script is stopped).  Any other error, e.g. "database is locked"
+while MacDive is writing to it, stops the conversion with a message instead of copying.
 
 Export types:
     dives           Dive log with associated gear and profile samples  (default)
@@ -306,7 +325,7 @@ COREDATA_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
 # BlueDive version and build the exported files are written for, in the same
 # "version (build)" form as the app's own exports (<metadata><version>).
 # ---------------------------------------------------------------------------
-BLUEDIVE_VERSION = "2.3 (172)"
+BLUEDIVE_VERSION = "2.3 (173)"
 
 
 def coredata_to_str(ts):
@@ -419,6 +438,113 @@ def base64_block(name, data, indent=4):
     lines += [f"{inner}{c}" for c in chunks]
     lines.append(f"{pad}</{name}>")
     return lines
+
+
+# ---------------------------------------------------------------------------
+# Database access (read-only)
+# ---------------------------------------------------------------------------
+
+class MacDiveDBError(Exception):
+    """MacDive's database cannot be read; the message is shown to the user."""
+
+
+_TEMP_DB_COPIES: dict = {}   # source database → its temporary copy, made once per run
+_TEMP_DB_FOLDERS: list = []
+
+
+def _remove_temp_db_folders():
+    import shutil
+    for folder in _TEMP_DB_FOLDERS:
+        shutil.rmtree(folder, ignore_errors=True)
+    _TEMP_DB_FOLDERS.clear()
+    _TEMP_DB_COPIES.clear()
+
+
+def _register_temp_db_cleanup():
+    """Delete the temporary copies at exit (see install_stop_signal_handlers for SIGHUP/SIGTERM)."""
+    import atexit
+    atexit.register(_remove_temp_db_folders)
+
+
+class StopRequested(SystemExit):
+    """The script was told to stop (Terminal closed, or `kill`): never treated as one failed file."""
+
+
+def install_stop_signal_handlers():
+    """
+    End the script through a normal exit when Terminal is closed (SIGHUP) or it is stopped
+    (SIGTERM): those signals otherwise end Python without running atexit, which deletes the
+    temporary database copy (the whole logbook) and stops the libdivecomputer worker.
+    Installed once at start-up, so every run stops the same way.
+    """
+    import signal
+
+    def stop(signum, frame):
+        raise StopRequested(128 + signum)
+
+    for sig in (signal.SIGHUP, signal.SIGTERM):
+        try:
+            if signal.getsignal(sig) is signal.SIG_DFL:
+                signal.signal(sig, stop)
+        except (ValueError, OSError):
+            pass   # not the main thread, or not supported
+
+
+def open_macdive_db(path):
+    """
+    Open MacDive's database for reading only, so the script can never change it.
+
+    MacDive's database is in WAL mode: a read-only connection creates the -shm index file when
+    it is missing (as any reader does; the database and -wal are not written), and cannot open
+    the database ("unable to open database file") when its -wal file is missing (e.g. a
+    database copied without the files beside it), or its -shm file is missing in a folder that
+    is not writable. Only then is it read from a copy of its files (.sqlite, -wal, -shm) in a temporary folder, made once
+    per run and deleted when the script ends; the original is still never written to. Any
+    other error (e.g. "database is locked" while MacDive writes to it) stops with a message:
+    copying a database being written could give a mix of old and new pages.
+    Raises MacDiveDBError when the database cannot be read.
+    """
+    src = Path(path).expanduser().resolve()
+    if src in _TEMP_DB_COPIES:
+        return sqlite3.connect(str(_TEMP_DB_COPIES[src]))
+    con = None
+    try:
+        con = sqlite3.connect(f"{src.as_uri()}?mode=ro", uri=True)
+        con.execute("SELECT count(*) FROM sqlite_master").fetchone()
+        return con
+    except sqlite3.OperationalError as exc:
+        if con is not None:
+            con.close()
+        if "unable to open database file" not in str(exc):
+            raise MacDiveDBError(f"cannot read {src}: {exc}. If MacDive is open, quit it and try again.")
+        reason = exc
+    except sqlite3.Error as exc:
+        if con is not None:
+            con.close()
+        if "not a database" in str(exc):
+            raise MacDiveDBError(f"{src} is not a SQLite database.")
+        raise MacDiveDBError(f"cannot read {src}: {exc}.")
+
+    if not os.access(src, os.R_OK):
+        raise MacDiveDBError(f"cannot read {src}: permission denied. Check the file's permissions, "
+                             f"or allow Terminal in System Settings → Privacy & Security → Full Disk Access.")
+    import shutil, tempfile
+    try:
+        folder = tempfile.mkdtemp(prefix="macdive_to_bluedive-")
+        if not _TEMP_DB_FOLDERS:
+            _register_temp_db_cleanup()
+        _TEMP_DB_FOLDERS.append(folder)
+        copy = Path(folder) / src.name
+        for suffix in ("", "-wal", "-shm"):
+            part = Path(f"{src}{suffix}")
+            if part.exists():
+                shutil.copyfile(part, f"{copy}{suffix}")
+    except OSError as exc:
+        raise MacDiveDBError(f"cannot read {src}: {exc}")
+    print(f"  Note: the database could not be opened read-only ({reason}); "
+          f"reading a temporary copy instead.")
+    _TEMP_DB_COPIES[src] = copy
+    return sqlite3.connect(str(copy))
 
 
 # ---------------------------------------------------------------------------
@@ -1160,11 +1286,35 @@ def _libdc_download(sha, dest):
         raise RuntimeError(f"{LIBDC_FOLDER}/ not found in the downloaded archive")
 
 
+_NO_DEVELOPER_TOOLS = "Apple's command-line tools are not installed — install them with: xcode-select --install"
+
+
+def run_quiet(cmd):
+    """Return code of a short command (output discarded), or None when it cannot run."""
+    import subprocess
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=10).returncode
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def developer_tools_installed():
+    """
+    Whether Apple's command-line tools (or Xcode) are installed. Without them /usr/bin/cc is
+    only a placeholder that fails (and may show macOS's install prompt), so it is not run.
+    """
+    return run_quiet(["xcode-select", "-p"]) == 0
+
+
 def _libdc_build(src_root, log):
     """Compile libdivecomputer from `src_root` and install it, with its sources, in the cache."""
     import shutil, subprocess, tempfile
     if not (src_root / "include" / "libdivecomputer" / "version.h").exists():
         raise RuntimeError(f"include/libdivecomputer/version.h missing from {LIBDC_FOLDER}")
+    # A RuntimeError, not a _LibDCBuildError: nothing is recorded as a failed commit, so the
+    # next run, once the tools are installed, compiles it.
+    if not developer_tools_installed():
+        raise RuntimeError(_NO_DEVELOPER_TOOLS)
     cc = shutil.which("cc")
     if cc is None:
         raise RuntimeError("no C compiler found — install the Xcode command-line tools "
@@ -1247,6 +1397,8 @@ def _libdc_update_github(cached, arch, meta_path, failed_path, log):
         log("  Cached copy was built from a local checkout.")
     elif cached:
         log("  Online version differs from the cached copy.")
+    if not developer_tools_installed():
+        raise RuntimeError(_NO_DEVELOPER_TOOLS)   # checked before downloading what cannot be compiled
     log(f"  Downloading {LIBDC_REPO}@{sha[:10]} ({LIBDC_FOLDER}/) …")
     with tempfile.TemporaryDirectory() as tmp:
         src_root = Path(tmp) / "libdivecomputer"
@@ -1273,6 +1425,23 @@ def _libdc_describe(notes):
     return f"GitHub {notes['version'][:10]}  ({notes['date']})"
 
 
+def libdc_cached_build():
+    """The notes of the cached libdivecomputer build when it can be used on this Mac, else None."""
+    meta_path = LIBDC_CACHE / "libdivecomputer.json"
+    if not (meta_path.exists() and (LIBDC_CACHE / "libdivecomputer.dylib").exists()):
+        return None
+    try:
+        cached = json.loads(meta_path.read_text())
+    except Exception:
+        return None
+    if not (isinstance(cached, dict) and cached.get("source") in ("local", "github")
+            and isinstance(cached.get("version"), str) and isinstance(cached.get("date"), str)):
+        return None   # missing or malformed notes, or a LibDCSwift build of an older script
+    if cached.get("arch") != _host_arch():
+        return None   # built for another architecture
+    return cached
+
+
 def setup_libdivecomputer(log):
     """
     Return a LibDCWorker decoder, or None when the library cannot be obtained (raw data is
@@ -1287,17 +1456,7 @@ def setup_libdivecomputer(log):
     failed_path = LIBDC_CACHE / "libdivecomputer-failed.json"
     dylib       = LIBDC_CACHE / "libdivecomputer.dylib"
     arch        = _host_arch()
-    cached = None
-    if meta_path.exists() and dylib.exists():
-        try:
-            cached = json.loads(meta_path.read_text())
-        except Exception:
-            cached = None
-    if not (isinstance(cached, dict) and cached.get("source") in ("local", "github")
-            and isinstance(cached.get("version"), str) and isinstance(cached.get("date"), str)):
-        cached = None   # missing or malformed notes, or a LibDCSwift build of an older script
-    if cached and cached.get("arch") != arch:
-        cached = None   # built for another architecture
+    cached = libdc_cached_build()
     local = _libdc_local_checkout()
     if local:
         log("libdivecomputer (raw dive computer data decoder) — source: this BlueDive checkout, "
@@ -3208,7 +3367,7 @@ def _export_dives(input_path, output_path, weight_unit, macdive_xml_path, import
         _header_logs.append(msg)
     libdc = LazyLibDC(_hlog)   # set up on the first dive with raw data
 
-    con = sqlite3.connect(input_path)
+    con = open_macdive_db(input_path)
     cur = con.cursor()
 
     junctions = discover_junctions(cur)
@@ -4231,7 +4390,7 @@ def gear_group_xml_lines(group, indent=4):
 
 def export_gears(input_path, output_path, weight_unit):
     _reset_schema_caches()
-    con = sqlite3.connect(input_path)
+    con = open_macdive_db(input_path)
     cur = con.cursor()
 
     divers      = load_divers(cur)
@@ -4363,7 +4522,7 @@ def load_certifications_list(cur, divers):
 
 def export_certifications(input_path, output_path):
     _reset_schema_caches()
-    con = sqlite3.connect(input_path)
+    con = open_macdive_db(input_path)
     cur = con.cursor()
 
     divers = load_divers(cur)
@@ -4423,7 +4582,7 @@ def export_species(input_path, output_path, critter_opts):
     Catalogue), including critters no dive uses. Same <species> elements as the dive export.
     """
     _reset_schema_caches()
-    con = sqlite3.connect(input_path)
+    con = open_macdive_db(input_path)
     cur = con.cursor()
     critters, skipped = load_critters(cur, critter_opts["species_mode"])
     con.close()
@@ -4464,7 +4623,7 @@ def export_species(input_path, output_path, critter_opts):
 def cmd_schema(input_path):
     """Print all tables and their columns — useful for diagnosing missing data."""
     _reset_schema_caches()
-    con = sqlite3.connect(input_path)
+    con = open_macdive_db(input_path)
     cur = con.cursor()
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     tables = [row[0] for row in cur.fetchall()]
@@ -4494,10 +4653,488 @@ def cmd_schema(input_path):
 
 
 # ---------------------------------------------------------------------------
+# Wizard (the script run without arguments)
+# ---------------------------------------------------------------------------
+#
+# Asks for the database, the MacDive XML export and the options, one step at a time, shows
+# the equivalent command lines, then runs them through main() — so a wizard run and the
+# printed commands always give the same files.
+
+_WIZ_MACDIVE_FOLDER = Path.home() / "Library" / "Application Support" / "MacDive"
+
+# (export type, output file name, description shown in the wizard), in the order they run.
+_WIZ_EXPORTS = [
+    ("gears",          "Gear.bluedive",           "Gear, gear groups and service history"),
+    ("certifications", "Certifications.bluedive", "Certifications"),
+    ("species",        "Species.bluedive",        "Species catalogue (every critter, including those no dive uses)"),
+    ("dives",          "Dives.bluedive",          "Dives, with their profiles, tanks, gear and marine life"),
+]
+
+
+class _WizardCancelled(Exception):
+    pass
+
+
+def _wiz_input(prompt):
+    try:
+        return input(prompt)
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise _WizardCancelled()
+
+
+def _wiz_heading(title):
+    print()
+    print(title)
+    print("─" * len(title))
+
+
+def _wiz_yes_no(question, default):
+    hint = "[Y/n]" if default else "[y/N]"
+    while True:
+        answer = _wiz_input(f"{question} {hint} ").strip().lower()
+        if not answer:
+            return default
+        if answer in ("y", "yes"):
+            return True
+        if answer in ("n", "no"):
+            return False
+        print("  Please answer y or n.")
+
+
+def _wiz_choice(question, options, default_index=0):
+    """Numbered choice among (value, label) options; Return picks the default."""
+    print(question)
+    for i, (_, label) in enumerate(options):
+        print(f"  {i + 1}. {label}{'  (default)' if i == default_index else ''}")
+    while True:
+        answer = _wiz_input(f"Choice [1-{len(options)}, Return = {default_index + 1}]: ").strip()
+        if not answer:
+            return options[default_index][0]
+        if answer.isdigit() and 1 <= int(answer) <= len(options):
+            return options[int(answer) - 1][0]
+        print(f"  Please type a number from 1 to {len(options)}.")
+
+
+def _wiz_clean_path(text):
+    """A path typed, pasted or dragged from Finder into Terminal: quotes and backslash escapes removed."""
+    text = text.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
+        text = text[1:-1]
+    else:
+        text = re.sub(r"\\(.)", r"\1", text)
+    # Full path: the printed commands then work from any folder, and a name starting
+    # with "-" is never read as an option.
+    return Path(text).expanduser().absolute()
+
+
+_WIZ_NO_ACCESS = ("If macOS asked whether Terminal may access this folder, allow it in System Settings → "
+                  "Privacy & Security → Files and Folders.")
+
+
+def _wiz_nearest_existing(path):
+    """`path`, or its nearest parent that exists (os.path.exists never raises)."""
+    path = Path(path)
+    while not os.path.exists(path) and path != path.parent:
+        path = path.parent
+    return path
+
+
+def _wiz_can_read(path):
+    """False when the nearest existing location of `path` cannot be read (e.g. macOS privacy settings)."""
+    place = _wiz_nearest_existing(path)
+    return os.access(place, os.R_OK | (os.X_OK if place.is_dir() else 0))
+
+
+def _wiz_folder_problem(folder):
+    """Why the files cannot be written to `folder` (created when missing), or None."""
+    place = _wiz_nearest_existing(folder)
+    if not os.path.isdir(place):
+        return f"{place} is a file, not a folder."
+    if os.access(place, os.W_OK | os.X_OK):
+        return None
+    # Only these folders are protected by macOS's privacy settings for Terminal.
+    protected = [Path.home() / n for n in ("Desktop", "Documents", "Downloads")]
+    if any(folder == p or p in folder.parents for p in protected):
+        return f"cannot write in {place}. {_WIZ_NO_ACCESS}"
+    return f"cannot write in {place} (permission denied)."
+
+
+def _wiz_check(path, test):
+    """`test(path)` (e.g. Path.is_file), or None when the location cannot be read: on Python 3.9
+    these checks raise PermissionError, e.g. when Terminal is not allowed to access the Desktop."""
+    try:
+        return test(path)
+    except OSError:
+        return None
+
+
+def _wiz_existing_path(question, kind):
+    """Asks until the answer is an existing file (kind "file") or folder (kind "folder")."""
+    while True:
+        answer = _wiz_input(f"{question}\n(type the path, or drag the {kind} from Finder into this window)\n> ")
+        if not answer.strip():
+            continue
+        path = _wiz_clean_path(answer)
+        found = _wiz_check(path, Path.is_dir if kind == "folder" else Path.is_file)
+        if found:
+            return path
+        if found is None or not _wiz_can_read(path):
+            print(f"  Cannot access {path}. {_WIZ_NO_ACCESS}")
+        elif not os.path.exists(path):
+            print(f"  Not found: {path}")
+        elif kind == "folder":
+            print(f"  {path} is not a folder.")
+        elif os.path.isdir(path):
+            print(f"  {path} is a folder, not a file.")
+        else:
+            print(f"  {path} is not a regular file.")
+
+
+def _wiz_pick_path(question, candidates, kind):
+    """One of the files or folders found, or another one the user gives."""
+    if not candidates:
+        return _wiz_existing_path(question, kind)
+    options = [(p, str(p)) for p in candidates] + [(None, f"Another {kind}…")]
+    chosen = _wiz_choice(question, options)
+    return chosen if chosen is not None else _wiz_existing_path(f"Which {kind}?", kind)
+
+
+def _wiz_find_databases():
+    """MacDive's databases in its default folder, MacDive.sqlite first."""
+    try:
+        found = list(_WIZ_MACDIVE_FOLDER.glob("*.sqlite"))
+    except OSError:
+        return []
+    return sorted(found, key=lambda p: (p.name != "MacDive.sqlite", p.name.lower()))
+
+
+def _wiz_is_macdive_export(path):
+    """True for a MacDive XML export, False for another file, None when it cannot be read."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(4096)
+    except OSError:
+        return None
+    return b"macdive_logbook.dtd" in head or (b"<dives>" in head and b"<units>" in head)
+
+
+def _wiz_find_exports():
+    """
+    The 5 newest MacDive XML exports on the Desktop and in Documents and Downloads (not their
+    subfolders). Files are sorted by date first (reading the date downloads nothing), then read
+    newest first until 5 exports are found, at most 20 files: reading a file iCloud has moved
+    off the Mac (Optimize Storage) downloads it.
+    """
+    import stat
+    candidates = []
+    for name in ("Desktop", "Documents", "Downloads"):
+        try:
+            for p in (Path.home() / name).iterdir():
+                if p.suffix.lower() == ".xml":
+                    try:
+                        st = p.stat()
+                    except OSError:
+                        continue
+                    if stat.S_ISREG(st.st_mode):
+                        candidates.append((st.st_mtime, p))
+        except OSError:
+            continue   # folder missing, or Terminal not allowed to read it
+    found = []
+    # At most the 20 newest .xml files are read, whatever they hold.
+    for _, p in sorted(candidates, key=lambda c: c[0], reverse=True)[:20]:
+        if _wiz_is_macdive_export(p):
+            found.append(p)
+            if len(found) == 5:
+                break
+    return found
+
+
+def _wiz_count_dives(db):
+    """Number of dives in the database, or None when it has no dive table (not a MacDive
+    database). Raises MacDiveDBError when it cannot be read."""
+    try:
+        con = open_macdive_db(db)
+        try:
+            cur = con.cursor()
+            cur.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ZDIVE'")
+            if cur.fetchone() is None:
+                return None
+            cur.execute("SELECT COUNT(*) FROM ZDIVE")
+            return cur.fetchone()[0]
+        finally:
+            con.close()
+    except sqlite3.Error as exc:   # e.g. a damaged dive table
+        hint = " If MacDive is open, quit it and try again." if isinstance(exc, sqlite3.OperationalError) else ""
+        raise MacDiveDBError(f"cannot read {db}: {exc}.{hint}")
+
+
+def _wiz_default_output_folder():
+    base = Path.home() / "Desktop"
+    if not _wiz_check(base, Path.is_dir):
+        base = Path.home()
+    name = f"BlueDive Migration {datetime.now().strftime('%Y-%m-%d')}"
+    folder, n = base / name, 2
+    while _wiz_check(folder, Path.exists):
+        folder, n = base / f"{name} {n}", n + 1
+    return folder
+
+
+def _wiz_argv(export_type, db, folder, file_name, opts):
+    """The command-line arguments of one export, as main() takes them."""
+    argv = [str(db), str(folder / file_name), "--export", export_type]
+    if export_type in ("dives", "gears"):
+        argv += ["--weight-unit", opts["weight"]]
+    if export_type == "dives":
+        argv += ["--macdive-xml", str(opts["macdive_xml"])]
+        if opts["import_unmatched_tanks"]:
+            argv.append("--import-unmatched-tanks")
+        if opts["drop_duplicate_tanks"]:
+            argv.append("--drop-duplicate-tanks")
+    if export_type in ("dives", "species"):
+        if opts["critter_species"] != "scientific":
+            argv += ["--critter-species", opts["critter_species"]]
+        if opts["critter_size_unit"] != "cm":
+            argv += ["--critter-size-unit", opts["critter_size_unit"]]
+        if opts["critter_images"] is not None:
+            argv += ["--critter-images", str(opts["critter_images"])]
+    return argv
+
+
+_WIZ_STATE = {"writing": False}   # set once the conversion has started
+
+
+def run_wizard():
+    try:
+        _run_wizard()
+    except (_WizardCancelled, KeyboardInterrupt):
+        print()
+        if _WIZ_STATE["writing"]:
+            print("Stopped.")
+            sys.exit(130)
+        print("Cancelled. Nothing was written.")
+        sys.exit(130)
+
+
+def _run_wizard():
+    import shlex
+    steps_shown = [0]
+
+    def step(title):
+        """Numbered heading; steps that do not apply (e.g. the export without dives) are not counted."""
+        steps_shown[0] += 1
+        _wiz_heading(f"{steps_shown[0]}. {title}")
+
+    print("MacDive → BlueDive migration")
+    print("============================")
+    print("This wizard converts your MacDive logbook into files BlueDive can import. Your MacDive")
+    print("database is only read, never changed. Press Return to accept a default, Ctrl-C to quit.")
+    print("(For the command-line options, run: python3 macdive_to_bluedive.py --help)")
+
+    # ── MacDive must be closed: its latest changes are then written to the database file.
+    while run_quiet(["pgrep", "-x", "MacDive"]) == 0:
+        print()
+        print("MacDive is open. Please quit it, so its latest changes are saved to its database.")
+        if _wiz_input("Press Return once MacDive is closed (or type 'skip' to continue anyway): ").strip().lower() == "skip":
+            break
+
+    # ── Database
+    step("MacDive database")
+    while True:
+        db = _wiz_pick_path("Which MacDive database?", _wiz_find_databases(), "file")
+        try:
+            dive_count = _wiz_count_dives(db)
+        except MacDiveDBError as exc:
+            print(f"  Error: {exc}")
+            continue
+        if dive_count is not None:
+            break
+        print(f"  {db} is not a MacDive database (it has no dive table). Please choose another file.")
+    print(f"  {dive_count:,} dives found.")
+
+    # ── What to convert
+    step("What to convert")
+    chosen = [(t, f, d) for t, f, d in _WIZ_EXPORTS if _wiz_yes_no(f"{d}?", True)]
+    if not chosen:
+        print("Nothing to convert.")
+        return
+    types = {t for t, _, _ in chosen}
+    opts = {"weight": None, "macdive_xml": None, "import_unmatched_tanks": False,
+            "drop_duplicate_tanks": False, "critter_species": "scientific",
+            "critter_size_unit": "cm", "critter_images": None}
+
+    # ── Dives: the MacDive XML export, and the decoder of the raw dive computer data
+    if "dives" in types:
+        step("MacDive XML export")
+        print("Dives need an XML export of the same MacDive logbook (in MacDive: File → Export → XML),")
+        print("which gives the units and the dive profiles.")
+        print("Looking for exports on your Desktop and in Documents and Downloads (macOS may ask")
+        print("whether Terminal may access these folders)…")
+        exports = _wiz_find_exports()   # searched once: reading files can download them from iCloud
+        while True:
+            opts["macdive_xml"] = _wiz_pick_path("Which MacDive XML export?", exports, "file")
+            is_export = _wiz_is_macdive_export(opts["macdive_xml"])
+            if is_export:
+                break
+            if is_export is None:
+                print(f"  Cannot access {opts['macdive_xml']}. {_WIZ_NO_ACCESS}")
+            else:
+                print(f"  {opts['macdive_xml']} is not a MacDive XML export (in MacDive: File → Export → XML). "
+                      f"Please choose another file.")
+
+        if not developer_tools_installed() and libdc_cached_build() is None:
+            print()
+            print("Apple's command-line tools are not installed. Without them, the raw data your dive")
+            print("computers recorded cannot be decoded: profiles, durations and pressures then come")
+            print("from the MacDive XML export only. To install them, run: xcode-select --install")
+            if not _wiz_yes_no("Continue without decoding the raw data?", False):
+                print("Install the tools, then run the wizard again.")
+                return
+
+    # ── Options
+    if types & {"dives", "gears", "species"}:
+        step("Options")
+    if types & {"dives", "gears"}:
+        opts["weight"] = _wiz_choice(
+            "Which weight unit did you use in MacDive? (MacDive stores the number only; it is never converted.)",
+            [("kg", "kg"), ("lbs", "lbs")])
+    if types & {"dives", "species"}:
+        opts["critter_species"] = _wiz_choice(
+            "What does the Species field of your MacDive critters hold?",
+            [("scientific", "Scientific names (e.g. Pterois volitans)"),
+             ("omit", "Something else, e.g. group or common names: leave it out")])
+        opts["critter_size_unit"] = _wiz_choice(
+            "Which unit are your critters' average sizes in? (never converted)",
+            [("cm", "cm"), ("in", "in")])
+        images = Path(db).parent / "Critter Images"
+        if _wiz_check(images, Path.is_dir):
+            print(f"Critter pictures: {images}")
+        elif _wiz_yes_no(f"No \"Critter Images\" folder beside the database. Choose the folder of the critter pictures?", False):
+            opts["critter_images"] = _wiz_existing_path("Which folder?", "folder")
+    if "dives" in types:
+        print("Duplicate tanks: MacDive sometimes stored a tank twice on a dive (same tank, gas, size,")
+        print("working pressure, material and type, neither with a pressure). Two real stages of the same")
+        print("tank and gas logged without pressures look the same and would be left out too.")
+        opts["drop_duplicate_tanks"] = _wiz_yes_no("Leave out these exact copies?", False)
+        if _wiz_yes_no("Did you dive a rebreather (CCR or SCR)?", False):
+            print("Rebreather cylinders: on CCR/SCR dives whose computer marks its cylinders as oxygen or")
+            print("diluent, this matches them to MacDive's tanks by role and gas instead of by pressure,")
+            print("so an existing MacDive tank can get different pressures (the computer's): MacDive often")
+            print("kept only the diluent tank, with the oxygen cylinder's pressures. Cylinders MacDive did")
+            print("not keep are added with the computer's pressures; the oxygen cylinder is added as 100% O2,")
+            print("inferred from its role (the computer records no mix). Unclear cases are logged and left")
+            print("as in MacDive; open-circuit dives are never changed.")
+            opts["import_unmatched_tanks"] = _wiz_yes_no("Match and add these cylinders?", False)
+
+    # ── Output folder
+    step("Where to save the files")
+    default_folder = _wiz_default_output_folder()
+    written = [f for _, f, _ in chosen] + (["Dives.log"] if "dives" in types else [])
+    while True:
+        answer = _wiz_input(f"Folder for the BlueDive files\n  [Return = {default_folder}]\n> ").strip()
+        folder = _wiz_clean_path(answer) if answer else default_folder
+        present = [_wiz_check(folder / f, Path.exists) for f in written]
+        problem = _wiz_folder_problem(folder)
+        if problem is None and None in present:
+            problem = f"cannot read {folder}. {_WIZ_NO_ACCESS}"
+        if problem is None:
+            break
+        print(f"  Error: {problem} Please choose another folder.")
+    existing = [f for f, here in zip(written, present) if here]
+    if existing and not _wiz_yes_no(f"{', '.join(existing)} already in this folder. Replace?", False):
+        print("Nothing was written. Run the wizard again and choose another folder.")
+        return
+
+    # ── Summary
+    runs = [(t, f, _wiz_argv(t, db, folder, f, opts)) for t, f, _ in chosen]
+    script = shlex.quote(str(Path(sys.argv[0]).resolve()))
+    _wiz_heading("Summary")
+    print(f"Database : {db}")
+    if opts["macdive_xml"]:
+        print(f"Export   : {opts['macdive_xml']}")
+    print(f"Folder   : {folder}")
+    print("Files    : " + ", ".join(f for _, f, _ in runs))
+    print()
+    print("The same conversion from the command line:")
+    for _, _, argv in runs:
+        print(f"  python3 {script} {shlex.join(argv)}")
+    print()
+    if not _wiz_yes_no("Convert now?", True):
+        print("Nothing was written.")
+        return
+
+    # ── Convert, one file after the other; a failed one does not stop the others.
+    _WIZ_STATE["writing"] = True
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(f"Error: cannot create {folder}: {exc}", file=sys.stderr)
+        sys.exit(1)
+    done, failed = [], []
+    for export_type, file_name, argv in runs:
+        _wiz_heading(f"Converting: {file_name}")
+        try:
+            main(argv)
+            done.append(file_name)
+        except KeyboardInterrupt:
+            print()
+            print(f"Stopped. Some files in {folder} may be incomplete: delete them and run the wizard again.")
+            sys.exit(130)
+        except StopRequested:
+            raise   # Terminal closed or `kill`: stop here, not just this file
+        except SystemExit as exc:
+            if exc.code in (0, None):
+                done.append(file_name)
+            else:
+                failed.append(file_name)
+        except MacDiveDBError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            failed.append(file_name)
+        except Exception:
+            import traceback
+            traceback.print_exc()   # a bug: the details are needed to report it
+            failed.append(file_name)
+
+    # ── Next steps
+    _wiz_heading("Done")
+    for f in done:
+        print(f"  ✓ {folder / f}")
+    if "Dives.bluedive" in done:
+        print(f"  ✓ {folder / 'Dives.log'}  (details of each dive's conversion)")
+    for f in failed:
+        print(f"  ✗ {f} — not converted (see the messages above)")
+    if not done:
+        sys.exit(1)
+    print()
+    print("Next, import the files into BlueDive in this order: in the Dives tab, + → Import,")
+    print("then choose the file (on a Mac you can also double-click a .bluedive file):")
+    steps = {
+        "Gear.bluedive":           "your equipment (first, so your dives link to it)",
+        "Certifications.bluedive": "your certifications",
+        "Dives.bluedive":          "your dives and their marine life; leave Import Gear and Import Species on",
+        "Species.bluedive":        ("the critters no dive uses (optional: the dives file already has the others)"
+                                    if "Dives.bluedive" in done else "your marine life species catalogue"),
+    }
+    order = ["Gear.bluedive", "Certifications.bluedive", "Dives.bluedive", "Species.bluedive"]
+    for n, f in enumerate([f for f in order if f in done], 1):
+        print(f"  {n}. {f} — {steps[f]}")
+    print()
+    print("To import on an iPhone or iPad, copy the folder there first (AirDrop or iCloud Drive).")
+    print("Dates are written in this Mac's time zone: import on a device set to the same time zone.")
+    try:
+        if _wiz_yes_no("Open the folder in Finder?", True):
+            run_quiet(["open", str(folder)])
+    except _WizardCancelled:
+        pass   # the files are written: nothing to cancel
+    if failed:
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Convert a MacDive SQLite database to a BlueDive XML file.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -4563,7 +5200,7 @@ Examples:
     parser.add_argument("--critter-images", dest="critter_images", default=None,
                         help="Dives, species: MacDive's 'Critter Images' folder (default: the one "
                              "beside the .sqlite file). Images not found are listed in the summary.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not Path(args.input).exists():
         print(f"Error: file not found: {args.input}", file=sys.stderr)
@@ -4608,4 +5245,15 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--libdc-worker":
         _libdc_worker_main(sys.argv[2])   # internal: libdivecomputer decoding process
     else:
-        main()
+        install_stop_signal_handlers()
+        if (len(sys.argv) == 1 and sys.stdin is not None and sys.stdin.isatty()
+                and sys.stdout is not None and sys.stdout.isatty()):
+            run_wizard()                  # no arguments, in Terminal: step-by-step wizard
+        else:
+            # Arguments, or no arguments from another program (input not a terminal):
+            # the command line, which then prints its usage as before.
+            try:
+                main()
+            except MacDiveDBError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                sys.exit(1)

@@ -17,7 +17,7 @@ BlueDive is a modern, actively maintained dive log app designed as a full-featur
 - **Native Mac app** — The same interface as on iPhone and iPad, with column-aligned lists and headers that stay visible, two-column detail layouts, and menu bar commands
 - **Multiple divers** — Keep several divers' logbooks in one database, filter every tab by diver, and move a dive to another diver
 - **iCloud sync** — Your logbook stays in sync across iPhone, iPad, and Mac automatically, including live updates of dives edited on another device
-- **Import** — MacDive XML, UDDF, Subsurface XML, Garmin FIT, BlueDive XML, and MacDive gear CSV; `Scripts/macdive_to_bluedive.py` migrates a MacDive SQLite database (dives, gear, certifications, and critters)
+- **Import** — MacDive XML, UDDF, Subsurface XML, Garmin FIT, BlueDive XML, and MacDive gear CSV; `Scripts/macdive_to_bluedive.py` migrates a MacDive SQLite database (dives, gear, certifications, and critters), with a step-by-step wizard (see [Migrating from MacDive](https://github.com/houle988/BlueDive/wiki/Migrating-From-MacDive))
 - **Export** — UDDF, BlueDive XML, and a printable PDF logbook
 - **Dive photos** — Import photos with their EXIF/IPTC metadata, automatic dive matching, camera clock correction, and re-import without duplicates
 - **Marine life & species catalogue** — Record sightings from a species catalogue linked to iNaturalist (taxonomy, names, Creative Commons photos), detect species from photo keywords, and export or import the catalogue
