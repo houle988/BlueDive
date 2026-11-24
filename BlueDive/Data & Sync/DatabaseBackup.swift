@@ -87,13 +87,16 @@ nonisolated enum DatabaseBackup {
 
     /// Creates the zip in a temporary folder of its own and returns it with its file name.
     /// `modelTypes` is `BlueDiveApp.appModelTypes`, read on the main actor by the caller.
+    /// `fileNamePrefix` names the zip (`<prefix>-yyyy-MM-dd-HHmm.zip`): the logbook a restore
+    /// replaced is exported under its own name, so it is never taken for the current logbook's.
     static func build(liveStoreURL: URL,
                       modelTypes: [any PersistentModel.Type],
                       iCloudSyncEnabled: Bool,
+                      fileNamePrefix: String = "BlueDive-Backup",
                       progress: @Sendable (Phase) -> Void) -> Result<(url: URL, name: String), Failure> {
         let fm = FileManager.default
         let storeName = liveStoreURL.lastPathComponent
-        let supportName = "." + liveStoreURL.deletingPathExtension().lastPathComponent + "_SUPPORT"
+        let supportName = DatabaseRestore.supportFolderName(forStoreAt: liveStoreURL)
         let supportSource = liveStoreURL.deletingLastPathComponent().appendingPathComponent(supportName)
 
         // Free space: the staging copy and the zip exist at the same time (photos hardly compress).
@@ -211,7 +214,7 @@ nonisolated enum DatabaseBackup {
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.timeZone = .current
         stamp.dateFormat = "yyyy-MM-dd-HHmm"
-        let zipName = "BlueDive-Backup-\(stamp.string(from: now)).zip"
+        let zipName = "\(fileNamePrefix)-\(stamp.string(from: now)).zip"
         let zipFolder = fm.temporaryDirectory.appendingPathComponent("BlueDiveBackupZip-\(UUID().uuidString)")
         guard (try? fm.createDirectory(at: zipFolder, withIntermediateDirectories: true)) != nil else {
             return .failure(.archiveFailed)

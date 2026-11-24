@@ -155,11 +155,14 @@ struct BlueDiveApp: App {
         BackgroundSyncTask.register()
         #endif
         // Photo copies previous launches left in tmp for Quick Look (this launch's folder is
-        // kept, so a photo opened before the sweep runs keeps its copy), and the folders of a
-        // backup the app was stopped during.
+        // kept, so a photo opened before the sweep runs keeps its copy), the folders of a
+        // backup the app was stopped during, and the working folders of a restore no longer
+        // pending (`DatabaseRestore.removeLeftovers` keeps a pending restore's).
+        let launchDate = Date()
         Task.detached(priority: .utility) {
             QuickLookCopies.removeLeftovers()
             DatabaseBackup.removeLeftoverFolders()
+            DatabaseRestore.removeLeftovers(before: launchDate)
         }
         #if DEBUG
         // listPendingNotifications()
@@ -177,7 +180,10 @@ struct BlueDiveApp: App {
     @State private var syncMonitor = CloudKitSyncMonitor()
     @State private var importCoordinator = FileImportCoordinator()
     @State private var diveStore = DiveStore()
-    
+    /// A restore prepared in Settings → Data Management: while it is pending the window shows
+    /// only the restore screen and the database is never opened (see `RestoreMode`).
+    @State private var restoreMode = RestoreMode.shared
+
     /// The main window group. On macOS it has a stable id; SwiftUI then gives the window a
     /// stable frame autosave name ("main-AppWindow-1" — observed, not documented by Apple), so
     /// AppKit saves the window's size and position and restores them on relaunch and when the
@@ -199,8 +205,17 @@ struct BlueDiveApp: App {
 
     var body: some Scene {
         mainWindowGroup {
-            RootLaunchContainer {
-                MainTabView()
+            Group {
+                if restoreMode.isActive {
+                    RestoreModeView()
+                } else {
+                    // The model container is attached here, not to the scene, so restore mode
+                    // never creates it: the database stays closed while a backup replaces it.
+                    RootLaunchContainer {
+                        MainTabView()
+                    }
+                    .modelContainer(Self.sharedModelContainer)
+                }
             }
             .preferredColorScheme(prefs.appearanceMode.colorScheme)
             .tint(.cyan)
@@ -222,7 +237,7 @@ struct BlueDiveApp: App {
             .environment(importCoordinator)
             .onChange(of: scenePhase) { _, newPhase in
                 #if os(iOS)
-                if newPhase == .background {
+                if newPhase == .background, !restoreMode.isActive {
                     BackgroundSyncTask.schedule()
                     if UserDefaults.standard.bool(forKey: BlueDiveApp.iCloudSyncEnabledKey) {
                         Self.beginSyncBackgroundTask()
@@ -231,6 +246,8 @@ struct BlueDiveApp: App {
                 #endif
             }
             .onOpenURL { url in
+                // Ignored during a restore: a file would be imported into the replaced logbook.
+                guard !restoreMode.isActive else { return }
                 importCoordinator.noteExternalOpen()
                 // Widget deep-links: bluedive://add/manual | bluedive://add/bluetooth
                 if let action = AddDiveDeepLink.action(for: url) {
@@ -250,7 +267,6 @@ struct BlueDiveApp: App {
                 }
             }
         }
-        .modelContainer(Self.sharedModelContainer)
         #if os(macOS)
         // On first launch, open the window maximized on the focused display: filling its
         // visible area (below the menu bar, beside the Dock), so the first-run disclaimer and
@@ -422,6 +438,26 @@ struct BlueDiveApp: App {
     /// UserDefaults key for iCloud sync preference.
     static let iCloudSyncEnabledKey = "iCloudSyncEnabled"
 
+    /// iCloud sync as `createModelContainer` opens it: on by default (new installs opt in).
+    static var isICloudSyncEnabled: Bool {
+        UserDefaults.standard.register(defaults: [iCloudSyncEnabledKey: true])
+        return UserDefaults.standard.bool(forKey: iCloudSyncEnabledKey)
+    }
+
+    /// The configuration `createModelContainer` opens the database with. Shared with
+    /// `liveStoreURL`, so the file restore mode replaces is always the one the app opens.
+    static func makeModelConfiguration(cloudKitDatabase: ModelConfiguration.CloudKitDatabase) -> ModelConfiguration {
+        ModelConfiguration(schema: appSchema, isStoredInMemoryOnly: false, allowsSave: true,
+                           cloudKitDatabase: cloudKitDatabase)
+    }
+
+    /// The database file `createModelContainer` opens (SwiftData's default location for this
+    /// configuration; the CloudKit setting does not change it), read without opening it:
+    /// restore mode replaces it.
+    static var liveStoreURL: URL {
+        makeModelConfiguration(cloudKitDatabase: .none).url
+    }
+
     private static func createModelContainer() -> ModelContainer {
         let schema = appSchema
 
@@ -433,20 +469,13 @@ struct BlueDiveApp: App {
         // The Settings toggle (and its existing "no account" warning) handles the unavailable case.
         // Existing users who already have the key stored are unaffected — register(defaults:) is
         // a no-op when the key is already present.
-        UserDefaults.standard.register(defaults: [iCloudSyncEnabledKey: true])
-
-        // Read iCloud sync preference
-        let iCloudEnabled = UserDefaults.standard.bool(forKey: iCloudSyncEnabledKey)
+        // Read iCloud sync preference (on by default: `isICloudSyncEnabled`)
+        let iCloudEnabled = isICloudSyncEnabled
         let cloudKitDB: ModelConfiguration.CloudKitDatabase = iCloudEnabled
             ? .private(CloudKitSyncMonitor.cloudKitContainerID)
             : .none
         
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            allowsSave: true,
-            cloudKitDatabase: cloudKitDB
-        )
+        let modelConfiguration = makeModelConfiguration(cloudKitDatabase: cloudKitDB)
 
         #if DEBUG
         // Only on request, and only when iCloud sync is on.

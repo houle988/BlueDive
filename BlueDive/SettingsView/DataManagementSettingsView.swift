@@ -34,6 +34,23 @@ struct DataManagementSettingsView: View {
     /// Numbers the measurements: only the latest one is shown (an earlier, slower one finishing
     /// after it would show a stale size).
     @State private var temporaryFilesMeasurement = 0
+    /// Restore backup: the folder picker, the folder picked (shown in `RestorePrepareSheet`), the
+    /// restore staged for the next launch, and a zip picked instead of its unzipped folder.
+    @State private var showRestorePicker = false
+    @State private var restoreFolder: PickedRestoreFolder?
+    @State private var pendingRestore: PendingRestore?
+    /// The size of the logbook a restore replaced on this device (`BlueDive Restore/previous`);
+    /// nil when there is none.
+    @State private var replacedLogbookSize: Int64?
+    @State private var showDeleteReplacedLogbookAlert = false
+    /// Numbers the restore-state reads: only the latest is shown (an earlier, slower size walk
+    /// finishing after it would show a deleted logbook's size again).
+    @State private var restoreStateRead = 0
+    @State private var showDeleteTemporaryFilesAlert = false
+    /// The backup being built is the export of the replaced logbook: its progress is shown on
+    /// the Restore card instead of the Backup card.
+    @State private var isExportingReplacedLogbook = false
+    @State private var showUnzipFirstAlert = false
     #if os(iOS)
     @State private var showBackupMover = false
     /// The backup zip offered in the save dialog (`DatabaseBackup.build` names it).
@@ -62,7 +79,7 @@ struct DataManagementSettingsView: View {
                     }
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    if let phase = backupProgress.phase {
+                    if let phase = backupProgress.phase, !isExportingReplacedLogbook {
                         HStack(spacing: 8) {
                             ProgressView().scaleEffect(0.8)
                             Text(verbatim: backupPhaseText(phase))
@@ -88,6 +105,8 @@ struct DataManagementSettingsView: View {
                         )
                 )
                 .padding(.horizontal)
+
+                restoreCard
 
                 VStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -160,7 +179,13 @@ struct DataManagementSettingsView: View {
                 VStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
                         Button {
-                            deleteTemporaryFiles()
+                            // The replaced logbook may be the only copy of dives a restore
+                            // replaced: deleting it is confirmed first.
+                            if pendingRestore == nil, replacedLogbookSize != nil {
+                                showDeleteTemporaryFilesAlert = true
+                            } else {
+                                deleteTemporaryFiles()
+                            }
                         } label: {
                             HStack {
                                 Label("Delete temporary files", systemImage: "xmark.bin")
@@ -186,7 +211,7 @@ struct DataManagementSettingsView: View {
                     }
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
 
-                    Text("Removes the copies BlueDive makes to preview, share or save photos and to build backups. Your dives and photos are not affected.")
+                    Text("Removes the copies BlueDive makes to preview, share or save photos and to build backups, and the logbook a restore replaced. Your current dives and photos are not affected.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
@@ -369,6 +394,21 @@ struct DataManagementSettingsView: View {
         } message: {
             Text("This will permanently delete all your data from this device and iCloud. This action cannot be undone. Wait for the iCloud sync to finish uploading before closing the app.")
         }
+        .sheet(item: $restoreFolder) { picked in
+            RestorePrepareSheet(folderURL: picked.url) {
+                refreshRestoreState()
+            }
+            .standardSheetPresentation()
+        }
+        .alert("Unzip the Backup First", isPresented: $showUnzipFirstAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            #if os(macOS)
+            Text("Double-click the backup in the Finder to unzip it, then choose the “BlueDive Backup” folder.")
+            #else
+            Text("Tap the backup in the Files app to unzip it, then choose the “BlueDive Backup” folder.")
+            #endif
+        }
         .alert(
             "Backup Failed",
             isPresented: Binding(get: { backupError != nil }, set: { if !$0 { backupError = nil } })
@@ -408,6 +448,180 @@ struct DataManagementSettingsView: View {
         }
     }
 
+    // MARK: - Restore
+
+    /// Restore backup: picks an unzipped backup and prepares it (`RestorePrepareSheet`); the
+    /// restore runs at the next launch. A prepared restore can be cancelled here.
+    private var restoreCard: some View {
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    showRestorePicker = true
+                } label: {
+                    HStack {
+                        Label("Restore backup", systemImage: "externaldrive.badge.timemachine")
+                        Spacer()
+                    }
+                    // The padding sits inside the button so the whole card responds, not only the
+                    // drawn label (a borderless Button only responds where something is drawn).
+                    .padding()
+                    .contentShape(Rectangle())
+                }
+                .borderlessButton()
+                .disabled(isDataOperationRunning)
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            if pendingRestore != nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("A restore is ready: it runs the next time BlueDive opens.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Cancel Prepared Restore", role: .destructive) {
+                        cancelPreparedRestore()
+                    }
+                    .font(.caption)
+                    // Red set explicitly, as Erase all data: the role alone does not colour a
+                    // borderless button on macOS.
+                    .foregroundStyle(Color.red)
+                    .borderlessButton()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+            } else {
+                Text("Replace the logbook on this device with a backup. BlueDive restores it the next time it opens.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+            }
+
+            // The logbook a restore replaced, kept on this device until the next restore: it can
+            // be exported as a backup (restorable later) or deleted.
+            if pendingRestore == nil, let replacedLogbookSize {
+                Text(verbatim: String(format: NSLocalizedString("The logbook a restore replaced is kept on this device (%@).", bundle: .forAppLanguage(), value: "The logbook a restore replaced is kept on this device (%@).", comment: "Restore backup: size of the replaced logbook kept on the device; %@ is a size such as 2.1 GB"), replacedLogbookSize.localizedFileSize))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Button {
+                        exportReplacedLogbook()
+                    } label: {
+                        HStack {
+                            Label("Export Replaced Logbook", systemImage: "square.and.arrow.up")
+                            Spacer()
+                        }
+                        .padding()
+                        .contentShape(Rectangle())
+                    }
+                    .borderlessButton()
+                    .disabled(isDataOperationRunning)
+                }
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                if let phase = backupProgress.phase, isExportingReplacedLogbook {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.8)
+                        Text(verbatim: backupPhaseText(phase))
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(role: .destructive) {
+                        showDeleteReplacedLogbookAlert = true
+                    } label: {
+                        HStack {
+                            Label("Delete Replaced Logbook", systemImage: "trash")
+                            Spacer()
+                        }
+                        .padding()
+                        .contentShape(Rectangle())
+                    }
+                    // As Erase all data: an explicit colour is not dimmed by `.disabled`, so it
+                    // greys out itself while another data operation runs.
+                    .foregroundStyle(isDataOperationRunning ? Color.secondary : Color.red)
+                    .borderlessButton()
+                    .disabled(isDataOperationRunning)
+                }
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
+        // On the card, not the screen: the screen already presents the backup's file mover on
+        // iOS, and two file dialogs on one view can keep one of them from appearing.
+        .fileImporter(isPresented: $showRestorePicker, allowedContentTypes: [.folder, .zip]) { result in
+            guard case .success(let url) = result else { return }
+            if url.pathExtension.lowercased() == "zip" {
+                showUnzipFirstAlert = true
+            } else {
+                restoreFolder = PickedRestoreFolder(url: url)
+            }
+        }
+        .onAppear { refreshRestoreState() }
+        .alert("Delete temporary files and the replaced logbook?", isPresented: $showDeleteTemporaryFilesAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) { deleteTemporaryFiles() }
+        } message: {
+            Text(verbatim: String(format: NSLocalizedString("The logbook a restore replaced (%@) is deleted with the temporary files. It is the logbook this device had before the last restore and cannot be recovered. Your current logbook is not affected.", bundle: .forAppLanguage(), value: "The logbook a restore replaced (%@) is deleted with the temporary files. It is the logbook this device had before the last restore and cannot be recovered. Your current logbook is not affected.", comment: "Delete temporary files confirmation; %@ is a size such as 2.1 GB"), (replacedLogbookSize ?? 0).localizedFileSize))
+        }
+        .alert("Delete the replaced logbook?", isPresented: $showDeleteReplacedLogbookAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) { deleteReplacedLogbook() }
+        } message: {
+            Text("It is the logbook this device had before the last restore. Deleting it frees its space and cannot be undone. Your current logbook is not affected.")
+        }
+    }
+
+    /// Reads whether a restore is prepared and the size of the replaced logbook (off the main
+    /// thread: the size walks the folder).
+    private func refreshRestoreState() {
+        restoreStateRead += 1
+        let read = restoreStateRead
+        Task {
+            let state = await Task.detached(priority: .utility) {
+                (DatabaseRestore.readPending(), DatabaseRestore.replacedLogbookSize())
+            }.value
+            guard read == restoreStateRead else { return }
+            pendingRestore = state.0
+            replacedLogbookSize = state.1
+        }
+    }
+
+    private func deleteReplacedLogbook() {
+        Task {
+            await Task.detached(priority: .utility) { DatabaseRestore.deleteReplacedLogbook() }.value
+            refreshRestoreState()
+        }
+    }
+
+    /// Deletes the staged backup. The live store is untouched (a prepared restore has not
+    /// started replacing it: that happens only in restore mode).
+    private func cancelPreparedRestore() {
+        let storeURL = BlueDiveApp.liveStoreURL
+        Task {
+            await Task.detached(priority: .userInitiated) {
+                try? DatabaseRestore.cancel(liveStoreURL: storeURL)
+            }.value
+            refreshRestoreState()
+        }
+    }
+
     // MARK: - Temporary Files
 
     /// The app's temporary folder: Quick Look, Share and Save As copies of photos, Quick Look
@@ -442,6 +656,7 @@ struct DataManagementSettingsView: View {
             }.value
             // Measured again by `onChange(of: isTemporaryFilesOperationRunning)`.
             activity.isDeletingTemporaryFiles = false
+            refreshRestoreState()
         }
     }
 
@@ -453,18 +668,22 @@ struct DataManagementSettingsView: View {
             guard let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
             total += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
         }
-        return total
+        // The logbook a restore replaced counts too when Delete temporary files can remove it.
+        return total + (DatabaseRestore.deletableReplacedLogbookSize() ?? 0)
     }
 
     /// Removes each item of the temporary folder (not the folder itself). A file another part
     /// of the app still uses is removed too (e.g. a Share copy in a photo viewer open in another
-    /// window, which then has to be shared again); nothing in tmp is part of the logbook.
+    /// window, which then has to be shared again); nothing in tmp is part of the logbook. The
+    /// logbook a restore replaced goes too (`DatabaseRestore.deleteReplacedLogbook`).
     private nonisolated static func removeTemporaryFiles() {
         let fileManager = FileManager.default
         guard let items = try? fileManager.contentsOfDirectory(at: temporaryFolder, includingPropertiesForKeys: nil) else { return }
         for item in items {
             try? fileManager.removeItem(at: item)
         }
+        // Not tmp, but not part of the current logbook either (never while a restore is pending).
+        DatabaseRestore.deleteReplacedLogbook()
     }
 
     // MARK: - Backup
@@ -512,6 +731,22 @@ struct DataManagementSettingsView: View {
             backupError = NSLocalizedString("Backup failed: could not locate the database.", bundle: .forAppLanguage(), comment: "")
             return
         }
+        buildAndSaveBackup(of: storeURL, fileNamePrefix: "BlueDive-Backup", replacedLogbook: false)
+    }
+
+    /// Exports the logbook a restore replaced (`BlueDive Restore/previous`) as an ordinary
+    /// backup, which Restore backup can bring back later. Its store is closed (never opened by
+    /// the app), so the snapshot is taken from it as from the live store.
+    private func exportReplacedLogbook() {
+        guard !isDataOperationRunning, pendingRestore == nil else { return }
+        let storeURL = DatabaseRestore.previousFolder()
+            .appendingPathComponent(BlueDiveApp.liveStoreURL.lastPathComponent)
+        buildAndSaveBackup(of: storeURL, fileNamePrefix: "BlueDive-Replaced-Logbook", replacedLogbook: true)
+    }
+
+    /// Builds a backup of the store at `storeURL` and offers it in the save dialog.
+    private func buildAndSaveBackup(of storeURL: URL, fileNamePrefix: String, replacedLogbook: Bool) {
+        isExportingReplacedLogbook = replacedLogbook
         let modelTypes = BlueDiveApp.appModelTypes
         let iCloudOn = UserDefaults.standard.bool(forKey: BlueDiveApp.iCloudSyncEnabledKey)
         let progress = backupProgress
@@ -527,7 +762,8 @@ struct DataManagementSettingsView: View {
             }
             // The copy runs detached; cancelling this task (the screen closing) cancels it too.
             let build = Task.detached(priority: .userInitiated) {
-                DatabaseBackup.build(liveStoreURL: storeURL, modelTypes: modelTypes, iCloudSyncEnabled: iCloudOn) { phase in
+                DatabaseBackup.build(liveStoreURL: storeURL, modelTypes: modelTypes, iCloudSyncEnabled: iCloudOn,
+                                     fileNamePrefix: fileNamePrefix) { phase in
                     Task { @MainActor in progress.update(phase) }
                 }
             }
@@ -792,7 +1028,7 @@ struct DataManagementSettingsView: View {
                 if errors.isEmpty, Self.hasNoExternalStorageRecords(in: modelContext),
                    let storeURL = modelContext.container.configurations.first?.url {
                     externalDataFolder = storeURL.deletingLastPathComponent()
-                        .appendingPathComponent("." + storeURL.deletingPathExtension().lastPathComponent + "_SUPPORT")
+                        .appendingPathComponent(DatabaseRestore.supportFolderName(forStoreAt: storeURL))
                         .appendingPathComponent("_EXTERNAL_DATA")
                 }
             }
@@ -803,6 +1039,10 @@ struct DataManagementSettingsView: View {
             }
             // The temporary copies dive photos and gear attachments were opened from in Quick Look.
             QuickLookCopies.removeAll()
+            // A prepared restore would bring the backup back at the next launch, and the logbook a
+            // restore replaced is still this device's data: both go with the rest. Off the main
+            // thread: the replaced logbook can hold gigabytes of photos.
+            await Task.detached(priority: .utility) { DatabaseRestore.eraseAll() }.value
 
             NotificationManager.shared.cancelAllNotifications()
             NotificationManager.shared.clearAllCatchUpMarkers()
@@ -828,6 +1068,7 @@ struct DataManagementSettingsView: View {
             await MainActor.run {
                 activity.isErasing = false
                 erasePhase = .done(errorCount: errors.count)
+                refreshRestoreState()
             }
         }
     }
@@ -867,4 +1108,10 @@ private final class DataOperationActivity {
     var isDeletingTemporaryFiles = false
     /// Repair photos is linking photos to their dives, or deleting the ones it could not.
     var isRepairingPhotos = false
+}
+
+/// The backup folder picked for a restore, presented in `RestorePrepareSheet`.
+private struct PickedRestoreFolder: Identifiable {
+    let id = UUID()
+    let url: URL
 }
