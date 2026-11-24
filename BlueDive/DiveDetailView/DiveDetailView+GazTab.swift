@@ -14,6 +14,10 @@ extension DiveDetailView {
 
     var gazTabContent: some View {
         VStack(spacing: 20) {
+            // Tank Tools (only with several tanks), above the Tanks card.
+            if dive.tanks.count > 1 {
+                tankToolsButton
+            }
             tankSelectorCard
             if usesTwoColumnCards {
                 // A wide window (`usesTwoColumnCards`) is wide enough to show the tank and the
@@ -77,7 +81,7 @@ extension DiveDetailView {
                 // Remove selected tank button (only if more than one tank)
                 if dive.tanks.count > 1 {
                     Button {
-                        removeSelectedTank()
+                        showRemoveTankConfirmation = true
                     } label: {
                         // Mirror of the Add button: 4 pt toward it (half the 8 pt gap),
                         // 12 pt trailing into the card's 16 pt padding. 40 × 44 pt.
@@ -105,6 +109,54 @@ extension DiveDetailView {
         .padding()
         .detailCardBackground()
         .padding(.horizontal)
+        .sheet(isPresented: $showTankToolsSheet) {
+            TankToolsSheet(dive: dive, selectedTankIndex: $selectedTankIndex)
+                .standardSheetPresentation()
+        }
+        .alert("Remove Tank?", isPresented: $showRemoveTankConfirmation) {
+            Button("Remove", role: .destructive) { removeSelectedTank() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(verbatim: removeTankMessage)
+        }
+    }
+
+    /// Opens Tank Tools: move a tank, or swap pressure readings. A card of its own, like the
+    /// Tanks card below it.
+    private var tankToolsButton: some View {
+        Button {
+            showTankToolsSheet = true
+        } label: {
+            HStack {
+                // Orange, like the Copy from Tank Template tool in Edit Gas.
+                Label("Tank Tools…", systemImage: "wrench.and.screwdriver")
+                    .foregroundStyle(.orange)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .padding()
+            .detailCardBackground()
+            .contentShape(Rectangle())
+        }
+        .borderlessButton()
+        .padding(.horizontal)
+    }
+
+    /// "Remove Tank 2 — Oxygen? …", for the selected tank.
+    private var removeTankMessage: String {
+        let tanks = dive.tanks
+        guard !tanks.isEmpty else { return "" }
+        let index = min(selectedTankIndex, tanks.count - 1)
+        // The removed tank's gas switches are cleared (and, for tank 1, the start of the dive),
+        // so those parts of the profile carry another tank's gas: the GF and PPO₂ change.
+        return String(format: NSLocalizedString("Remove %@? Its pressure readings in the dive profile are deleted too, and the parts of the dive breathed from it are calculated with another tank's gas.",
+                                                bundle: Bundle.forAppLanguage(),
+                                                value: "Remove %@? Its pressure readings in the dive profile are deleted too, and the parts of the dive breathed from it are calculated with another tank's gas.",
+                                                comment: "Remove Tank confirmation. %@ is a tank (e.g. Tank 2 — Oxygen)."),
+                      tanks[index].pickerLabel(index: index))
     }
 
     var gazInfoCard: some View {
@@ -598,20 +650,18 @@ extension DiveDetailView {
     }
 
     func removeSelectedTank() {
-        var tanks = dive.tanks
-        guard tanks.count > 1 else { return }
-        let indexToRemove = min(selectedTankIndex, tanks.count - 1)
-        tanks.remove(at: indexToRemove)
-        dive.tanks = tanks
+        let indexToRemove = min(selectedTankIndex, dive.tanks.count - 1)
+        // The removed tank's readings go with it, and the tanks after it keep their own.
+        guard dive.removeTank(at: indexToRemove) else { return }
         store.commit(dive, affects: .rowFields)
-        selectedTankIndex = max(0, indexToRemove - 1)
+        // The tank that took the removed one's position, or the last tank when the last was removed.
+        selectedTankIndex = Dive.selectionAfterRemovingTank(at: indexToRemove, remaining: dive.tanks.count)
     }
 
     // MARK: - Tank Picker Helper
 
     func tankPickerLabel(index: Int, tank: TankData) -> String {
-        let tankLabel = NSLocalizedString("Tank", bundle: Bundle.forAppLanguage(), comment: "")
-        return "\(tankLabel) \(index + 1) — \(tank.gasDisplayName())"
+        tank.pickerLabel(index: index)
     }
 
     // MARK: - Helper Functions for Decompression
@@ -696,5 +746,232 @@ extension DiveDetailView {
         default:
             return .red // Dangerous (hyperoxic)
         }
+    }
+}
+
+// MARK: - Tank Tools Helpers
+
+extension DiveProfilePoint {
+    /// This sample with new tank readings, primary pressure and gas switch, under a new id; every
+    /// other field is kept. The tank tools rebuild samples only through here, so a field added to
+    /// `DiveProfilePoint` later is not dropped (`TankToolsActionTests` compares every field). The
+    /// new id is what tells the chart the profile was replaced (`ProfileCacheID` compares the
+    /// first and last sample ids, as after an import); sample ids are not stored anywhere else
+    /// and only this dive's chart caches are rebuilt.
+    func replacingTankData(tankPressure: Double?, tankPressures: [Int: Double]?, currentGas: Int?) -> DiveProfilePoint {
+        DiveProfilePoint(
+            id: UUID(),
+            time: time,
+            depth: depth,
+            temperature: temperature,
+            tankPressure: tankPressure,
+            tankPressures: tankPressures,
+            ndl: ndl,
+            ceilingDepth: ceilingDepth,
+            ceilingTime: ceilingTime,
+            cns: cns,
+            ppo2: ppo2,
+            sensorPPO2: sensorPPO2,
+            events: events,
+            currentGas: currentGas,
+            setpoint: setpoint,
+            tts: tts,
+            rbt: rbt
+        )
+    }
+
+    /// The per-tank readings, nil when there are none (an empty dictionary counts as none, as
+    /// the decoder reads it).
+    var perTankReadings: [Int: Double]? {
+        guard let readings = tankPressures, !readings.isEmpty else { return nil }
+        return readings
+    }
+
+    /// The readings by tank as the decoder reads them: the per-tank readings, else a legacy single
+    /// pressure as tank 0's.
+    var readingsByTank: [Int: Double]? {
+        perTankReadings ?? tankPressure.map { [0: $0] }
+    }
+
+    /// The primary pressure the decoder derives from per-tank readings: tank 0, else the lowest index.
+    static func primaryPressure(_ readings: [Int: Double]) -> Double? {
+        readings[0] ?? readings.min(by: { $0.key < $1.key })?.value
+    }
+}
+
+/// Gas tab → Tank Tools → Swap Pressure Readings (`TankToolsSheet`): exchanges the pressure
+/// readings of two tanks, e.g. when the import put a transmitter's readings on the wrong tank
+/// (Shearwater reports transmitter pressure without its gas, so the import has to infer the
+/// tank). The readings move with their start and end pressures; each tank keeps its gas, its
+/// position and its usage times, and the gas switches (`currentGas`) are unchanged. A swap is
+/// its own inverse.
+enum TankPressureSwap {
+    /// The profile with the readings of tanks `a` and `b` exchanged in every sample; every sample
+    /// gets a new id (`replacingTankData`). A sample with neither tank keeps its readings. A
+    /// legacy single pressure (no per-tank readings) is tank 0's, as the decoder reads it.
+    static func swappingReadings(_ points: [DiveProfilePoint], _ a: Int, _ b: Int) -> [DiveProfilePoint] {
+        guard a != b else { return points }
+        return points.map { point in
+            guard let original = point.readingsByTank, original[a] != nil || original[b] != nil else {
+                return point.replacingTankData(tankPressure: point.tankPressure,
+                                               tankPressures: point.tankPressures, currentGas: point.currentGas)
+            }
+            var swapped = original
+            swapped[a] = original[b]
+            swapped[b] = original[a]
+            return point.replacingTankData(tankPressure: DiveProfilePoint.primaryPressure(swapped),
+                                           tankPressures: swapped, currentGas: point.currentGas)
+        }
+    }
+
+    /// The tanks with the start and end pressures of tanks `a` and `b` exchanged; every other
+    /// field of each tank (id, gas, volume, usage times…) stays as it is.
+    static func swappingStartEndPressures(_ tanks: [TankData], _ a: Int, _ b: Int) -> [TankData] {
+        guard a != b, tanks.indices.contains(a), tanks.indices.contains(b) else { return tanks }
+        var result = tanks
+        result[a] = withPressures(tanks[a], start: tanks[b].startPressure, end: tanks[b].endPressure)
+        result[b] = withPressures(tanks[b], start: tanks[a].startPressure, end: tanks[a].endPressure)
+        return result
+    }
+
+    private static func withPressures(_ tank: TankData, start: Double?, end: Double?) -> TankData {
+        TankData(id: tank.id, o2: tank.o2, he: tank.he, volume: tank.volume,
+                 startPressure: start, endPressure: end, workingPressure: tank.workingPressure,
+                 tankMaterial: tank.tankMaterial, tankType: tank.tankType,
+                 usageStartTime: tank.usageStartTime, usageEndTime: tank.usageEndTime)
+    }
+}
+
+/// Gas tab → Tank Tools → Move Tank (`TankToolsSheet`), and Remove Tank: keeps the profile's
+/// per-tank readings and gas switches (`currentGas`, an index into `Dive.tanks`) on their tanks
+/// when the tank list changes. A move removes the tank, then inserts it, so the tanks in between
+/// shift by one.
+enum TankSlotMove {
+    /// The new position of the tank that was at `old` once the tank at `from` moves to `to`.
+    static func newIndex(_ old: Int, from: Int, to: Int) -> Int {
+        if old == from { return to }
+        if from < to {
+            // Moving forward: elements in (from, to] shift one position earlier.
+            if old > from && old <= to { return old - 1 }
+        } else {
+            // Moving backward: elements in [to, from) shift one position later.
+            if old >= to && old < from { return old + 1 }
+        }
+        return old
+    }
+
+    /// The tanks with the one at `from` moved to `to`.
+    static func movingTank(_ tanks: [TankData], from: Int, to: Int) -> [TankData] {
+        guard from != to, tanks.indices.contains(from), tanks.indices.contains(to) else { return tanks }
+        var result = tanks
+        let moved = result.remove(at: from)
+        result.insert(moved, at: to)
+        return result
+    }
+
+    /// The profile after moving the tank at `from` to `to`: every reading and gas switch keeps its
+    /// tank, at that tank's new position, and every sample gets a new id (`replacingTankData`).
+    /// A legacy single pressure (no per-tank readings) is tank 0's, as the decoder reads it: it
+    /// follows that tank when the move changes its position. Likewise the gas before the first
+    /// gas switch: samples without `currentGas` carry the last gas forward, starting from tank 0
+    /// (`buhlmannInputs`, `buildPPO2Map`), so when the move changes tank 0's position the first
+    /// sample is given that tank's new position and the start of the dive keeps its gas.
+    static func remappingSamples(_ points: [DiveProfilePoint], from: Int, to: Int) -> [DiveProfilePoint] {
+        let firstTankPosition = newIndex(0, from: from, to: to)
+        return points.enumerated().map { offset, point in
+            let newCurrentGas = point.currentGas.map { newIndex($0, from: from, to: to) }
+                ?? (offset == 0 && firstTankPosition != 0 ? firstTankPosition : nil)
+            let readings = point.perTankReadings
+                ?? (firstTankPosition != 0 ? point.readingsByTank : nil)
+            guard let readings else {
+                return point.replacingTankData(tankPressure: point.tankPressure,
+                                               tankPressures: point.tankPressures, currentGas: newCurrentGas)
+            }
+            // newIndex is one-to-one, so no two readings land on the same tank.
+            let renumbered = Dictionary(uniqueKeysWithValues: readings.map { (newIndex($0.key, from: from, to: to), $0.value) })
+            return point.replacingTankData(tankPressure: DiveProfilePoint.primaryPressure(renumbered),
+                                           tankPressures: renumbered, currentGas: newCurrentGas)
+        }
+    }
+
+    /// The profile after tank `index` is removed: its readings are dropped, the tanks after it
+    /// move one position earlier, and a gas switch to it is cleared (no tank is left to point
+    /// to); every sample gets a new id (`replacingTankData`). A legacy single pressure (no
+    /// per-tank readings) is tank 0's, as the decoder reads it: removed with tank 0, else kept.
+    static func removingTank(_ points: [DiveProfilePoint], at index: Int) -> [DiveProfilePoint] {
+        points.map { point in
+            let newCurrentGas: Int? = point.currentGas.flatMap { gas in
+                gas == index ? nil : (gas > index ? gas - 1 : gas)
+            }
+            guard let readings = point.perTankReadings else {
+                return point.replacingTankData(tankPressure: index == 0 ? nil : point.tankPressure,
+                                               tankPressures: point.tankPressures, currentGas: newCurrentGas)
+            }
+            var kept: [Int: Double] = [:]
+            for (key, value) in readings where key != index {
+                kept[key > index ? key - 1 : key] = value
+            }
+            return point.replacingTankData(tankPressure: DiveProfilePoint.primaryPressure(kept),
+                                           tankPressures: kept.isEmpty ? nil : kept, currentGas: newCurrentGas)
+        }
+    }
+}
+
+// MARK: - Tank Tools Actions
+
+extension Dive {
+    /// Tank Tools → Move Tank: moves the tank at `from` to `to`. With `movesSamples`, its
+    /// pressure readings and gas switches move with it; without, the profile is left as it is
+    /// (only the tank's details move). Returns false, changing nothing, for an invalid or
+    /// no-op move. A dive without a profile gets none written. The caller commits.
+    @discardableResult
+    func moveTank(from: Int, to: Int, movesSamples: Bool) -> Bool {
+        let current = tanks
+        guard from != to, current.indices.contains(from), current.indices.contains(to) else { return false }
+        tanks = TankSlotMove.movingTank(current, from: from, to: to)
+        if movesSamples {
+            let samples = profileSamples
+            if !samples.isEmpty {
+                profileSamples = TankSlotMove.remappingSamples(samples, from: from, to: to)
+            }
+        }
+        return true
+    }
+
+    /// Tank Tools → Swap Pressure Readings: tanks `a` and `b` exchange their readings and their
+    /// start and end pressures; each keeps its gas. Returns false, changing nothing, for an
+    /// invalid or no-op swap. The caller commits.
+    @discardableResult
+    func swapTankReadings(_ a: Int, _ b: Int) -> Bool {
+        let current = tanks
+        guard a != b, current.indices.contains(a), current.indices.contains(b) else { return false }
+        tanks = TankPressureSwap.swappingStartEndPressures(current, a, b)
+        let samples = profileSamples
+        if !samples.isEmpty {
+            profileSamples = TankPressureSwap.swappingReadings(samples, a, b)
+        }
+        return true
+    }
+
+    /// The Gas tab's selection after Remove Tank: the tank now at the removed one's position,
+    /// else the last tank (the last one was removed).
+    static func selectionAfterRemovingTank(at index: Int, remaining: Int) -> Int {
+        max(0, min(index, remaining - 1))
+    }
+
+    /// Gas tab → Remove Tank: removes the tank at `index` with its readings; the tanks after it
+    /// keep their own (see `TankSlotMove.removingTank`). The last tank cannot be removed.
+    /// Returns false, changing nothing, otherwise. The caller commits.
+    @discardableResult
+    func removeTank(at index: Int) -> Bool {
+        var current = tanks
+        guard current.count > 1, current.indices.contains(index) else { return false }
+        current.remove(at: index)
+        tanks = current
+        let samples = profileSamples
+        if !samples.isEmpty {
+            profileSamples = TankSlotMove.removingTank(samples, at: index)
+        }
+        return true
     }
 }

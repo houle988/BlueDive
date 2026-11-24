@@ -144,6 +144,8 @@ struct DiveDetailView: View {
     @State var shownSpecies: Species?
     @State var selectedPhotoForPreview: IdentifiablePhotoData?
     @State var selectedTankIndex: Int = 0
+    @State var showTankToolsSheet = false
+    @State var showRemoveTankConfirmation = false
     @State var showFullScreenSiteMap = false
     @State private var dragOffset: CGFloat = 0
     @State private var pendingDive: Dive? = nil
@@ -563,6 +565,8 @@ struct DiveDetailView: View {
             refreshCaches(for: newValue)
             // Reset per-dive UI state when navigating to a different dive
             selectedTankIndex = 0
+            showTankToolsSheet = false
+            showRemoveTankConfirmation = false
             showEditSheet = false
             showAddFish = false
             showFullScreenSiteMap = false
@@ -901,9 +905,7 @@ struct DiveDetailView: View {
         case .conditions:
             EditConditionsView(dive: dive)
         case .gaz:
-            EditGazView(dive: dive, tankIndex: selectedTankIndex) { newIndex in
-                selectedTankIndex = newIndex
-            }
+            EditGazView(dive: dive, tankIndex: selectedTankIndex)
         case .equipment:
             EditEquipmentView(dive: dive)
         case .marineLife:
