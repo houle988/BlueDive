@@ -553,11 +553,21 @@ final class Dive {
     //   -1   → decoded when Data was nil → return []
     //   else → key of the Data that was decoded → return cached if the key is unchanged
     // Tanks and deco stops are small and key on a hash of every byte (contentKey), so a
-    // same-length change (e.g. EAN32 → EAN36) re-decodes. The profile blob is large and
-    // read often, so it keys on its byte count; it is not used by any list summary.
+    // same-length change (e.g. EAN32 → EAN36) re-decodes. The profile blob is large and read
+    // on every chart redraw, so it keeps the Data it was decoded from and compares with `==`:
+    // SwiftData returns the same storage on every read until the object is refreshed, so the
+    // comparison is an identity check (~0 µs); after a merge it is one memcmp (~18 µs/MB), and
+    // the cache is kept only when the bytes are identical. A same-length rewrite (Tank Tools
+    // swap or move every sample's readings under new ids) is detected, which a byte-count key
+    // is not; hashing every byte would cost ~0.5 ms/MB per read. It keeps one blob alive per
+    // decoded dive until its next read (a re-fetch hands new storage), beside the decoded
+    // samples it already keeps. Not used by any list summary.
 
     @Transient private var _cachedProfileSamples: [DiveProfilePoint] = []
     @Transient private var _profileCacheKey: Int? = nil
+    /// The `profileData` the cache was decoded from (shares storage with the stored value, so
+    /// comparing it is an identity check; see `profileSamples`).
+    @Transient private var _profileCacheData: Data? = nil
 
     @Transient private var _cachedTanks: [TankData] = []
     @Transient private var _tanksCacheKey: Int? = nil
@@ -570,14 +580,21 @@ final class Dive {
     /// Accès au profil de plongée
     var profileSamples: [DiveProfilePoint] {
         get {
-            let currentKey = profileData?.count ?? -1
-            if let k = _profileCacheKey, k == currentKey { return _cachedProfileSamples }
-            guard let data = profileData else {
-                _cachedProfileSamples = []; _profileCacheKey = -1; return []
+            let data = profileData
+            let currentKey = data?.count ?? -1
+            if let k = _profileCacheKey, k == currentKey, data == _profileCacheData {
+                // Same bytes. Re-point at the current storage so the next comparison is the
+                // identity fast path again when a merge delivered identical bytes.
+                _profileCacheData = data
+                return _cachedProfileSamples
+            }
+            guard let data else {
+                _cachedProfileSamples = []; _profileCacheKey = -1; _profileCacheData = nil; return []
             }
             let decoded = (try? JSONDecoder().decode([DiveProfilePoint].self, from: data)) ?? []
             _cachedProfileSamples = decoded
             _profileCacheKey = data.count
+            _profileCacheData = data
             return decoded
         }
         set {
@@ -586,6 +603,7 @@ final class Dive {
             profileData = encoded
             _cachedProfileSamples = newValue
             _profileCacheKey = encoded?.count ?? -1
+            _profileCacheData = encoded
         }
     }
 
@@ -611,8 +629,8 @@ final class Dive {
         }
     }
 
-    /// Cache key over every byte of a small JSON blob (-1 for nil). Not `Data.hashValue`:
-    /// Foundation's Data hash covers only the count and the first 80 bytes.
+    /// Cache key over every byte of a small JSON blob (-1 for nil). Not `Data.hashValue`, which
+    /// hashes every byte on current OS versions and is unspecified on others.
     private static func contentKey(_ data: Data?) -> Int {
         guard let data else { return -1 }
         var hasher = Hasher()
