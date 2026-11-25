@@ -189,7 +189,7 @@ struct RestorePrepareSheet: View {
                 #if os(macOS)
                 Text("Quit BlueDive (BlueDive → Quit BlueDive).")
                 #else
-                Text("Close BlueDive: swipe it away in the app switcher.")
+                Text("Close BlueDive: swipe it away in the app switcher (Exposé on iPad).")
                 #endif
                 if iCloudSyncEnabled {
                     Text("Delete BlueDive's data from iCloud.")
