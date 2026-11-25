@@ -781,9 +781,6 @@ struct GearAttachmentEditor: View {
                     Button("Save") {
                         save()
                     }
-                    #if os(iOS)
-                    .buttonStyle(.borderedProminent)
-                    #endif
                 }
             }
         }

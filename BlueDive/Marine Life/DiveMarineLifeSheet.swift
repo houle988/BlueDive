@@ -110,6 +110,7 @@ struct DiveMarineLifeSheet: View {
                             } icon: {
                                 Image(systemName: "plus.circle")
                             }
+                            .accentLabelOnMac()
                         }
                         .listRowButton()
                     }
@@ -209,6 +210,7 @@ struct DiveMarineLifeSheet: View {
             }
             .contentShape(Rectangle())
         }
+        .foregroundStyle(.primary)
         .listRowButton()
     }
 
@@ -343,6 +345,7 @@ struct LinkSightingSheet: View {
                             } icon: {
                                 Image(systemName: "plus.circle")
                             }
+                            .accentLabelOnMac()
                         }
                         .listRowButton()
                     }
@@ -359,6 +362,7 @@ struct LinkSightingSheet: View {
                             }
                             .contentShape(Rectangle())
                         }
+                        .foregroundStyle(.primary)
                         .listRowButton()
                     }
                 } header: {

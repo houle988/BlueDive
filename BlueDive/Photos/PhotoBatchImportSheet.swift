@@ -113,7 +113,6 @@ struct PhotoBatchImportSheet: View {
                             runImport()
                         } label: {
                             Text("Import")
-                                .confirmationActionForeground(.pink)
                         }
                         .disabled(assignedCount == 0)
                     }
@@ -123,7 +122,6 @@ struct PhotoBatchImportSheet: View {
                             answerQuestions(after: firstPass)
                         } label: {
                             Text("Continue")
-                                .confirmationActionForeground(.pink)
                         }
                     }
                 } else if case .finished = phase {
@@ -166,6 +164,7 @@ struct PhotoBatchImportSheet: View {
                 showFileImporter = true
             } label: {
                 Label("Choose Photos or a Folder…", systemImage: "folder")
+                    .accentLabelOnMac()
             }
             .listRowButton()
         } footer: {

@@ -1580,9 +1580,6 @@ struct CertificationDetailView: View {
                     } label: {
                         Text("Edit").fontWeight(.semibold)
                     }
-                    #if os(iOS)
-                    .buttonStyle(.borderedProminent)
-                    #endif
                 }
             }
             #if os(iOS)
@@ -1872,9 +1869,6 @@ struct AddCertificationView: View {
                         saveCertification()
                     }
                     .disabled(!isValid)
-                    #if os(iOS)
-                    .buttonStyle(.borderedProminent)
-                    #endif
                 }
             }
             #if os(iOS)

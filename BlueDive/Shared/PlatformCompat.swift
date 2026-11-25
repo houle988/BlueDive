@@ -564,11 +564,23 @@ extension View {
     /// A colour set on the label takes precedence. On macOS a colour set on the Button itself
     /// is lost (the style redraws the label in the default colour), so a custom colour goes on
     /// the label: unconditionally, or inside `#if os(macOS)` to keep the iOS code unchanged
-    /// (see "Fetch Weather" and "Copy Site Information" in the edit sheets).
+    /// (see "Fetch Weather" and "Copy Site Information" in the edit sheets). An action row
+    /// in the accent colour, as iOS draws it, puts `accentLabelOnMac()` on its label.
     func listRowButton() -> some View {
         #if os(macOS)
         self.buttonStyle(ListRowButtonStyle())
             .foregroundStyle(.tint)
+        #else
+        self
+        #endif
+    }
+
+    /// macOS: a `listRowButton()` label in the accent colour, as iOS draws an action row.
+    /// The macOS style draws an uncoloured label in the primary colour (observed: white in a
+    /// dark sheet), so the colour goes on the label. On iOS the view is unchanged.
+    func accentLabelOnMac() -> some View {
+        #if os(macOS)
+        self.foregroundStyle(Color.accentColor)
         #else
         self
         #endif

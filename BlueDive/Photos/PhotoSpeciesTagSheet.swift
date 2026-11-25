@@ -80,6 +80,7 @@ struct PhotoSpeciesTagSheet: View {
                             } icon: {
                                 Image(systemName: "plus.circle")
                             }
+                            .accentLabelOnMac()
                         }
                         .listRowButton()
                     }
@@ -96,6 +97,7 @@ struct PhotoSpeciesTagSheet: View {
                             }
                             .contentShape(Rectangle())
                         }
+                        .foregroundStyle(.primary)
                         .listRowButton()
                     }
                 } header: {

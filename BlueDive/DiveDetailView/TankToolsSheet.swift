@@ -88,9 +88,12 @@ struct TankToolsSheet: View {
             }
             Toggle("Move All Tank Data", isOn: $movesSamples)
                 .fullWidthSwitch()
-            Button("Move Tank") { showMoveConfirmation = true }
-                .disabled(moveTank == movePosition || !isValid(moveTank, tanks) || !isValid(movePosition, tanks))
-                .listRowButton()
+            Button { showMoveConfirmation = true } label: {
+                Text("Move Tank")
+                    .accentLabelOnMac()
+            }
+            .disabled(moveTank == movePosition || !isValid(moveTank, tanks) || !isValid(movePosition, tanks))
+            .listRowButton()
         } header: {
             Text("Move Tank")
         } footer: {
@@ -106,9 +109,12 @@ struct TankToolsSheet: View {
         Section {
             tankPicker("Tank", selection: $swapTank, tanks: tanks)
             tankPicker("With", selection: $swapOther, tanks: tanks)
-            Button("Swap Readings") { showSwapConfirmation = true }
-                .disabled(swapTank == swapOther || !isValid(swapTank, tanks) || !isValid(swapOther, tanks))
-                .listRowButton()
+            Button { showSwapConfirmation = true } label: {
+                Text("Swap Readings")
+                    .accentLabelOnMac()
+            }
+            .disabled(swapTank == swapOther || !isValid(swapTank, tanks) || !isValid(swapOther, tanks))
+            .listRowButton()
         } header: {
             Text("Swap Pressure Readings")
         } footer: {

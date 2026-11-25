@@ -224,7 +224,6 @@ struct PhotoReimportSheet: View {
                         dismiss()
                     } label: {
                         Text("Continue")
-                            .confirmationActionForeground(.pink)
                     }
                 }
             }

@@ -847,7 +847,6 @@ struct EditNotesView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .confirmationActionForeground(.brown)
                 }
             }
         }
@@ -1133,7 +1132,6 @@ struct EditEquipmentView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .confirmationActionForeground(DiveTab.equipment.color)
                 }
             }
         }
@@ -1161,6 +1159,7 @@ struct EditEquipmentView: View {
             }
         }
         .listRowBackground(Color.primary.opacity(0.05))
+        .foregroundStyle(.primary)
         .listRowButton()
         .accessibilityLabel(isOnDive
             ? Text(verbatim: String(format: NSLocalizedString("Remove %@", bundle: .forAppLanguage(), comment: "Accessibility label for a button that removes a filter chip, naming the specific value it removes"), gear.name))
@@ -1911,7 +1910,6 @@ struct EditSiteDetailsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .confirmationActionForeground(.blue)
                         .disabled(entryGPSOutOfRange || exitGPSOutOfRange)
                 }
             }
@@ -2999,7 +2997,6 @@ struct EditGazView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .bold()
-                        .confirmationActionForeground(.green)
                 }
             }
         }

@@ -312,7 +312,6 @@ struct AddTankTemplateView: View {
                 .disabled(!isFormValid)
                 #if os(iOS)
                 .fontWeight(.semibold)
-                .buttonStyle(.borderedProminent)
                 #endif
         }
     }

@@ -189,9 +189,6 @@ struct EditGearView: View {
                 saveChanges()
             }
             .disabled(!isFormValid)
-            #if os(iOS)
-            .buttonStyle(.borderedProminent)
-            #endif
         }
     }
 

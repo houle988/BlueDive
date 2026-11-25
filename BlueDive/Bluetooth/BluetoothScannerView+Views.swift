@@ -222,6 +222,7 @@ extension BluetoothScannerView {
                         "Search for Devices",
                         systemImage: "antenna.radiowaves.left.and.right"
                     )
+                    .accentLabelOnMac()
                 }
                 .listRowButton()
             } footer: {

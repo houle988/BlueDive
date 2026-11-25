@@ -957,6 +957,7 @@ struct SpeciesPickerList<Footer: View>: View {
                         }
                         .contentShape(Rectangle())
                     }
+                    .foregroundStyle(.primary)
                     .listRowButton()
                 }
             }

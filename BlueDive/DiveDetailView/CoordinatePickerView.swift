@@ -173,11 +173,6 @@ struct CoordinatePickerView: View {
                         }
                     }
                     .bold()
-                    // A hardcoded .blue here would stay solid blue even while genuinely
-                    // disabled below — `.disabled()` only dims a Button's default tint,
-                    // not an explicit `.foregroundStyle()` override. Tie the colour to the
-                    // same condition so a disabled Save always looks disabled.
-                    .confirmationActionForeground(canSave ? .blue : .secondary)
                     .disabled(!canSave)
                 }
                 ToolbarItem(placement: .sheetPrimaryAction) {

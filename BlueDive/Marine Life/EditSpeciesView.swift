@@ -222,6 +222,7 @@ struct EditSpeciesView: View {
                             showLookup = true
                         } label: {
                             Label("Look Up on iNaturalist", systemImage: "leaf")
+                                .accentLabelOnMac()
                         }
                         .listRowButton()
                         // Not while a typed name is another species' (the lookup could move it to
@@ -389,7 +390,6 @@ struct EditSpeciesView: View {
                         save()
                     } label: {
                         Text("Save")
-                            .confirmationActionForeground(.orange)
                     }
                     // Not while a picked image is still loading: it would be saved without it.
                     .disabled(!canSave || imageLoads > 0)

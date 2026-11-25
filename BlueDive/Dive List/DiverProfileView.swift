@@ -1266,10 +1266,6 @@ struct InsuranceDetailView: View {
                     } label: {
                         Text("Edit").fontWeight(.semibold)
                     }
-                    #if os(iOS)
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
-                    #endif
                 }
             }
             #if os(iOS)
@@ -1431,10 +1427,6 @@ struct AddInsuranceView: View {
                         save()
                     }
                     .disabled(!isValid)
-                    #if os(iOS)
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
-                    #endif
                 }
             }
             #if os(iOS)

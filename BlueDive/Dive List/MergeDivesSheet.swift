@@ -126,7 +126,6 @@ struct MergeDivesSheet: View {
             Button("Merge") {
                 showConfirmation = true
             }
-            .buttonStyle(.borderedProminent)
             .disabled(selectedDiveA == nil || selectedDiveB == nil || selectionIsImportingPhotos)
         }
     }

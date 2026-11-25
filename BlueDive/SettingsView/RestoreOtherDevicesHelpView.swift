@@ -47,11 +47,14 @@ struct RestoreOtherDevicesHelpView: View {
                     Button {
                         copyCommand()
                     } label: {
-                        if copied {
-                            Label("Copied", systemImage: "checkmark")
-                        } else {
-                            Label("Copy Commands", systemImage: "doc.on.doc")
+                        Group {
+                            if copied {
+                                Label("Copied", systemImage: "checkmark")
+                            } else {
+                                Label("Copy Commands", systemImage: "doc.on.doc")
+                            }
                         }
+                        .accentLabelOnMac()
                     }
                     .listRowButton()
                     Text("The first time, macOS asks whether Terminal may access data from other apps: click Allow.")

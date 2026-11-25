@@ -64,6 +64,7 @@ struct INaturalistLookupSheet: View {
                         startSearch()
                     } label: {
                         Label("Search", systemImage: "magnifyingglass")
+                            .accentLabelOnMac()
                     }
                     .listRowButton()
                     .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSearching)
@@ -87,6 +88,12 @@ struct INaturalistLookupSheet: View {
                             } label: {
                                 resultRow(result)
                             }
+                            .foregroundStyle(.primary)
+                            #if os(iOS)
+                            // iOS does not dim an explicit colour while disabled (macOS's row
+                            // style does): dim the other rows while a choice is applied.
+                            .opacity(applyingID != nil && applyingID != result.id ? 0.4 : 1)
+                            #endif
                             .listRowButton()
                             .disabled(applyingID != nil)
                         }

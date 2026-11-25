@@ -534,9 +534,6 @@ struct AddGearView: View {
                 saveGear()
             }
             .disabled(!isFormValid)
-            #if os(iOS)
-            .buttonStyle(.borderedProminent)
-            #endif
         }
     }
     

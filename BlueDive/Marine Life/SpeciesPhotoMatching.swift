@@ -698,7 +698,6 @@ struct SpeciesPhotoReviewSheet: View {
                         dismiss()
                     } label: {
                         Text("Link")
-                            .confirmationActionForeground(.orange)
                     }
                     .disabled(accepted.isEmpty)
                 }

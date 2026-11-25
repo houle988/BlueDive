@@ -337,17 +337,6 @@ struct RestoreModeView: View {
 }
 
 private extension View {
-    /// macOS: the row button's label in the accent colour. Restore mode's window does not pass
-    /// the app's tint to `listRowButton()` there (observed: the labels were drawn white), so the
-    /// colour goes on the label, as `listRowButton()` documents. On iOS the view is unchanged.
-    func accentLabelOnMac() -> some View {
-        #if os(macOS)
-        self.foregroundStyle(Color.accentColor)
-        #else
-        self
-        #endif
-    }
-
     /// macOS: records the height of a scrollable view's content in `height`. On iOS the view is
     /// returned unchanged.
     func measuresContentHeightOnMac(_ height: Binding<CGFloat?>) -> some View {

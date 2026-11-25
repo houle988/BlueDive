@@ -252,7 +252,6 @@ struct AddGearGroupView: View {
                 .disabled(!isFormValid)
                 #if os(iOS)
                 .fontWeight(.semibold)
-                .buttonStyle(.borderedProminent)
                 #endif
         }
     }

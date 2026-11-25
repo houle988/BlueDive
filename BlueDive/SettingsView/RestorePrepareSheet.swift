@@ -157,8 +157,11 @@ struct RestorePrepareSheet: View {
             Toggle("BlueDive and its data are deleted from my other devices.",
                    isOn: $otherDevicesReady)
                 .fullWidthSwitch()
-            Button("How to delete it on your other devices") { showOtherDevicesHelp = true }
-                .listRowButton()
+            Button { showOtherDevicesHelp = true } label: {
+                Text("How to delete it on your other devices")
+                    .accentLabelOnMac()
+            }
+            .listRowButton()
             if iCloudSyncEnabled {
                 Toggle("I will delete BlueDive's data from iCloud before opening BlueDive again.",
                        isOn: $iCloudDataDeleted)
@@ -200,13 +203,16 @@ struct RestorePrepareSheet: View {
         }
         #if os(macOS)
         Section {
-            Button("Quit BlueDive") {
+            Button {
                 // A sheet still attached to the window keeps the app from quitting: close it,
                 // then quit once it is gone.
                 dismiss()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     NSApp.terminate(nil)
                 }
+            } label: {
+                Text("Quit BlueDive")
+                    .accentLabelOnMac()
             }
             .listRowButton()
         }

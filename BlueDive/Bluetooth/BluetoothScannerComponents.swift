@@ -322,6 +322,7 @@ struct DeviceReassociationPickerSheet: View {
                         dismiss()
                     } label: {
                         Text("Connect as New Device")
+                            .accentLabelOnMac()
                     }
                     .listRowButton()
                 }
@@ -397,6 +398,7 @@ struct ModelPickerSheet: View {
                         }
                     }
                     .accessibilityAddTraits(currentOverride == nil ? .isSelected : [])
+                    .foregroundStyle(.primary)
                     .listRowButton()
                 } header: {
                     Text("Detected Model")
@@ -426,6 +428,7 @@ struct ModelPickerSheet: View {
                                 }
                             }
                             .accessibilityAddTraits(currentOverride?.name == model.name ? .isSelected : [])
+                            .foregroundStyle(.primary)
                             .listRowButton()
                         }
                     }
