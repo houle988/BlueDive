@@ -776,15 +776,19 @@ enum DiveImportMapper {
         return (linkedTanks, gasMixToTankIndex, oxygenSupplyTanks)
     }
 
-    /// The stored tank each rebuilt tank keeps its id and user details from on a re-download:
-    /// transmitter slots (index < `transmitterCount`) by position; a gas-only tank by its gas
+    /// The stored tank each rebuilt tank keeps its id and user details from on a re-download.
+    /// When the stored dive has as many tanks as the rebuild, every tank pairs by position (the
+    /// same download gives the same tanks, so a gas the user edited keeps its details). When the
+    /// count differs — "Filter unused tanks" toggled between downloads, or a CCR bailout an
+    /// earlier version put on the O₂ transmitter now getting its own tank — transmitter slots
+    /// (index < `transmitterCount`) still pair by position and a gas-only tank pairs by its gas
     /// (O₂ and He percentages) among the stored tanks after the transmitter slots, each used
-    /// once and in order, so a gas the rebuild adds or drops (e.g. a CCR bailout an earlier
-    /// version put on the O₂ transmitter) does not move another tank's details; any gas-only
-    /// tank still unpaired takes the next leftover stored one in order (a gas the user edited).
-    /// The stored dive records no transmitter count, so the new download's is used; extra
-    /// stored tanks are dropped.
+    /// once and in order, so a gas the rebuild adds or drops does not move another tank's
+    /// details; any gas-only tank still unpaired takes the next leftover stored one in order (a
+    /// gas the user edited). The stored dive records no transmitter count, so the new download's
+    /// is used; extra stored tanks are dropped.
     private static func storedTanks(for built: [TankData], existing: [TankData], transmitterCount: Int) -> [TankData?] {
+        if existing.count == built.count { return existing.map { $0 } }
         var paired = [TankData?](repeating: nil, count: built.count)
         let slots = min(transmitterCount, built.count)
         for index in 0..<min(slots, existing.count) { paired[index] = existing[index] }
@@ -1110,7 +1114,8 @@ enum DiveImportMapper {
             )
             mergeMixToTankIndex = built.gasMixToTankIndex
             // Preserve the identity and user-set fields of the stored tank each rebuilt tank pairs
-            // with (`storedTanks`: transmitter slots by position, gas-only tanks by gas).
+            // with (`storedTanks`: by position when the tank count is unchanged, else transmitter
+            // slots by position and gas-only tanks by gas).
             let pairedStored = Self.storedTanks(for: built.tanks, existing: existingTanks, transmitterCount: dcTanks.count)
             dive.tanks = built.tanks.enumerated().map { (index, tank) in
                 let existing = pairedStored[index]
@@ -1148,24 +1153,20 @@ enum DiveImportMapper {
             // No tank data but we have gas mixes — store them as tanks with gas only
             let needsFilter = context.filterUnusedTanks && (context.deviceFamily.map { Self.familiesNeedingSwiftTankFilter.contains($0) } ?? true)
             let usedMixes = needsFilter ? Self.usedGasMixIndices(from: diveData) : nil
-            // existingIdx walks existingTanks in lockstep with the filtered output.
-            // If filterUnusedTanks was toggled between imports, the shapes may differ and
-            // user-set fields (volume, tankMaterial, etc.) and the id could land on the wrong tank.
-            var existingIdx = 0
-            var tankIdx = 0
-            dive.tanks = dcGasMixes.enumerated().compactMap { (index, mix) in
-                if let used = usedMixes {
-                    guard used.contains(index) else { return nil }
-                }
-                let existing = existingIdx < existingTanks.count ? existingTanks[existingIdx] : nil
-                existingIdx += 1
-                mergeMixToTankIndex[index] = tankIdx
-                tankIdx += 1
-                return TankData(id: existing?.id ?? UUID(),
-                                o2: mix.oxygen, he: mix.helium,
-                                volume: existing?.volume, workingPressure: existing?.workingPressure,
-                                tankMaterial: existing?.tankMaterial,
-                                tankType: existing?.tankType ?? Self.tankType(forUsage: mix.usage))
+            // One gas-only tank per (filtered) mix, in mix order; each keeps the id and user-set
+            // fields of the stored tank it pairs with (`storedTanks`: by position when the tank
+            // count is unchanged, else by gas, so toggling "Filter unused tanks" between two
+            // downloads keeps every tank's details with its own gas).
+            let keptMixes = dcGasMixes.enumerated().filter { usedMixes?.contains($0.offset) ?? true }
+            for (tankIdx, kept) in keptMixes.enumerated() { mergeMixToTankIndex[kept.offset] = tankIdx }
+            let built = keptMixes.map { TankData(o2: $0.element.oxygen, he: $0.element.helium) }
+            let pairedStored = Self.storedTanks(for: built, existing: existingTanks, transmitterCount: 0)
+            dive.tanks = zip(keptMixes, pairedStored).map { kept, existing in
+                TankData(id: existing?.id ?? UUID(),
+                         o2: kept.element.oxygen, he: kept.element.helium,
+                         volume: existing?.volume, workingPressure: existing?.workingPressure,
+                         tankMaterial: existing?.tankMaterial,
+                         tankType: existing?.tankType ?? Self.tankType(forUsage: kept.element.usage))
             }
         } else if let gasMix = diveData.gasMix, gasMix != 21 {
             // Single non-Air gas from dive computer

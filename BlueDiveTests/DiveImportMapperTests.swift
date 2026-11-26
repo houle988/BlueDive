@@ -167,15 +167,103 @@ struct DiveImportMapperTests {
         #expect(ids.before.count == 1 && ids.after == ids.before)
     }
 
-    /// The id follows the tank at the same position, like the user's tank details: switching
-    /// "Filter unused tanks" between downloads keeps the first tank's id and gives any added
-    /// tank a new one.
-    @Test func mergeKeepsIDsByPositionWhenTheTankCountChanges() {
+    /// When "Filter unused tanks" is switched between downloads the tank count changes and each
+    /// id follows its gas: the breathed 32 % keeps its id, any added tank gets a new one.
+    @Test func mergeKeepsIDsByGasWhenTheTankCountChanges() {
         let fewer = merged(threeMixDive(), firstFilter: false, mergeFilter: true)
         #expect(fewer.before.count == 3 && fewer.after == [fewer.before[0]])
         let more = merged(threeMixDive(), firstFilter: true, mergeFilter: false)
         #expect(more.before.count == 1 && more.after.count == 3 && more.after[0] == more.before[0])
         #expect(Set(more.after).count == 3)
+    }
+
+    /// An i300C-style dive that breathes its first mix, then switches to `second` (by default the third).
+    private func twoUsedOfThreeMixesDive(_ mixes: [Double] = [0.32, 0.21, 0.50], used second: Int = 2) -> DiveData {
+        var data = threeMixDive()
+        data.gasMixes = mixes.map { GasMix(helium: 0, oxygen: $0, nitrogen: 1 - $0, usage: .none) }
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 600, depth: 18),
+                        ProfileSample(time: 1200, depth: 6, currentGas: second),
+                        ProfileSample(time: 2400, depth: 0)]
+        return data
+    }
+
+    /// Gives each tank the material named at its index (nil leaves it unset).
+    private func setMaterials(_ dive: Dive, _ materials: [String?]) {
+        dive.tanks = dive.tanks.enumerated().map { i, t in
+            TankData(id: t.id, o2: t.o2, he: t.he, volume: materials[i] == nil ? nil : 10 + Double(i),
+                     startPressure: t.startPressure, endPressure: t.endPressure, tankMaterial: materials[i])
+        }
+    }
+
+    /// Turning "Filter unused tanks" on between two downloads drops the unbreathed 21 % and keeps
+    /// the 32 % and 50 % tanks' ids and details with their gas; a sample on the 50 % mix points
+    /// at its tank.
+    @Test func turningTheFilterOnKeepsEachTanksDetailsWithItsGas() {
+        let data = twoUsedOfThreeMixesDive()
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(filterUnusedTanks: false))
+        setMaterials(dive, ["A", "B", "C"])
+        let ids = dive.tanks.map(\.id)
+        DiveImportMapper.merge(data, into: dive, context: context(filterUnusedTanks: true))
+        #expect(dive.tanks.map(\.o2Percentage) == [32, 50])
+        #expect(dive.tanks.map(\.id) == [ids[0], ids[2]])
+        #expect(dive.tanks.map(\.tankMaterial) == ["A", "C"] && dive.tanks.map(\.volume) == [10, 12])
+        #expect(dive.profileSamples.compactMap(\.currentGas) == [0, 1])
+    }
+
+    /// Turning the filter off adds the 21 % back as a new tank between the two kept ones.
+    @Test func turningTheFilterOffAddsTheUnusedGasAsANewTank() {
+        let data = twoUsedOfThreeMixesDive()
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(filterUnusedTanks: true))
+        setMaterials(dive, ["A", "C"])
+        let ids = dive.tanks.map(\.id)
+        DiveImportMapper.merge(data, into: dive, context: context(filterUnusedTanks: false))
+        #expect(dive.tanks.map(\.o2Percentage) == [32, 21, 50])
+        #expect(dive.tanks[0].id == ids[0] && dive.tanks[2].id == ids[1])
+        #expect(!ids.contains(dive.tanks[1].id) && dive.tanks[1].tankMaterial == nil && dive.tanks[1].volume == nil)
+        #expect(dive.tanks.map(\.tankMaterial) == ["A", nil, "C"])
+        #expect(dive.profileSamples.compactMap(\.currentGas) == [0, 2])
+    }
+
+    /// The i300C reports an unset slot as 21 %, so repeated gases are common: the first two
+    /// tanks keep their ids in order when the filter drops the third.
+    @Test func repeatedGasesKeepTheirIDsInOrder() {
+        let data = twoUsedOfThreeMixesDive([0.32, 0.21, 0.21], used: 1)
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(filterUnusedTanks: false))
+        setMaterials(dive, ["A", "B", "C"])
+        let ids = dive.tanks.map(\.id)
+        DiveImportMapper.merge(data, into: dive, context: context(filterUnusedTanks: true))
+        #expect(dive.tanks.map(\.id) == [ids[0], ids[1]])
+        #expect(dive.tanks.map(\.tankMaterial) == ["A", "B"])
+    }
+
+    /// With an unchanged tank count, tanks pair by position: a gas the user edited to match
+    /// another tank's never swaps the two tanks' details (gas-mixes-only and transmitter paths).
+    @Test func anUnchangedTankCountPairsByPosition() {
+        let dive = DiveImportMapper.makeDive(from: threeMixDive(), diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        setMaterials(dive, ["A", "B", "C"])
+        let ids = dive.tanks.map(\.id)
+        dive.tanks = dive.tanks.enumerated().map { i, t in
+            TankData(id: t.id, o2: i == 1 ? 0.50 : t.o2, he: t.he, volume: t.volume, tankMaterial: t.tankMaterial)
+        }
+        DiveImportMapper.merge(threeMixDive(), into: dive, context: context())
+        #expect(dive.tanks.map(\.id) == ids && dive.tanks.map(\.tankMaterial) == ["A", "B", "C"])
+        #expect(dive.tanks.map(\.o2Percentage) == [32, 21, 50])
+
+        let transmitter = oneTransmitterDive(mixes: [(0.32, 0), (0.21, 0), (0.50, 0)])
+        let withTanks = DiveImportMapper.makeDive(from: transmitter, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                                  context: context())
+        setMaterials(withTanks, ["A", "B", "C"])
+        let tankIDs = withTanks.tanks.map(\.id)
+        withTanks.tanks = withTanks.tanks.enumerated().map { i, t in
+            TankData(id: t.id, o2: i == 1 ? 0.50 : t.o2, he: t.he, volume: t.volume, tankMaterial: t.tankMaterial)
+        }
+        DiveImportMapper.merge(transmitter, into: withTanks, context: context())
+        #expect(withTanks.tanks.map(\.id) == tankIDs && withTanks.tanks.map(\.tankMaterial) == ["A", "B", "C"])
     }
 
     // MARK: Gas mixes that could not be read
@@ -604,8 +692,9 @@ struct DiveImportMapperTests {
         #expect(stored.tanks[1].tankMaterial == nil && ![firstID, secondID].contains(stored.tanks[1].id))
     }
 
-    /// A gas-only tank whose gas the user edited (50 → 49 %) still keeps its id and details: no
-    /// stored tank has the downloaded gas, so it takes the leftover stored gas-only tank.
+    /// A gas-only tank whose gas the user edited (50 → 49 %) still keeps its id and details when
+    /// the re-download adds a tank: no stored tank has the downloaded gas, so it takes the
+    /// leftover stored gas-only tank; the added gas gets a new tank.
     @Test func anEditedGasOnlyTankKeepsItsDetailsThroughTheLeftoverFallback() {
         let data = oneTransmitterDive(mixes: [(0.32, 0), (0.50, 0), (0.21, 0.35)])
         let stored = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "", context: context())
@@ -614,10 +703,12 @@ struct DiveImportMapperTests {
             TankData(id: t.id, o2: i == 1 ? 0.49 : t.o2, he: t.he, volume: i == 1 ? 7 : t.volume, startPressure: t.startPressure,
                      endPressure: t.endPressure, tankMaterial: i == 1 ? "Aluminium" : i == 2 ? "Steel" : nil)
         }
-        DiveImportMapper.merge(data, into: stored, context: context())
-        #expect(stored.tanks.map(\.id) == ids)
+        DiveImportMapper.merge(oneTransmitterDive(mixes: [(0.32, 0), (0.50, 0), (0.21, 0.35), (0.18, 0.45)]),
+                               into: stored, context: context())
+        #expect(stored.tanks.map(\.o2Percentage) == [32, 50, 21, 18])
+        #expect(Array(stored.tanks.map(\.id).prefix(3)) == ids && !ids.contains(stored.tanks[3].id))
         #expect(stored.tanks[1].o2Percentage == 50 && stored.tanks[1].volume == 7 && stored.tanks[1].tankMaterial == "Aluminium")
-        #expect(stored.tanks[2].tankMaterial == "Steel")
+        #expect(stored.tanks[2].tankMaterial == "Steel" && stored.tanks[3].tankMaterial == nil)
     }
 
     /// A CCR with three bailouts and no bailout transmitter: the first download gives each bailout
