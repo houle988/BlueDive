@@ -112,7 +112,7 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
     }
 
     /// Every gas used on a dive, one per distinct gas in tank order (`TankData.gasName`:
-    /// "Air", "Nitrox", "Trimix", "Heliox", "Hypoxic"). Empty when the dive has no tanks.
+    /// "Air", "Nitrox", "Oxygen", "Trimix", "Heliox", "Hypoxic"). Empty when the dive has no tanks.
     /// Shared by the summary and the gas filters that work on `Dive`.
     static func gasNames(of dive: Dive) -> [String] {
         var seen = Set<String>()
@@ -127,6 +127,8 @@ struct DiveSummary: Identifiable, Hashable, Sendable {
             return NSLocalizedString("Air", bundle: .forAppLanguage(), value: "Air", comment: "Gas type label: 21% oxygen")
         case "Nitrox":
             return NSLocalizedString("Nitrox", bundle: .forAppLanguage(), value: "Nitrox", comment: "Gas type label: oxygen above 21%")
+        case "Oxygen":
+            return NSLocalizedString("Oxygen", bundle: .forAppLanguage(), value: "Oxygen", comment: "Gas type: pure oxygen (100% O2), e.g. a CCR oxygen supply or an O2 deco gas")
         case "Trimix":
             return NSLocalizedString("Trimix", bundle: .forAppLanguage(), value: "Trimix", comment: "Gas type label: helium present")
         case "Heliox":

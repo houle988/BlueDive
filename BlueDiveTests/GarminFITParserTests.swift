@@ -22,7 +22,7 @@ struct GarminFITParserTests {
     private static let localOffset: UInt32 = 3600
     private static let elapsed: Float64 = 600
     /// Gas switch from the first gas (21 %) to the second (50 %), seconds after the start.
-    private static let switchAt: UInt32 = 300
+    nonisolated private static let switchAt: UInt32 = 300
 
     /// Degrees → FIT semicircles (exact for the values used here).
     private static func semicircles(_ degrees: Double) -> Int32 {
@@ -79,8 +79,19 @@ struct GarminFITParserTests {
         return mesgs
     }
 
-    /// A one-session dive: records every 10 s, two open-circuit gases with a switch at
-    /// `switchAt`, one tank transmitter, dive settings, a dive summary and an Activity
+    /// A DiveGasMesg: FIT gas slot, O₂ %, status and mode.
+    struct Gas: Sendable {
+        let index: UInt16, oxygen: UInt8, status: DiveGasStatus, mode: DiveGasMode
+        init(_ index: UInt16, _ oxygen: UInt8, _ status: DiveGasStatus = .enabled, _ mode: DiveGasMode = .openCircuit) {
+            (self.index, self.oxygen, self.status, self.mode) = (index, oxygen, status, mode)
+        }
+    }
+
+    /// Air then EAN50, both enabled open-circuit gases.
+    nonisolated private static let defaultGases = [Gas(0, 21), Gas(1, 50)]
+
+    /// A one-session dive: records every 10 s, by default two open-circuit gases with a switch
+    /// at `switchAt` and one tank transmitter, dive settings, a dive summary and an Activity
     /// message carrying the watch's local time.
     /// - `manufacturer`, `product`: the FileId's, and the watch DeviceInfo's when `devices` is nil.
     /// - `fileIdProductName`: a product name in the FileId (none by default).
@@ -89,17 +100,11 @@ struct GarminFITParserTests {
     /// - `summaryReferences`: one DiveSummary per entry, in order, all with reference index 0:
     ///   `.session` (dive 42), `.lap` (no dive number, as Descent watches write it beside the
     ///   session's) or `nil` (no reference message, dive 7); see `SummaryValues`.
-    /// A DiveGasMesg: FIT gas slot, O₂ %, status and mode.
-    struct Gas {
-        let index: UInt16, oxygen: UInt8, status: DiveGasStatus, mode: DiveGasMode
-        init(_ index: UInt16, _ oxygen: UInt8, _ status: DiveGasStatus = .enabled, _ mode: DiveGasMode = .openCircuit) {
-            (self.index, self.oxygen, self.status, self.mode) = (index, oxygen, status, mode)
-        }
-    }
-
-    /// Air then EAN50, both enabled open-circuit gases.
-    private static let defaultGases = [Gas(0, 21), Gas(1, 50)]
-
+    /// - `subSport`: the session's sub-sport (none by default).
+    /// - `gases`: the DiveGasMesg slots (default: `defaultGases`).
+    /// - `gasSwitches`: the gas-switch events, seconds after the start and FIT gas slot
+    ///   (default: slot 0 at the start, slot 1 at `switchAt`; empty for a single-gas dive).
+    /// - `transmitters`: one TankSummaryMesg per entry, sensor and start/end pressure in bar.
     private static func makeDiveFile(
         manufacturer: Manufacturer = .garmin,
         product: GarminProduct = .descentX10,

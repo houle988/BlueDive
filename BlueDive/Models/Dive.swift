@@ -184,6 +184,7 @@ struct TankData: Identifiable, Sendable {
             if 100 - o2Percentage - hePercentage <= 0 { return "Heliox" }
             return "Trimix"
         }
+        if o2Percentage >= 100 { return "Oxygen" }
         if o2Percentage > 21 { return "Nitrox" }
         if o2Percentage < 21 { return "Hypoxic" }
         return "Air"
@@ -195,6 +196,8 @@ struct TankData: Identifiable, Sendable {
                 return String(format: NSLocalizedString("Heliox %d/%d", bundle: .forAppLanguage(), comment: "Heliox gas mix label showing oxygen/helium percentages e.g. Heliox 21/79"), o2Percentage, hePercentage)
             }
             return String(format: NSLocalizedString("Trimix %d/%d", bundle: .forAppLanguage(), comment: "Trimix gas mix label showing oxygen/helium percentages e.g. Trimix 21/35"), o2Percentage, hePercentage)
+        } else if o2Percentage >= 100 {
+            return NSLocalizedString("Oxygen", bundle: .forAppLanguage(), value: "Oxygen", comment: "Gas type: pure oxygen (100% O2), e.g. a CCR oxygen supply or an O2 deco gas")
         } else if o2Percentage > 21 {
             let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(.current))
             return String(format: NSLocalizedString("Nitrox %@", bundle: .forAppLanguage(), comment: "Nitrox gas mix label, %@ is the pre-formatted oxygen percentage e.g. Nitrox 32%"), pct)

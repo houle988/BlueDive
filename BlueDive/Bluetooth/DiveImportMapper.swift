@@ -154,11 +154,15 @@ enum DiveImportMapper {
     /// On Shearwater, DC_GASMIX_UNKNOWN is always reported so the "tank N = mix N"
     /// heuristic fails when AI transmitter slot order ≠ gas configuration slot order.
     /// Returns nil when the profile lacks sufficient data for a reliable determination.
+    /// `tankIndices` / `mixIndices` restrict the candidates (a CCR's diluent transmitters to
+    /// its diluent mixes, its other transmitters to its open-circuit mixes); nil keeps all.
     private static func inferShearwaterGasMixToTank(
         profile: [ProfileSample],
         tankCount: Int,
         gasMixCount: Int,
-        minMappings: Int = 2
+        minMappings: Int = 2,
+        tankIndices: [Int]? = nil,
+        mixIndices: Set<Int>? = nil
     ) -> [Int: Int]? {
         // No pressure drop to compare without two samples (and 1..<0 below would trap).
         guard profile.count > 1 else { return nil }
@@ -174,11 +178,11 @@ enum DiveImportMapper {
             // Update lastKnownGas from prev first so the segment [prev→curr] is credited to
             // the gas that was active during the interval, not the incoming gas after a switch.
             if let g = prev.currentGas, g >= 0, g < gasMixCount { lastKnownGas = g }
-            guard let gas = lastKnownGas else {
+            guard let gas = lastKnownGas, mixIndices?.contains(gas) ?? true else {
                 if let g = curr.currentGas, g >= 0, g < gasMixCount { lastKnownGas = g }
                 continue
             }
-            for tankIdx in 0..<tankCount {
+            for tankIdx in tankIndices ?? Array(0..<tankCount) {
                 let prevP = prev.pressures[tankIdx] ?? 0
                 let currP = curr.pressures[tankIdx] ?? 0
                 guard prevP > 0, currP > 0, prevP > currP else { continue }
@@ -595,9 +599,56 @@ enum DiveImportMapper {
         return tankType(forUsage: dcGasMixes[tank.gasMix].usage)
     }
 
+    /// Whether a Shearwater dive's transmitters carry the rebreather flags libdivecomputer
+    /// sets on CC/CC2/SC dives (transmitter named "O…"/"D…", or the HP-CCR slots). Such a
+    /// dive's gases are matched by `shearwaterCCRMixForTank`, never by position across groups.
+    private static func isFlaggedShearwaterCCR(_ dcTanks: [DiveData.Tank], deviceFamily: DeviceFamily?) -> Bool {
+        deviceFamily == .shearwaterPetrel && dcTanks.contains { $0.usage == .oxygen || $0.usage == .diluent }
+    }
+
+    /// The gas mix of each non-oxygen transmitter on a flagged Shearwater CCR dive
+    /// ([tank index → mix index]). Shearwater lists its open-circuit gases (bailouts) and its
+    /// diluents, never the oxygen supply, and reports no mix for any transmitter
+    /// (`DC_GASMIX_UNKNOWN`). So a diluent transmitter is matched only to a diluent mix and
+    /// any other transmitter only to an open-circuit mix: by pressure inference within that
+    /// group, then the group's remaining mixes in the order the profile first breathes them,
+    /// then in list order (a single transmitter and a single mix in a group are matched at
+    /// once). The oxygen transmitter takes no mix; an unclaimed mix (a bailout without a
+    /// transmitter) becomes a gas-only tank.
+    private static func shearwaterCCRMixForTank(
+        _ dcTanks: [DiveData.Tank], dcGasMixes: [GasMix], profile: [ProfileSample], profileGasMixOrder: [Int]
+    ) -> [Int: Int] {
+        let diluentMixes = dcGasMixes.indices.filter { dcGasMixes[$0].usage == .diluent }
+        let openCircuitMixes = dcGasMixes.indices.filter { dcGasMixes[$0].usage != .diluent }
+        let diluentTanks = dcTanks.indices.filter { dcTanks[$0].usage == .diluent }
+        let otherTanks = dcTanks.indices.filter { dcTanks[$0].usage != .diluent && dcTanks[$0].usage != .oxygen }
+
+        var mixForTank: [Int: Int] = [:]
+        for (tanks, mixes) in [(diluentTanks, diluentMixes), (otherTanks, openCircuitMixes)]
+        where !tanks.isEmpty && !mixes.isEmpty {
+            var group: [Int: Int] = [:]
+            if tanks.count > 1 || mixes.count > 1,
+               let inferred = inferShearwaterGasMixToTank(
+                   profile: profile, tankCount: dcTanks.count, gasMixCount: dcGasMixes.count,
+                   minMappings: 1, tankIndices: tanks, mixIndices: Set(mixes)) {
+                for (mix, tank) in inferred { group[tank] = mix }
+            }
+            var remaining: [Int] = []
+            for mix in profileGasMixOrder.filter(mixes.contains) + mixes
+            where !remaining.contains(mix) && !group.values.contains(mix) {
+                remaining.append(mix)
+            }
+            for (tank, mix) in zip(tanks.filter { group[$0] == nil }, remaining) { group[tank] = mix }
+            mixForTank.merge(group) { first, _ in first }
+        }
+        return mixForTank
+    }
+
     /// Builds the tank list from the tanks the dive computer reports (DC_FIELD_TANK), plus a
     /// gas-only tank for every gas mix no tank claims, and the gas-mix index → tank-array index
-    /// map used to remap the profile's currentGas and derive usage times.
+    /// map used to remap the profile's currentGas and derive usage times. `oxygenSupplyTanks`
+    /// holds the indices of a flagged Shearwater CCR's oxygen transmitters, given pure oxygen
+    /// because the computer reports no gas for them (`merge` keeps a user's near-pure value).
     ///
     /// Shared by the first download (`makeDive`) and the re-download merge
     /// (`merge`) so both assign gases to tanks identically: a re-download must not
@@ -607,10 +658,11 @@ enum DiveImportMapper {
         diveData: DiveData,
         deviceFamily: DeviceFamily?,
         filterUnusedTanks: Bool
-    ) -> (tanks: [TankData], gasMixToTankIndex: [Int: Int]) {
+    ) -> (tanks: [TankData], gasMixToTankIndex: [Int: Int], oxygenSupplyTanks: Set<Int>) {
         let dcGasMixes = diveData.gasMixes ?? []
         let profileGasMixOrder = Self.orderedGasMixIndices(from: diveData)
         var linkedTanks: [TankData] = []
+        var oxygenSupplyTanks: Set<Int> = []
         var gasMixToTankIndex: [Int: Int] = [:]
 
         // For Shearwater AI dives: derive gas-mix→tank assignment from pressure data.
@@ -620,7 +672,13 @@ enum DiveImportMapper {
         // (mix, tank) pair remains undetermined after inference, it is forced by
         // elimination (the only remaining slot must be the only remaining mix).
         let pressureGuidedMixForTank: [Int: Int]  // [tankIndex → mixIndex]
-        if deviceFamily == .shearwaterPetrel, dcGasMixes.count > 1,
+        let flaggedCCR = Self.isFlaggedShearwaterCCR(dcTanks, deviceFamily: deviceFamily)
+        if flaggedCCR {
+            // Shearwater CCR: gases follow the transmitter flags (see shearwaterCCRMixForTank).
+            pressureGuidedMixForTank = Self.shearwaterCCRMixForTank(
+                dcTanks, dcGasMixes: dcGasMixes, profile: diveData.profile, profileGasMixOrder: profileGasMixOrder)
+            for (tankIdx, mixIdx) in pressureGuidedMixForTank { gasMixToTankIndex[mixIdx] = tankIdx }
+        } else if deviceFamily == .shearwaterPetrel, dcGasMixes.count > 1,
            var pgMap = Self.inferShearwaterGasMixToTank(
                profile: diveData.profile,
                tankCount: dcTanks.count,
@@ -646,11 +704,24 @@ enum DiveImportMapper {
             let he: Double
             var resolvedMixIdx: Int? = nil
 
-            if let mixIdx = pressureGuidedMixForTank[index], mixIdx < dcGasMixes.count {
+            if flaggedCCR && tank.usage == .oxygen {
+                // The rebreather's oxygen supply: Shearwater lists no mix for it. Owner decision
+                // (DECISIONS.md L10): the computer's oxygen flag is taken as pure oxygen.
+                // No profile sample or usage window points at it (not in gasMixToTankIndex).
+                o2 = 1.0
+                he = 0.0
+                oxygenSupplyTanks.insert(index)
+            } else if let mixIdx = pressureGuidedMixForTank[index], mixIdx < dcGasMixes.count {
                 // Pressure-guided: use the gas mix whose pressure matched this tank.
                 // gasMixToTankIndex was already pre-populated above.
                 o2 = dcGasMixes[mixIdx].oxygen
                 he = dcGasMixes[mixIdx].helium
+            } else if flaggedCCR {
+                // No mix of this transmitter's group is left: no gas data, never another
+                // group's gas (a diluent or bailout on the wrong transmitter).
+                DiveComputerLog.shared.log("Tank \(index): no gas mix of its kind; defaulting to 21% O2", level: .warning)
+                o2 = 0.21
+                he = 0.0
             } else {
                 let result = Self.resolveGasMix(
                     mixIndex: tank.gasMix,
@@ -702,7 +773,33 @@ enum DiveImportMapper {
                                         tankType: Self.tankType(forUsage: dcGasMixes[mixIdx].usage)))
         }
 
-        return (linkedTanks, gasMixToTankIndex)
+        return (linkedTanks, gasMixToTankIndex, oxygenSupplyTanks)
+    }
+
+    /// The stored tank each rebuilt tank keeps its id and user details from on a re-download:
+    /// transmitter slots (index < `transmitterCount`) by position; a gas-only tank by its gas
+    /// (O₂ and He percentages) among the stored tanks after the transmitter slots, each used
+    /// once and in order, so a gas the rebuild adds or drops (e.g. a CCR bailout an earlier
+    /// version put on the O₂ transmitter) does not move another tank's details; any gas-only
+    /// tank still unpaired takes the next leftover stored one in order (a gas the user edited).
+    /// The stored dive records no transmitter count, so the new download's is used; extra
+    /// stored tanks are dropped.
+    private static func storedTanks(for built: [TankData], existing: [TankData], transmitterCount: Int) -> [TankData?] {
+        var paired = [TankData?](repeating: nil, count: built.count)
+        let slots = min(transmitterCount, built.count)
+        for index in 0..<min(slots, existing.count) { paired[index] = existing[index] }
+        guard slots < built.count else { return paired }
+        var spare = Array(existing.dropFirst(slots))
+        for index in slots..<built.count {
+            if let match = spare.firstIndex(where: {
+                $0.o2Percentage == built[index].o2Percentage && $0.hePercentage == built[index].hePercentage
+            }) {
+                paired[index] = spare.remove(at: match)
+            }
+        }
+        var leftovers = spare.makeIterator()
+        for index in slots..<built.count where paired[index] == nil { paired[index] = leftovers.next() }
+        return paired
     }
 
     // MARK: - Convert to BlueDive Dive
@@ -734,7 +831,7 @@ enum DiveImportMapper {
         let profileGasMixOrder = Self.orderedGasMixIndices(from: diveData)
 
         if let dcTanks = diveData.tanks, !dcTanks.isEmpty {
-            (linkedTanks, gasMixToTankIndex) = Self.buildTanksFromComputerTanks(
+            (linkedTanks, gasMixToTankIndex, _) = Self.buildTanksFromComputerTanks(
                 dcTanks,
                 diveData: diveData,
                 deviceFamily: context.deviceFamily,
@@ -1012,13 +1109,19 @@ enum DiveImportMapper {
                 filterUnusedTanks: context.filterUnusedTanks
             )
             mergeMixToTankIndex = built.gasMixToTankIndex
-            // Preserve the identity and user-set fields of the existing tank at the same index
-            // (the transmitter slot, then the gas-only tanks in gas-mix order).
+            // Preserve the identity and user-set fields of the stored tank each rebuilt tank pairs
+            // with (`storedTanks`: transmitter slots by position, gas-only tanks by gas).
+            let pairedStored = Self.storedTanks(for: built.tanks, existing: existingTanks, transmitterCount: dcTanks.count)
             dive.tanks = built.tanks.enumerated().map { (index, tank) in
-                let existing = index < existingTanks.count ? existingTanks[index] : nil
+                let existing = pairedStored[index]
+                // A Shearwater CCR's oxygen supply: the computer reports no gas for it, so a
+                // near-pure oxygen the user set (e.g. 99.5 %) is kept; any other stored gas (such
+                // as a bailout gas an earlier version put there) becomes pure oxygen.
+                let keepsUserOxygen = built.oxygenSupplyTanks.contains(index) && (existing?.o2 ?? 0) >= 0.99
                 return TankData(
                     id: existing?.id ?? tank.id,
-                    o2: tank.o2, he: tank.he,
+                    o2: keepsUserOxygen ? existing?.o2 ?? tank.o2 : tank.o2,
+                    he: keepsUserOxygen ? existing?.he ?? tank.he : tank.he,
                     volume: tank.volume ?? existing?.volume,
                     startPressure: tank.startPressure,
                     endPressure: tank.endPressure,

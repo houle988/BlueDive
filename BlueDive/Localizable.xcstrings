@@ -51838,6 +51838,41 @@
         }
       }
     },
+    "Oxygen" : {
+      "comment" : "Gas type: pure oxygen (100% O2), e.g. a CCR oxygen supply or an O2 deco gas",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sauerstoff"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Oxígeno"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oxygène"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Oksygen"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zuurstof"
+          }
+        }
+      }
+    },
     "Oxygen (O₂)" : {
       "localizations" : {
         "de" : {

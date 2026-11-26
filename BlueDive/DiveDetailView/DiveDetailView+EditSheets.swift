@@ -2673,6 +2673,8 @@ struct EditGazView: View {
                 return NSLocalizedString("Heliox", bundle: .forAppLanguage(), comment: "Gas type label: oxygen and helium only, no nitrogen")
             }
             return NSLocalizedString("Trimix", bundle: .forAppLanguage(), comment: "Gas type label: helium present")
+        } else if workingO2 >= 100 {
+            return NSLocalizedString("Oxygen", bundle: .forAppLanguage(), value: "Oxygen", comment: "Gas type: pure oxygen (100% O2), e.g. a CCR oxygen supply or an O2 deco gas")
         } else if workingO2 == 21 {
             return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Gas type label: 21% oxygen")
         } else if workingO2 > 21 {
