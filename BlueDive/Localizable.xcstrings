@@ -30477,7 +30477,7 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filtrer les bouteilles inutilisées"
+            "value" : "Filtrer les cylindres inutilisés"
           }
         },
         "nb" : {
@@ -64265,7 +64265,7 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Certains ordinateurs de plongée (Aqualung, Oceanic, Sherwood, HW OSTC, Cressi, DeepSix, Deepblu, Oceans, McLean) signalent tous les emplacements de gaz configurés même lorsqu'un seul a été utilisé. Lorsqu'il est activé, les bouteilles fantômes sont filtrées. Désactivez si vous portez des bouteilles configurées mais non utilisées (p. ex. bouteille de secours, bail-out)."
+            "value" : "Certains ordinateurs de plongée (Aqualung, Oceanic, Sherwood, HW OSTC, Cressi, DeepSix, Deepblu, Oceans, McLean) signalent tous les emplacements de gaz configurés même lorsqu'un seul a été utilisé. Lorsqu'il est activé, les cylindres fantômes sont filtrés. Désactivez si vous portez des cylindres configurés mais non utilisés (p. ex. cylindre de secours, bail-out)."
           }
         },
         "nb" : {
