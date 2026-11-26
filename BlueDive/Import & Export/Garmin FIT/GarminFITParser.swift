@@ -184,7 +184,7 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 endPressure: nil,
                 workingPressure: nil,
                 tankMaterial: nil,
-                tankType: gas.getMode() == .closedCircuitDiluent ? "CCR" : nil
+                tankType: gas.getMode() == .closedCircuitDiluent ? "Diluent" : nil
             ))
         }
 

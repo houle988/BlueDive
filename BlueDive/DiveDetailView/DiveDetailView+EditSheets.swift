@@ -2588,7 +2588,7 @@ struct EditGazView: View {
     }
 
     private let materialOptions = ["Steel", "Galvanized Steel", "Aluminium", "Carbon"]
-    private let typeOptions     = ["Single tank", "Twinset", "Sidemount", "Pony", "Rebreather", "Other"]
+    private let typeOptions     = ["Single tank", "Twinset", "Sidemount", "Pony", "Stage", "Drysuit", "Rebreather", "Diluent", "O2", "Other"]
 
     init(dive: Dive, tankIndex: Int = 0) {
         self.dive = dive

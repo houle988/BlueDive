@@ -169,6 +169,16 @@ struct TankData: Identifiable, Sendable {
     var o2Percentage: Int { Int((o2 * 100).rounded()) }
     var hePercentage: Int { Int((he * 100).rounded()) }
 
+    /// True for a tank whose pressure drop does not measure the diver's breathing, so it is
+    /// left out of every RMV/SAC calculation: a drysuit inflation bottle ("Drysuit"), whose gas
+    /// feeds the suit, and a closed-circuit rebreather's diluent ("Diluent") and oxygen ("O2")
+    /// cylinders, whose gas is breathed again on the loop. A bailout tank keeps its own format.
+    /// "CCR" is what the Garmin FIT import stored for a diluent before "Diluent" existed.
+    var isExcludedFromRMV: Bool {
+        guard let type = tankType else { return false }
+        return ["Drysuit", "Diluent", "O2", "CCR"].contains { type.caseInsensitiveCompare($0) == .orderedSame }
+    }
+
     var gasName: String {
         if hePercentage > 0 {
             if 100 - o2Percentage - hePercentage <= 0 { return "Heliox" }
@@ -1035,12 +1045,14 @@ final class Dive {
         guard duration > 0 || consistentDurationSeconds != nil,
               index >= 0, index < tanks.count else { return 0.0 }
         let tank = tanks[index]
+        // A drysuit or CCR diluent/O₂ tank has no RMV/SAC.
+        guard !tank.isExcludedFromRMV else { return 0.0 }
 
         let samples = profileSamples
         let hasSamples = (samples.last?.time ?? 0) > 0
 
-        // Manual dive (no samples): only supported for single tank
-        if !hasSamples && tanks.count > 1 { return 0.0 }
+        // Manual dive (no samples): only supported for a single breathing tank
+        if !hasSamples && tanks.filter({ !$0.isExcludedFromRMV }).count > 1 { return 0.0 }
 
         // The dive's end in minutes: the last sample, else the computer/file time, else the
         // stored duration (manual dive).
@@ -1133,7 +1145,8 @@ final class Dive {
 
         // Decode profileSamples and tanks exactly once for the entire calculation.
         let samples = profileSamples
-        let tankList = tanks
+        // Drysuit and CCR diluent/O₂ tanks never count in the combined RMV.
+        let tankList = tanks.filter { !$0.isExcludedFromRMV }
         let hasSamples = (samples.last?.time ?? 0) > 0
 
         // Manual dive (no samples): only supported for single tank
@@ -1245,7 +1258,7 @@ final class Dive {
 
     /// Check using pre-decoded tanks (avoids redundant JSON decoding).
     private func combinedRMVNeedsUsageTime(for tankList: [TankData]) -> Bool {
-        let validTanks = tankList.filter { ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }
+        let validTanks = tankList.filter { !$0.isExcludedFromRMV && ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }
         guard validTanks.count > 1 else { return false }
         if validTanks.allSatisfy({ $0.tankType?.lowercased().contains("sidemount") == true }) { return false }
         return validTanks.contains { $0.usageStartTime == nil || $0.usageEndTime == nil }
@@ -1255,7 +1268,7 @@ final class Dive {
     /// making an accurate combined SAC impossible to compute.
     /// Sidemount-only tanks are exempt — they are breathed simultaneously for the full dive.
     var combinedSACNeedsUsageTime: Bool {
-        let validTanks = tanks.filter { ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }
+        let validTanks = tanks.filter { !$0.isExcludedFromRMV && ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }
         guard validTanks.count > 1 else { return false }
         if validTanks.allSatisfy({ $0.tankType?.lowercased().contains("sidemount") == true }) { return false }
         return validTanks.contains { $0.usageStartTime == nil || $0.usageEndTime == nil }
@@ -1267,7 +1280,7 @@ final class Dive {
     var combinedSAC: Double {
         let rmv = combinedRMV
         guard rmv > 0 else { return 0.0 }
-        let validTanks = tanks.filter { ($0.volume ?? 0) > 0 }
+        let validTanks = tanks.filter { !$0.isExcludedFromRMV && ($0.volume ?? 0) > 0 }
         guard !validTanks.isEmpty else { return 0.0 }
 
         let tanksWithTime = validTanks.filter { $0.usageStartTime != nil && $0.usageEndTime != nil }

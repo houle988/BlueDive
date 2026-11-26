@@ -269,11 +269,20 @@ extension DiveDetailView {
             let sacLabel: LocalizedStringKey = selectedTankIsDouble ? "SAC (double tank)" : "SAC"
 
             let isSidemount = selectedTankTypeLC.contains("sidemount")
-            let validTankCount = dive.tanks.filter { ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }.count
+            // Drysuit and CCR diluent/O₂ tanks are left out of RMV/SAC.
+            let isExcludedFromRMV = tank?.isExcludedFromRMV == true
+            let validTankCount = dive.tanks.filter { !$0.isExcludedFromRMV && ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil }.count
             let multiTankMissingUsageTime = validTankCount > 1 && (tank?.usageStartTime == nil || tank?.usageEndTime == nil) && !isSidemount
             let multiTankNoSamples = dive.profileSamples.count < 2 && validTankCount > 1
 
-            if multiTankNoSamples || multiTankMissingUsageTime {
+            if isExcludedFromRMV {
+                ConditionRow(icon: "lungs", color: .pink, label: rmvLabel, value: "—")
+                ConditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel, value: "—")
+                Text("Drysuit and CCR tanks are not included in RMV/SAC")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
+            } else if multiTankNoSamples || multiTankMissingUsageTime {
                 ConditionRow(icon: "lungs", color: .pink, label: rmvLabel, value: "—")
                 ConditionRow(icon: "gauge.with.dots.needle.bottom.50percent", color: .mint, label: sacLabel, value: "—")
                 if multiTankNoSamples {

@@ -44,7 +44,8 @@ final class DiveImportMapperParityTests {
             // The first dive's surface interval was computed against the logbook's previous dive.
             let ignored = MapperParityFixtures.notFromTheMapper.union(MapperParityFixtures.notInFormerExports)
             let skip = index == 0 ? ignored.union(["surfaceInterval", "repetitiveDive"]) : ignored
-            if let difference = MapperParityFixtures.firstDifference(old, produced, ignoring: skip) {
+            if let difference = MapperParityFixtures.firstDifference(old, produced, ignoring: skip,
+                                                                     accepting: MapperParityFixtures.newSinceFormerExports) {
                 Issue.record("\(folder.lastPathComponent) \(old.value("date") ?? ""): \(difference)")
             }
             previousDiveEndTime = diveData.datetime.addingTimeInterval(diveData.reportedDivetime ?? diveData.divetime)
@@ -153,8 +154,17 @@ enum MapperParityFixtures {
         return dive
     }
 
-    /// The first differing value, as "path: expected … got …"; nil when equal.
-    static func firstDifference(_ expected: XMLElementTree, _ actual: XMLElementTree, ignoring: Set<String>) -> String? {
+    /// Values the former version never wrote, now filled from the computer: a tank's format
+    /// from its diluent/oxygen flag. Accepted only where the former export had none, so any
+    /// other change to a tank format is still reported.
+    static func newSinceFormerExports(path: String, expected: String?, actual: String?) -> Bool {
+        path == "tanks/tank/tankType" && (expected ?? "").isEmpty && ["Diluent", "O2"].contains(actual ?? "")
+    }
+
+    /// The first differing value, as "path: expected … got …"; nil when equal. `accepting`
+    /// lets a caller allow a known difference (path without indices, expected, actual).
+    static func firstDifference(_ expected: XMLElementTree, _ actual: XMLElementTree, ignoring: Set<String>,
+                                accepting: (String, String?, String?) -> Bool = { _, _, _ in false }) -> String? {
         let a = expected.flattened(), b = actual.flattened()
         for key in Set(a.keys).union(b.keys).sorted() {
             // Drops the "[n]" indices only, so an attribute keeps its "@name" ("a[1]/b[2]@c" → "a/b@c").
@@ -162,7 +172,7 @@ enum MapperParityFixtures {
             if ignoring.contains(path) || ignoring.contains(where: { path.hasPrefix($0 + "/") || path.hasPrefix($0 + "@") }) {
                 continue
             }
-            if a[key] != b[key] {
+            if a[key] != b[key], !accepting(path, a[key], b[key]) {
                 return "\(key): expected \(a[key].map { "\"\($0.prefix(80))\"" } ?? "nothing"), got \(b[key].map { "\"\($0.prefix(80))\"" } ?? "nothing")"
             }
         }

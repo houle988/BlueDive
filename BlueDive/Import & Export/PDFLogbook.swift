@@ -50,7 +50,11 @@ struct PDFDiveLogbook {
         case "Twinset":      return NSLocalizedString("Twinset", bundle: loc, comment: "")
         case "Sidemount":    return NSLocalizedString("Sidemount", bundle: loc, comment: "")
         case "Pony":         return NSLocalizedString("Pony", bundle: loc, comment: "")
-        case "Rebreather":   return NSLocalizedString("Rebreather", bundle: loc, comment: "")
+        case "Stage":        return NSLocalizedString("Stage", bundle: loc, value: "Stage", comment: "")
+        case "Drysuit":      return NSLocalizedString("Drysuit", bundle: loc, value: "Drysuit", comment: "")
+        case "Rebreather":   return NSLocalizedString("Rebreather (other)", bundle: loc, value: "Rebreather (other)", comment: "")
+        case "Diluent":      return NSLocalizedString("Diluent (CCR)", bundle: loc, value: "Diluent (CCR)", comment: "")
+        case "O2":           return NSLocalizedString("O₂ (CCR)", bundle: loc, value: "O₂ (CCR)", comment: "")
         case "Other":        return NSLocalizedString("Other", bundle: loc, comment: "")
         default:             return value
         }

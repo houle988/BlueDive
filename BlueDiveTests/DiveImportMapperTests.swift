@@ -257,4 +257,82 @@ struct DiveImportMapperTests {
         #expect(same.profile.map(\.currentGas) == data.profile.map(\.currentGas))
         #expect(same.gasMix == data.gasMix)
     }
+
+    // MARK: CCR diluent / oxygen tank formats
+
+    /// A CCR dive: a diluent and an oxygen cylinder, both on transmitters.
+    private func ccrDive(tankUsage: [GasUsage], mixUsage: [GasUsage]) -> DiveData {
+        var data = DiveData(number: 1, datetime: Date(timeIntervalSince1970: 1_800_000_000),
+                            maxDepth: 30, avgDepth: 18, divetime: 3600, reportedDivetime: 3600, temperature: 10)
+        data.gasMixes = [GasMix(helium: 0, oxygen: 0.21, nitrogen: 0.79, usage: mixUsage[0]),
+                         GasMix(helium: 0, oxygen: 1.0, nitrogen: 0, usage: mixUsage[1])]
+        data.gasMix = 0
+        data.tanks = [DiveData.Tank(volume: 3, workingPressure: 200, beginPressure: 200, endPressure: 150, gasMix: 0, usage: tankUsage[0]),
+                      DiveData.Tank(volume: 3, workingPressure: 200, beginPressure: 200, endPressure: 140, gasMix: 1, usage: tankUsage[1])]
+        data.profile = [ProfileSample(time: 0, depth: 0, currentGas: 0),
+                        ProfileSample(time: 1200, depth: 30),
+                        ProfileSample(time: 3600, depth: 0)]
+        return data
+    }
+
+    @Test func computerDiluentAndOxygenTanksGetTheirFormat() {
+        let dive = DiveImportMapper.makeDive(from: ccrDive(tankUsage: [.diluent, .oxygen], mixUsage: [.none, .none]),
+                                             diveNumber: 1, previousDiveEndTime: nil, diverName: "", context: context())
+        #expect(dive.tanks.map(\.tankType) == ["Diluent", "O2"])
+        #expect(dive.tanks.allSatisfy { $0.isExcludedFromRMV })
+    }
+
+    /// The computer reports each tank's gas (Divesoft flags only the mix): the mix's flag is used.
+    @Test func tankFormatFallsBackToTheGasMixUsage() {
+        let dive = DiveImportMapper.makeDive(from: ccrDive(tankUsage: [.none, .none], mixUsage: [.diluent, .oxygen]),
+                                             diveNumber: 1, previousDiveEndTime: nil, diverName: "", context: context())
+        #expect(dive.tanks.map(\.tankType) == ["Diluent", "O2"])
+    }
+
+    /// Shearwater reports no gas for its transmitters, so tanks are matched to mixes by
+    /// pressure inference or position; such a guessed match must not give a tank the mix's
+    /// diluent flag (e.g. an unflagged bailout transmitter landing on the diluent).
+    @Test func aGuessedGasMatchGivesNoFormat() {
+        var data = ccrDive(tankUsage: [.none, .none], mixUsage: [.none, .diluent])
+        let unknown = Int(UInt32.max)    // DC_GASMIX_UNKNOWN
+        data.tanks = data.tanks?.map {
+            DiveData.Tank(volume: $0.volume, workingPressure: $0.workingPressure, beginPressure: $0.beginPressure,
+                          endPressure: $0.endPressure, gasMix: unknown, usage: $0.usage)
+        }
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context(family: .shearwaterPetrel))
+        #expect(dive.tanks.prefix(2).map(\.tankType) == [nil, nil])
+        #expect(dive.tanks.prefix(2).allSatisfy { !$0.isExcludedFromRMV })
+    }
+
+    @Test func openCircuitAndSidemountTanksKeepNoFormat() {
+        let dive = DiveImportMapper.makeDive(from: ccrDive(tankUsage: [.none, .sidemount], mixUsage: [.none, .none]),
+                                             diveNumber: 1, previousDiveEndTime: nil, diverName: "", context: context())
+        #expect(dive.tanks.map(\.tankType) == [nil, nil])
+    }
+
+    @Test func gasOnlyTanksGetTheMixUsageFormat() {
+        var data = ccrDive(tankUsage: [.none, .none], mixUsage: [.diluent, .oxygen])
+        data.tanks = nil
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "", context: context())
+        #expect(dive.tanks.map(\.tankType) == ["Diluent", "O2"])
+    }
+
+    @Test func mergeKeepsTheUserFormatAndFillsAnUnsetOne() {
+        let data = ccrDive(tankUsage: [.diluent, .oxygen], mixUsage: [.none, .none])
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "", context: context())
+        dive.tanks = [TankData(id: dive.tanks[0].id, o2: 0.21, he: 0, tankType: "Single tank"),
+                      TankData(id: dive.tanks[1].id, o2: 1.0, he: 0, tankType: nil)]
+        DiveImportMapper.merge(data, into: dive, context: context())
+        #expect(dive.tanks.map(\.tankType) == ["Single tank", "O2"])
+    }
+
+    /// "CCR" is the Garmin FIT import's former value for a diluent.
+    @Test func excludedFromRMVMatchesDrysuitAndCCRFormatsOnly() {
+        let excluded = ["Drysuit", "Diluent", "O2", "CCR", "drysuit"].map { TankData(tankType: $0).isExcludedFromRMV }
+        let counted = [nil, "Single tank", "Twinset", "Sidemount", "Pony", "Rebreather", "Other"]
+            .map { TankData(tankType: $0).isExcludedFromRMV }
+        #expect(excluded.allSatisfy { $0 })
+        #expect(counted.allSatisfy { !$0 })
+    }
 }

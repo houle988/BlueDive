@@ -129,7 +129,11 @@ func localizedTankFormat(_ format: String) -> String {
     case "Twinset":      return NSLocalizedString("Twinset", bundle: bundle, comment: "Tank format: twinset")
     case "Sidemount":    return NSLocalizedString("Sidemount", bundle: bundle, comment: "Tank format: sidemount")
     case "Pony":         return NSLocalizedString("Pony", bundle: bundle, comment: "Tank format: pony bottle")
-    case "Rebreather":   return NSLocalizedString("Rebreather", bundle: bundle, comment: "Tank format: rebreather")
+    case "Stage":        return NSLocalizedString("Stage", bundle: bundle, value: "Stage", comment: "Tank format: stage bottle (travel, bottom or deco gas) clipped to the diver")
+    case "Drysuit":      return NSLocalizedString("Drysuit", bundle: bundle, value: "Drysuit", comment: "Tank format: drysuit inflation bottle")
+    case "Rebreather":   return NSLocalizedString("Rebreather (other)", bundle: bundle, value: "Rebreather (other)", comment: "Tank format: rebreather cylinder other than a CCR diluent or oxygen one (e.g. semi-closed); stored value stays \"Rebreather\"")
+    case "Diluent":      return NSLocalizedString("Diluent (CCR)", bundle: bundle, value: "Diluent (CCR)", comment: "Tank format: closed-circuit rebreather diluent cylinder")
+    case "O2":           return NSLocalizedString("O₂ (CCR)", bundle: bundle, value: "O₂ (CCR)", comment: "Tank format: closed-circuit rebreather oxygen cylinder")
     case "Other":        return NSLocalizedString("Other", bundle: bundle, comment: "Tank format: other")
     default:             return format
     }

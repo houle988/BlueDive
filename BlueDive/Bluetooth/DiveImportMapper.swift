@@ -572,6 +572,29 @@ enum DiveImportMapper {
 
     // MARK: - Computer Tanks
 
+    /// The tank format for a cylinder the dive computer flags as a closed-circuit rebreather's
+    /// diluent or oxygen (libdivecomputer's `dc_usage_t`); nil for any other usage, which
+    /// leaves the format unset as before.
+    static func tankType(forUsage usage: GasUsage) -> String? {
+        switch usage {
+        case .diluent: return "Diluent"
+        case .oxygen:  return "O2"
+        case .none, .sidemount: return nil
+        }
+    }
+
+    /// The format for a computer tank: its own usage flag, else the flag of the gas mix the
+    /// computer reports it is on (Divesoft flags only the mix). A mix matched by pressure
+    /// inference or by position gives no format: a guessed match must not label a tank, or a
+    /// breathed tank (e.g. a Shearwater bailout landing on the diluent) would silently leave
+    /// RMV/SAC.
+    private static func tankType(for tank: DiveData.Tank, dcGasMixes: [GasMix]) -> String? {
+        if let type = tankType(forUsage: tank.usage) { return type }
+        // DC_GASMIX_UNKNOWN (UInt32.max) and `unreadableGasMix` (-2) fall outside the indices.
+        guard dcGasMixes.indices.contains(tank.gasMix) else { return nil }
+        return tankType(forUsage: dcGasMixes[tank.gasMix].usage)
+    }
+
     /// Builds the tank list from the tanks the dive computer reports (DC_FIELD_TANK), plus a
     /// gas-only tank for every gas mix no tank claims, and the gas-mix index → tank-array index
     /// map used to remap the profile's currentGas and derive usage times.
@@ -659,7 +682,8 @@ enum DiveImportMapper {
                 volume: tank.volume > 0 ? tank.volume : nil,
                 startPressure: startPressure,
                 endPressure: endPressure,
-                workingPressure: tank.workingPressure > 0 ? tank.workingPressure : nil
+                workingPressure: tank.workingPressure > 0 ? tank.workingPressure : nil,
+                tankType: Self.tankType(for: tank, dcGasMixes: dcGasMixes)
             ))
         }
 
@@ -674,7 +698,8 @@ enum DiveImportMapper {
             if let used = usedMixIndicesForSupplement, !used.contains(mixIdx) { continue }
             let tankIdx = linkedTanks.count
             gasMixToTankIndex[mixIdx] = tankIdx
-            linkedTanks.append(TankData(o2: dcGasMixes[mixIdx].oxygen, he: dcGasMixes[mixIdx].helium))
+            linkedTanks.append(TankData(o2: dcGasMixes[mixIdx].oxygen, he: dcGasMixes[mixIdx].helium,
+                                        tankType: Self.tankType(forUsage: dcGasMixes[mixIdx].usage)))
         }
 
         return (linkedTanks, gasMixToTankIndex)
@@ -731,7 +756,7 @@ enum DiveImportMapper {
                 }
                 gasMixToTankIndex[index] = tankIdx
                 tankIdx += 1
-                return TankData(o2: mix.oxygen, he: mix.helium)
+                return TankData(o2: mix.oxygen, he: mix.helium, tankType: Self.tankType(forUsage: mix.usage))
             }
         } else {
             let o2Fraction = Double(diveData.gasMix ?? 21) / 100.0
@@ -1007,7 +1032,8 @@ enum DiveImportMapper {
                     endPressure: tank.endPressure,
                     workingPressure: tank.workingPressure ?? existing?.workingPressure,
                     tankMaterial: existing?.tankMaterial,
-                    tankType: existing?.tankType
+                    // The format the user set wins; else the computer's diluent/O₂ flag.
+                    tankType: existing?.tankType ?? tank.tankType
                 )
             }
         } else if !diveData.tankPressure.isEmpty {
@@ -1043,7 +1069,8 @@ enum DiveImportMapper {
                 return TankData(id: existing?.id ?? UUID(),
                                 o2: mix.oxygen, he: mix.helium,
                                 volume: existing?.volume, workingPressure: existing?.workingPressure,
-                                tankMaterial: existing?.tankMaterial, tankType: existing?.tankType)
+                                tankMaterial: existing?.tankMaterial,
+                                tankType: existing?.tankType ?? Self.tankType(forUsage: mix.usage))
             }
         } else if let gasMix = diveData.gasMix, gasMix != 21 {
             // Single non-Air gas from dive computer

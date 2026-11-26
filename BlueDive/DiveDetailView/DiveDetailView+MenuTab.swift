@@ -134,6 +134,15 @@ extension DiveDetailView {
         .padding(.horizontal)
     }
 
+    /// True when the dive has a drysuit or CCR diluent/O₂ tank and no other tank with the
+    /// volume and pressures RMV/SAC need, so the RMV and SAC cards show "—" for that reason.
+    private var rmvExcludesEveryTank: Bool {
+        let tanks = dive.tanks
+        return tanks.contains { $0.isExcludedFromRMV } && !tanks.contains {
+            !$0.isExcludedFromRMV && ($0.volume ?? 0) > 0 && $0.startPressure != nil && $0.endPressure != nil
+        }
+    }
+
     // Vérifie si on a des données supplémentaires à afficher
     var hasAdditionalData: Bool {
         dive.profileSamples.contains { $0.temperature != nil || $0.tankPressure != nil || $0.ndl != nil }
@@ -1302,11 +1311,14 @@ extension DiveDetailView {
                 color: dive.isRepetitiveDive ? .orange : .gray
             )
 
+            // Captions count only the tanks RMV/SAC uses (not drysuit or CCR diluent/O₂).
             DetailCard(
                 title: "RMV",
                 value: dive.formattedCombinedRMV,
                 subtitle: {
-                    if dive.profileSamples.count < 2 && dive.tanks.count > 1 {
+                    if rmvExcludesEveryTank {
+                        return NSLocalizedString("Drysuit and CCR tanks are not included in RMV/SAC", bundle: Bundle.forAppLanguage(), value: "Drysuit and CCR tanks are not included in RMV/SAC", comment: "")
+                    } else if dive.profileSamples.count < 2 && dive.tanks.filter({ !$0.isExcludedFromRMV }).count > 1 {
                         return NSLocalizedString("Multi-tank RMV/SAC requires dive computer data", bundle: Bundle.forAppLanguage(), comment: "")
                     } else if dive.combinedRMVNeedsUsageTime {
                         return NSLocalizedString("Usage time required for multi-tank RMV", bundle: Bundle.forAppLanguage(), comment: "Shown when multiple non-sidemount tanks are present but usage time is missing, making combined RMV impossible to compute")
@@ -1321,7 +1333,9 @@ extension DiveDetailView {
                 title: "SAC",
                 value: dive.formattedCombinedSAC,
                 subtitle: {
-                    if dive.profileSamples.count < 2 && dive.tanks.count > 1 {
+                    if rmvExcludesEveryTank {
+                        return NSLocalizedString("Drysuit and CCR tanks are not included in RMV/SAC", bundle: Bundle.forAppLanguage(), value: "Drysuit and CCR tanks are not included in RMV/SAC", comment: "")
+                    } else if dive.profileSamples.count < 2 && dive.tanks.filter({ !$0.isExcludedFromRMV }).count > 1 {
                         return NSLocalizedString("Multi-tank RMV/SAC requires dive computer data", bundle: Bundle.forAppLanguage(), comment: "")
                     } else if dive.combinedSACNeedsUsageTime {
                         return NSLocalizedString("Usage time required for multi-tank SAC", bundle: Bundle.forAppLanguage(), comment: "Shown when multiple tanks are present but usage time is missing, making combined SAC impossible to compute")

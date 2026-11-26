@@ -27,7 +27,7 @@ struct EditTankTemplateView: View {
     @State private var validationMessage = ""
 
     private let materialOptions = ["Steel", "Galvanized Steel", "Aluminium", "Carbon"]
-    private let formatOptions   = ["Single tank", "Twinset", "Sidemount", "Pony", "Rebreather", "Other"]
+    private let formatOptions   = ["Single tank", "Twinset", "Sidemount", "Pony", "Stage", "Drysuit", "Rebreather", "Diluent", "O2", "Other"]
 
     // MARK: - Init
 

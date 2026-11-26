@@ -480,13 +480,23 @@ final class SubsurfaceXMLParser: NSObject, XMLParserDelegate, @unchecked Sendabl
         // unparseable, or he is present (trimix), leave o2 as parsed.
         let resolvedO2 = o2 ?? ((attrs["o2"] == nil && attrs["he"] == nil) ? 21 : nil)
 
+        // A cylinder Subsurface marks as the rebreather's diluent or oxygen gets that tank
+        // format; any other use (open-circuit, travel gas, not used) leaves it unset.
+        let tankType: String?
+        switch attrs["use"]?.lowercased() {
+        case "diluent": tankType = "Diluent"
+        case "oxygen":  tankType = "O2"
+        default:        tankType = nil
+        }
+
         tempTanks.append(BlueDiveTankData(
             oxygen: resolvedO2,
             helium: he,
             volume: volume,
             startPressure: startPres,
             endPressure: endPres,
-            workingPressure: workPressure
+            workingPressure: workPressure,
+            tankType: tankType
         ))
     }
 
