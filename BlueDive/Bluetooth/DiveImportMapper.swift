@@ -768,23 +768,15 @@ enum DiveImportMapper {
         // gasMixToTankIndex is fully built.
         let profileSamples = Self.remapProfileCurrentGas(rawProfileSamples, using: gasMixToTankIndex)
 
-        // Dive mode
-        let diveType: String
-        if let diveMode = diveData.diveMode {
-            switch diveMode {
-            case .freedive:
-                diveType = "Freediving"
-            case .gauge:
-                diveType = "Gauge"
-            case .openCircuit:
-                diveType = "Open Circuit"
-            case .closedCircuit:
-                diveType = "Rebreather"
-            case .semiClosedCircuit:
-                diveType = "Semi-Rebreather"
-            }
-        } else {
-            diveType = "Reef"
+        // Dive mode; none reported gives no dive type (never a default such as "Reef").
+        let diveType: String?
+        switch diveData.diveMode {
+        case .freedive?:          diveType = "Freediving"
+        case .gauge?:             diveType = "Gauge"
+        case .openCircuit?:       diveType = "Open Circuit"
+        case .closedCircuit?:     diveType = "Rebreather"
+        case .semiClosedCircuit?: diveType = "Semi-Rebreather"
+        case nil:                 diveType = nil
         }
 
         // Decompression model

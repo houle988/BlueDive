@@ -19,7 +19,7 @@
 | `waterTemperature` | `temperature` when finite |
 | `minTemperature` / `maxTemperature` | `minTemperature` / `maxTemperature` when finite, else the profile's min / max (min also falls back to `temperature`) |
 | `airTemperature` | `measuredSurfaceTemperature` only — never `surfaceTemperature`, which falls back to the first sample's water temperature |
-| `diveTypes` | `diveMode`: Freediving, Gauge, Open Circuit, Rebreather (CCR), Semi-Rebreather; "Reef" when not reported |
+| `diveTypes` | `diveMode`: Freediving, Gauge, Open Circuit, Rebreather (CCR), Semi-Rebreather; none when not reported (no default) |
 | `decompressionAlgorithm` | `decoModel.description` ("Bühlmann GF 40/85", …) |
 | `cnsPercentage` | `cns`, else the last sample with CNS |
 | `isDecompressionDive` | `decoStop.type == 2`, or any sample with a deco-stop depth or a `.decoStop` event |

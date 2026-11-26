@@ -258,6 +258,19 @@ struct DiveImportMapperTests {
         #expect(same.gasMix == data.gasMix)
     }
 
+    // MARK: Dive type
+
+    @Test func aDiveWithoutAReportedModeGetsNoDiveType() {
+        var data = threeMixDive()
+        data.diveMode = nil
+        let dive = DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                             context: context())
+        #expect(dive.diveTypes == nil)
+        data.diveMode = .closedCircuit
+        #expect(DiveImportMapper.makeDive(from: data, diveNumber: 1, previousDiveEndTime: nil, diverName: "",
+                                          context: context()).diveTypes == "Rebreather")
+    }
+
     // MARK: CCR diluent / oxygen tank formats
 
     /// A CCR dive: a diluent and an oxygen cylinder, both on transmitters.

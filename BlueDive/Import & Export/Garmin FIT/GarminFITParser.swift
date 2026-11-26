@@ -171,9 +171,12 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
         let sortedGasIndices = gasMap.keys.sorted()
         var gasIndexToTankPos: [UInt16: Int] = [:]
         var globalTanks: [BlueDiveTankData] = []
+        // Whether each global tank's gas is marked "backup only" (carried, e.g. a CCR bailout).
+        var globalGasIsBackup: [Bool] = []
         for (pos, idx) in sortedGasIndices.enumerated() {
             gasIndexToTankPos[idx] = pos
             let gas = gasMap[idx]!
+            globalGasIsBackup.append(gas.getStatus() == .backupOnly)
             globalTanks.append(BlueDiveTankData(
                 id: nil,
                 oxygen: gas.getOxygenContent().map { Int($0) },
@@ -348,6 +351,17 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 guard nextUpdatePos < sessionTanks.count else { continue }
                 sensorToTankPos[sensor] = nextUpdatePos
                 nextUpdatePos += 1
+            }
+
+            // Keep a gas the diver marked "backup only" (e.g. a CCR bailout) but did not breathe
+            // as a gas-only tank, after the breathed ones. Added only now, so the transmitter
+            // mapping above sees the breathed tanks alone: a leftover transmitter (such as a
+            // CCR's O₂ supply) never lands on it. No gas switch refers to it, so it gets no
+            // pressures, usage window or profile samples. "Enabled" gases that were not breathed
+            // are not kept: open-circuit files list configured gases the diver did not carry.
+            for position in globalTanks.indices
+            where globalGasIsBackup[position] && !referencedPositions.contains(position) {
+                sessionTanks.append(globalTanks[position])
             }
             // Build FIT-timestamp keyed lookup: rawTimestamp → [tankPos: bar].
             var updatesByTimestamp: [UInt32: [Int: Double]] = [:]
@@ -622,7 +636,7 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 notes: nil,
                 tags: nil,
                 site: siteData,
-                types: [],
+                types: Self.diveTypes(forSubSport: session.getSubSport()),
                 buddies: [],
                 gases: [],
                 tanks: sessionTanks,
@@ -633,6 +647,21 @@ final class GarminFITParser: MesgListener, @unchecked Sendable {
                 rawDiveComputerData: nil,
                 fingerprintData: nil
             ))
+        }
+    }
+
+    // MARK: - Dive Type
+
+    /// The dive type for a session's diving sub-sport, in the words the Bluetooth import uses
+    /// (`DiveImportMapper`). FIT has no semi-closed sub-sport; a session without a diving
+    /// sub-sport gets no type rather than a default.
+    static func diveTypes(forSubSport subSport: SubSport?) -> [String] {
+        switch subSport {
+        case .ccrDiving?:                         return ["Rebreather"]
+        case .singleGasDiving?, .multiGasDiving?: return ["Open Circuit"]
+        case .gaugeDiving?:                       return ["Gauge"]
+        case .apneaDiving?, .apneaHunting?:       return ["Freediving"]
+        default:                                  return []
         }
     }
 

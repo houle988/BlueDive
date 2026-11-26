@@ -89,6 +89,17 @@ struct GarminFITParserTests {
     /// - `summaryReferences`: one DiveSummary per entry, in order, all with reference index 0:
     ///   `.session` (dive 42), `.lap` (no dive number, as Descent watches write it beside the
     ///   session's) or `nil` (no reference message, dive 7); see `SummaryValues`.
+    /// A DiveGasMesg: FIT gas slot, O₂ %, status and mode.
+    struct Gas {
+        let index: UInt16, oxygen: UInt8, status: DiveGasStatus, mode: DiveGasMode
+        init(_ index: UInt16, _ oxygen: UInt8, _ status: DiveGasStatus = .enabled, _ mode: DiveGasMode = .openCircuit) {
+            (self.index, self.oxygen, self.status, self.mode) = (index, oxygen, status, mode)
+        }
+    }
+
+    /// Air then EAN50, both enabled open-circuit gases.
+    private static let defaultGases = [Gas(0, 21), Gas(1, 50)]
+
     private static func makeDiveFile(
         manufacturer: Manufacturer = .garmin,
         product: GarminProduct = .descentX10,
@@ -96,6 +107,10 @@ struct GarminFITParserTests {
         fileIdSerial: UInt32? = serial,
         devices: [Device]? = nil,
         sport: Sport = .diving,
+        subSport: SubSport? = nil,
+        gases: [Gas] = defaultGases,
+        gasSwitches: [(offset: UInt32, gasIndex: UInt32)] = [(0, 0), (switchAt, 1)],
+        transmitters: [(sensor: UInt32, start: Float64, end: Float64)] = [(1111, 200, 120)],
         summaryReferences: [MesgNum?] = [.session]
     ) throws -> Data {
         let start = DateTime(timestamp: startFIT)
@@ -111,17 +126,17 @@ struct GarminFITParserTests {
         try settings.setWaterType(.salt)
         mesgs.append(settings)
 
-        for (index, oxygen) in [(UInt16(0), UInt8(21)), (UInt16(1), UInt8(50))] {
-            let gas = DiveGasMesg()
-            try gas.setMessageIndex(index)
-            try gas.setOxygenContent(oxygen)
-            try gas.setHeliumContent(0)
-            try gas.setStatus(.enabled)
-            try gas.setMode(.openCircuit)
-            mesgs.append(gas)
+        for gas in gases {
+            let mesg = DiveGasMesg()
+            try mesg.setMessageIndex(gas.index)
+            try mesg.setOxygenContent(gas.oxygen)
+            try mesg.setHeliumContent(0)
+            try mesg.setStatus(gas.status)
+            try mesg.setMode(gas.mode)
+            mesgs.append(mesg)
         }
 
-        for (offset, gasIndex) in [(UInt32(0), UInt32(0)), (switchAt, UInt32(1))] {
+        for (offset, gasIndex) in gasSwitches {
             let event = EventMesg()
             try event.setTimestamp(DateTime(timestamp: startFIT + offset))
             try event.setEvent(.diveGasSwitched)
@@ -139,12 +154,14 @@ struct GarminFITParserTests {
             mesgs.append(record)
         }
 
-        let tank = TankSummaryMesg()
-        try tank.setTimestamp(DateTime(timestamp: startFIT + UInt32(elapsed) + 2))
-        try tank.setSensor(1111)
-        try tank.setStartPressure(200)
-        try tank.setEndPressure(120)
-        mesgs.append(tank)
+        for transmitter in transmitters {
+            let tank = TankSummaryMesg()
+            try tank.setTimestamp(DateTime(timestamp: startFIT + UInt32(elapsed) + 2))
+            try tank.setSensor(transmitter.sensor)
+            try tank.setStartPressure(transmitter.start)
+            try tank.setEndPressure(transmitter.end)
+            mesgs.append(tank)
+        }
 
         let session = SessionMesg()
         try session.setMessageIndex(0)
@@ -152,6 +169,7 @@ struct GarminFITParserTests {
         try session.setStartTime(start)
         try session.setTotalElapsedTime(elapsed)
         try session.setSport(sport)
+        if let subSport { try session.setSubSport(subSport) }
         try session.setMaxDepth(20)
         try session.setMinTemperature(18)
         try session.setMaxTemperature(24)
@@ -334,6 +352,73 @@ struct GarminFITParserTests {
         #expect(dive.tanks[0].usageEndTime == Double(Self.switchAt))
         #expect(dive.tanks[1].usageStartTime == Double(Self.switchAt))
         #expect(dive.tanks[1].usageEndTime == Self.elapsed)
+    }
+
+    // MARK: Backup gases
+
+    @Test func anUnbreathedBackupGasIsKeptAsAGasOnlyTank() throws {
+        let dive = try Self.parseOne(Self.makeDiveFile(gases: Self.defaultGases + [Gas(2, 29, .backupOnly)]))
+
+        try #require(dive.tanks.count == 3)
+        // The breathed tanks are unchanged.
+        #expect(dive.tanks[0].oxygen == 21 && dive.tanks[0].startPressure == 200 && dive.tanks[0].endPressure == 120)
+        #expect(dive.tanks[1].oxygen == 50 && dive.tanks[1].usageStartTime == Double(Self.switchAt))
+        // The backup gas: no pressures, no usage window, no format.
+        #expect(dive.tanks[2].oxygen == 29)
+        #expect(dive.tanks[2].startPressure == nil && dive.tanks[2].endPressure == nil)
+        #expect(dive.tanks[2].usageStartTime == nil && dive.tanks[2].usageEndTime == nil)
+        #expect(dive.tanks[2].tankType == nil)
+    }
+
+    @Test(arguments: [DiveGasStatus.enabled, .disabled])
+    func anUnbreathedGasThatIsNotBackupIsNotKept(status: DiveGasStatus) throws {
+        let dive = try Self.parseOne(Self.makeDiveFile(gases: Self.defaultGases + [Gas(2, 29, status)]))
+        #expect(dive.tanks.map(\.oxygen) == [21, 50])
+    }
+
+    /// A CCR dive: the diluent breathed all dive (no gas switch), an open-circuit bailout
+    /// carried, a second transmitter (the O₂ supply) that reported nothing.
+    @Test func aCCRBailoutIsKeptAndTheSpareTransmitterStaysOffIt() throws {
+        let dive = try Self.parseOne(Self.makeDiveFile(
+            subSport: .ccrDiving,
+            gases: [Gas(0, 21, .enabled, .closedCircuitDiluent), Gas(1, 29, .backupOnly)],
+            gasSwitches: [],
+            transmitters: [(1111, 196, 195.5), (2222, 0, 0)]))
+
+        try #require(dive.tanks.count == 2)
+        #expect(dive.tanks[0].oxygen == 21 && dive.tanks[0].tankType == "Diluent")
+        #expect(dive.tanks[0].startPressure == 196 && dive.tanks[0].endPressure == 195.5)
+        #expect(dive.tanks[0].usageStartTime == 0)
+        #expect(dive.tanks[1].oxygen == 29 && dive.tanks[1].tankType == nil)
+        #expect(dive.tanks[1].startPressure == nil && dive.tanks[1].usageStartTime == nil)
+        #expect(dive.samples.allSatisfy { $0.currentGas == nil || $0.currentGas == 0 })
+    }
+
+    /// A transmitter with readings but no breathed gas left for it is not put on the bailout.
+    @Test func aSecondTransmitterWithReadingsNeverLandsOnTheBailout() throws {
+        let dive = try Self.parseOne(Self.makeDiveFile(
+            gases: [Gas(0, 21, .enabled, .closedCircuitDiluent), Gas(1, 29, .backupOnly)],
+            gasSwitches: [],
+            transmitters: [(1111, 196, 195.5), (2222, 200, 170)]))
+
+        try #require(dive.tanks.count == 2)
+        #expect(dive.tanks[1].startPressure == nil && dive.tanks[1].endPressure == nil)
+    }
+
+    // MARK: Dive type
+
+    @Test(arguments: [
+        (SubSport?.some(.ccrDiving), ["Rebreather"]),
+        (.singleGasDiving, ["Open Circuit"]),
+        (.multiGasDiving, ["Open Circuit"]),
+        (.gaugeDiving, ["Gauge"]),
+        (.apneaDiving, ["Freediving"]),
+        (.apneaHunting, ["Freediving"]),
+        (nil, []),
+    ])
+    func theDiveTypeFollowsTheSubSport(subSport: SubSport?, types: [String]) throws {
+        let dive = try Self.parseOne(Self.makeDiveFile(subSport: subSport))
+        #expect(dive.types == types)
     }
 
     @Test func buildsTheProfileSamples() throws {
