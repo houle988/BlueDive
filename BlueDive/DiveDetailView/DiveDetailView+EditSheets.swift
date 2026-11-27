@@ -2588,7 +2588,7 @@ struct EditGazView: View {
     }
 
     private let materialOptions = ["Steel", "Galvanized Steel", "Aluminium", "Carbon"]
-    private let typeOptions     = ["Single tank", "Twinset", "Sidemount", "Pony", "Stage", "Drysuit", "Rebreather", "Diluent", "O2", "Other"]
+    private let typeOptions     = ["Single tank", "Twinset", "Sidemount", "Pony", "Stage", "Bailout", "Drysuit", "Rebreather", "Diluent", "O2", "Other"]
 
     init(dive: Dive, tankIndex: Int = 0) {
         self.dive = dive
@@ -2673,8 +2673,8 @@ struct EditGazView: View {
                 return NSLocalizedString("Heliox", bundle: .forAppLanguage(), comment: "Gas type label: oxygen and helium only, no nitrogen")
             }
             return NSLocalizedString("Trimix", bundle: .forAppLanguage(), comment: "Gas type label: helium present")
-        } else if workingO2 >= 100 {
-            return NSLocalizedString("Oxygen", bundle: .forAppLanguage(), value: "Oxygen", comment: "Gas type: pure oxygen (100% O2), e.g. a CCR oxygen supply or an O2 deco gas")
+        } else if workingO2 >= 98 {
+            return NSLocalizedString("Oxygen", bundle: .forAppLanguage(), value: "Oxygen", comment: "Gas type: oxygen (98% O2 or more), e.g. a CCR oxygen supply or an O2 deco gas")
         } else if workingO2 == 21 {
             return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Gas type label: 21% oxygen")
         } else if workingO2 > 21 {

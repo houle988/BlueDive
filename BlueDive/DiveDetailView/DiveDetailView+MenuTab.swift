@@ -1218,15 +1218,22 @@ extension DiveDetailView {
 
     /// Gas mix summary for all tanks, e.g. "Air / Nitrox 32%"
     var allTanksGasMixSummary: String {
-        let tanks = dive.tanks
-        guard !tanks.isEmpty else { return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Air gas type label") }
+        guard !dive.tanks.isEmpty else { return NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Air gas type label") }
+        let tanks = overviewTanks
+        guard !tanks.isEmpty else { return "—" }
         let labels = tanks.map { $0.gasDisplayName() }
         return labels.joined(separator: " / ")
     }
 
+    /// The tanks the Overview's gas and pressure tiles list, in the same order so the three
+    /// tiles line up: every tank but a drysuit inflation bottle, whose gas is not breathed.
+    private var overviewTanks: [TankData] {
+        dive.tanks.filter { !$0.isDrysuit }
+    }
+
     /// Start pressure summary for all tanks, e.g. "200 bar / 180 bar"
     func allTanksStartPressureSummary(symbol: String) -> String {
-        let tanks = dive.tanks
+        let tanks = overviewTanks
         guard !tanks.isEmpty else { return "—" }
         let values = tanks.map { tank -> String in
             guard let sp = tank.startPressure else { return "—" }
@@ -1237,7 +1244,7 @@ extension DiveDetailView {
 
     /// End pressure summary for all tanks, e.g. "50 bar / 80 bar"
     func allTanksEndPressureSummary(symbol: String) -> String {
-        let tanks = dive.tanks
+        let tanks = overviewTanks
         guard !tanks.isEmpty else { return "—" }
         let values = tanks.map { tank -> String in
             guard let ep = tank.endPressure else { return "—" }

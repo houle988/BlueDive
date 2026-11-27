@@ -55,20 +55,15 @@ extension DiveDetailView {
                     .foregroundStyle(.primary)
                 Spacer()
 
-                if dive.tanks.count > 1 {
-                    Text(verbatim: "\(min(selectedTankIndex, dive.tanks.count - 1) + 1) / \(dive.tanks.count)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                // Add tank button
+                // Add tank button, before the counter so it sits away from Remove (a tap meant
+                // for one never lands on the other).
                 Button {
                     addNewTank()
                 } label: {
                     // Header HStack spacing is 8 pt, so this grows only 4 pt (half the gap)
-                    // toward the adjacent Remove button and 12 pt leading into the empty
-                    // Spacer/counter area. Vertically: 16 pt of card padding above, 12 pt
-                    // to the tank Picker below. 40 × 44 pt.
+                    // toward the adjacent counter and 12 pt leading into the empty Spacer.
+                    // Vertically: 16 pt of card padding above, 12 pt to the tank Picker
+                    // below. 40 × 44 pt.
                     TapTargetInset(top: 10, leading: 12, bottom: 10, trailing: 4) {
                         Image(systemName: "plus.circle")
                             .font(.title3)
@@ -78,13 +73,19 @@ extension DiveDetailView {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Add Tank"))
 
+                if dive.tanks.count > 1 {
+                    Text(verbatim: "\(min(selectedTankIndex, dive.tanks.count - 1) + 1) / \(dive.tanks.count)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
                 // Remove selected tank button (only if more than one tank)
                 if dive.tanks.count > 1 {
                     Button {
                         showRemoveTankConfirmation = true
                     } label: {
-                        // Mirror of the Add button: 4 pt toward it (half the 8 pt gap),
-                        // 12 pt trailing into the card's 16 pt padding. 40 × 44 pt.
+                        // 4 pt toward the counter (half the 8 pt gap), 12 pt trailing into
+                        // the card's 16 pt padding. 40 × 44 pt.
                         TapTargetInset(top: 10, leading: 4, bottom: 10, trailing: 12) {
                             Image(systemName: "minus.circle")
                                 .font(.title3)
@@ -168,10 +169,7 @@ extension DiveDetailView {
 
         let gasTypeDisplay: String = tank?.gasDisplayName() ?? NSLocalizedString("Air", bundle: .forAppLanguage(), comment: "Air gas type label")
 
-        let volumeDisplay: String = {
-            guard let vol = tank?.volume else { return "—" }
-            return dive.formattedVolume(vol, workingPressureRaw: tank?.workingPressure)
-        }()
+        let volumeDisplay: String = tank.flatMap { dive.formattedTankVolume($0) } ?? "—"
 
         let isDouble: Bool = {
             guard let tt = tank?.tankType?.lowercased() else { return false }

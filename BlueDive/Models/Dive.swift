@@ -169,6 +169,12 @@ struct TankData: Identifiable, Sendable {
     var o2Percentage: Int { Int((o2 * 100).rounded()) }
     var hePercentage: Int { Int((he * 100).rounded()) }
 
+    /// A drysuit inflation bottle: its gas (e.g. argon) is not breathed, so it is not listed as
+    /// one of the dive's gases (list row, gas filters, Overview tiles).
+    var isDrysuit: Bool {
+        tankType?.caseInsensitiveCompare("Drysuit") == .orderedSame
+    }
+
     /// True for a tank whose pressure drop does not measure the diver's breathing, so it is
     /// left out of every RMV/SAC calculation: a drysuit inflation bottle ("Drysuit"), whose gas
     /// feeds the suit, and a closed-circuit rebreather's diluent ("Diluent") and oxygen ("O2")
@@ -184,7 +190,8 @@ struct TankData: Identifiable, Sendable {
             if 100 - o2Percentage - hePercentage <= 0 { return "Heliox" }
             return "Trimix"
         }
-        if o2Percentage >= 100 { return "Oxygen" }
+        // 98–99 % is how divers often enter an oxygen fill (allowing for a little air in it).
+        if o2Percentage >= 98 { return "Oxygen" }
         if o2Percentage > 21 { return "Nitrox" }
         if o2Percentage < 21 { return "Hypoxic" }
         return "Air"
@@ -197,7 +204,11 @@ struct TankData: Identifiable, Sendable {
             }
             return String(format: NSLocalizedString("Trimix %d/%d", bundle: .forAppLanguage(), comment: "Trimix gas mix label showing oxygen/helium percentages e.g. Trimix 21/35"), o2Percentage, hePercentage)
         } else if o2Percentage >= 100 {
-            return NSLocalizedString("Oxygen", bundle: .forAppLanguage(), value: "Oxygen", comment: "Gas type: pure oxygen (100% O2), e.g. a CCR oxygen supply or an O2 deco gas")
+            return NSLocalizedString("Oxygen", bundle: .forAppLanguage(), value: "Oxygen", comment: "Gas type: oxygen (98% O2 or more), e.g. a CCR oxygen supply or an O2 deco gas")
+        } else if o2Percentage >= 98 {
+            // Oxygen as entered below 100 %: the percentage stays visible.
+            let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(.current))
+            return String(format: NSLocalizedString("Oxygen (%@)", bundle: .forAppLanguage(), value: "Oxygen (%@)", comment: "Oxygen gas label for a 98% or 99% oxygen fill, %@ is the pre-formatted oxygen percentage e.g. Oxygen (98%)"), pct)
         } else if o2Percentage > 21 {
             let pct = (Double(o2Percentage) / 100.0).formatted(.percent.locale(.current))
             return String(format: NSLocalizedString("Nitrox %@", bundle: .forAppLanguage(), comment: "Nitrox gas mix label, %@ is the pre-formatted oxygen percentage e.g. Nitrox 32%"), pct)
@@ -949,6 +960,16 @@ final class Dive {
         return formatLocalizedNumber(display, minDecimals: 0, maxDecimals: decimals) + " \(symbol)"
     }
 
+
+    /// A tank's volume in the user's display unit. A twinset's volume is stored per cylinder (as
+    /// RMV/SAC use it), so its pair's total follows in parentheses, e.g. "12.9 L (25.8 L)".
+    func formattedTankVolume(_ tank: TankData) -> String? {
+        guard let volume = tank.volume else { return nil }
+        let single = formattedVolume(volume, workingPressureRaw: tank.workingPressure)
+        let type = tank.tankType?.lowercased() ?? ""
+        guard type.contains("twin") || type.contains("double") else { return single }
+        return "\(single) (\(formattedVolume(volume * 2, workingPressureRaw: tank.workingPressure)))"
+    }
 
     /// The cylinder size as a formatted string in the user's display unit.
     var formattedCylinderSize: String? {

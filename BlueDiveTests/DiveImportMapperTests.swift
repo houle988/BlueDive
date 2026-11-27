@@ -431,10 +431,32 @@ struct DiveImportMapperTests {
     /// "CCR" is the Garmin FIT import's former value for a diluent.
     @Test func excludedFromRMVMatchesDrysuitAndCCRFormatsOnly() {
         let excluded = ["Drysuit", "Diluent", "O2", "CCR", "drysuit"].map { TankData(tankType: $0).isExcludedFromRMV }
-        let counted = [nil, "Single tank", "Twinset", "Sidemount", "Pony", "Rebreather", "Other"]
+        let counted = [nil, "Single tank", "Twinset", "Sidemount", "Pony", "Stage", "Bailout", "Rebreather", "Other"]
             .map { TankData(tankType: $0).isExcludedFromRMV }
         #expect(excluded.allSatisfy { $0 })
         #expect(counted.allSatisfy { !$0 })
+    }
+
+    /// A drysuit bottle's gas (argon here) is not one the dive was breathed on, so the list row
+    /// and the gas filters leave it out; every other format, CCR tanks included, is listed.
+    @Test func aDrysuitBottleIsNotListedAsADiveGas() {
+        let dive = Dive()
+        dive.tanks = [TankData(o2: 0.32), TankData(o2: 0, tankType: "Drysuit"), TankData(o2: 0.21, tankType: "Bailout"),
+                      TankData(o2: 1.0, tankType: "O2")]
+        #expect(DiveSummary.gasNames(of: dive) == ["Nitrox", "Air", "Oxygen"])
+        dive.tanks = [TankData(o2: 0.21, tankType: "drysuit")]
+        #expect(DiveSummary.gasNames(of: dive).isEmpty)
+    }
+
+    /// A twinset's volume is per cylinder; its display adds the pair's total in parentheses.
+    @Test func aTwinsetShowsItsTotalVolume() {
+        let dive = Dive()
+        let twin = TankData(volume: 12.9, workingPressure: 237, tankType: "Twinset")
+        #expect(dive.formattedTankVolume(twin)
+                == "\(dive.formattedVolume(12.9, workingPressureRaw: 237)) (\(dive.formattedVolume(25.8, workingPressureRaw: 237)))")
+        #expect(dive.formattedTankVolume(TankData(volume: 12.9, workingPressure: 237))
+                == dive.formattedVolume(12.9, workingPressureRaw: 237))
+        #expect(dive.formattedTankVolume(TankData(tankType: "Twinset")) == nil)
     }
 
     // MARK: Shearwater CCR gases
@@ -745,10 +767,17 @@ struct DiveImportMapperTests {
         #expect(tanks[4].id == trimixID && tanks[4].volume == 11 && tanks[4].tankType == "Stage")
     }
 
+    /// 98 % O₂ and above is named Oxygen; below 100 % the label keeps the percentage.
     @Test func pureOxygenIsNamedOxygen() {
         #expect(TankData(o2: 1.0).gasName == "Oxygen")
         #expect(TankData(o2: 0.995).gasName == "Oxygen")
-        #expect(TankData(o2: 0.98).gasName == "Nitrox")
+        #expect(TankData(o2: 0.99).gasName == "Oxygen")
+        #expect(TankData(o2: 0.98).gasName == "Oxygen")
+        #expect(TankData(o2: 0.97).gasName == "Nitrox")
         #expect(TankData(o2: 0.21).gasName == "Air")
+        #expect(TankData(o2: 0.98, he: 0.02).gasName == "Heliox")
+        let pct = (0.98).formatted(.percent.locale(.current))
+        #expect(TankData(o2: 0.98).gasDisplayName().contains(pct) && TankData(o2: 0.98).gasDisplayName().hasSuffix(")"))
+        #expect(!TankData(o2: 1.0).gasDisplayName().contains("%"))
     }
 }

@@ -51,6 +51,7 @@ struct PDFDiveLogbook {
         case "Sidemount":    return NSLocalizedString("Sidemount", bundle: loc, comment: "")
         case "Pony":         return NSLocalizedString("Pony", bundle: loc, comment: "")
         case "Stage":        return NSLocalizedString("Stage", bundle: loc, value: "Stage", comment: "")
+        case "Bailout":      return NSLocalizedString("Bailout", bundle: loc, value: "Bailout", comment: "")
         case "Drysuit":      return NSLocalizedString("Drysuit", bundle: loc, value: "Drysuit", comment: "")
         case "Rebreather":   return NSLocalizedString("Rebreather (other)", bundle: loc, value: "Rebreather (other)", comment: "")
         case "Diluent":      return NSLocalizedString("Diluent (CCR)", bundle: loc, value: "Diluent (CCR)", comment: "")
@@ -1148,7 +1149,7 @@ struct PDFDiveLogbook {
             for (index, tank) in tanks.enumerated() {
                 let tankLabel = String(format: NSLocalizedString("Tank %lld", bundle: loc, comment: ""), index + 1)
 
-                let volStr: String = tank.volume.map { dive.formattedVolume($0, workingPressureRaw: tank.workingPressure) } ?? ""
+                let volStr: String = dive.formattedTankVolume(tank) ?? ""
 
                 let pressStr: String = {
                     guard let sp = tank.startPressure else { return "" }
@@ -1184,10 +1185,7 @@ struct PDFDiveLogbook {
 
             allRows.append((NSLocalizedString("Gas", bundle: loc, comment: ""), gasString(for: tank), accentPurple))
 
-            let volStr: String = {
-                guard let vol = tank.volume else { return "—" }
-                return dive.formattedVolume(vol, workingPressureRaw: tank.workingPressure)
-            }()
+            let volStr: String = dive.formattedTankVolume(tank) ?? "—"
             allRows.append((NSLocalizedString("Volume", bundle: loc, comment: ""), volStr, accentCyan))
 
             let startStr: String = {
