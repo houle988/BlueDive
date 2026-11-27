@@ -440,7 +440,7 @@ struct BlueDiveApp: App {
 
     /// iCloud sync as `createModelContainer` opens it: on by default (new installs opt in).
     static var isICloudSyncEnabled: Bool {
-        UserDefaults.standard.register(defaults: [iCloudSyncEnabledKey: true])
+        UserDefaults.standard.register(defaults: [iCloudSyncEnabledKey: UserPreferences.Defaults.iCloudSyncEnabled])
         return UserDefaults.standard.bool(forKey: iCloudSyncEnabledKey)
     }
 

@@ -7,12 +7,12 @@ import Combine
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("notificationsEnabled") private var notificationsEnabled = false
-    @AppStorage("gearMaintenanceReminders") private var gearReminders = true
-    @AppStorage("certificationReminders") private var certReminders = true
-    @AppStorage("insuranceReminders") private var insuranceReminders = true
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = UserPreferences.Defaults.notificationsEnabled
+    @AppStorage("gearMaintenanceReminders") private var gearReminders = UserPreferences.Defaults.gearMaintenanceReminders
+    @AppStorage("certificationReminders") private var certReminders = UserPreferences.Defaults.certificationReminders
+    @AppStorage("insuranceReminders") private var insuranceReminders = UserPreferences.Defaults.insuranceReminders
     /// Written by `UserPreferences.languageMode`; observed to re-localize scheduled reminders.
-    @AppStorage("languageMode") private var languageMode = "system"
+    @AppStorage("languageMode") private var languageMode = UserPreferences.Defaults.languageMode.rawValue
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("lastAcceptedDisclaimerVersion") private var lastAcceptedDisclaimerVersion = ""
     /// Set once the one-time Online Services question has been answered (per device, like
@@ -22,7 +22,28 @@ struct MainTabView: View {
     /// Set once the one-time iNaturalist question has been answered (per device).
     @AppStorage("taxonomyPromptShown") private var taxonomyPromptShown = false
     @State private var showTaxonomyPrompt = false
+    /// Getting Started, shown in this window: after "Set Up BlueDive" at the end of the Welcome
+    /// Tour on first launch (in the same presentation), or from Settings → About. Scene storage,
+    /// with its step, because a language change from or to System rebuilds the whole window
+    /// (`LanguageOverrideModifier`): the guide then reopens on the same step instead of
+    /// disappearing.
+    @SceneStorage("showGettingStarted") private var showGettingStarted = false
+    @SceneStorage("gettingStartedStep") private var gettingStartedStep = 0
+    /// True from "Set Up BlueDive" until the guide closes. `guideBinding` reads it so the
+    /// presentation stays up while the tour hands over to Getting Started: the @AppStorage and
+    /// @SceneStorage writes of `setUpAfterWelcome` are not seen in the same update, and for that
+    /// moment neither of them alone kept the cover shown (it closed and opened again).
+    @State private var isSettingUpAfterWelcome = false
+    /// Whether the presentation that is closing showed Getting Started: `guideBinding`'s setter
+    /// clears the flags above as the close starts, and without this `guideContent` would show
+    /// the Welcome Tour while the cover slides away. Cleared once it has closed.
+    @State private var closingGuideShowedSetup = false
+    /// Set by Settings → About → Getting Started, which closes Settings: the guide opens once
+    /// the Settings sheet is gone (a presentation cannot start while another is closing).
+    @State private var openGettingStartedAfterSettings = false
     @Environment(\.introVisible) private var introVisible
+    /// The main window's scheme: the system's when the theme is System (`guideColorScheme`).
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(FileImportCoordinator.self) private var importCoordinator
 
     private var shouldShowDisclaimer: Bool {
@@ -66,6 +87,8 @@ struct MainTabView: View {
             // widget link.
             && gearToOpen == nil && certToRenew == nil && insuranceToRenew == nil
             && !importCoordinator.receivedExternalOpen
+            // Getting Started asks the same questions on its Online Services step.
+            && !showGettingStarted
     }
 
     // MARK: - Launch Questions
@@ -91,11 +114,52 @@ struct MainTabView: View {
         )
     }
 
-    private var welcomeBinding: Binding<Bool> {
+    /// The first-launch Welcome Tour and Getting Started share one presentation, so "Set Up
+    /// BlueDive" continues in place instead of one cover closing and another opening.
+    private var guideBinding: Binding<Bool> {
         Binding(
-            get: { shouldShowWelcome },
-            set: { if !$0 { hasCompletedOnboarding = true } }
+            // Never over the intro or before the disclaimer is accepted, as the tour: a guide
+            // restored from scene storage at launch waits for both.
+            get: {
+                !introVisible && isCurrentAppVersion(lastAcceptedDisclaimerVersion)
+                    && (shouldShowWelcome || showGettingStarted || isSettingUpAfterWelcome)
+            },
+            set: {
+                if !$0 {
+                    closingGuideShowedSetup = showGettingStarted || isSettingUpAfterWelcome
+                    hasCompletedOnboarding = true
+                    showGettingStarted = false
+                    isSettingUpAfterWelcome = false
+                }
+            }
         )
+    }
+
+    /// The tour on first launch, then Getting Started once the user chose to set up BlueDive
+    /// (or Getting Started alone, from Settings → About).
+    @ViewBuilder
+    private var guideContent: some View {
+        if showGettingStarted || isSettingUpAfterWelcome || closingGuideShowedSetup {
+            GettingStartedView(step: $gettingStartedStep)
+        } else {
+            WelcomeWizardView(onSetUp: setUpAfterWelcome)
+        }
+    }
+
+    /// The guide's colour scheme: the chosen theme, or for System the main window's (which
+    /// follows the system). Never nil: a presentation whose preferred scheme changes back to nil
+    /// keeps the previous one, so a Dark → System change in the guide left it dark while the
+    /// main window turned light.
+    private var guideColorScheme: ColorScheme {
+        UserPreferences.shared.appearanceMode.colorScheme ?? colorScheme
+    }
+
+    /// "Set Up BlueDive" on the tour's last page: the same presentation shows Getting Started.
+    private func setUpAfterWelcome() {
+        isSettingUpAfterWelcome = true
+        gettingStartedStep = 0
+        showGettingStarted = true
+        hasCompletedOnboarding = true
     }
 
     /// Tracks the active tab so widget deep-links can switch to the Logbook
@@ -192,6 +256,17 @@ struct MainTabView: View {
         if !shown.contains(selectedTab) { selectedTab = .dives }
         withAnimation(.easeInOut(duration: 0.5)) {
             layout = shown
+        }
+    }
+
+    /// After the Settings sheet closes: applies a new tab layout, and opens Getting Started when
+    /// it was asked for from Settings → About.
+    private func settingsDismissed() {
+        applyMainTabLayout()
+        if openGettingStartedAfterSettings {
+            openGettingStartedAfterSettings = false
+            gettingStartedStep = 0
+            showGettingStarted = true
         }
     }
 
@@ -346,8 +421,9 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: disclaimerBinding) {
             DisclaimerView()
         }
-        .fullScreenCover(isPresented: welcomeBinding) {
-            WelcomeWizardView()
+        .fullScreenCover(isPresented: guideBinding, onDismiss: { closingGuideShowedSetup = false }) {
+            guideContent
+                .preferredColorScheme(guideColorScheme)
         }
         #else
         // fullScreenCover is unavailable on macOS; present as sheets instead.
@@ -355,8 +431,9 @@ struct MainTabView: View {
             DisclaimerView()
                 .standardSheetPresentation()
         }
-        .sheet(isPresented: welcomeBinding) {
-            WelcomeWizardView()
+        .sheet(isPresented: guideBinding, onDismiss: { closingGuideShowedSetup = false }) {
+            guideContent
+                .preferredColorScheme(guideColorScheme)
                 .standardSheetPresentation()
         }
         #endif
@@ -382,8 +459,9 @@ struct MainTabView: View {
         }
         // Any dismissal (Close, swipe, Escape, the language page's own dismiss) applies a new
         // tab layout to this window.
-        .sheet(isPresented: $showSettings, onDismiss: applyMainTabLayout) {
+        .sheet(isPresented: $showSettings, onDismiss: settingsDismissed) {
             SettingsView()
+                .environment(\.showGettingStarted, ShowSheetAction { openGettingStartedAfterSettings = true })
                 .standardSheetPresentation()
         }
         .sheet(isPresented: $showSyncStatus) {

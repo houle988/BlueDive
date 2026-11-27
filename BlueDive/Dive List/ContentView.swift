@@ -97,7 +97,7 @@ struct ContentView: View {
 
     @AppStorage(DiverFilter.storageKey) private var selectedDiver: String = ""
     @AppStorage("showCalculatorsMenu") private var showCalculatorsMenu = false
-    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
+    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = UserPreferences.Defaults.autoSequenceEnabled
     @Environment(FileImportCoordinator.self) var importCoordinator
     /// The main tabs this window shows: an XML file for a hidden tab is refused (Settings →
     /// Appearance & Language → Main Tabs).

@@ -6,7 +6,6 @@ import AppKit
 #endif
 
 struct BluetoothSettingsView: View {
-    @AppStorage("filterUnusedTanks") private var filterUnusedTanks = false
     @AppStorage("bleDiagnosticLoggingEnabled") private var bleDiagnosticLoggingEnabled = false
     @Query(sort: \DeviceFingerprint.updatedAt, order: .reverse) private var fingerprintRecords: [DeviceFingerprint]
     @State private var showFingerprintDebug = false
@@ -29,31 +28,7 @@ struct BluetoothSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                VStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle(isOn: $filterUnusedTanks) {
-                            Label("Filter unused tanks", systemImage: "cylinder.split.1x2")
-                        }
-                        .fullWidthSwitch()
-                    }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-
-                    Text("Some dive computers (Aqualung, Oceanic, Sherwood, HW OSTC, Cressi, DeepSix, Deepblu, Oceans, McLean) report all configured gas slots even when only one was used. When enabled, phantom tanks are filtered out. Disable if you carry configured-but-unused tanks (e.g. pony bottle, bailout).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal)
+                BluetoothImportSettingsCards()
 
                 fingerprintCard
 
@@ -361,6 +336,41 @@ struct BluetoothSettingsView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
+    }
+}
+
+/// The import preference for dives downloaded over Bluetooth, shared by Settings → Bluetooth
+/// Import and Getting Started. Fingerprints and diagnostic logging stay on the page.
+struct BluetoothImportSettingsCards: View {
+    @AppStorage("filterUnusedTanks") private var filterUnusedTanks = UserPreferences.Defaults.filterUnusedTanks
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $filterUnusedTanks) {
+                    Label("Filter unused tanks", systemImage: "cylinder.split.1x2")
+                }
+                .fullWidthSwitch()
+                SettingDefaultCaption(isOn: UserPreferences.Defaults.filterUnusedTanks)
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            Text("Some dive computers (Aqualung, Oceanic, Sherwood, HW OSTC, Cressi, DeepSix, Deepblu, Oceans, McLean) report all configured gas slots even when only one was used. When enabled, phantom tanks are filtered out. Disable if you carry configured-but-unused tanks (e.g. pony bottle, bailout).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                 )
         )
         .padding(.horizontal)

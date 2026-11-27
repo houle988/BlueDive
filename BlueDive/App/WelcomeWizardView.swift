@@ -1,10 +1,14 @@
 import SwiftUI
 
 struct WelcomeWizardView: View {
+    /// On first launch: the last page offers "Set Up BlueDive", which continues with Getting
+    /// Started in the same presentation (`MainTabView`), beside "Start Using BlueDive". Nil when
+    /// the tour is opened again from Settings: its last page then only closes it.
+    var onSetUp: (() -> Void)? = nil
+
     @Environment(\.dismiss) private var dismiss
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var currentPage = 0
-    @State private var appeared = false
 
     private let pages: [WelcomePage] = [
         // Page 1: Getting dives in
@@ -90,127 +94,23 @@ struct WelcomeWizardView: View {
     ]
 
     var body: some View {
-        ZStack {
-            // Background
-            LinearGradient(
-                colors: [Color.platformBackground, Color.cyan.opacity(0.06), Color.platformBackground],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Page content
-                #if os(iOS)
-                TabView(selection: $currentPage) {
-                    ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                        pageView(page)
-                            .tag(index)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                #else
-                pageView(pages[currentPage])
-                    .id(currentPage)
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.3), value: currentPage)
-                #endif
-
-                // Bottom controls
-                VStack(spacing: 20) {
-                    Divider().opacity(0.3).padding(.horizontal, 24)
-                    // Page indicators
-                    HStack(spacing: 8) {
-                        ForEach(0..<pages.count, id: \.self) { index in
-                            Capsule()
-                                .fill(index == currentPage ? Color.cyan : Color.primary.opacity(0.2))
-                                .frame(width: index == currentPage ? 24 : 8, height: 8)
-                                .animation(.spring(response: 0.3), value: currentPage)
-                        }
-                    }
-                    // The dots are purely decorative; this exposes the position they convey
-                    // visually as a single spoken element instead of dropping it entirely.
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(Text(verbatim: String(format: NSLocalizedString("Page %lld of %lld", bundle: .forAppLanguage(), comment: "Announces the current page's position in the welcome wizard's page indicator"), currentPage + 1, pages.count)))
-
-                    // Buttons
-                    HStack {
-                        if currentPage > 0 {
-                            Button {
-                                #if os(iOS)
-                                currentPage -= 1
-                                #else
-                                withAnimation { currentPage -= 1 }
-                                #endif
-                            } label: {
-                                Text("Back")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 24)
-                                    .padding(.vertical, 12)
-                                    // The padding responds too, not only the text.
-                                    .contentShape(Rectangle())
-                            }
-                            .transition(.opacity)
-                            .borderlessButton()
-                        }
-
-                        Spacer()
-
-                        Button {
-                            if currentPage < pages.count - 1 {
-                                #if os(iOS)
-                                currentPage += 1
-                                #else
-                                withAnimation { currentPage += 1 }
-                                #endif
-                            } else {
-                                hasCompletedOnboarding = true
-                                dismiss()
-                            }
-                        } label: {
-                            Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 32)
-                                .padding(.vertical, 12)
-                                .background(
-                                    Capsule().fill(Color.cyan)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 24)
-
-                    // Skip
-                    if currentPage < pages.count - 1 {
-                        Button {
-                            hasCompletedOnboarding = true
-                            dismiss()
-                        } label: {
-                            Text("Skip")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .transition(.opacity)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.25), value: currentPage)
-                .padding(.top, 8)
-                .padding(.bottom, 40)
-                .padding(.horizontal, 8)
-            }
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 20)
+        // From Settings (no onSetUp) the last page only closes the tour.
+        GuidePager(
+            pageCount: pages.count,
+            current: $currentPage,
+            lastPagePrimary: onSetUp == nil ? Text("Get Started") : Text("Set Up BlueDive"),
+            onLastPagePrimary: onSetUp ?? finish,
+            lastPageSecondary: onSetUp == nil ? nil : Text("Start Using BlueDive"),
+            onLastPageSecondary: finish,
+            onSkip: finish
+        ) { index in
+            pageView(pages[index])
         }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.5)) {
-                appeared = true
-            }
-        }
+    }
+
+    private func finish() {
+        hasCompletedOnboarding = true
+        dismiss()
     }
 
     // MARK: - Page View
@@ -220,35 +120,21 @@ struct WelcomeWizardView: View {
             VStack(spacing: 24) {
                 Spacer().frame(height: 20)
 
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill(page.iconColor.opacity(0.12))
-                        .frame(width: 90, height: 90)
-
-                    Image(systemName: page.icon)
-                        .font(.system(size: 40))
-                        .foregroundStyle(page.iconColor)
-                        .accessibilityHidden(true)
-                }
-
-                // Title & subtitle
-                VStack(spacing: 6) {
-                    Text(page.title)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-
-                    Text(page.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
+                GuidePageHeader(icon: page.icon, color: page.iconColor,
+                                title: Text(page.title), subtitle: Text(page.subtitle))
 
                 // Feature rows
                 VStack(spacing: 14) {
                     ForEach(page.features) { feature in
-                        featureRow(feature)
+                        GuideFeatureRow(
+                            icon: feature.icon,
+                            color: feature.color,
+                            title: Text(feature.title),
+                            // A suffix is a separate, shared sentence (translated once), joined here.
+                            detail: feature.descriptionSuffix.map { Text(feature.description) + Text(verbatim: " ") + Text($0) }
+                                ?? Text(feature.description),
+                            link: feature.url
+                        )
                     }
                 }
                 .padding(.horizontal, 24)
@@ -258,46 +144,6 @@ struct WelcomeWizardView: View {
             }
             .padding(.horizontal)
         }
-    }
-
-    // MARK: - Feature Row
-
-    private func featureRow(_ feature: Feature) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(feature.color.opacity(0.12))
-                    .frame(width: 42, height: 42)
-
-                Image(systemName: feature.icon)
-                    .font(.body)
-                    .foregroundStyle(feature.color)
-                    .accessibilityHidden(true)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(feature.title)
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.primary)
-
-                // A suffix is a separate, shared sentence (translated once), joined here.
-                (feature.descriptionSuffix.map { Text(feature.description) + Text(verbatim: " ") + Text($0) }
-                    ?? Text(feature.description))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let link = feature.url {
-                    ExternalLinkView(url: link)
-                        .padding(.top, 2)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(12)
-        .sectionCardBackground()
     }
 }
 

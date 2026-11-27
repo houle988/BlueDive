@@ -7,12 +7,10 @@ import AppKit
 struct DiveSequenceSettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(DiveStore.self) private var store
-    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
     @State private var showingRecalculateSurfaceAlert = false
     @State private var showingRecalculateSurfaceDone = false
     @State private var showingRenumberDivesAlert = false
     @State private var showingRenumberDivesDone = false
-    @State private var prefs = UserPreferences.shared
 
     var body: some View {
         ScrollView {
@@ -68,33 +66,7 @@ struct DiveSequenceSettingsView: View {
                 )
                 .padding(.horizontal)
 
-                VStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle(isOn: $autoSequenceEnabled) {
-                            Label("Auto-update dive numbers", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                        .fullWidthSwitch()
-                    }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-
-                    Text("When on, dive numbers and surface intervals are recalculated automatically when you add, delete, move, or change the date of a dive. Turn this off to update them only with the buttons above.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal)
-
-                tripsCard
+                DiveSequenceSettingsCards()
 
                 #if os(macOS)
                 VStack(spacing: 12) {
@@ -166,6 +138,72 @@ struct DiveSequenceSettingsView: View {
         }
     }
 
+    private func recalculateSurfaceIntervals() {
+        // Saving does not re-deliver the @Query (dive membership is unchanged), so patch the
+        // store's summary caches directly or the list keeps the old intervals until relaunch.
+        let updates = Dive.recalculateSurfaceIntervals(in: modelContext)
+        store.commitSurfaceIntervals(updates)
+    }
+
+    private func renumberDives() {
+        Dive.renumberDives(in: modelContext)
+        store.commitListRebuild()
+    }
+
+    #if os(macOS)
+    private func showDatabaseInFinder() {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: appSupport.path)
+    }
+    #endif
+}
+
+/// Automatic dive numbering and how dives are grouped into trips, shared by Settings → Dive
+/// Sequence and Getting Started. The one-off Recalculate and Renumber actions stay on the page.
+struct DiveSequenceSettingsCards: View {
+    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = UserPreferences.Defaults.autoSequenceEnabled
+    @State private var prefs = UserPreferences.shared
+    @Environment(\.isInGettingStarted) private var isInGettingStarted
+
+    var body: some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(isOn: $autoSequenceEnabled) {
+                        Label("Auto-update dive numbers", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .fullWidthSwitch()
+                    SettingDefaultCaption(isOn: UserPreferences.Defaults.autoSequenceEnabled)
+                }
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+                Group {
+                    if isInGettingStarted {
+                        Text("When on, dive numbers and surface intervals are recalculated automatically when you add, delete, move, or change the date of a dive. Turn this off to update them only from Settings → Dive Sequence.")
+                    } else {
+                        Text("When on, dive numbers and surface intervals are recalculated automatically when you add, delete, move, or change the date of a dive. Turn this off to update them only with the buttons above.")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.primary.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal)
+
+            tripsCard
+        }
+    }
+
     /// How dives are grouped into trips (My Trips and the PDF logbook's Trip field).
     private var tripsCard: some View {
         VStack(spacing: 12) {
@@ -187,6 +225,10 @@ struct DiveSequenceSettingsView: View {
                         .monospacedDigit()
                     }
                 }
+                SettingDefaultCaption(verbatim: String(
+                    format: NSLocalizedString("%lld days", bundle: Bundle.forAppLanguage(), value: "%lld days", comment: "Trip gap setting value (number of days)"),
+                    UserPreferences.defaultTripGapDays
+                ))
             }
             .padding()
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -196,6 +238,7 @@ struct DiveSequenceSettingsView: View {
                     Label("New trip when the country changes", systemImage: "globe")
                 }
                 .fullWidthSwitch()
+                SettingDefaultCaption(isOn: UserPreferences.Defaults.splitTripsOnCountryChange)
             }
             .padding()
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
@@ -216,23 +259,4 @@ struct DiveSequenceSettingsView: View {
         )
         .padding(.horizontal)
     }
-
-    private func recalculateSurfaceIntervals() {
-        // Saving does not re-deliver the @Query (dive membership is unchanged), so patch the
-        // store's summary caches directly or the list keeps the old intervals until relaunch.
-        let updates = Dive.recalculateSurfaceIntervals(in: modelContext)
-        store.commitSurfaceIntervals(updates)
-    }
-
-    private func renumberDives() {
-        Dive.renumberDives(in: modelContext)
-        store.commitListRebuild()
-    }
-
-    #if os(macOS)
-    private func showDatabaseInFinder() {
-        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
-        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: appSupport.path)
-    }
-    #endif
 }

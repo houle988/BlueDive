@@ -77,7 +77,7 @@ struct BluetoothScannerView: View {
     }
     @State var connectedDeviceName: String?
     @State var downloadAllDives: Bool = false
-    @AppStorage("filterUnusedTanks") var filterUnusedTanks: Bool = false
+    @AppStorage("filterUnusedTanks") var filterUnusedTanks: Bool = UserPreferences.Defaults.filterUnusedTanks
     @AppStorage("syncDeviceClock") var syncDeviceClock: Bool = true
     /// The app-wide diver filter. Read only as a fallback hint when seeding the import cutoff
     /// for a device whose owning diver cannot be resolved; nothing here writes to it.

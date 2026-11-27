@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 struct ICloudSettingsView: View {
     @Environment(CloudKitSyncMonitor.self) private var syncMonitor
-    @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
+    @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = UserPreferences.Defaults.iCloudSyncEnabled
     @State private var showSyncLogExporter = false
     @State private var syncLogDocument: ExportableFileDocument?
     @State private var syncLogFileName: String = ""
@@ -13,53 +13,7 @@ struct ICloudSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                VStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 12) {
-                            Image(systemName: syncMonitor.ckAccountStatusIcon)
-                                .foregroundStyle(syncMonitor.ckAccountStatusColor)
-                                .frame(width: 20)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("iCloud account")
-                                    .font(.subheadline)
-                                Text(verbatim: syncMonitor.ckAccountStatusLabel)
-                                    .font(.caption)
-                                    .foregroundStyle(syncMonitor.ckAccountStatusColor)
-                            }
-                            Spacer()
-                            if !syncMonitor.ckAccountStatusFetched {
-                                ProgressView().scaleEffect(0.8)
-                            }
-                        }
-                    }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle(isOn: $iCloudSyncEnabled) {
-                            Label("iCloud sync", systemImage: "arrow.triangle.2.circlepath.icloud")
-                        }
-                        .fullWidthSwitch()
-                    }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-
-                    Text("Sync dive data across your devices. Changes take effect after restarting the app.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.primary.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal)
+                ICloudSettingsCards()
 
                 if iCloudSyncEnabled {
                     VStack(spacing: 12) {
@@ -111,30 +65,7 @@ struct ICloudSettingsView: View {
                     .padding(.horizontal)
                 }
 
-                if syncMonitor.ckAccountStatusFetched && syncMonitor.ckAccountStatus != .available && iCloudSyncEnabled {
-                    VStack(spacing: 12) {
-                        Label {
-                            Text("iCloud sync is enabled but no iCloud account is available. Data will be stored locally until you sign in.")
-                                .foregroundStyle(.orange)
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundStyle(.orange)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-                    }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color.primary.opacity(0.03))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                            )
-                    )
-                    .padding(.horizontal)
-                }
+                ICloudAccountWarningCard()
             }
             .padding(.vertical)
         }
@@ -147,6 +78,97 @@ struct ICloudSettingsView: View {
             defaultFilename: syncLogFileName
         ) { _ in
             syncLogDocument = nil
+        }
+    }
+}
+
+/// The iCloud account status and the sync switch, shared by Settings → iCloud and Getting Started.
+struct ICloudSettingsCards: View {
+    @Environment(CloudKitSyncMonitor.self) private var syncMonitor
+    @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = UserPreferences.Defaults.iCloudSyncEnabled
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    Image(systemName: syncMonitor.ckAccountStatusIcon)
+                        .foregroundStyle(syncMonitor.ckAccountStatusColor)
+                        .frame(width: 20)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iCloud account")
+                            .font(.subheadline)
+                        Text(verbatim: syncMonitor.ckAccountStatusLabel)
+                            .font(.caption)
+                            .foregroundStyle(syncMonitor.ckAccountStatusColor)
+                    }
+                    Spacer()
+                    if !syncMonitor.ckAccountStatusFetched {
+                        ProgressView().scaleEffect(0.8)
+                    }
+                }
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $iCloudSyncEnabled) {
+                    Label("iCloud sync", systemImage: "arrow.triangle.2.circlepath.icloud")
+                }
+                .fullWidthSwitch()
+                SettingDefaultCaption(isOn: UserPreferences.Defaults.iCloudSyncEnabled)
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+
+            Text("Sync dive data across your devices. Changes take effect after restarting the app.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
+    }
+}
+
+/// The warning shown while iCloud sync is on without an iCloud account, shared by
+/// Settings → iCloud and Getting Started.
+struct ICloudAccountWarningCard: View {
+    @Environment(CloudKitSyncMonitor.self) private var syncMonitor
+    @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = UserPreferences.Defaults.iCloudSyncEnabled
+
+    var body: some View {
+        if syncMonitor.ckAccountStatusFetched && syncMonitor.ckAccountStatus != .available && iCloudSyncEnabled {
+            VStack(spacing: 12) {
+                Label {
+                    Text("iCloud sync is enabled but no iCloud account is available. Data will be stored locally until you sign in.")
+                        .foregroundStyle(.orange)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.primary.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal)
         }
     }
 }

@@ -9,7 +9,7 @@ struct MoveDiverSheet: View {
     @Environment(\.locale) private var locale
 
     @State private var targetName: String
-    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
+    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = UserPreferences.Defaults.autoSequenceEnabled
     let originalTrimmedName: String
 
     init(dive: Dive) {

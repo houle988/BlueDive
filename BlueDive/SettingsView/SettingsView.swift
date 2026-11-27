@@ -635,39 +635,75 @@ class UserPreferences {
         WideWindowLayout.isSupportedOnDevice
     }
 
+    /// The default value of each preference shown in Settings: read by `init` (an absent key),
+    /// `resetToDefaults()`, the `@AppStorage` preferences and the "Default:" captions of
+    /// Getting Started, so a caption can never show a value other than the real default.
+    /// The trip gap and the profile preview keep their own (`defaultTripGapDays`,
+    /// `defaultShowsDiveListProfilePreview`).
+    enum Defaults {
+        static let depthUnit: DepthUnit = .meters
+        static let pressureUnit: PressureUnit = .bar
+        static let temperatureUnit: TemperatureUnit = .celsius
+        static let volumeUnit: VolumeUnit = .liters
+        static let weightUnit: WeightUnit = .kilograms
+        static let appearanceMode: AppearanceMode = .system
+        static let languageMode: AppLanguage = .system
+        static let hideClearedDecoStops = false
+        static let showPhotosOnProfile = true
+        static let searchDiveNotes = false
+        static let formatNotesAsMarkdown = false
+        static let wideSpeciesImages = true
+        static let splitTripsOnCountryChange = false
+        static let copySiteGPSMode: SwitchStartMode = .lastUsed
+        static let replaceWeatherMode: SwitchStartMode = .lastUsed
+        static let fetchWeatherOnline = false
+        static let fetchTaxonomyOnline = false
+        /// Empty: the app language.
+        static let taxonomyNameLanguage = ""
+        static let useINaturalistCommonNames = true
+        static let useAlternativeINaturalistPhoto = true
+        // Preferences kept in @AppStorage by their views.
+        static let notificationsEnabled = false
+        static let gearMaintenanceReminders = true
+        static let certificationReminders = true
+        static let insuranceReminders = true
+        static let milestoneNotifications = false
+        static let autoSequenceEnabled = false
+        static let filterUnusedTanks = false
+        static let iCloudSyncEnabled = true
+    }
+
     init() {
-        self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "meters") ?? .meters
-        self.pressureUnit     = PressureUnit(rawValue: UserDefaults.standard.string(forKey: "pressureUnit") ?? "bar") ?? .bar
-        self.temperatureUnit  = TemperatureUnit(rawValue: UserDefaults.standard.string(forKey: "temperatureUnit") ?? "celsius") ?? .celsius
-        self.volumeUnit       = VolumeUnit(rawValue: UserDefaults.standard.string(forKey: "volumeUnit") ?? "liters") ?? .liters
-        self.weightUnit       = WeightUnit(rawValue: UserDefaults.standard.string(forKey: "weightUnit") ?? "kilograms") ?? .kilograms
-        self.appearanceMode   = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "system") ?? .system
-        self.languageMode     = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "languageMode") ?? "system") ?? .system
-        // bool(forKey:) returns false when the key is absent, which is exactly the required
-        // OFF default — no registerDefaults entry needed.
-        self.hideClearedDecoStops = UserDefaults.standard.bool(forKey: "hideClearedDecoStops")
+        self.depthUnit        = DepthUnit(rawValue: UserDefaults.standard.string(forKey: "depthUnit") ?? "") ?? Defaults.depthUnit
+        self.pressureUnit     = PressureUnit(rawValue: UserDefaults.standard.string(forKey: "pressureUnit") ?? "") ?? Defaults.pressureUnit
+        self.temperatureUnit  = TemperatureUnit(rawValue: UserDefaults.standard.string(forKey: "temperatureUnit") ?? "") ?? Defaults.temperatureUnit
+        self.volumeUnit       = VolumeUnit(rawValue: UserDefaults.standard.string(forKey: "volumeUnit") ?? "") ?? Defaults.volumeUnit
+        self.weightUnit       = WeightUnit(rawValue: UserDefaults.standard.string(forKey: "weightUnit") ?? "") ?? Defaults.weightUnit
+        self.appearanceMode   = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? Defaults.appearanceMode
+        self.languageMode     = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "languageMode") ?? "") ?? Defaults.languageMode
+        // An absent key reads as the preference's default.
+        self.hideClearedDecoStops = UserDefaults.standard.object(forKey: "hideClearedDecoStops") as? Bool ?? Defaults.hideClearedDecoStops
         self.showSamplesTab = UserDefaults.standard.bool(forKey: "showSamplesTab")
         self.diveTabOrder = UserDefaults.standard.stringArray(forKey: "diveTabOrder") ?? []
         self.hiddenDiveTabs = UserDefaults.standard.stringArray(forKey: "hiddenDiveTabs") ?? []
         self.mainTabOrder = UserDefaults.standard.stringArray(forKey: Self.mainTabOrderKey) ?? []
         self.hiddenMainTabs = UserDefaults.standard.stringArray(forKey: Self.hiddenMainTabsKey) ?? []
-        self.searchDiveNotes = UserDefaults.standard.bool(forKey: "searchDiveNotes")
+        self.searchDiveNotes = UserDefaults.standard.object(forKey: "searchDiveNotes") as? Bool ?? Defaults.searchDiveNotes
         let storedTripGap = UserDefaults.standard.object(forKey: "tripGapDays") as? Int ?? Self.defaultTripGapDays
         self.tripGapDays = min(max(storedTripGap, Self.tripGapDaysRange.lowerBound), Self.tripGapDaysRange.upperBound)
-        self.splitTripsOnCountryChange = UserDefaults.standard.bool(forKey: "splitTripsOnCountryChange")
-        self.formatNotesAsMarkdown = UserDefaults.standard.bool(forKey: "formatNotesAsMarkdown")
-        self.copySiteGPSMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "copySiteGPSMode") ?? "lastUsed") ?? .lastUsed
+        self.splitTripsOnCountryChange = UserDefaults.standard.object(forKey: "splitTripsOnCountryChange") as? Bool ?? Defaults.splitTripsOnCountryChange
+        self.formatNotesAsMarkdown = UserDefaults.standard.object(forKey: "formatNotesAsMarkdown") as? Bool ?? Defaults.formatNotesAsMarkdown
+        self.copySiteGPSMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "copySiteGPSMode") ?? "") ?? Defaults.copySiteGPSMode
         self.copySiteGPSLastChoice = UserDefaults.standard.object(forKey: "copySiteGPSLastChoice") as? Bool
-        self.replaceWeatherMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "replaceWeatherMode") ?? "lastUsed") ?? .lastUsed
+        self.replaceWeatherMode = SwitchStartMode(rawValue: UserDefaults.standard.string(forKey: "replaceWeatherMode") ?? "") ?? Defaults.replaceWeatherMode
         self.replaceWeatherLastChoice = UserDefaults.standard.object(forKey: "replaceWeatherLastChoice") as? Bool
-        // On by default: an absent key reads as true.
-        self.wideSpeciesImages = UserDefaults.standard.object(forKey: "wideSpeciesImages") as? Bool ?? true
-        self.showPhotosOnProfile = UserDefaults.standard.object(forKey: "showPhotosOnProfile") as? Bool ?? true
-        self.fetchWeatherOnline = UserDefaults.standard.bool(forKey: "fetchWeatherOnline")
-        self.fetchTaxonomyOnline = UserDefaults.standard.bool(forKey: "fetchTaxonomyOnline")
-        self.taxonomyNameLanguage = UserDefaults.standard.string(forKey: "taxonomyNameLanguage") ?? ""
-        self.useINaturalistCommonNames = UserDefaults.standard.object(forKey: "useINaturalistCommonNames") as? Bool ?? true
-        self.useAlternativeINaturalistPhoto = UserDefaults.standard.object(forKey: "useAlternativeINaturalistPhoto") as? Bool ?? true
+        self.wideSpeciesImages = UserDefaults.standard.object(forKey: "wideSpeciesImages") as? Bool ?? Defaults.wideSpeciesImages
+        self.showPhotosOnProfile = UserDefaults.standard.object(forKey: "showPhotosOnProfile") as? Bool ?? Defaults.showPhotosOnProfile
+        self.fetchWeatherOnline = UserDefaults.standard.object(forKey: "fetchWeatherOnline") as? Bool ?? Defaults.fetchWeatherOnline
+        self.fetchTaxonomyOnline = UserDefaults.standard.object(forKey: "fetchTaxonomyOnline") as? Bool ?? Defaults.fetchTaxonomyOnline
+        self.taxonomyNameLanguage = UserDefaults.standard.string(forKey: "taxonomyNameLanguage") ?? Defaults.taxonomyNameLanguage
+        self.useINaturalistCommonNames = UserDefaults.standard.object(forKey: "useINaturalistCommonNames") as? Bool ?? Defaults.useINaturalistCommonNames
+        self.useAlternativeINaturalistPhoto = UserDefaults.standard.object(forKey: "useAlternativeINaturalistPhoto") as? Bool ?? Defaults.useAlternativeINaturalistPhoto
         // An absent key reads as the platform default (on for macOS and iPad).
         self.showDiveListProfilePreview = UserDefaults.standard.object(forKey: "showDiveListProfilePreview") as? Bool
             ?? Self.defaultShowsDiveListProfilePreview
@@ -679,40 +715,40 @@ class UserPreferences {
     }
 
     func resetToDefaults() {
-        depthUnit       = .meters
-        pressureUnit    = .bar
-        temperatureUnit = .celsius
-        volumeUnit      = .liters
-        weightUnit      = .kilograms
-        appearanceMode  = .system
-        languageMode    = .system
-        hideClearedDecoStops = false
+        depthUnit       = Defaults.depthUnit
+        pressureUnit    = Defaults.pressureUnit
+        temperatureUnit = Defaults.temperatureUnit
+        volumeUnit      = Defaults.volumeUnit
+        weightUnit      = Defaults.weightUnit
+        appearanceMode  = Defaults.appearanceMode
+        languageMode    = Defaults.languageMode
+        hideClearedDecoStops = Defaults.hideClearedDecoStops
         showSamplesTab = false
         diveTabOrder = []
         hiddenDiveTabs = []
         mainTabOrder = []
         hiddenMainTabs = []
-        searchDiveNotes = false
+        searchDiveNotes = Defaults.searchDiveNotes
         tripGapDays = Self.defaultTripGapDays
-        splitTripsOnCountryChange = false
-        formatNotesAsMarkdown = false
-        wideSpeciesImages = true
-        showPhotosOnProfile = true
-        copySiteGPSMode = .lastUsed
+        splitTripsOnCountryChange = Defaults.splitTripsOnCountryChange
+        formatNotesAsMarkdown = Defaults.formatNotesAsMarkdown
+        wideSpeciesImages = Defaults.wideSpeciesImages
+        showPhotosOnProfile = Defaults.showPhotosOnProfile
+        copySiteGPSMode = Defaults.copySiteGPSMode
         copySiteGPSLastChoice = nil
-        replaceWeatherMode = .lastUsed
+        replaceWeatherMode = Defaults.replaceWeatherMode
         replaceWeatherLastChoice = nil
-        fetchWeatherOnline = false
-        fetchTaxonomyOnline = false
-        taxonomyNameLanguage = ""
-        useINaturalistCommonNames = true
-        useAlternativeINaturalistPhoto = true
+        fetchWeatherOnline = Defaults.fetchWeatherOnline
+        fetchTaxonomyOnline = Defaults.fetchTaxonomyOnline
+        taxonomyNameLanguage = Defaults.taxonomyNameLanguage
+        useINaturalistCommonNames = Defaults.useINaturalistCommonNames
+        useAlternativeINaturalistPhoto = Defaults.useAlternativeINaturalistPhoto
         showDiveListProfilePreview = Self.defaultShowsDiveListProfilePreview
         SharedChartLineVisibility.shared.value = ChartLineVisibility()
         ChartLineVisibility().save()
         UserDefaults.standard.removeObject(forKey: DiverFilter.storageKey)
-        UserDefaults.standard.set(false, forKey: "filterUnusedTanks")
-        UserDefaults.standard.set(false, forKey: "autoSequenceEnabled")
+        UserDefaults.standard.set(Defaults.filterUnusedTanks, forKey: "filterUnusedTanks")
+        UserDefaults.standard.set(Defaults.autoSequenceEnabled, forKey: "autoSequenceEnabled")
         DiveSortOrder.resetPersisted()
     }
 }
@@ -726,6 +762,7 @@ struct SettingsView: View {
     @State private var showingAboutSheet = false
     @State private var showWelcomeWizard = false
     @State private var showDisclaimer = false
+    @Environment(\.showGettingStarted) private var showGettingStarted
 
     var body: some View {
         NavigationStack {
@@ -827,6 +864,19 @@ struct SettingsView: View {
                     }
                     .foregroundStyle(.primary)
                     .listRowButton()
+
+                    if let showGettingStarted {
+                        // The window presents the guide, not Settings: a language change from or
+                        // to System there rebuilds the window, which would close Settings with it.
+                        Button {
+                            showGettingStarted()
+                            dismiss()
+                        } label: {
+                            SettingsListRow(title: "Getting Started", icon: "slider.horizontal.3", color: .cyan)
+                        }
+                        .foregroundStyle(.primary)
+                        .listRowButton()
+                    }
 
                     Button {
                         dismiss()
@@ -968,6 +1018,40 @@ struct SettingsLinkCard<Destination: View>: View {
                 )
         )
         .padding(.horizontal)
+    }
+}
+
+// MARK: - Default Captions
+
+extension EnvironmentValues {
+    /// True in Getting Started: the settings cards it shares with the Settings pages add a
+    /// "Default: …" caption under each control, and footers that refer to the Settings page
+    /// itself use the guide's wording. False in Settings.
+    @Entry var isInGettingStarted = false
+    /// Opens Getting Started in the window once Settings has closed; set by `MainTabView` on
+    /// the Settings sheet. Nil elsewhere, which hides the Settings → About row.
+    @Entry var showGettingStarted: ShowSheetAction? = nil
+}
+
+/// The "Default: …" caption under a control of a shared settings card, shown only where
+/// `isInGettingStarted` is set. The value comes from
+/// `UserPreferences.Defaults` (or the preference's own default constant).
+struct SettingDefaultCaption: View {
+    @Environment(\.isInGettingStarted) private var showsDefaults
+    private let value: Text
+
+    init(_ value: LocalizedStringKey) { self.value = Text(value) }
+    init(verbatim value: String) { self.value = Text(verbatim: value) }
+    /// For a switch: "On" or "Off".
+    init(isOn: Bool) { self.value = isOn ? Text("On") : Text("Off") }
+
+    var body: some View {
+        if showsDefaults {
+            Text("Default: \(value)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 

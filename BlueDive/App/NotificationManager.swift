@@ -685,8 +685,8 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
 extension Gear {
     /// Schedules a maintenance notification ONLY if notifications are enabled and a service date is set.
     func scheduleMaintenanceReminder() {
-        guard UserDefaults.standard.bool(forKey: "notificationsEnabled"),
-              UserDefaults.standard.object(forKey: "gearMaintenanceReminders") as? Bool ?? true,
+        guard UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? UserPreferences.Defaults.notificationsEnabled,
+              UserDefaults.standard.object(forKey: "gearMaintenanceReminders") as? Bool ?? UserPreferences.Defaults.gearMaintenanceReminders,
               nextServiceDue != nil else { return }
         NotificationManager.shared.scheduleGearMaintenanceReminder(for: self)
     }
@@ -694,16 +694,16 @@ extension Gear {
 
 extension Certification {
     func scheduleExpirationReminder() {
-        guard UserDefaults.standard.bool(forKey: "notificationsEnabled"),
-              UserDefaults.standard.object(forKey: "certificationReminders") as? Bool ?? true else { return }
+        guard UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? UserPreferences.Defaults.notificationsEnabled,
+              UserDefaults.standard.object(forKey: "certificationReminders") as? Bool ?? UserPreferences.Defaults.certificationReminders else { return }
         NotificationManager.shared.scheduleCertificationExpirationReminder(for: self)
     }
 }
 
 extension DivingInsurance {
     func scheduleExpirationReminder() {
-        guard UserDefaults.standard.bool(forKey: "notificationsEnabled"),
-              UserDefaults.standard.object(forKey: "insuranceReminders") as? Bool ?? true else { return }
+        guard UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? UserPreferences.Defaults.notificationsEnabled,
+              UserDefaults.standard.object(forKey: "insuranceReminders") as? Bool ?? UserPreferences.Defaults.insuranceReminders else { return }
         NotificationManager.shared.scheduleInsuranceExpirationReminder(for: self)
     }
 }

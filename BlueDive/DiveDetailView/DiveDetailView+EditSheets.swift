@@ -11,7 +11,7 @@ struct EditMenuStatsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(DiveStore.self) private var store
-    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = false
+    @AppStorage("autoSequenceEnabled") private var autoSequenceEnabled = UserPreferences.Defaults.autoSequenceEnabled
 
     @State private var workingMaxDepth: Double
     @State private var workingAvgDepth: Double

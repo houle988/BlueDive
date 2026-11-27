@@ -516,7 +516,7 @@ struct SettingsToolbarButton: View {
 struct CloudSyncToolbarButton: View {
     @Environment(\.showSyncStatusSheet) private var showSyncStatusSheet
     @Environment(CloudKitSyncMonitor.self) private var syncMonitor
-    @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = true
+    @AppStorage(BlueDiveApp.iCloudSyncEnabledKey) private var iCloudSyncEnabled = UserPreferences.Defaults.iCloudSyncEnabled
 
     var body: some View {
         Button { showSyncStatusSheet?() } label: { icon }
