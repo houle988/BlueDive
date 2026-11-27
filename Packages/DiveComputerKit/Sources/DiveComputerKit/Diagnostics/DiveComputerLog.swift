@@ -115,7 +115,10 @@ public final class DiveComputerLog: @unchecked Sendable {
              handler: handler)
     }
 
-    func logLibrary(level: dc_loglevel_t, file: String, line: UInt32, function: String, message: String) {
+    /// `expectedBackupStop`: the session's backup stop is refusing libdivecomputer's commands, so
+    /// an error or warning only reports that refusal: logged at info, tagged as expected.
+    func logLibrary(level: dc_loglevel_t, file: String, line: UInt32, function: String, message: String,
+                    expectedBackupStop: Bool = false) {
         let mapped: LogLevel
         let name: String
         switch level {
@@ -125,10 +128,16 @@ public final class DiveComputerLog: @unchecked Sendable {
         case DC_LOGLEVEL_DEBUG: mapped = .debug; name = "DEBUG"
         default: mapped = .debug; name = "TRACE"
         }
+        var level = mapped
+        var tag = name
+        if expectedBackupStop, mapped >= .warning {
+            level = .info
+            tag = "\(name), expected: backup stop"
+        }
         let (minimum, handler) = locked { (_minimumLevel, _onLog) }
-        guard mapped >= minimum else { return }
-        let text = "[libdc \(name)] \((file as NSString).lastPathComponent):\(line) (\(function)): \(message)"
-        emit(LogEvent(level: mapped, message: text, category: "libdivecomputer", function: function, timestamp: Date()),
+        guard level >= minimum else { return }
+        let text = "[libdc \(tag)] \((file as NSString).lastPathComponent):\(line) (\(function)): \(message)"
+        emit(LogEvent(level: level, message: text, category: "libdivecomputer", function: function, timestamp: Date()),
              handler: handler)
     }
 

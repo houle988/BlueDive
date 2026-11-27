@@ -13,6 +13,15 @@ final class DeviceSession: @unchecked Sendable {
 
     private let stateLock = NSLock()
     private var cancelled = false
+    /// Set when the device reported a backup serial: makes libdivecomputer's cancel check
+    /// stop the download step before its next command (the manifest request), without cutting
+    /// the link as a user cancel does. Cleared before the clock is set.
+    private var stoppingForBackup = false
+    /// The cancel callback refused a command because of the backup stop (not a user cancel):
+    /// from then on libdivecomputer's errors and warnings only report that refusal (a refused
+    /// command never reaches the link, and every later one goes through the same check), so
+    /// they are logged as expected information, not errors.
+    private var backupRefused = false
     private var finished = false
     private var finishWaiters: [CheckedContinuation<Void, Never>] = []
 
@@ -28,6 +37,11 @@ final class DeviceSession: @unchecked Sendable {
     private var fingerprintMatched = false
     private var cutoffReached = false
     private var newestFingerprint: Data?
+    /// The device reported a serial in `request.backupSerials`.
+    private var isBackupComputer = false
+    /// A backup computer's backend delivered a dive despite the stop (it did not check the
+    /// cancel flag before its next command, e.g. after a libdivecomputer update).
+    private var backupReachedDive = false
 
     init(request: SessionRequest, link: any SessionLink,
          continuation: AsyncThrowingStream<SessionEvent, any Error>.Continuation) {
@@ -47,6 +61,18 @@ final class DeviceSession: @unchecked Sendable {
     }
 
     var isCancelled: Bool { stateLock.withLock { cancelled } }
+
+    /// What libdivecomputer's cancel callback reads: a user cancel or the backup stop.
+    fileprivate var shouldStopLibrary: Bool {
+        stateLock.withLock {
+            if cancelled { return true }
+            if stoppingForBackup { backupRefused = true; return true }
+            return false
+        }
+    }
+
+    /// libdivecomputer's messages are expected while the backup stop refuses its commands.
+    fileprivate var libraryMessagesExpected: Bool { stateLock.withLock { stoppingForBackup && backupRefused } }
 
     /// Torn down: every libdivecomputer object and the connection are released.
     var isFinished: Bool { stateLock.withLock { finished } }
@@ -68,6 +94,11 @@ final class DeviceSession: @unchecked Sendable {
             if done { waiter.resume() }
         }
     }
+
+    /// Families whose libdivecomputer backend never calls `device_is_cancelled`, so a backup
+    /// computer stops only at its first dive (`Docs/DECISIONS.md` L11). Neither can set its clock
+    /// over BLE. Re-check at every libdivecomputer sync (`UPSTREAM.md`, step 10).
+    static let familiesWithoutCancelCheck: Set<DeviceFamily> = [.cressiGoa, .pelagicI330R]
 
     // MARK: - Session thread
 
@@ -105,10 +136,13 @@ final class DeviceSession: @unchecked Sendable {
             throw Self.map(error)
         }
 
+        // The session is the userdata of every libdivecomputer callback; it outlives the context
+        // (freed below, on this thread, before run() returns).
+        let unmanaged = Unmanaged.passUnretained(self).toOpaque()
         var context: OpaquePointer?
         _ = dc_context_new(&context)
         dc_context_set_loglevel(context, DiveComputerLog.shared.libdcLevel)
-        dc_context_set_logfunc(context, libdcLogFunction, nil)
+        dc_context_set_logfunc(context, libdcLogFunction, unmanaged)
 
         let stream = DCIOStream(link: link, authorization: request.authorization,
                                 authorizationRequest: AuthorizationRequest(peripheralID: request.peripheralID,
@@ -135,29 +169,59 @@ final class DeviceSession: @unchecked Sendable {
         guard let device else { throw .deviceOpenFailed(.io) }
         continuation.yield(.connected(openedPair.flatMap { DeviceCatalog.model(family: $0.family, modelID: $0.model) }))
 
-        let unmanaged = Unmanaged.passUnretained(self).toOpaque()
         let events = DC_EVENT_DEVINFO.rawValue | DC_EVENT_PROGRESS.rawValue | DC_EVENT_CLOCK.rawValue
         dc_device_set_events(device, events, eventCallback, unmanaged)
         dc_device_set_cancel(device, cancelCallback, unmanaged)
 
         let status = DCStatus(dc_device_foreach(device, diveCallback, unmanaged))
-        if status != .success {
+        // The backup stop only concerns the download step: cleared at once, before a cancel or
+        // the close can log anything, so nothing after it is taken for the expected refusal.
+        stateLock.withLock { stoppingForBackup = false }
+        if status != .success, !isBackupComputer {
             DiveComputerLog.shared.log("Download ended with \(status.name) after \(logCount - 1) dives " +
                                        "(fingerprint matched: \(fingerprintMatched), stored fingerprint: \(storedFingerprint != nil))",
                                        level: .warning)
         }
         if isCancelled { throw .cancelled }
 
+        // A backup computer: the download step was stopped on purpose right after the serial,
+        // before any dive or manifest, so its status says nothing. Only the clock is set.
+        if isBackupComputer, let identity {
+            DiveComputerLog.shared.log("Backup computer \(identity.serial): download step refused on purpose after the serial (\(status.name)), no dive downloaded", level: .info)
+            if backupReachedDive {
+                // The stop fell back to the first dive: the dive list and one dive were
+                // transferred (nothing kept). Expected for the families whose backend never
+                // checks the cancel flag; for any other one it means a libdivecomputer change, so
+                // it is visible outside debug mode.
+                if Self.familiesWithoutCancelCheck.contains(identity.family) {
+                    DiveComputerLog.shared.log("Backup computer \(identity.serial): \(identity.family) does not check the stop flag (expected), stopped at its first dive; the dive was discarded", level: .info)
+                } else {
+                    DiveComputerLog.shared.log("Backup computer \(identity.serial): a dive reached the session before the stop — this backend did not refuse its next command; the dive was discarded", level: .warning)
+                }
+            }
+            var clock: ClockSyncResult?
+            if request.syncClock {
+                let result = syncClock(device)
+                clock = result
+                continuation.yield(.clockSync(result))
+            }
+            if isCancelled { throw .cancelled }
+            return DownloadDecision.backupOutcome(identity: identity, status: status, clockSync: clock)
+        }
+
+        var clockResult: ClockSyncResult?
         if request.syncClock,
            DownloadDecision.shouldSyncClock(status: status, fingerprintMatched: fingerprintMatched, cutoffReached: cutoffReached) {
-            continuation.yield(.clockSync(syncClock(device)))
+            let result = syncClock(device)
+            clockResult = result
+            continuation.yield(.clockSync(result))
         }
 
         let facts = DownloadDecision.Facts(status: status, hasNewDives: hasNewDives, fingerprintMatched: fingerprintMatched,
                                            cutoffReached: cutoffReached, useFingerprint: request.useFingerprint,
                                            hadStoredFingerprint: storedFingerprint != nil, diveCount: logCount - 1,
                                            newestFingerprint: newestFingerprint, identity: identity)
-        return try DownloadDecision.decide(facts).get()
+        return try DownloadDecision.decide(facts, clockSync: clockResult).get()
     }
 
     /// Configuration priority: forced > stored > advertised name. When a forced or stored
@@ -233,6 +297,14 @@ final class DeviceSession: @unchecked Sendable {
             let identity = DeviceIdentity(family: pair.family, descriptorModel: pair.model, hardwareModel: info.model,
                                           firmware: info.firmware, serial: serial, libraryName: libraryName)
             self.identity = identity
+            if DownloadDecision.isBackup(serial: serial, in: request.backupSerials) {
+                // No fingerprint is applied: nothing will be downloaded.
+                isBackupComputer = true
+                stateLock.withLock { stoppingForBackup = true }
+                DiveComputerLog.shared.log("\(serial) is a backup computer: stopping before any dive", level: .info)
+                continuation.yield(.deviceIdentified(identity, fingerprintApplied: false))
+                return
+            }
             var applied = false
             if request.useFingerprint, let stored = request.fingerprintsBySerial[serial], !stored.isEmpty {
                 storedFingerprint = stored
@@ -262,7 +334,12 @@ final class DeviceSession: @unchecked Sendable {
 
     /// 1 = continue, 0 = stop. Dives arrive newest first.
     fileprivate func handleDive(_ bytes: Data, fingerprint: Data) -> Int32 {
+        // A backend that reaches a dive despite the backup stop: nothing is kept.
         if isCancelled { return 0 }
+        if isBackupComputer {
+            backupReachedDive = true
+            return 0
+        }
         if request.useFingerprint, let stored = storedFingerprint, stored == fingerprint {
             fingerprintMatched = true
             return 0
@@ -331,7 +408,7 @@ private let eventCallback: dc_event_callback_t = { device, type, data, userdata 
 }
 
 private let cancelCallback: dc_cancel_callback_t = { userdata in
-    (DeviceSession.from(userdata)?.isCancelled ?? true) ? 1 : 0
+    (DeviceSession.from(userdata)?.shouldStopLibrary ?? true) ? 1 : 0
 }
 
 /// `data` and `fingerprint` belong to the backend and are reused: copied at once.
@@ -340,8 +417,10 @@ private let diveCallback: dc_dive_callback_t = { data, size, fingerprint, fsize,
     return session.handleDive(Data(bytes: data, count: Int(size)), fingerprint: Data(bytes: fingerprint, count: Int(fsize)))
 }
 
-private let libdcLogFunction: dc_logfunc_t = { _, level, file, line, function, message, _ in
+private let libdcLogFunction: dc_logfunc_t = { _, level, file, line, function, message, userdata in
+    let expected = DeviceSession.from(userdata)?.libraryMessagesExpected ?? false
     DiveComputerLog.shared.logLibrary(level: level, file: file.map { String(cString: $0) } ?? "",
                                       line: line, function: function.map { String(cString: $0) } ?? "",
-                                      message: message.map { String(cString: $0) } ?? "")
+                                      message: message.map { String(cString: $0) } ?? "",
+                                      expectedBackupStop: expected)
 }

@@ -245,6 +245,7 @@ public struct SessionRequest: Sendable {
   public var fingerprintsBySerial: [String: Data]  // lowercased %08x serial → DeviceFingerprint.fingerprintData
   public var stopBefore: Date?                     // stop at the first dive older than this (always applied when set)
   public var syncClock: Bool                       // default false
+  public var backupSerials: Set<String>            // backup computers (lowercased %08x): stopped after DEVINFO, clock only (DECISIONS L11)
   public var authorization: (any BLEAuthorizationProvider)?
 }
 public struct DeviceIdentity: Sendable, Equatable {
@@ -264,10 +265,11 @@ public enum SessionEvent: Sendable {
   case finished(DownloadOutcome)                                   // last event of a successful session
 }
 public struct DownloadOutcome: Sendable, Equatable {
-  public enum Kind: Sendable, Equatable { case completed, noNewDives, partial }   // no stoppedAtCutoff kind: see the Bool
+  public enum Kind: Sendable, Equatable { case completed, noNewDives, partial, backupComputer }   // no stoppedAtCutoff kind: see the Bool
   public let kind: Kind; public let status: DCStatus; public let diveCount: Int
   public let stoppedAtCutoff: Bool; public let fingerprintMatched: Bool; public let identity: DeviceIdentity?
   public let newestFingerprint: Data?              // the watermark to store, nil when it must not move
+  public let clockSync: ClockSyncResult?           // nil when the clock was not set
 }
 public enum SessionError: Error, Sendable, Equatable {
   case bluetoothUnavailable(BluetoothState), peripheralNotFound, connectionTimeout, connectionFailed(String?),
@@ -497,10 +499,10 @@ Phases, in order, each emitting events; any failure → `SessionError` thrown on
 
    `newestFingerprint` is returned only when `shouldAdvanceWatermark`.
 
-   > **As built (2026-11-19).** The event is `.deviceIdentified(identity, fingerprintApplied:)` (step 5). `Session/DownloadDecision.swift` implements the table with these differences: `Kind` has only `completed`, `noNewDives` and `partial` — a cutoff stop is `stoppedAtCutoff: Bool` on the outcome with the kind `completed` (or `noNewDives`); `newestFingerprint` is also nil when no `DeviceIdentity` was reported (no serial to store it under); `kind` is `noNewDives` when no watermark is returned and (`fingerprintMatched`, or a stored fingerprint and no new dive). There is no `Cutoff` / `onlyWhenNoWatermark`: `SessionRequest.stopBefore` is applied whenever it is set (step 6: the first dive older than it stops the enumeration, and its fingerprint becomes the watermark when it is the newest dive). Whether a cutoff is set at all is the app's decision (§6, as built).
+   > **As built (2026-11-19).** The event is `.deviceIdentified(identity, fingerprintApplied:)` (step 5). `Session/DownloadDecision.swift` implements the table with these differences: `Kind` has only `completed`, `noNewDives` and `partial` (plus `backupComputer`, added later: `DECISIONS.md` L11) — a cutoff stop is `stoppedAtCutoff: Bool` on the outcome with the kind `completed` (or `noNewDives`); `newestFingerprint` is also nil when no `DeviceIdentity` was reported (no serial to store it under); `kind` is `noNewDives` when no watermark is returned and (`fingerprintMatched`, or a stored fingerprint and no new dive). There is no `Cutoff` / `onlyWhenNoWatermark`: `SessionRequest.stopBefore` is applied whenever it is set (step 6: the first dive older than it stops the enumeration, and its fingerprint becomes the watermark when it is the newest dive). Whether a cutoff is set at all is the app's decision (§6, as built).
 8. **Clock sync** (`ClockSync`) when `syncClock` and (SUCCESS, or PROTOCOL with `fingerprintMatched || cutoffReached`): `dc_datetime_t` from `Calendar(identifier: .gregorian)` + `TimeZone.current` components, `timezone = secondsFromGMT(for: now)` **in seconds**; `dc_device_timesync`; SUCCESS → `.synced`, UNSUPPORTED → `.unsupported` (silent), else `.failed(status)`.
 9. **Teardown** (always, also on error/cancel; this ordering is the Shearwater "Sending Dive" fix): (a) `dc_device_close` (sends the protocol exit, e.g. Shearwater `2E 90 20 00`, shearwater_petrel.c:116-129; its read uses the backend's timeout because `firstPacketReceived` is still true — unless no read has returned data yet, see L5); (b) **flush ≤0.5 s**: if a `.withoutResponse` write is outstanding, wait for `peripheralIsReady` or 0.5 s; for `.withResponse` wait for the pending callback or 0.5 s (bounded identically to the spec's blind sleep, but returns early when the radio confirms); (c) `dc_iostream_close`; release the `Unmanaged` link reference; (d) `dc_descriptor_free`, `dc_context_free`; (e) `link.close()` → `cancelPeripheralConnection`, wait ≤2 s for `didDisconnect`; (f) finish the stream (`.finished(outcome)` then `finish()`, or `finish(throwing:)`). The thread exits; `cancel()` awaits the join, so by the time the app sees the stream end **no C pointer is alive** — the sheet-dismiss blocking during `.connecting/.downloading` (BSV:155-162) becomes unnecessary. *As built: the close flush (b) is a fixed `Thread.sleep(forTimeInterval: BLETiming.closeFlush)` (0.5 s) right after `dc_device_close` (`Session/DeviceSession.swift`, teardown `defer`); it does not return early when the radio confirms.*
-10. **Cancellation**: `handle.cancel()` sets the flag, `link.cancel()` wakes every wait; `dc_device_set_cancel` makes retrying backends abort between transactions (device.c `device_is_cancelled` is polled by oceanic_atom2, mares_iconhd, suunto_eonsteel, hw_ostc3; Shearwater/Pelagic/Cressi are stopped by the dive callback returning 0 and by the link failing their next read). Outcome `.cancelled`.
+10. **Cancellation**: `handle.cancel()` sets the flag, `link.cancel()` wakes every wait; `dc_device_set_cancel` makes retrying backends abort between transactions (device.c `device_is_cancelled` is polled before each command by most backends, Shearwater (`shearwater_common.c`), oceanic_atom2, mares_iconhd, hw_ostc3 and suunto_eonsteel (per file) included; Pelagic i330R and Cressi Goa never poll it and are stopped by the dive callback returning 0 and by the link failing their next read; the backup-computer stop relies on the polling, `DECISIONS.md` L11). Outcome `.cancelled`.
 
 Threading guarantee (documented in README): libdivecomputer objects are touched only on `LibDCThread`; `BLEPeripheralLink` methods may be called from the libdc thread and `bleQueue` only; `DiveComputerManager` only on `MainActor`.
 

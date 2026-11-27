@@ -18,7 +18,8 @@ enum DownloadDecision {
 
     /// The outcome, or the error to report. A protocol error is a success when it
     /// happened after the cutoff, the fingerprint match or some dives (partial sync).
-    static func decide(_ f: Facts) -> Result<DownloadOutcome, SessionError> {
+    /// `clockSync` is carried into the outcome unchanged (nil when the clock was not set).
+    static func decide(_ f: Facts, clockSync: ClockSyncResult? = nil) -> Result<DownloadOutcome, SessionError> {
         var partial = false
         let save: Bool
         switch f.status {
@@ -51,7 +52,20 @@ enum DownloadDecision {
         }
         return .success(DownloadOutcome(kind: kind, status: f.status, diveCount: f.diveCount,
                                         stoppedAtCutoff: f.cutoffReached, fingerprintMatched: f.fingerprintMatched,
-                                        identity: f.identity, newestFingerprint: watermark))
+                                        identity: f.identity, newestFingerprint: watermark, clockSync: clockSync))
+    }
+
+    /// A backup computer's outcome: no dive, no watermark, whatever the stopped download step
+    /// returned (it was stopped on purpose right after the serial; `status` is what it returned,
+    /// normally `.cancelled`, kept for traces).
+    static func backupOutcome(identity: DeviceIdentity, status: DCStatus, clockSync: ClockSyncResult?) -> DownloadOutcome {
+        DownloadOutcome(kind: .backupComputer, status: status, diveCount: 0, stoppedAtCutoff: false,
+                        fingerprintMatched: false, identity: identity, newestFingerprint: nil, clockSync: clockSync)
+    }
+
+    /// Whether the reported serial belongs to a backup computer.
+    static func isBackup(serial: String, in backupSerials: Set<String>) -> Bool {
+        backupSerials.contains(serial.lowercased())
     }
 
     /// Clock sync runs after a clean download, or a protocol error that came after the

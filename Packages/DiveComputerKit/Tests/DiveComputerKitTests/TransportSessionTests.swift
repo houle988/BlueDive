@@ -313,6 +313,40 @@ struct DownloadDecisionTests {
         #expect(!DownloadDecision.shouldSyncClock(status: .timeout, fingerprintMatched: true, cutoffReached: true))
     }
 
+    /// A backup computer downloads nothing and never moves the watermark, whatever the
+    /// stopped download step returned; the clock result rides along.
+    @Test func backupComputerOutcome() {
+        let identity = DeviceIdentity(family: .shearwaterPetrel, descriptorModel: 11, hardwareModel: 11,
+                                      firmware: 1, serial: "0000abcd", libraryName: "Shearwater Perdix 2")
+        let synced = DownloadDecision.backupOutcome(identity: identity, status: .cancelled, clockSync: .synced)
+        #expect(synced.kind == .backupComputer)
+        #expect(synced.diveCount == 0)
+        #expect(synced.newestFingerprint == nil)
+        #expect(synced.identity == identity)
+        #expect(synced.clockSync == .synced)
+        #expect(synced.status == .cancelled)   // what the stopped download step returned, for traces
+        #expect(DownloadDecision.backupOutcome(identity: identity, status: .cancelled, clockSync: nil).clockSync == nil)
+    }
+
+    /// A normal download carries the clock result in its outcome, nil when the clock was not set.
+    @Test func outcomeCarriesTheClockResult() throws {
+        let withClock = try DownloadDecision.decide(facts(.success, new: true, stored: true), clockSync: .synced).get()
+        #expect(withClock.clockSync == .synced)
+        #expect(withClock.kind == .completed)
+        let unsupported = try DownloadDecision.decide(facts(.success, matched: true, stored: true), clockSync: .unsupported).get()
+        #expect(unsupported.clockSync == .unsupported)
+        #expect(try DownloadDecision.decide(facts(.success, new: true, stored: true)).get().clockSync == nil)
+    }
+
+    /// Serials compare as libdivecomputer reports them (lowercase `%08x`), whatever the case
+    /// the app passed.
+    @Test func backupSerialMatching() {
+        #expect(DownloadDecision.isBackup(serial: "0000abcd", in: ["0000abcd"]))
+        #expect(DownloadDecision.isBackup(serial: "0000ABCD", in: ["0000abcd"]))
+        #expect(!DownloadDecision.isBackup(serial: "0000abce", in: ["0000abcd"]))
+        #expect(!DownloadDecision.isBackup(serial: "0000abcd", in: []))
+    }
+
     /// The time zone is in seconds east of UTC (minutes broke Ratio and Shearwater).
     @Test func clockSyncTimezoneInSeconds() throws {
         let zone = try #require(TimeZone(identifier: "America/Toronto"))
@@ -323,6 +357,8 @@ struct DownloadDecisionTests {
     }
 }
 
+/// Serialized: some tests observe `DiveComputerLog.shared`, which every session writes to.
+@Suite(.serialized)
 struct SessionTests {
 
     private func run(_ request: SessionRequest, link: FakeLink, cancelAfter: TimeInterval? = nil) async -> ([SessionEvent], Error?) {
@@ -397,6 +433,144 @@ struct SessionTests {
         }
     }
 
+    /// A backup serial changes nothing for a device that never reports its serial: the
+    /// session fails as any download would and tears everything down.
+    @Test func backupRequestOnSilentDeviceTimesOut() async {
+        let link = FakeLink(name: "Perdix 2")
+        let request = SessionRequest(peripheralID: UUID(), syncClock: true, backupSerials: ["0000abcd"])
+        let (events, error) = await run(request, link: link)
+        #expect(error as? SessionError == .downloadFailed(.timeout))
+        #expect(!events.contains { if case .clockSync = $0 { return true }; return false })
+        #expect(link.closed)
+    }
+
+    /// One Shearwater BLE reply: the 2-byte BLE header, then the SLIP-framed V1 packet
+    /// (`01 FF len+1 00 payload`, END-terminated).
+    private func shearwaterReply(_ payload: [UInt8]) -> LinkRead {
+        let packet: [UInt8] = [0x01, 0xFF, UInt8(payload.count + 1), 0x00] + payload
+        var framed: [UInt8] = [0x01, 0x00]
+        for byte in packet {
+            switch byte {
+            case 0xC0: framed += [0xDB, 0xDC]
+            case 0xDB: framed += [0xDB, 0xDD]
+            default: framed.append(byte)
+            }
+        }
+        return .data(Data(framed + [0xC0]))
+    }
+
+    /// The replies a Perdix 2 sends before reporting its serial 0000abcd: serial (8 ASCII hex
+    /// digits), firmware, model.
+    private var shearwaterIdentityReplies: [LinkRead] {
+        [shearwaterReply([0x62, 0x80, 0x10] + Array("0000ABCD".utf8)),
+         shearwaterReply([0x62, 0x80, 0x11] + Array("V90".utf8)),
+         shearwaterReply([0x62, 0x80, 0x60, 0x0B])]
+    }
+
+    private func wrote(_ link: FakeLink, _ command: [UInt8]) -> Bool {
+        link.writes.contains { $0.range(of: Data(command)) != nil }
+    }
+
+    /// Real Shearwater backend: a backup serial stops the download step right after the serial
+    /// (the logbook-format request and the manifest are never sent), then the clock is set
+    /// (model read again, local time written) and the session ends with no dive.
+    @Test func backupComputerSetsTheClockWithoutDownloading() async {
+        let link = FakeLink(name: "Perdix 2", reads: shearwaterIdentityReplies + [
+            shearwaterReply([0x62, 0x80, 0x60, 0x0B]),       // timesync: model (not a Teric)
+            shearwaterReply([0x6E, 0x90, 0x30])               // timesync: local time written
+        ])
+        let request = SessionRequest(peripheralID: UUID(), syncClock: true, backupSerials: ["0000abcd"])
+        let (events, error) = await run(request, link: link)
+        #expect(error == nil)
+        #expect(wrote(link, [0x22, 0x80, 0x10]))                    // serial read
+        #expect(!wrote(link, [0x22, 0x80, 0x21]))                   // no logbook-format request
+        #expect(wrote(link, [0x2E, 0x90, 0x30]))                    // local time written
+        #expect(!events.contains { if case .dive = $0 { return true }; return false })
+        #expect(events.contains { if case .clockSync(.synced) = $0 { return true }; return false })
+        let outcome = events.compactMap { if case .finished(let outcome) = $0 { return outcome }; return nil }.first
+        #expect(outcome?.kind == .backupComputer)
+        #expect(outcome?.identity?.serial == "0000abcd")
+        #expect(outcome?.newestFingerprint == nil)
+        #expect(outcome?.clockSync == .synced)
+        #expect(wrote(link, [0x2E, 0x90, 0x20, 0x00]))              // exit command at close
+        #expect(link.closed)
+    }
+
+    /// The refused command's libdivecomputer error is logged as expected information, not as an
+    /// error: a successful backup sync leaves no error line in the console or a trace.
+    @Test func backupStopLogsNoLibraryError() async {
+        let events = LogEventBox()
+        // Info level for the run, so the downgraded line itself is visible (outside debug mode
+        // the log keeps warnings and above only, so it is simply not shown).
+        let minimum = DiveComputerLog.shared.minimumLevel
+        DiveComputerLog.shared.minimumLevel = .info
+        DiveComputerLog.shared.onLog = { events.append($0) }
+        defer {
+            DiveComputerLog.shared.onLog = nil
+            DiveComputerLog.shared.minimumLevel = minimum
+        }
+        let link = FakeLink(name: "Perdix 2", reads: shearwaterIdentityReplies + [
+            shearwaterReply([0x62, 0x80, 0x60, 0x0B]),
+            shearwaterReply([0x6E, 0x90, 0x30])
+        ])
+        let request = SessionRequest(peripheralID: UUID(), syncClock: true, backupSerials: ["0000abcd"])
+        let (_, error) = await run(request, link: link)
+        #expect(error == nil)
+        // Only this session's backend: other suites may log libdivecomputer lines meanwhile.
+        let library = events.all.filter { $0.category == "libdivecomputer" && $0.message.contains("shearwater_petrel.c") }
+        #expect(!library.contains { $0.level >= .warning })
+        #expect(library.contains { $0.message.contains("expected: backup stop") && $0.message.contains("logbook type") })
+    }
+
+    /// A backup computer gets no fingerprint, even when one is stored for its serial.
+    @Test func backupComputerAppliesNoFingerprint() async {
+        let link = FakeLink(name: "Perdix 2", reads: shearwaterIdentityReplies)
+        let request = SessionRequest(peripheralID: UUID(), useFingerprint: true,
+                                     fingerprintsBySerial: ["0000abcd": Data([1, 2, 3, 4])],
+                                     syncClock: false, backupSerials: ["0000abcd"])
+        let (events, error) = await run(request, link: link)
+        #expect(error == nil)
+        #expect(events.contains { if case .deviceIdentified(_, let applied) = $0 { return !applied }; return false })
+    }
+
+    /// A user cancel during a backup session (here while the clock is being set) ends as a
+    /// cancel: no outcome, the exit command is still sent, the link is closed.
+    @Test func cancelDuringBackupSession() async {
+        let link = FakeLink(name: "Perdix 2", reads: shearwaterIdentityReplies)
+        link.blockReads = true
+        let request = SessionRequest(peripheralID: UUID(), syncClock: true, backupSerials: ["0000abcd"])
+        let (events, error) = await run(request, link: link, cancelAfter: 0.3)
+        #expect(error as? SessionError == .cancelled)
+        #expect(!events.contains { if case .finished = $0 { return true }; return false })
+        #expect(link.closeWrites.contains { $0.range(of: Data([0x2E, 0x90, 0x20, 0x00])) != nil })
+        #expect(link.closed)
+    }
+
+    /// With clock sync off, a backup computer is identified and closed: nothing is written.
+    @Test func backupComputerWithoutClockSyncDoesNothing() async {
+        let link = FakeLink(name: "Perdix 2", reads: shearwaterIdentityReplies)
+        let request = SessionRequest(peripheralID: UUID(), syncClock: false, backupSerials: ["0000abcd"])
+        let (events, error) = await run(request, link: link)
+        #expect(error == nil)
+        #expect(!wrote(link, [0x22, 0x80, 0x21]))
+        #expect(!wrote(link, [0x2E, 0x90, 0x30]))
+        #expect(!events.contains { if case .clockSync = $0 { return true }; return false })
+        let outcome = events.compactMap { if case .finished(let outcome) = $0 { return outcome }; return nil }.first
+        #expect(outcome?.kind == .backupComputer)
+        #expect(outcome?.clockSync == nil)
+        #expect(link.closed)
+    }
+
+    /// Another computer's serial is not stopped: the download step goes on to the
+    /// logbook-format request (which times out here).
+    @Test func otherSerialIsDownloadedAsUsual() async {
+        let link = FakeLink(name: "Perdix 2", reads: shearwaterIdentityReplies)
+        let request = SessionRequest(peripheralID: UUID(), syncClock: true, backupSerials: ["0000ffff"])
+        let (_, error) = await run(request, link: link)
+        #expect(wrote(link, [0x22, 0x80, 0x21]))
+        #expect(error as? SessionError == .downloadFailed(.timeout))
+    }
+
     @Test func cancelDuringDownload() async {
         let link = FakeLink(name: "Perdix 2")
         link.blockReads = true
@@ -407,4 +581,12 @@ struct SessionTests {
         #expect(link.closeWrites.contains { $0.range(of: Data([0x2E, 0x90, 0x20, 0x00])) != nil })
         #expect(link.closed)
     }
+}
+
+/// Collects log events from the session thread.
+final class LogEventBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events: [LogEvent] = []
+    func append(_ event: LogEvent) { lock.withLock { events.append(event) } }
+    var all: [LogEvent] { lock.withLock { events } }
 }

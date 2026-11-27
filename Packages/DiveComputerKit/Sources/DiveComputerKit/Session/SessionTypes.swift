@@ -24,14 +24,19 @@ public struct SessionRequest: Sendable {
     public var fingerprintsBySerial: [String: Data]
     /// Stop at the first dive older than this date (dives are delivered newest first).
     public var stopBefore: Date?
-    /// Set the computer's clock after the download.
+    /// Set the computer's clock after the download (for a backup computer: instead of it).
     public var syncClock: Bool
+    /// Serials of backup computers, lowercased `%08x` like `fingerprintsBySerial`. When the
+    /// device reports one of them, no dive is downloaded: the session stops right after the
+    /// serial, sets the clock when `syncClock` is on, and ends with a `.backupComputer` outcome.
+    public var backupSerials: Set<String>
     /// PIN / access code for devices that require pairing (Pelagic i330R, Apeks DSX).
     public var authorization: (any BLEAuthorizationProvider)?
 
     public init(peripheralID: UUID, advertisedName: String? = nil, modelSelection: ModelSelection = .autoDetect,
                 useFingerprint: Bool = true, fingerprintsBySerial: [String: Data] = [:], stopBefore: Date? = nil,
-                syncClock: Bool = false, authorization: (any BLEAuthorizationProvider)? = nil) {
+                syncClock: Bool = false, backupSerials: Set<String> = [],
+                authorization: (any BLEAuthorizationProvider)? = nil) {
         self.peripheralID = peripheralID
         self.advertisedName = advertisedName
         self.modelSelection = modelSelection
@@ -39,6 +44,7 @@ public struct SessionRequest: Sendable {
         self.fingerprintsBySerial = fingerprintsBySerial
         self.stopBefore = stopBefore
         self.syncClock = syncClock
+        self.backupSerials = backupSerials
         self.authorization = authorization
     }
 }
@@ -96,6 +102,9 @@ public struct DownloadOutcome: Sendable, Equatable {
         /// A protocol error after some dives: those dives are kept; older ones stay
         /// unreachable until a full download (old Mares firmware with corrupt slots).
         case partial
+        /// The device reported a serial in `SessionRequest.backupSerials`: nothing was
+        /// downloaded (the clock may have been set, see `clockSync`).
+        case backupComputer
     }
 
     public let kind: Kind
@@ -106,8 +115,11 @@ public struct DownloadOutcome: Sendable, Equatable {
     public let fingerprintMatched: Bool
     public let identity: DeviceIdentity?
     /// The fingerprint to store as the new watermark (the newest dive's), or nil when the
-    /// watermark must not move (no new dives, or "Download all dives").
+    /// watermark must not move (no new dives, "Download all dives", a backup computer).
     public let newestFingerprint: Data?
+    /// The clock sync result, nil when the clock was not set (sync off, or a download that
+    /// ended before it). Also sent as `SessionEvent.clockSync`.
+    public let clockSync: ClockSyncResult?
 }
 
 public enum SessionError: Error, Sendable, Equatable {
