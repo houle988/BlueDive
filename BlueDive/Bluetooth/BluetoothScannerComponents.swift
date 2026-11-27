@@ -194,6 +194,8 @@ struct DeviceRow: View {
 
 struct KnownDeviceRow: View {
     let computerName: String
+    /// The name the icon is picked from (the catalog model's, so it follows family + model).
+    var iconName: String? = nil
     let serial: String
     let lastSynced: Date
     let diverName: String?
@@ -204,7 +206,7 @@ struct KnownDeviceRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                DiveComputerIconView(name: computerName, isSelected: true)
+                DiveComputerIconView(name: iconName ?? computerName, isSelected: true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(computerName)
@@ -279,7 +281,7 @@ struct DeviceReassociationPickerSheet: View {
                             dismiss()
                         } label: {
                             HStack(spacing: 12) {
-                                DiveComputerIconView(name: candidate.computerName, isSelected: false)
+                                DiveComputerIconView(name: candidate.iconName, isSelected: false)
                                 VStack(alignment: .leading, spacing: 3) {
                                     if let name = candidate.diverName {
                                         // Not a Label, for the same reason as in KnownDeviceRow.
@@ -346,6 +348,9 @@ struct DeviceReassociationPickerSheet: View {
 struct ModelPickerSheet: View {
     let detectedName: String
     let currentOverride: ComputerModel?
+    /// false in Edit Dive Computer: with no device in range there is nothing to auto-detect
+    /// from, so only the catalog models are offered.
+    var showsAutoDetect: Bool = true
     let onSelect: (ComputerModel?) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -376,34 +381,36 @@ struct ModelPickerSheet: View {
     var body: some View {
         NavigationStack {
             groupedList {
-                Section {
-                    Button {
-                        onSelect(nil)
-                        dismiss()
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Auto-detect")
-                                    .foregroundStyle(.primary)
-                                Text(detectedName)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if currentOverride == nil {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(Color.accentColor)
-                                    .accessibilityHidden(true)
+                if showsAutoDetect {
+                    Section {
+                        Button {
+                            onSelect(nil)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Auto-detect")
+                                        .foregroundStyle(.primary)
+                                    Text(detectedName)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if currentOverride == nil {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.accentColor)
+                                        .accessibilityHidden(true)
+                                }
                             }
                         }
+                        .accessibilityAddTraits(currentOverride == nil ? .isSelected : [])
+                        .foregroundStyle(.primary)
+                        .listRowButton()
+                    } header: {
+                        Text("Detected Model")
+                    } footer: {
+                        Text("If the detected model is incorrect, select the correct one below.")
                     }
-                    .accessibilityAddTraits(currentOverride == nil ? .isSelected : [])
-                    .foregroundStyle(.primary)
-                    .listRowButton()
-                } header: {
-                    Text("Detected Model")
-                } footer: {
-                    Text("If the detected model is incorrect, select the correct one below.")
                 }
 
                 ForEach(groupedModels, id: \.brand) { group in

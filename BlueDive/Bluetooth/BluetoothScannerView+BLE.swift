@@ -154,7 +154,7 @@ extension BluetoothScannerView {
             if DeviceStorage.shared.getStoredDevice(uuid: uuid) == nil,
                let record = cachedTargetFingerprint,
                let family = record.family,
-               record.modelID != 0 {
+               DeviceFingerprint.isModelSet(family: family, modelID: record.modelID) {
                 // We can't verify serial over BLE before connecting, but the
                 // advertisement name should match the stored computerName.
                 let bleName = DeviceCatalog.displayName(forAdvertisedName: peripheral.name ?? "")
@@ -725,6 +725,7 @@ extension BluetoothScannerView {
                 id: "\(trimmedSerial)#\(fp.persistentModelID)",
                 serial: trimmedSerial,
                 computerName: fp.computerName,
+                iconName: fp.iconName,
                 family: fp.family,
                 modelID: fp.modelID,
                 lastSynced: fp.updatedAt,

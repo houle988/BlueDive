@@ -135,11 +135,19 @@ extension BluetoothScannerView {
                     ForEach(dedupedKnownDevices, id: \.persistentModelID) { device in
                         KnownDeviceRow(
                             computerName: device.computerName,
+                            iconName: device.iconName,
                             serial: device.serial,
                             lastSynced: device.updatedAt,
                             diverName: diverNames[device.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()],
                             onTap: { connectToKnownDevice(device) }
                         )
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button {
+                                deviceToEdit = KnownDeviceSnapshot(device)
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
                                 deviceToDelete = device
@@ -152,6 +160,11 @@ extension BluetoothScannerView {
                             .tint(.red)
                         }
                         .contextMenu {
+                            Button {
+                                deviceToEdit = KnownDeviceSnapshot(device)
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
                             Button(role: .destructive) {
                                 deviceToDelete = device
                                 showingDeleteConfirmation = true
@@ -238,6 +251,10 @@ extension BluetoothScannerView {
         .formStyle(.grouped)
         .onAppear {
             prepareImportCutoffDefault()
+        }
+        .sheet(item: $deviceToEdit) { device in
+            EditKnownDeviceSheet(device: device)
+                .standardSheetPresentation()
         }
         // The cutoff section only exists while Download All Dives is on, so turning that off has
         // to disarm the cutoff too — otherwise an invisible importCutoffEnabled would still apply

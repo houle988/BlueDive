@@ -1,12 +1,16 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - DEBUG ONLY — remove before release
+// MARK: - Sync Fingerprints (Settings → Bluetooth Import)
 
+/// Every stored sync-fingerprint record, duplicates included. Tapping one opens Edit Dive
+/// Computer, the sheet Known Dive Computers uses, so both edit with the same rules.
 struct FingerprintDebugView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var records: [DeviceFingerprint]
     @State private var appeared = false
+    /// The record whose Edit Dive Computer sheet is shown.
+    @State private var deviceToEdit: KnownDeviceSnapshot?
 
     var body: some View {
         NavigationStack {
@@ -46,6 +50,10 @@ struct FingerprintDebugView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     closeToolbarButton { dismiss() }
                 }
+            }
+            .sheet(item: $deviceToEdit) { device in
+                EditKnownDeviceSheet(device: device)
+                    .standardSheetPresentation()
             }
         }
     }
@@ -150,7 +158,9 @@ struct FingerprintDebugView: View {
 
             VStack(spacing: 12) {
                 ForEach(records) { record in
-                    FingerprintDebugRow(record: record)
+                    FingerprintDebugRow(record: record) {
+                        deviceToEdit = KnownDeviceSnapshot(record)
+                    }
                 }
             }
             .padding()
@@ -170,34 +180,13 @@ struct FingerprintDebugView: View {
 // MARK: - Row
 
 private struct FingerprintDebugRow: View {
-    @Bindable var record: DeviceFingerprint
-    @State private var hexInput: String = ""
-    @State private var errorMessage: String?
-    @State private var saveSuccess = false
-    @State private var isExpanded = false
+    let record: DeviceFingerprint
+    let onTap: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            collapseHeader
-
-            if isExpanded {
-                Divider().padding(.horizontal)
-                expandedDetail
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
-        .onAppear { hexInput = record.fingerprintData.debugHexString }
-    }
-
-    // MARK: Collapse header
-
-    private var collapseHeader: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
-        } label: {
+        Button(action: onTap) {
             HStack(spacing: 12) {
-                DiveComputerIconView(name: record.computerName, isSelected: false)
+                DiveComputerIconView(name: record.iconName, isSelected: false)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Group {
@@ -241,7 +230,7 @@ private struct FingerprintDebugRow: View {
 
                 Spacer()
 
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
@@ -250,149 +239,6 @@ private struct FingerprintDebugRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Set directly on the Button rather than on a descendant inside its label,
-        // since it's undocumented whether SwiftUI promotes a descendant's
-        // .accessibilityValue to the enclosing Button's own accessibility element.
-        .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
-    }
-
-    // MARK: Expanded detail
-
-    private var expandedDetail: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            metadataRow
-            fingerprintDisplay
-            editSection
-        }
-        .padding(.vertical, 12)
-    }
-
-    private var metadataRow: some View {
-        HStack(spacing: 20) {
-            metaCell(label: "Updated", value: record.updatedAt.formatted(date: .abbreviated, time: .shortened))
-
-            if record.modelID != 0 {
-                metaCell(label: "Model ID", value: String(format: "0x%02X", record.modelID), monospaced: true)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal)
-    }
-
-    @ViewBuilder
-    private func metaCell(label: LocalizedStringKey, value: String, monospaced: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            if monospaced {
-                Text(value)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.primary)
-            } else {
-                Text(value)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-            }
-        }
-    }
-
-    private var fingerprintDisplay: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Fingerprint", systemImage: "lock.doc.fill")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(record.fingerprintData.isEmpty ? "—" : record.fingerprintData.debugHexString)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(record.fingerprintData.isEmpty ? Color.secondary : Color.blue)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.blue.opacity(0.07))
-            )
-            .padding(.horizontal)
-        }
-    }
-
-    private var editSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Override (hex)", systemImage: "pencil")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-
-            HStack(spacing: 8) {
-                TextField("Enter hex bytes…", text: $hexInput)
-                    .font(.system(.caption, design: .monospaced))
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    #endif
-
-                Button {
-                    guard let data = Data(debugHex: hexInput), !data.isEmpty else {
-                        errorMessage = NSLocalizedString("Invalid hex", bundle: .forAppLanguage(), comment: "")
-                        saveSuccess = false
-                        return
-                    }
-                    record.fingerprintData = data
-                    record.updatedAt = Date()
-                    errorMessage = nil
-                    withAnimation { saveSuccess = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveSuccess = false }
-                    }
-                } label: {
-                    Label(saveSuccess ? "Saved" : "Save", systemImage: saveSuccess ? "checkmark" : "square.and.arrow.down")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(saveSuccess ? .green : .blue)
-                .animation(.easeInOut(duration: 0.2), value: saveSuccess)
-            }
-            .padding(.horizontal)
-
-            if let err = errorMessage {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .accessibilityHidden(true)
-                    Text(err)
-                        .foregroundStyle(.orange)
-                }
-                .font(.caption)
-                .padding(.horizontal)
-            }
-        }
-    }
-}
-
-// MARK: - Hex helpers (file-private to avoid conflicts)
-
-private extension Data {
-    var debugHexString: String {
-        map { String(format: "%02x", $0) }.joined()
-    }
-
-    init?(debugHex hex: String) {
-        let cleaned = hex.replacingOccurrences(of: " ", with: "")
-        guard cleaned.count % 2 == 0 else { return nil }
-        var data = Data()
-        var index = cleaned.startIndex
-        while index < cleaned.endIndex {
-            let next = cleaned.index(index, offsetBy: 2)
-            guard let byte = UInt8(cleaned[index..<next], radix: 16) else { return nil }
-            data.append(byte)
-            index = next
-        }
-        self = data
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
     }
 }

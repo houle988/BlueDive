@@ -167,23 +167,3 @@ final class FingerprintXMLParser: NSObject, XMLParserDelegate {
         tempUpdatedAt = nil
     }
 }
-
-// MARK: - Hex Helper
-
-private extension Data {
-    /// Decodes a hex string ("0a1b2c…", spaces allowed). An empty string is an empty fingerprint.
-    init?(fingerprintHex hex: String) {
-        let cleaned = hex.replacingOccurrences(of: " ", with: "")
-        // UInt8(_:radix:) accepts a leading "+"/"-", so require hex digits only.
-        guard cleaned.count % 2 == 0, cleaned.allSatisfy(\.isHexDigit) else { return nil }
-        var data = Data()
-        var index = cleaned.startIndex
-        while index < cleaned.endIndex {
-            let next = cleaned.index(index, offsetBy: 2)
-            guard let byte = UInt8(cleaned[index..<next], radix: 16) else { return nil }
-            data.append(byte)
-            index = next
-        }
-        self = data
-    }
-}

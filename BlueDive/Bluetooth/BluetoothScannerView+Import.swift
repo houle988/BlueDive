@@ -300,7 +300,8 @@ extension BluetoothScannerView {
     /// family/model disagrees with the DB (e.g. after a model override was saved).
     func seedDeviceStorageFromDatabase(for peripheral: DiscoveredDevice, fingerprint device: DeviceFingerprint) {
         let uuid = peripheral.identifier.uuidString
-        guard let family = device.family, device.modelID != 0 else { return }
+        guard let family = device.family,
+              DeviceFingerprint.isModelSet(family: family, modelID: device.modelID) else { return }
 
         // The stored name is the advertised one: Pelagic access codes are kept in the Keychain
         // under it, and deleting the device deletes them by that name.
@@ -535,8 +536,9 @@ extension BluetoothScannerView {
                 existing.family = override.family
                 existing.modelID = override.modelID
                 Self.logger.info("Applied model override to DeviceFingerprint: \(override.name) (model \(override.modelID))")
-            } else if existing.familyID.isEmpty || existing.modelID == 0 {
-                // No prior identity — seed from auto-detection.
+            } else if !existing.hasStoredIdentity {
+                // No prior identity — seed from auto-detection. Model number 0 is a real model in
+                // some families, so a model picked in Edit Dive Computer (e.g. Crest CR-4) stays.
                 existing.computerName = libraryDeviceType
                 existing.family = storedDevice.family
                 existing.modelID = storedDevice.model

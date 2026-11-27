@@ -19,6 +19,8 @@ struct ReassociationCandidate: Identifiable {
     let id: String
     let serial: String
     let computerName: String
+    /// The name the icon is picked from (the catalog model's, as in the known-device list).
+    let iconName: String
     let family: DeviceFamily?
     let modelID: UInt32
     let lastSynced: Date
@@ -102,6 +104,8 @@ struct BluetoothScannerView: View {
     /// the download succeeds).
     @State var pendingReassociationPruneRestore: [StoredDevice]? = nil
     @State var deviceToDelete: DeviceFingerprint?
+    /// The known device whose Edit sheet is shown (swipe right or context menu).
+    @State var deviceToEdit: KnownDeviceSnapshot?
     @State var showingDeleteConfirmation = false
     @State var modelOverrides: [String: ComputerModel] = [:]
     @State var peripheralForModelPicker: DiscoveredDevice?
