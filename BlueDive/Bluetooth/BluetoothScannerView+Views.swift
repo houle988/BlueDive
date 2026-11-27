@@ -92,6 +92,9 @@ extension BluetoothScannerView {
         case .completed:
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
+        case .backupComputer(_, let clock):
+            Image(systemName: clock == .synced ? "clock.badge.checkmark" : "clock.badge.exclamationmark")
+                .foregroundStyle(syncStateColor)
         case .error:
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.red)
@@ -108,6 +111,8 @@ extension BluetoothScannerView {
         switch syncState {
         case .completed(let imported, let merged, let skipped):
             completedView(imported: imported, merged: merged, skipped: skipped)
+        case .backupComputer(_, let clock):
+            backupComputerView(clock: clock)
         case .error(let message):
             errorView(message: message)
         case .idle where !isSearching:
@@ -139,6 +144,7 @@ extension BluetoothScannerView {
                             serial: device.serial,
                             lastSynced: device.updatedAt,
                             diverName: diverNames[device.serial.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()],
+                            isBackup: device.isEffectiveBackup,
                             onTap: { connectToKnownDevice(device) }
                         )
                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -584,6 +590,36 @@ extension BluetoothScannerView {
         )
     }
 
+    // MARK: - Backup Computer View
+
+    /// The result of a session with a backup dive computer. The status header shows the
+    /// clock result; the body says why nothing was downloaded. No Close button: the toolbar's
+    /// close button does it.
+    private func backupComputerView(clock: BackupClockResult) -> some View {
+        Form {
+            Section {
+                detailRow(NSLocalizedString("No dive was downloaded.", bundle: .forAppLanguage(), value: "No dive was downloaded.", comment: "Bluetooth sync result for a backup dive computer: its dives are never downloaded."), systemImage: "tray", color: .secondary)
+            } footer: {
+                if clock == .failed {
+                    Text("Make sure the dive computer is still in Bluetooth mode, then try again.")
+                } else {
+                    Text("Backup dive computers record the same dives as your main one, so their dives are never downloaded. To download this one, turn off Backup Dive Computer in Edit Dive Computer.")
+                }
+            }
+
+            Section {
+                Button {
+                    abandonScanSession()
+                } label: {
+                    Text("Back to Dive Computers", comment: "Button on the Bluetooth sync result for a backup dive computer: returns to the list of known dive computers.")
+                        .accentLabelOnMac()
+                }
+                .listRowButton()
+            }
+        }
+        .formStyle(.grouped)
+    }
+
     // MARK: - Error View
 
     @ViewBuilder
@@ -744,6 +780,9 @@ extension BluetoothScannerView {
                         Text("Clock sync is only performed on dive computers that support it. If your computer does not support clock setting, this option has no effect and the sync proceeds normally.")
                             .foregroundStyle(.secondary)
                             .font(.callout)
+                        Text("A backup dive computer (Edit Dive Computer) only has its clock set: its dives are never downloaded.")
+                            .foregroundStyle(.secondary)
+                            .font(.callout)
                     }
 
                     Divider()
@@ -833,6 +872,12 @@ extension BluetoothScannerView {
         case .downloading: return .blue
         case .importing: return .purple
         case .completed: return .green
+        case .backupComputer(_, let clock):
+            switch clock {
+            case .synced: return .green
+            case .unsupported, .notRequested: return .secondary
+            case .failed: return .orange
+            }
         case .error: return .red
         }
     }
@@ -862,6 +907,8 @@ extension BluetoothScannerView {
                 return NSLocalizedString("Older Dives Skipped", bundle: bundle, value: "Older Dives Skipped", comment: "Title shown after a Bluetooth sync in which every downloaded dive was discarded because it predated the user's import cutoff date.")
             }
             return NSLocalizedString("No New Dives", bundle: bundle, comment: "Title shown when there are no new dives to import from the dive computer")
+        case .backupComputer:
+            return NSLocalizedString("Backup Dive Computer", bundle: bundle, value: "Backup Dive Computer", comment: "Title of the Bluetooth sync result for a dive computer marked as a backup: nothing was downloaded, only its clock may have been set.")
         case .error:
             return NSLocalizedString("Sync Error", bundle: bundle, comment: "Title shown in the Bluetooth scanner when a sync failed.")
         }
@@ -899,6 +946,17 @@ extension BluetoothScannerView {
             case .skipped: return skippedCountText(skipped)
             case .upToDate:
                 return NSLocalizedString("Your logbook is up to date", bundle: bundle, comment: "Subtitle shown when the logbook is already up to date after sync")
+            }
+        case .backupComputer(let name, let clock):
+            switch clock {
+            case .synced:
+                return String(format: NSLocalizedString("Clock set on %@", bundle: bundle, value: "Clock set on %@", comment: "Subtitle of the Bluetooth sync result for a backup dive computer whose clock was set. %@ is the dive computer's name."), name)
+            case .unsupported:
+                return NSLocalizedString("This dive computer cannot set its clock over Bluetooth.", bundle: bundle, value: "This dive computer cannot set its clock over Bluetooth.", comment: "Subtitle of the Bluetooth sync result for a backup dive computer that does not support setting its clock.")
+            case .failed:
+                return NSLocalizedString("The clock could not be set.", bundle: bundle, value: "The clock could not be set.", comment: "Subtitle of the Bluetooth sync result for a backup dive computer when setting its clock failed.")
+            case .notRequested:
+                return NSLocalizedString("Sync device clock is off: nothing was done.", bundle: bundle, value: "Sync device clock is off: nothing was done.", comment: "Subtitle of the Bluetooth sync result for a backup dive computer when the Sync device clock setting is off.")
             }
         case .error:
             // Generic on purpose: the detailed message, which can be long, is in errorView.

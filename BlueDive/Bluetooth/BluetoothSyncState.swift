@@ -1,4 +1,5 @@
 import SwiftData
+import DiveComputerKit
 
 // MARK: - Sync State
 
@@ -10,14 +11,35 @@ enum BluetoothSyncState: Equatable {
     case downloading(current: Int, total: Int)
     case importing(count: Int)
     case completed(imported: Int, merged: Int, skipped: Int)
+    /// A backup dive computer: nothing was downloaded; `clock` says whether its clock was set.
+    case backupComputer(name: String, clock: BackupClockResult)
     case error(message: String)
     
     var isActive: Bool {
         switch self {
-        case .idle, .completed, .error:
+        case .idle, .completed, .backupComputer, .error:
             return false
         default:
             return true
+        }
+    }
+}
+
+/// What a session with a backup dive computer did with its clock.
+enum BackupClockResult: Equatable {
+    case synced
+    /// The computer cannot set its clock over Bluetooth.
+    case unsupported
+    case failed
+    /// Sync device clock is off: nothing was done.
+    case notRequested
+
+    init(_ result: ClockSyncResult?) {
+        switch result {
+        case .synced: self = .synced
+        case .unsupported: self = .unsupported
+        case .failed: self = .failed
+        case nil: self = .notRequested
         }
     }
 }

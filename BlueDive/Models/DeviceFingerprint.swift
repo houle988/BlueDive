@@ -28,6 +28,11 @@ final class DeviceFingerprint {
     /// When this record was last updated.
     var updatedAt: Date = Date()
 
+    /// A backup dive computer (Edit Dive Computer): it records the same dives as the main one,
+    /// so its dives are never downloaded; a sync only sets its clock, when Sync device clock
+    /// is on. Matched by serial in DiveComputerKit (`SessionRequest.backupSerials`).
+    var isBackupComputer: Bool = false
+
     /// Convenience accessor for the typed DeviceFamily enum.
     var family: DeviceFamily? {
         get { DeviceFamily(rawValue: familyID) }

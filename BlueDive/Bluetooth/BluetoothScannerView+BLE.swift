@@ -66,6 +66,13 @@ extension BluetoothScannerView {
 
     /// Connects directly to a known device using its stored BLE UUID (no scanning required).
     func connectToKnownDevice(_ device: DeviceFingerprint) {
+        // A backup computer is only ever connected to set its clock: with Sync device clock
+        // off there is nothing to do, so it is not connected at all.
+        if DeviceFingerprint.backupNotToConnect(serial: device.serial, syncClock: syncDeviceClock, in: [device]) != nil {
+            DiveComputerLog.shared.log("[Known device] \(device.computerName) is a backup computer and clock sync is off — not connecting", level: .info)
+            backupWithoutClockSync = device.computerName
+            return
+        }
         beginDiagnosticTraceIfEnabled()
         // Now that the device is known, anchor the cutoff on the newest dive belonging to *its*
         // diver instead of the newest dive in the logbook. diverNameBySerial is already computed
@@ -210,6 +217,19 @@ extension BluetoothScannerView {
             DiveComputerLog.shared.log("Connect to \(peripheral.identifier.uuidString) ignored — sync already active (\(String(describing: syncState)))", level: .warning)
             return false
         }
+        // Every path ends here (known-device tap, scan fallback, Search, reassociation): a
+        // computer already known to be a backup is not connected when there is no clock to
+        // set. Its serial is the one it was matched to, else the one stored for its
+        // identifier; a computer with neither is identified by the session (which stops after
+        // its serial).
+        let knownSerial = expectedSerial ?? DeviceStorage.shared.getStoredDevice(uuid: peripheral.identifier.uuidString)?.serial
+        if let backup = DeviceFingerprint.backupNotToConnect(serial: knownSerial, syncClock: syncDeviceClock, in: knownDevices) {
+            DiveComputerLog.shared.log("\(backup.computerName) (\(peripheral.identifier.uuidString)) is a backup computer and clock sync is off — not connecting", level: .info)
+            restorePendingReassociationPrune()
+            abandonScanSession()
+            backupWithoutClockSync = backup.computerName
+            return false
+        }
 
         clearCutoffResults()
         syncedDives = []
@@ -302,6 +322,7 @@ extension BluetoothScannerView {
             // dives are never transferred over BLE.
             stopBefore: effectiveCutoff,
             syncClock: syncDeviceClock,
+            backupSerials: backupComputerSerials(),
             authorization: BLEPairingProvider(deviceName: connectedDeviceName ?? deviceName,
                                               generation: pairingPrompt.generation)
         )
@@ -457,7 +478,50 @@ extension BluetoothScannerView {
                                          model: identity.hardwareModel, serial: identity.serial)
     }
 
+    /// Serials of the computers marked "Backup Dive Computer", as the session compares them.
+    /// Placeholder serials ("0"…) are left out: unrelated computers share them, and one marked
+    /// as a backup would stop every computer reporting it from downloading.
+    private func backupComputerSerials() -> Set<String> {
+        DeviceFingerprint.backupSerials(in: knownDevices)
+    }
+
+    /// A backup computer's session: nothing was downloaded and no watermark moves. The
+    /// identifier is kept (the connection was proven), "Last synced" moves to now unless setting
+    /// the clock failed, and the result screen says what happened to its clock.
+    private func finishBackupComputer(_ outcome: DownloadOutcome) {
+        let serial = outcome.identity?.serial
+        let name = serial.flatMap { reported in
+            knownDevices.first { $0.serial.normalizedComputerSerial() == reported.normalizedComputerSerial() }?.computerName
+        } ?? connectedDeviceName ?? outcome.identity?.libraryName ?? ""
+        let clock = BackupClockResult(outcome.clockSync)
+        Self.logger.info("Backup computer \(serial ?? "?"): no dive downloaded, clock \(String(describing: clock))")
+        sessionWatermark = nil
+        cutoffStopDate = nil
+        cutoffFilteredCount = 0
+        cutoffAppliedDate = nil
+        isPartialSync = false
+        commitPendingSeed(reportedSerial: serial)
+        pendingReassociationPruneRestore = nil
+        if clock != .failed, let serial {
+            let all = (try? modelContext.fetch(FetchDescriptor<DeviceFingerprint>())) ?? []
+            let updated = KnownDeviceEdit.markBackupSynced(serial: serial, in: all, at: Date())
+            do {
+                try modelContext.save()
+            } catch {
+                DiveComputerLog.shared.log("Backup computer \(serial): Last synced not saved: \(error.localizedDescription)", level: .warning)
+            }
+            Self.logger.info("Backup computer \(serial): Last synced updated on \(updated) record(s)")
+        }
+        selectedDevice = nil
+        syncState = .backupComputer(name: name, clock: clock)
+        BLEDiagnosticSession.shared.stop()
+    }
+
     private func finishDownload(_ outcome: DownloadOutcome, downloaded: [DiveData], cutoff: Date?) {
+        if outcome.kind == .backupComputer {
+            finishBackupComputer(outcome)
+            return
+        }
         Self.logger.info("Retrieval successful: \(downloaded.count) dives (\(String(describing: outcome.kind)))")
         sessionWatermark = outcome.newestFingerprint
         cutoffStopDate = outcome.stoppedAtCutoff ? cutoff : nil

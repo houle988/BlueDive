@@ -107,6 +107,8 @@ struct BluetoothScannerView: View {
     /// The known device whose Edit sheet is shown (swipe right or context menu).
     @State var deviceToEdit: KnownDeviceSnapshot?
     @State var showingDeleteConfirmation = false
+    /// A backup dive computer was tapped while Sync device clock is off: nothing to do.
+    @State var backupWithoutClockSync: String?
     @State var modelOverrides: [String: ComputerModel] = [:]
     @State var peripheralForModelPicker: DiscoveredDevice?
     @State var showInfo = false
@@ -168,7 +170,7 @@ struct BluetoothScannerView: View {
         switch state {
         case .connecting, .downloading, .importing:
             return true
-        case .idle, .scanning, .completed, .error:
+        case .idle, .scanning, .completed, .backupComputer, .error:
             return false
         }
     }
@@ -325,6 +327,16 @@ struct BluetoothScannerView: View {
                 let newValue = Self.isTeardownUnsafe(newState)
                 if isTeardownUnsafe != newValue {
                     isTeardownUnsafe = newValue
+                }
+            }
+            .alert("Backup Dive Computer", isPresented: Binding(
+                get: { backupWithoutClockSync != nil },
+                set: { if !$0 { backupWithoutClockSync = nil } }
+            )) {
+                Button("OK", role: .cancel) { backupWithoutClockSync = nil }
+            } message: {
+                if let name = backupWithoutClockSync {
+                    Text("\(name) is a backup dive computer: its dives are never downloaded. Turn on Sync device clock to set its clock.")
                 }
             }
             .alert("Delete Dive Computer", isPresented: $showingDeleteConfirmation) {

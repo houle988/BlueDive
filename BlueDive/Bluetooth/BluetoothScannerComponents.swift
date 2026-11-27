@@ -199,6 +199,8 @@ struct KnownDeviceRow: View {
     let serial: String
     let lastSynced: Date
     let diverName: String?
+    /// A backup dive computer: a sync only sets its clock.
+    var isBackup: Bool = false
     let onTap: () -> Void
 
     @Environment(\.locale) private var locale
@@ -209,9 +211,20 @@ struct KnownDeviceRow: View {
                 DiveComputerIconView(name: iconName ?? computerName, isSelected: true)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(computerName)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        Text(computerName)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        if isBackup {
+                            // Its own key: the catalog's "Backup" is a data backup.
+                            Text(verbatim: NSLocalizedString("Backup (dive computer badge)", bundle: .forAppLanguage(), value: "Backup", comment: "Badge on a known dive computer marked as a backup dive computer (a second computer recording the same dives): its dives are never downloaded."))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.orange.opacity(0.15)))
+                        }
+                    }
 
                     if let name = diverName {
                         // Not a Label: in a List/Form row iOS gives a Label's icon a fixed-width

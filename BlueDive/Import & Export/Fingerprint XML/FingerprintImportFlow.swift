@@ -205,6 +205,7 @@ private struct FingerprintImportFlow: ViewModifier {
             record.familyID = device.familyID
             record.modelID = device.modelID
             record.updatedAt = device.updatedAt ?? Date()
+            record.isBackupComputer = device.isBackupComputer
             modelContext.insert(record)
         }
         do {

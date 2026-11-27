@@ -36,6 +36,41 @@ extension DeviceFingerprint {
         modelID != 0 || DeviceCatalog.model(family: family, modelID: 0) != nil
     }
 
+    /// Whether the computer can be a backup: its serial identifies one unit. A placeholder
+    /// serial ("0"…) is shared by unrelated computers, so the session never treats it as a
+    /// backup (`SessionRequest.backupSerials` leaves it out).
+    static func canBeBackup(serial: String) -> Bool {
+        serial.normalizedComputerSerial() != nil
+    }
+
+    /// Marked as a backup and identifiable as one: the rule the session, the known-device tap
+    /// and the badge share, so a flag on a placeholder serial (e.g. from an imported file)
+    /// changes nothing anywhere.
+    var isEffectiveBackup: Bool {
+        isBackupComputer && Self.canBeBackup(serial: serial)
+    }
+
+    /// The serials the session treats as backups (`SessionRequest.backupSerials`): every
+    /// effective backup's, normalized. Placeholder serials are never included.
+    static func backupSerials(in records: [DeviceFingerprint]) -> Set<String> {
+        Set(records.filter(\.isEffectiveBackup).compactMap { $0.serial.normalizedComputerSerial() })
+    }
+
+    /// The effective backup record with this serial, if any.
+    static func backupRecord(serial: String, in records: [DeviceFingerprint]) -> DeviceFingerprint? {
+        guard let key = serial.normalizedComputerSerial() else { return nil }
+        return records.first { $0.isEffectiveBackup && $0.serial.normalizedComputerSerial() == key }
+    }
+
+    /// The backup computer a connection would be made to for nothing: with Sync device clock
+    /// off there is no clock to set and its dives are never downloaded, so it is not connected.
+    /// `serial` is the one the peripheral was matched to or stored under; nil (never seen) is
+    /// left to the session, which stops right after the serial.
+    static func backupNotToConnect(serial: String?, syncClock: Bool, in records: [DeviceFingerprint]) -> DeviceFingerprint? {
+        guard !syncClock, let serial else { return nil }
+        return backupRecord(serial: serial, in: records)
+    }
+
     /// The name `DiveComputerIconView` picks the artwork from: the catalog model's name, so the
     /// icon follows the family and model; the stored name for a legacy record.
     var iconName: String {
@@ -87,6 +122,7 @@ struct KnownDeviceSnapshot: Identifiable {
     let catalogModel: ComputerModel?
     let lastSynced: Date
     let fingerprint: Data
+    let isBackupComputer: Bool
 
     init(_ device: DeviceFingerprint) {
         id = device.persistentModelID
@@ -97,6 +133,7 @@ struct KnownDeviceSnapshot: Identifiable {
         catalogModel = device.catalogModel
         lastSynced = device.updatedAt
         fingerprint = device.fingerprintData
+        isBackupComputer = device.isBackupComputer
     }
 }
 
@@ -114,6 +151,7 @@ struct EditKnownDeviceSheet: View {
     @State private var selectedModel: ComputerModel?
     @State private var fingerprintText: String
     @State private var showsAdvanced = false
+    @State private var isBackupComputer: Bool
     @State private var showingModelPicker = false
     @State private var showingClearConfirmation = false
     @State private var showingSaveError = false
@@ -122,6 +160,7 @@ struct EditKnownDeviceSheet: View {
         self.device = device
         _selectedModel = State(initialValue: device.catalogModel)
         _fingerprintText = State(initialValue: device.fingerprint.fingerprintHexString)
+        _isBackupComputer = State(initialValue: device.isBackupComputer)
     }
 
     // MARK: Derived state
@@ -152,8 +191,12 @@ struct EditKnownDeviceSheet: View {
         return parsedFingerprint.count != device.fingerprint.count
     }
 
+    private var backupChanged: Bool {
+        isBackupComputer != device.isBackupComputer
+    }
+
     private var canSave: Bool {
-        parsedFingerprint != nil && (modelChanged || fingerprintChanged)
+        parsedFingerprint != nil && (modelChanged || fingerprintChanged || backupChanged)
     }
 
     private var displayedName: String {
@@ -171,6 +214,7 @@ struct EditKnownDeviceSheet: View {
             Form {
                 computerSection
                 modelSection
+                backupSection
                 advancedSection
             }
             .groupedFormStyleOnMac()
@@ -269,6 +313,25 @@ struct EditKnownDeviceSheet: View {
         }
     }
 
+    private var canBeBackup: Bool {
+        DeviceFingerprint.canBeBackup(serial: device.serial)
+    }
+
+    private var backupSection: some View {
+        Section {
+            Toggle("Backup Dive Computer", isOn: $isBackupComputer)
+                // Can still be turned off if a placeholder serial was flagged elsewhere.
+                .disabled(!canBeBackup && !isBackupComputer)
+                .fullWidthSwitch()
+        } footer: {
+            if canBeBackup {
+                Text("For a second dive computer that records the same dives as your main one. Its dives are never downloaded: a sync only sets its clock, when Sync device clock is on.")
+            } else {
+                Text("This dive computer reports no serial number, so it cannot be marked as a backup.")
+            }
+        }
+    }
+
     private var advancedSection: some View {
         Section {
             // A row button rather than a DisclosureGroup: in a Form only a DisclosureGroup's
@@ -354,6 +417,7 @@ struct EditKnownDeviceSheet: View {
         guard let fingerprint = parsedFingerprint else { return }
         let newModel = modelChanged ? selectedModel : nil
         let newFingerprint = fingerprintChanged ? fingerprint : nil
+        let newBackup = backupChanged ? isBackupComputer : nil
 
         // Fetched again, so only live records are written: one deleted here or by another
         // device while the sheet was open is simply absent.
@@ -363,7 +427,8 @@ struct EditKnownDeviceSheet: View {
             dismiss()
             return
         }
-        let originals = KnownDeviceEdit.write(model: newModel, fingerprint: newFingerprint, to: records)
+        let originals = KnownDeviceEdit.write(model: newModel, fingerprint: newFingerprint,
+                                               isBackupComputer: newBackup, to: records)
         do {
             try modelContext.save()
         } catch {
@@ -384,6 +449,9 @@ struct EditKnownDeviceSheet: View {
             let result = KnownDeviceEdit.storedDevices(stored, withSerial: serialKey, setTo: newModel)
             if result.updated > 0 { DeviceStorage.shared.updateStoredDevices(result.devices) }
             DiveComputerLog.shared.log("[Known device] Edited serial \(serialKey): model \(newModel.name) (\(newModel.family) \(newModel.modelID)), \(result.updated) DeviceStorage entr\(result.updated == 1 ? "y" : "ies") updated", level: .info)
+        }
+        if let newBackup {
+            DiveComputerLog.shared.log("[Known device] Serial \(device.serial) marked as \(newBackup ? "a backup" : "a main") dive computer on \(records.count) record(s)", level: .info)
         }
         if newFingerprint != nil {
             DiveComputerLog.shared.log("[Known device] Edited the fingerprint of serial \(device.serial) (\(fingerprint.count) bytes) on \(records.count) record(s)", level: .info)
@@ -414,16 +482,19 @@ enum KnownDeviceEdit {
         let familyID: String
         let modelID: UInt32
         let fingerprint: Data
+        let isBackupComputer: Bool
     }
 
     /// Writes the changed values only (nil leaves a field as it is) and returns each record's
     /// values from before. The name follows the model, as a download with a model override does.
     /// `updatedAt` ("Last synced") is kept: an edit is not a sync.
     @discardableResult
-    static func write(model: ComputerModel?, fingerprint: Data?, to records: [DeviceFingerprint]) -> [OriginalValues] {
+    static func write(model: ComputerModel?, fingerprint: Data?, isBackupComputer: Bool? = nil,
+                      to records: [DeviceFingerprint]) -> [OriginalValues] {
         records.map { record in
             let original = OriginalValues(record: record, computerName: record.computerName, familyID: record.familyID,
-                                          modelID: record.modelID, fingerprint: record.fingerprintData)
+                                          modelID: record.modelID, fingerprint: record.fingerprintData,
+                                          isBackupComputer: record.isBackupComputer)
             if let model {
                 record.computerName = model.name
                 record.family = model.family
@@ -431,6 +502,9 @@ enum KnownDeviceEdit {
             }
             if let fingerprint {
                 record.fingerprintData = fingerprint
+            }
+            if let isBackupComputer {
+                record.isBackupComputer = isBackupComputer
             }
             return original
         }
@@ -444,7 +518,18 @@ enum KnownDeviceEdit {
             original.record.familyID = original.familyID
             original.record.modelID = original.modelID
             original.record.fingerprintData = original.fingerprint
+            original.record.isBackupComputer = original.isBackupComputer
         }
+    }
+
+    /// A completed backup session: "Last synced" moves to `date` on every record of the serial
+    /// (nothing else changes; no dive and no watermark). Returns the records changed.
+    @discardableResult
+    static func markBackupSynced(serial: String, in records: [DeviceFingerprint], at date: Date) -> Int {
+        guard let key = serial.normalizedComputerSerial() else { return 0 }
+        let matching = records.filter { $0.serial.normalizedComputerSerial() == key }
+        matching.forEach { $0.updatedAt = date }
+        return matching.count
     }
 
     /// The DeviceStorage list with the entries of `serialKey` (a normalized, non-placeholder

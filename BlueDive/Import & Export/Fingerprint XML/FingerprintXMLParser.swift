@@ -16,6 +16,8 @@ final class FingerprintXMLParser: NSObject, XMLParserDelegate {
         var modelID: UInt32
         var fingerprintData: Data
         var updatedAt: Date?
+        /// `<isBackupComputer>`; false when the element is absent (older exports).
+        var isBackupComputer: Bool = false
     }
 
     enum ParseError: Error {
@@ -43,6 +45,7 @@ final class FingerprintXMLParser: NSObject, XMLParserDelegate {
     private var tempModelID: UInt32?
     private var tempFingerprint: Data?
     private var tempUpdatedAt: Date?
+    private var tempIsBackup: Bool?
 
     // MARK: - Date Formatter
 
@@ -140,6 +143,10 @@ final class FingerprintXMLParser: NSObject, XMLParserDelegate {
                 hasInvalidValue = true
             }
         case "updatedAt":    tempUpdatedAt = dateFormatter.date(from: text)
+        case "isBackupComputer":
+            // Anything but true/1 reads as a main dive computer: the flag only ever stops a
+            // download, so an unreadable value must not refuse the whole file.
+            tempIsBackup = ["true", "1"].contains(text.lowercased())
         case "device":
             let parsed = ParsedDevice(
                 serial: tempSerial ?? "",
@@ -147,7 +154,8 @@ final class FingerprintXMLParser: NSObject, XMLParserDelegate {
                 familyID: tempFamilyID ?? "",
                 modelID: tempModelID ?? 0,
                 fingerprintData: tempFingerprint ?? Data(),
-                updatedAt: tempUpdatedAt
+                updatedAt: tempUpdatedAt,
+                isBackupComputer: tempIsBackup ?? false
             )
             devices.append(parsed)
             isInDevice = false
@@ -165,5 +173,6 @@ final class FingerprintXMLParser: NSObject, XMLParserDelegate {
         tempModelID = nil
         tempFingerprint = nil
         tempUpdatedAt = nil
+        tempIsBackup = nil
     }
 }

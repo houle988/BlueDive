@@ -53,6 +53,10 @@ enum FingerprintXMLExporter {
         // Lowercase hex, the same notation the Sync Fingerprints editor shows and accepts.
         lines.append(xmlTag("fingerprint",  hexString(device.fingerprintData), indent: 6))
         lines.append(xmlTag("updatedAt",    formatDate(device.updatedAt),     indent: 6))
+        // Only when set: files without it (older exports) read as a main dive computer.
+        if device.isBackupComputer {
+            lines.append(xmlTag("isBackupComputer", "true", indent: 6))
+        }
         lines.append("    </device>")
 
         return lines

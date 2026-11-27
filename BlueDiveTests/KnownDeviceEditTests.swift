@@ -203,6 +203,96 @@ struct KnownDeviceEditTests {
         #expect(device.updatedAt == lastSynced)
     }
 
+    /// The backup flag is written only when given, and put back by a failed save.
+    @Test func backupFlagIsWrittenAndRestored() throws {
+        let context = try makeContext()
+        let device = record(serial: "0000abcd", in: context)
+        #expect(!device.isBackupComputer)
+
+        KnownDeviceEdit.write(model: nil, fingerprint: nil, to: [device])
+        #expect(!device.isBackupComputer)
+
+        let originals = KnownDeviceEdit.write(model: nil, fingerprint: nil, isBackupComputer: true, to: [device])
+        #expect(device.isBackupComputer)
+        #expect(device.fingerprintData == Data([1, 2, 3, 4]))
+        KnownDeviceEdit.restore(originals)
+        #expect(!device.isBackupComputer)
+    }
+
+    /// A placeholder serial cannot be a backup: the flag on it changes nothing.
+    @Test func placeholderSerialIsNeverAnEffectiveBackup() throws {
+        let context = try makeContext()
+        let real = record(serial: "0000abcd", in: context)
+        let placeholder = record(serial: "0", in: context)
+        real.isBackupComputer = true
+        placeholder.isBackupComputer = true
+        #expect(real.isEffectiveBackup)
+        #expect(!placeholder.isEffectiveBackup)
+        #expect(DeviceFingerprint.canBeBackup(serial: "0000abcd"))
+        #expect(!DeviceFingerprint.canBeBackup(serial: "0"))
+        #expect(!DeviceFingerprint.canBeBackup(serial: ""))
+    }
+
+    /// The connection rules the Bluetooth sheet applies: the session's backup serials, and no
+    /// connection to a known backup while Sync device clock is off.
+    @Test func backupConnectionRules() throws {
+        let context = try makeContext()
+        let backup = record(serial: "0000ABCD", in: context)
+        backup.isBackupComputer = true
+        let main = record(serial: "0000ef01", in: context)
+        let placeholder = record(serial: "0", in: context)
+        placeholder.isBackupComputer = true
+        let records = [backup, main, placeholder]
+
+        #expect(DeviceFingerprint.backupSerials(in: records) == ["0000abcd"])
+        #expect(DeviceFingerprint.backupRecord(serial: " 0000abcd ", in: records) === backup)
+        #expect(DeviceFingerprint.backupRecord(serial: "0000ef01", in: records) == nil)
+        #expect(DeviceFingerprint.backupRecord(serial: "0", in: records) == nil)
+
+        // Clock sync off: the backup is not connected; anything else is.
+        #expect(DeviceFingerprint.backupNotToConnect(serial: "0000abcd", syncClock: false, in: records) === backup)
+        #expect(DeviceFingerprint.backupNotToConnect(serial: "0000ef01", syncClock: false, in: records) == nil)
+        #expect(DeviceFingerprint.backupNotToConnect(serial: nil, syncClock: false, in: records) == nil)
+        // Clock sync on: the backup is connected (to set its clock).
+        #expect(DeviceFingerprint.backupNotToConnect(serial: "0000abcd", syncClock: true, in: records) == nil)
+    }
+
+    /// A completed backup session moves "Last synced" on every record of the serial, and only
+    /// on those.
+    @Test func backupSessionMovesLastSynced() throws {
+        let context = try makeContext()
+        let backup = record(serial: "0000abcd", in: context)
+        let duplicate = record(serial: "0000ABCD", in: context)
+        let other = record(serial: "0000ef01", in: context)
+        let otherDate = other.updatedAt
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+
+        #expect(KnownDeviceEdit.markBackupSynced(serial: "0000abcd", in: [backup, duplicate, other], at: now) == 2)
+        #expect(backup.updatedAt == now)
+        #expect(duplicate.updatedAt == now)
+        #expect(other.updatedAt == otherDate)
+        #expect(KnownDeviceEdit.markBackupSynced(serial: "0", in: [backup], at: now) == 0)
+    }
+
+    /// The fingerprint export carries the backup flag through an import; a file without it
+    /// (older exports) or with an unreadable value reads as a main dive computer.
+    @Test func fingerprintXMLCarriesTheBackupFlag() throws {
+        let context = try makeContext()
+        let backup = record(serial: "0000abcd", in: context)
+        backup.isBackupComputer = true
+        let main = record(serial: "0000ef01", in: context)
+
+        let xml = FingerprintXMLExporter.generateXML(for: [backup, main])
+        let parsed = try FingerprintXMLParser().parse(data: Data(xml.utf8)).get()
+        #expect(parsed.map(\.isBackupComputer) == [true, false])
+        #expect(xml.components(separatedBy: "<isBackupComputer>").count == 2)   // written once, for the backup only
+
+        let garbled = xml.replacingOccurrences(of: "<isBackupComputer>true</isBackupComputer>",
+                                               with: "<isBackupComputer>maybe</isBackupComputer>")
+        let lenient = try FingerprintXMLParser().parse(data: Data(garbled.utf8)).get()
+        #expect(lenient.map(\.isBackupComputer) == [false, false])
+    }
+
     /// A failed save puts every edited record back as it was, the raw family string included.
     @Test func restorePutsBackTheValuesFromBeforeTheEdit() throws {
         let context = try makeContext()
