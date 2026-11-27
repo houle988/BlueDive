@@ -169,6 +169,14 @@ struct TankData: Identifiable, Sendable {
     var o2Percentage: Int { Int((o2 * 100).rounded()) }
     var hePercentage: Int { Int((he * 100).rounded()) }
 
+    /// The number of cylinders the tank stands for: 2 for a twinset (two manifolded cylinders,
+    /// "Twinset" or an older "double" value), else 1. `volume` is one cylinder's, so the gas
+    /// used, RMV and SAC multiply it by this count. Sidemount cylinders are separate tanks.
+    var cylinderCount: Double {
+        let type = tankType?.lowercased() ?? ""
+        return type.contains("twin") || type.contains("double") ? 2 : 1
+    }
+
     /// A drysuit inflation bottle: its gas (e.g. argon) is not breathed, so it is not listed as
     /// one of the dive's gases (list row, gas filters, Overview tiles).
     var isDrysuit: Bool {
@@ -966,9 +974,8 @@ final class Dive {
     func formattedTankVolume(_ tank: TankData) -> String? {
         guard let volume = tank.volume else { return nil }
         let single = formattedVolume(volume, workingPressureRaw: tank.workingPressure)
-        let type = tank.tankType?.lowercased() ?? ""
-        guard type.contains("twin") || type.contains("double") else { return single }
-        return "\(single) (\(formattedVolume(volume * 2, workingPressureRaw: tank.workingPressure)))"
+        guard tank.cylinderCount > 1 else { return single }
+        return "\(single) (\(formattedVolume(volume * tank.cylinderCount, workingPressureRaw: tank.workingPressure)))"
     }
 
     /// The cylinder size as a formatted string in the user's display unit.
@@ -1108,9 +1115,6 @@ final class Dive {
             ? effectiveAvgDepth / 3.28084
             : effectiveAvgDepth
         let avgAtmosphere = (effectiveAvgDepthMeters / 10.0) + 1.0
-        let tankTypeLC = tank.tankType?.lowercased() ?? ""
-        let tankMultiplier: Double = (tankTypeLC.contains("twin") || tankTypeLC.contains("double")) ? 2.0 : 1.0
-
         guard let volume = tank.volume,
               let pStart = tank.startPressure,
               let pEnd = tank.endPressure,
@@ -1120,7 +1124,7 @@ final class Dive {
         let pEndBar   = PressureUnit.bar.convert(pEnd,   from: storedPressureUnit)
         let consumedBar = pStartBar - pEndBar
         let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
-        let totalLiters = consumedBar * volumeLiters * tankMultiplier
+        let totalLiters = consumedBar * volumeLiters * tank.cylinderCount
         let rmv = totalLiters / divisor / avgAtmosphere
         return rmv > 0 && rmv < 100 ? rmv : 0.0
     }
@@ -1131,7 +1135,9 @@ final class Dive {
         guard rmv > 0, index >= 0, index < tanks.count else { return 0.0 }
         let tank = tanks[index]
         guard let volume = tank.volume, volume > 0 else { return 0.0 }
-        let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
+        // The RMV counts both cylinders of a twinset, so its SAC (the pair's pressure drop per
+        // minute at the surface) divides by the pair's volume.
+        let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure) * tank.cylinderCount
         let sac = rmv / volumeLiters
         return sac > 0 && sac < 20 ? sac : 0.0
     }
@@ -1223,9 +1229,7 @@ final class Dive {
                 let pEndBar   = PressureUnit.bar.convert(pEnd,   from: storedPressureUnit)
                 let consumedBar = pStartBar - pEndBar
                 let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
-                let tankTypeLC = tank.tankType?.lowercased() ?? ""
-                let tankMultiplier: Double = (tankTypeLC.contains("twin") || tankTypeLC.contains("double")) ? 2.0 : 1.0
-                let tankSurfaceGas = consumedBar * volumeLiters * tankMultiplier / avgAtmosphere
+                let tankSurfaceGas = consumedBar * volumeLiters * tank.cylinderCount / avgAtmosphere
 
                 surfaceGasSum += tankSurfaceGas
                 anyContribution = true
@@ -1255,9 +1259,7 @@ final class Dive {
                 let pEndBar   = PressureUnit.bar.convert(pEnd,   from: storedPressureUnit)
                 let consumedBar = pStartBar - pEndBar
                 let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
-                let tankTypeLC = tank.tankType?.lowercased() ?? ""
-                let tankMultiplier: Double = (tankTypeLC.contains("twin") || tankTypeLC.contains("double")) ? 2.0 : 1.0
-                totalLiters += consumedBar * volumeLiters * tankMultiplier
+                totalLiters += consumedBar * volumeLiters * tank.cylinderCount
             }
 
             guard totalLiters > 0 else { return 0.0 }
@@ -1298,7 +1300,8 @@ final class Dive {
         return validTanks.contains { $0.usageStartTime == nil || $0.usageEndTime == nil }
     }
 
-    /// Combined SAC: combinedRMV divided by the usage-time-weighted average tank volume.
+    /// Combined SAC: combinedRMV divided by the usage-time-weighted average tank volume, a
+    /// twinset counting as its pair's volume (`cylinderCount`), as in the RMV.
     /// For a single tank, usage time is not required.
     /// For multiple tanks, all tanks must have usage time recorded — returns 0 otherwise.
     var combinedSAC: Double {
@@ -1323,17 +1326,17 @@ final class Dive {
             let totalWeight = tanksWithTime.reduce(0.0) { $0 + effectiveDuration($1) }
             if totalWeight > 0 {
                 avgVolumeLiters = tanksWithTime.reduce(0.0) { sum, tank in
-                    let vol = waterVolumeLiters(rawVolume: tank.volume!, workingPressureRaw: tank.workingPressure)
+                    let vol = waterVolumeLiters(rawVolume: tank.volume!, workingPressureRaw: tank.workingPressure) * tank.cylinderCount
                     return sum + vol * (effectiveDuration(tank) / totalWeight)
                 }
             } else {
                 // All usage durations are zero — use simple average as last resort.
-                let total = validTanks.reduce(0.0) { $0 + waterVolumeLiters(rawVolume: $1.volume!, workingPressureRaw: $1.workingPressure) }
+                let total = validTanks.reduce(0.0) { $0 + waterVolumeLiters(rawVolume: $1.volume!, workingPressureRaw: $1.workingPressure) * $1.cylinderCount }
                 avgVolumeLiters = total / Double(validTanks.count)
             }
         } else if validTanks.count == 1 {
             // Single tank: usage time not needed.
-            avgVolumeLiters = waterVolumeLiters(rawVolume: validTanks[0].volume!, workingPressureRaw: validTanks[0].workingPressure)
+            avgVolumeLiters = waterVolumeLiters(rawVolume: validTanks[0].volume!, workingPressureRaw: validTanks[0].workingPressure) * validTanks[0].cylinderCount
         } else if validTanks.allSatisfy({ $0.tankType?.lowercased().contains("sidemount") == true }) {
             // All-sidemount without usage times: assume full dive usage → simple average volume.
             let total = validTanks.reduce(0.0) { $0 + waterVolumeLiters(rawVolume: $1.volume!, workingPressureRaw: $1.workingPressure) }
@@ -1818,9 +1821,7 @@ extension Dive {
             let endBar       = PressureUnit.bar.convert(ep, from: storedPressureUnit)
             let consumedBar  = startBar - endBar
             let volumeLiters = waterVolumeLiters(rawVolume: volume, workingPressureRaw: tank.workingPressure)
-            let tankTypeLC   = tank.tankType?.lowercased() ?? ""
-            let tankMultiplier: Double = (tankTypeLC.contains("twin") || tankTypeLC.contains("double")) ? 2.0 : 1.0
-            totalLiters += consumedBar * volumeLiters * tankMultiplier
+            totalLiters += consumedBar * volumeLiters * tank.cylinderCount
         }
         return totalLiters
     }
